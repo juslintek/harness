@@ -80,7 +80,12 @@ export function defaultTailSources(harnessWorktrees?: string): TailSource[] {
       root: join(homedir(), ".claude", "projects"),
       ...(harnessWorktrees === undefined ? {} : { excludeCwdUnder: harnessWorktrees }),
     },
-    { name: "codex", glob: "**/rollout-*.jsonl", root: join(homedir(), ".codex", "sessions") },
+    {
+      name: "codex",
+      glob: "**/rollout-*.jsonl",
+      root: join(homedir(), ".codex", "sessions"),
+      ...(harnessWorktrees === undefined ? {} : { excludeCwdUnder: harnessWorktrees }),
+    },
   ];
 }
 
