@@ -41,6 +41,10 @@ test("non-shell actions", () => {
   expect(run({ kind: "fetch", paths: [] }).verdict).toBe("ask");
   expect(run({ kind: "other", paths: [] }).verdict).toBe("ask");
   expect(run({ kind: "other", paths: [], toolName: "ToolSearch" }).verdict).toBe("allow");
+  expect(run({ kind: "other", paths: [], toolName: "mcp__harness__task_move" }).verdict).toBe(
+    "allow",
+  );
+  expect(run({ kind: "other", paths: [], toolName: "mcp__other__task_move" }).verdict).toBe("ask");
 });
 
 test("result carries rule and category", () => {
