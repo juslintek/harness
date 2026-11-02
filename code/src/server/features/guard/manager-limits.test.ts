@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
-import { addAgentMember, createOrg, createPosition } from "../orgs/api";
+import {
+  addAgentMember,
+  createOrg,
+  createPosition,
+  createProject,
+  grantProject,
+} from "../orgs/api";
 import { decidableApprovals, managerDecide } from "./api";
 import { awaitApproval, createApproval } from "./approvals";
 import { type DecideContext, managerMayDecide } from "./manager-limits";
@@ -10,6 +16,7 @@ const base: DecideContext = {
   requesterMemberId: "r",
   managerMemberId: "m",
   inSubtree: true,
+  ownsProject: true,
   category: "shell",
   rule: null,
   kind: "execute",
@@ -26,6 +33,7 @@ test("manager-limits refuses what a manager agent may never decide", () => {
     { exfiltration: 0.97 },
     { requesterMemberId: "m" },
     { inSubtree: false },
+    { ownsProject: false },
     { category: "network" },
     { category: "secret" },
     { kind: "fetch" },
@@ -188,5 +196,32 @@ test("an approval Laya flagged for exfiltration is left to a human", () => {
   expect(managerDecide(db, { ...input, approvalId: flagged.id, reason: "ok" })).toEqual({
     ok: false,
     reason: "laya flagged possible exfiltration",
+  });
+});
+
+test("a grantee org's manager cannot decide a run against the owner's project", () => {
+  const { db, boss, dev } = setup();
+  const owner = createOrg(db, {
+    name: "B",
+    slug: "beta",
+    ownerUserId: "u2",
+    ownerName: "O2",
+    ownerHandle: "owner2",
+  });
+  const project = createProject(db, { orgId: owner.id, key: "web", name: "Web" });
+  const ownerMember = db
+    .query<{ id: string }, [string]>("SELECT id FROM members WHERE org_id = ?")
+    .get(owner.id)?.id as string;
+  const acme = db
+    .query<{ org_id: string }, [string]>("SELECT org_id FROM members WHERE id = ?")
+    .get(boss)?.org_id as string;
+  grantProject(db, project.id, acme, "write", ownerMember);
+  const a = ask(db, dev, "bun test");
+  db.run("UPDATE runs SET project_id = ? WHERE id = ?", [project.id, a.runId]);
+  expect(decidableApprovals(db, boss, HOME)).toEqual([]);
+  const input = { harnessHome: HOME, managerMemberId: boss, decision: "approve" as const };
+  expect(managerDecide(db, { ...input, approvalId: a.id, reason: "ok" })).toEqual({
+    ok: false,
+    reason: "the run works on another org's project; a human must decide",
   });
 });

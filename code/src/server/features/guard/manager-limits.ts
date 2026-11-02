@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { basename, posix, resolve } from "node:path";
 import { appendEvent } from "../logs/api";
-import { getMember, managerPositionsOf, reportsTransitivelyTo } from "../orgs/api";
+import { getMember, getProject, managerPositionsOf, reportsTransitivelyTo } from "../orgs/api";
 import { type ApprovalRow, decideApproval, getApproval, listApprovals } from "./approvals";
 import { DENY_EXFILTRATION } from "./l2";
 
@@ -19,6 +19,8 @@ export interface DecideContext extends ActionContext {
   requesterMemberId: string | null;
   managerMemberId: string;
   inSubtree: boolean;
+  // False when the run works in a project owned by another org than the manager's.
+  ownsProject: boolean;
 }
 
 // Text that points at the harness itself, its sandbox or its agent config: a manager agent must
@@ -80,6 +82,7 @@ export function managerMayDecide(ctx: DecideContext): string | null {
   if (ctx.requesterMemberId === ctx.managerMemberId)
     return "managers cannot decide their own request";
   if (!ctx.inSubtree) return "the requester does not report to you";
+  if (!ctx.ownsProject) return "the run works on another org's project; a human must decide";
   return actionRefusal(ctx);
 }
 
@@ -129,7 +132,9 @@ function contextFor(
   harnessHome: string,
 ): DecideContext {
   const run = db
-    .query<{ member_id: string | null }, [string]>("SELECT member_id FROM runs WHERE id = ?")
+    .query<{ member_id: string | null; project_id: string | null }, [string]>(
+      "SELECT member_id, project_id FROM runs WHERE id = ?",
+    )
     .get(approval.runId);
   const requesterMemberId = run?.member_id ?? null;
   const requester = requesterMemberId === null ? null : getMember(db, requesterMemberId);
@@ -138,7 +143,18 @@ function contextFor(
     managerPositionsOf(db, managerMemberId).some(
       (p) => p.orgId === requester.orgId && reportsTransitivelyTo(db, requester.id, p.id),
     );
-  return { ...actionContext(approval, harnessHome), requesterMemberId, managerMemberId, inSubtree };
+  // A grantee org's manager may lead the requester, yet the project and its repo are the owner's.
+  const projectOrgId = run?.project_id ? (getProject(db, run.project_id)?.orgId ?? null) : null;
+  const ownsProject =
+    !run?.project_id ||
+    (projectOrgId !== null && projectOrgId === getMember(db, managerMemberId)?.orgId);
+  return {
+    ...actionContext(approval, harnessHome),
+    requesterMemberId,
+    managerMemberId,
+    inSubtree,
+    ownsProject,
+  };
 }
 
 export function decidableApprovals(
