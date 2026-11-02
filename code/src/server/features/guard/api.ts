@@ -238,6 +238,11 @@ export async function checkAction(
   if (l1.verdict === "deny") {
     return { verdict: "deny", layer: "L1", reason: l1.reason, rule: l1.rule, approvalId: null };
   }
+  // Laya reads command text; a bare path inside the task root told it nothing and it scored
+  // ordinary edits as exfiltration.
+  if (l1.verdict === "allow" && action.kind !== "execute") {
+    return { verdict: "allow", layer: "L1", reason: l1.reason, rule: l1.rule, approvalId: null };
+  }
   let l2: L2Result | null = null;
   if (l1.verdict === "allow") {
     l2 = await escalateL2({ request: run.prompt, command }, l1);
