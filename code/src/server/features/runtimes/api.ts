@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { type AgentSpec, getSpec } from "../agents/api";
 import { expireApprovals } from "../guard/api";
 import type { NewEvent } from "../logs/api";
+import { onMemberRemoved } from "../orgs/api";
 import { listAcpModels } from "./acp-models";
 import { createProbeLaunch, type RunDeps, type RunMember } from "./launch";
 import {
@@ -55,6 +56,24 @@ export async function startRun(
 
 export function killRun(db: Database, runId: string): boolean {
   return kill(db, runId);
+}
+
+// A removed agent must stop at once: killing the run makes finalize revoke its run token, which
+// would otherwise keep the member's board and chat scopes until the run ends on its own.
+function endRunsOf(db: Database, memberId: string): void {
+  const ids = db
+    .query<{ id: string }, [string]>("SELECT id FROM runs WHERE member_id = ? AND ended_at IS NULL")
+    .all(memberId);
+  for (const { id } of ids) kill(db, id, "member_removed");
+}
+
+let wired = false;
+
+// The listener gets the db from the event, so one subscription serves every database.
+export function wireRuntimes(): void {
+  if (wired) return;
+  wired = true;
+  onMemberRemoved((db, member) => endRunsOf(db, member.id));
 }
 
 export function setHalted(db: Database, value: boolean): void {

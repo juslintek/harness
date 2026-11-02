@@ -7,7 +7,7 @@ import { firstRunEnrollment } from "./server/features/auth/api";
 import { wireBoard } from "./server/features/board/api";
 import { wireChat } from "./server/features/chat/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
-import { recoverRuns, shutdownRuns } from "./server/features/runtimes/api";
+import { recoverRuns, shutdownRuns, wireRuntimes } from "./server/features/runtimes/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
 import { pwaResponse } from "./server/pwa";
@@ -23,6 +23,7 @@ migrate(db, migrations);
 const instanceId = ensureInstance(db);
 wireBoard(db);
 wireChat(db);
+wireRuntimes();
 
 recoverRuns(db);
 const app = createApp({
