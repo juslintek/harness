@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
 import { bootApi } from "../../test-support/api-kit";
-import { createTask } from "../board/api";
 import { addAgentMember, createProject, grantProject } from "../orgs/api";
 
 async function setup(command = "git push", l1 = "{}") {
@@ -87,15 +86,14 @@ test("an org owner may not approve a write into the harness home", async () => {
   expect((await res.json()).reason).toBe("the action touches the harness home");
 });
 
-test("a run on a granted project's task is decided by the project's org, not the agent's", async () => {
+test("a run in a granted project is decided by the project's org, not the agent's", async () => {
   const { k, owner: agentOrgOwner, approvalId } = await setup();
   const projectOwner = await k.user({ stepUp: true });
   const alpha = k.org(projectOwner, "alpha");
   const beta = k.db.query<{ id: string }, []>("SELECT id FROM orgs WHERE slug = 'acme'").get();
   const project = createProject(k.db, { orgId: alpha.id, key: "web", name: "Web" });
   grantProject(k.db, project.id, beta?.id as string, "write", alpha.owner.id);
-  const task = createTask(k.db, { projectId: project.id, title: "t", createdBy: alpha.owner.id });
-  k.db.run("UPDATE runs SET task_id = ?", [task.id]);
+  k.db.run("UPDATE runs SET project_id = ?", [project.id]);
   const call = (who: typeof projectOwner) =>
     k.call(who, "POST", `/api/approvals/${approvalId}`, { decision: "approve" });
   expect((await call(agentOrgOwner)).status).toBe(403);

@@ -43,11 +43,10 @@ function scratchRepo(home: string, orgId: string): string {
   return dir;
 }
 
-function wakeRepo(db: Database, wake: WakeRow): string | null {
+function wakeProject(db: Database, wake: WakeRow): string | null {
   const task = wake.taskId === null ? null : getTask(db, wake.taskId);
   const channel = wake.channelId === null ? null : getChannel(db, wake.channelId);
-  const projectId = task?.projectId ?? channel?.projectId ?? null;
-  return projectId === null ? null : (getProject(db, projectId)?.repo ?? null);
+  return task?.projectId ?? channel?.projectId ?? null;
 }
 
 function scopesFor(db: Database, member: MemberRow): TokenScope[] {
@@ -77,7 +76,9 @@ export function settleRun(db: Database, runId: string): void {
 }
 
 // A wake stored before a grant was revoked or lowered must not start a run in that project.
-function reachableWakes(db: Database, memberId: string): WakeRow[] {
+// One run works in one project's repo and is judged by that project's org, so it takes only the
+// wakes of the oldest wake's project; the others wait for the next batch.
+function nextBatch(db: Database, memberId: string): { wakes: WakeRow[]; projectId: string | null } {
   const wakes = pendingWakes(db, memberId);
   const lost = wakes.filter((w) => !mayWork(db, memberId, w));
   setStatus(
@@ -86,12 +87,15 @@ function reachableWakes(db: Database, memberId: string): WakeRow[] {
     "skipped",
     { detail: { reason: "no_access" } },
   );
-  return wakes.filter((w) => !lost.includes(w));
+  const reachable = wakes.filter((w) => !lost.includes(w));
+  const first = reachable[0];
+  const projectId = first ? wakeProject(db, first) : null;
+  return { wakes: reachable.filter((w) => wakeProject(db, w) === projectId), projectId };
 }
 
 async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<boolean> {
   const member = getMember(db, memberId);
-  const wakes = reachableWakes(db, memberId);
+  const { wakes, projectId } = nextBatch(db, memberId);
   if (wakes.length === 0) return false;
   const ids = wakes.map((w) => w.id);
   if (!member || member.agentId === null || member.paused) {
@@ -103,7 +107,7 @@ async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<b
     return false;
   }
   setStatus(db, ids, "started");
-  const repo = wakes.map((w) => wakeRepo(db, w)).find((r) => r !== null);
+  const repo = projectId === null ? null : (getProject(db, projectId)?.repo ?? null);
   const taskId = wakes.find((w) => w.taskId !== null && getTask(db, w.taskId))?.taskId;
   try {
     const runId = await startRun(db, deps.runDeps, {
@@ -112,7 +116,12 @@ async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<b
       repo: repo ?? scratchRepo(deps.home, member.orgId),
       prompt: buildPrompt(db, member, wakes),
       ...(taskId == null ? {} : { taskId }),
-      member: { memberId, orgId: member.orgId, scopes: scopesFor(db, member) },
+      member: {
+        memberId,
+        orgId: member.orgId,
+        scopes: scopesFor(db, member),
+        ...(projectId === null ? {} : { projectId }),
+      },
     });
     setStatus(db, ids, "started", { runId });
     settleRun(db, runId);
