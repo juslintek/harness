@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
-import { listChannels, listMessages } from "../chat/api";
+import { listChannels, listMessages, openDm } from "../chat/api";
 import { addHumanMember, createPosition } from "../orgs/api";
 import { mintRunToken, type TokenScope } from "./api";
 import { ALL, type Db, call as kitCall, tokenFor as kitToken, listen, world } from "./test-kit";
@@ -163,6 +163,16 @@ test("chat_dm is refused for a viewer, as the HTTP DM route does", async () => {
   const res = await call(tokenFor(vee.id, w.a.id), "chat_dm", { handle: "ay", body: "hi" });
   expect(res.isError).toBe(true);
   expect(res.text).toContain("viewers cannot");
+});
+
+test("chat_post is refused for a viewer in a dm", async () => {
+  const w = world(db);
+  const ay = w.agent(w.a.id, "ay");
+  const vee = addHumanMember(db, w.a.id, "v", "vee", "Vee", "viewer");
+  const dm = openDm(db, ay.id, vee.id);
+  const res = await call(tokenFor(vee.id, w.a.id), "chat_post", { channel: dm.id, body: "hi" });
+  expect(res.isError).toBe(true);
+  expect(listMessages(db, dm.id, ay.id, {})).toEqual([]);
 });
 
 test("approvals_decide needs its scope and a manager over the requester", async () => {

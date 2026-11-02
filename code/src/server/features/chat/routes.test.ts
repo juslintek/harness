@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { bootApi } from "../../test-support/api-kit";
 import { createTask } from "../board/api";
 import { createProject, grantProject } from "../orgs/api";
-import { ensureProjectChannel } from "./api";
+import { createGroup, ensureProjectChannel } from "./api";
 
 async function setup() {
   const k = bootApi();
@@ -188,4 +188,20 @@ test("thread replies page with limit and a before cursor, apart from the channel
   expect(older).toHaveLength(1);
   const top = (await (await k.call(owner, "GET", path)).json()) as Msg[];
   expect(top.map((m) => m.body)).toEqual(["root"]);
+});
+
+test("a viewer in a dm or group reads it but cannot post", async () => {
+  const { k, owner, a } = await setup();
+  const viewer = await k.user();
+  const viewerMember = k.join(a.id, viewer, "viewer", "view");
+  const dm = await (
+    await k.call(owner, "POST", "/api/orgs/acme/dms", { memberId: viewerMember.id })
+  ).json();
+  const group = createGroup(k.db, a.id, "crew", [viewerMember.id], a.owner.id);
+  for (const id of [dm.id, group.id]) {
+    const path = `/api/channels/${id}/messages`;
+    expect((await k.call(viewer, "GET", path)).status).toBe(200);
+    expect((await k.call(viewer, "POST", path, { body: "x" })).status).toBe(403);
+    expect((await k.call(owner, "POST", path, { body: "x" })).status).toBe(201);
+  }
 });

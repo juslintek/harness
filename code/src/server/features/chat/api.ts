@@ -118,7 +118,8 @@ export function channelAccess(
     if (access === "none") return "none";
     return access === "read" ? "read" : "write";
   }
-  return isChannelMember(db, channelId, memberId) ? "write" : "none";
+  if (!isChannelMember(db, channelId, memberId)) return "none";
+  return member.role === "viewer" ? "read" : "write";
 }
 
 // Same candidates as mention resolution: every member of the channel's org, and of the grantee
