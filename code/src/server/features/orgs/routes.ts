@@ -66,7 +66,10 @@ function orgRoutesBasic(db: Database, app: Hono<AuthEnv>): void {
       teams: listTeams(db, org.id),
       members: listMembers(db, org.id),
       positions: listPositions(db, org.id),
-      projects: listProjects(db, org.id),
+      projects: listProjects(db, org.id).map((p) =>
+        // The repo path is a host path: only the instance admin sees it, and only for projects this org owns.
+        p.orgId === org.id && c.get("actor").instanceAdmin ? p : { ...p, repo: null },
+      ),
     });
   });
 }

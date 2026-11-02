@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bootApi } from "../../test-support/api-kit";
 import { createEnrollment, enrollmentUser, redeemEnrollment } from "../auth/api";
+import { createProject, grantProject } from "./api";
 
 test("creating an org makes the caller its owner and strangers get 404", async () => {
   const k = bootApi();
@@ -249,4 +250,22 @@ test("a position with a holder and a reporting line needs step-up like a manager
   expect((await post(owner, { title: "Dev", reportsTo: boss.id })).status).toBe(201);
   expect((await post(owner, { title: "Dev2", memberId: a.owner.id })).status).toBe(201);
   expect((await post(stepped, edge)).status).toBe(201);
+});
+
+test("the org detail shows a project's repo path only to the instance admin and only for the owner org", async () => {
+  const k = bootApi();
+  const admin = await k.user({ admin: true });
+  const plain = await k.user();
+  const a = k.org(admin, "acme");
+  const b = k.org(admin, "beta");
+  k.join(a.id, plain, "member", "plain");
+  const repo = mkdtempSync(join(tmpdir(), "routes-repo-"));
+  Bun.spawnSync(["git", "init", "-q", repo]);
+  const project = createProject(k.db, { orgId: a.id, key: "web", name: "Web", repo });
+  grantProject(k.db, project.id, b.id, "read", a.owner.id);
+  const repoSeen = async (who: typeof admin, slug: string) =>
+    (await (await k.call(who, "GET", `/api/orgs/${slug}`)).json()).projects[0].repo;
+  expect(await repoSeen(admin, "acme")).toBe(repo);
+  expect(await repoSeen(plain, "acme")).toBeNull();
+  expect(await repoSeen(admin, "beta")).toBeNull();
 });
