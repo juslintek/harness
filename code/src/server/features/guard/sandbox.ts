@@ -67,6 +67,7 @@ const DENY_WRITE_HOME = [
     "output-styles",
     "CLAUDE.md",
     "rules",
+    "shell-snapshots",
   ]),
   "~/.claude.json",
   ...underHome("~/.gemini", [
@@ -138,6 +139,10 @@ function gitWritable(input: SandboxInput): string[] {
     join(common, "logs/refs/heads", branch),
   ];
 }
+
+// Git resolves the common dir from commondir and the worktree from gitdir, and reads config.worktree as config.
+const adminPointers = (admin: string): string[] =>
+  ["commondir", "gitdir", "config.worktree"].map((name) => join(admin, name));
 
 const SCRUB_KEEP = /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|TERM|TMPDIR|LC_.*)$/;
 
@@ -217,7 +222,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
               join(git, "hooks"),
               join(git, "config"),
               join(git, "modules"),
-              join(input.gitWorktreeDir ?? git, "config.worktree"),
+              ...adminPointers(input.gitWorktreeDir ?? git),
               join(input.worktree, ".git"),
             ]
           : []),

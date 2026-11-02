@@ -220,7 +220,6 @@ export const runAcp: Adapter = async (ctx) => {
     stderr: "pipe",
     detached: true,
   });
-  ctx.onSpawn?.(proc.pid);
   const { shared, faulted } = newShared();
   const safe: RunContext = {
     ...ctx,
@@ -248,11 +247,17 @@ export const runAcp: Adapter = async (ctx) => {
     }
   });
   try {
+    // Inside the try so a throwing onSpawn still reaches terminate().
+    ctx.onSpawn?.(proc.pid);
     const outcome = await settle(conn, safe, sink, shared, clock, faulted);
     if (outcome.error !== null) {
       safe.emit({ kind: "error", runId: ctx.runId, agent: ctx.spec.id, body: outcome.error });
     }
     return outcome;
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    safe.emit({ kind: "error", runId: ctx.runId, agent: ctx.spec.id, body: error });
+    return { stopReason: "error", text: sink.text, usage: [], error, sessionId: shared.sessionId };
   } finally {
     clock.stop();
     await terminate(proc);

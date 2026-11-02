@@ -197,9 +197,6 @@ export const runAgy: Adapter = async (ctx) => {
     stderr: "pipe",
     detached: true,
   });
-  ctx.onSpawn?.(proc.pid);
-  // terminate() wants a piped stdin; agy -p reads none, so close it right away.
-  void proc.stdin.end();
   const seen: Seen = { sessionId: null, result: null, pending: "" };
   let stderr = "";
   const errors = drain(proc.stderr, (t) => {
@@ -207,6 +204,10 @@ export const runAgy: Adapter = async (ctx) => {
   });
   errors.catch(() => undefined);
   try {
+    // Inside the try so a throwing onSpawn still reaches terminate().
+    ctx.onSpawn?.(proc.pid);
+    // terminate() wants a piped stdin; agy -p reads none, so close it right away.
+    void proc.stdin.end();
     const outcome = await finish(proc, ctx, seen, () => stderr, errors);
     if (outcome.error !== null) {
       ctx.emit({ kind: "error", ...base(ctx), body: outcome.error });

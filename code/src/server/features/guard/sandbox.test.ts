@@ -47,25 +47,6 @@ test("settings snapshot: paths expanded, domains merged without duplicates", () 
     ]),
   );
   expect(s.filesystem.allowWrite).not.toContain("/repo/.git");
-  expect(s.filesystem.denyWrite).toEqual(
-    expect.arrayContaining([
-      "/repo/.git/hooks",
-      "/repo/.git/config",
-      "/repo/.git/modules",
-      "/repo/.git/worktrees/r1/config.worktree",
-      "/wt/r1/.git",
-      "/wt/r1/.claude",
-      "/wt/r1/.codex",
-      join(homedir(), ".codex/rules"),
-      join(homedir(), ".claude.json"),
-      join(homedir(), ".claude/settings.local.json"),
-      join(homedir(), ".claude/plugins"),
-      join(homedir(), ".claude/skills"),
-      join(homedir(), ".claude/commands"),
-      join(homedir(), ".gemini/settings.json"),
-      join(homedir(), ".gemini/antigravity-cli/settings.json"),
-    ]),
-  );
   expect(s.filesystem.denyRead).toContain(join(homedir(), ".codex/auth.json"));
   expect(s.filesystem.denyRead).toContain(join(homedir(), ".gemini/oauth_creds.json"));
   expect(s.filesystem.denyRead).not.toContain(join(homedir(), ".claude/.credentials.json"));
@@ -77,6 +58,32 @@ test("settings snapshot: paths expanded, domains merged without duplicates", () 
   expect(s.network.allowedDomains.filter((d) => d === "github.com")).toHaveLength(1);
   expect(s.network.allowedDomains).toContain("api.anthropic.com");
   expect(s.network.allowedDomains).toContain("registry.npmjs.org");
+});
+
+test("git admin pointers and agent code and config dirs are write-denied", () => {
+  const denied = buildSrtSettings(baseInput).filesystem.denyWrite;
+  expect(denied).toEqual(
+    expect.arrayContaining([
+      "/repo/.git/hooks",
+      "/repo/.git/config",
+      "/repo/.git/modules",
+      "/repo/.git/worktrees/r1/config.worktree",
+      "/repo/.git/worktrees/r1/commondir",
+      "/repo/.git/worktrees/r1/gitdir",
+      "/wt/r1/.git",
+      "/wt/r1/.claude",
+      "/wt/r1/.codex",
+      join(homedir(), ".codex/rules"),
+      join(homedir(), ".claude/shell-snapshots"),
+      join(homedir(), ".claude.json"),
+      join(homedir(), ".claude/settings.local.json"),
+      join(homedir(), ".claude/plugins"),
+      join(homedir(), ".claude/skills"),
+      join(homedir(), ".claude/commands"),
+      join(homedir(), ".gemini/settings.json"),
+      join(homedir(), ".gemini/antigravity-cli/settings.json"),
+    ]),
+  );
 });
 
 test("presets and missing git dir", () => {
@@ -250,6 +257,10 @@ test("live srt: a commit works, the git pointer, hooks, config and other refs st
       `echo x > ${gitDir}/hooks/x`,
       `echo x >> ${gitDir}/config`,
       `echo x > ${adminDir}/config.worktree`,
+      `echo ${worktree} > ${adminDir}/commondir`,
+      `echo x > ${adminDir}/gitdir`,
+      `rm ${adminDir}/commondir`,
+      `mv ${adminDir}/gitdir ${adminDir}/gitdir2`,
       `mkdir ${gitDir}/modules`,
       `echo x > ${gitDir}/refs/heads/main`,
       `echo x > ${gitDir}/refs/heads/harness/other`,
@@ -258,6 +269,7 @@ test("live srt: a commit works, the git pointer, hooks, config and other refs st
     ];
     for (const cmd of denied) expect(await run(cmd)).not.toBe(0);
     expect(existsSync(join(gitDir, "hooks", "x"))).toBe(false);
+    expect(await run(`echo z > g && git add g && ${commit} -m t3`)).toBe(0);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

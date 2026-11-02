@@ -86,3 +86,14 @@ test("an agent without a permission mode runs but is flagged", async () => {
   });
   expect(h.requests.some((r) => r.method === "session/set_config_option")).toBe(false);
 });
+
+test("an onSpawn that throws ends the run as error and the process is gone", async () => {
+  const h = await drive([{ hang: true }], {
+    onSpawn: () => {
+      throw new Error("pid write failed");
+    },
+  });
+  expect(h.outcome.stopReason).toBe("error");
+  expect(h.outcome.error).toContain("pid write failed");
+  expect(gone(h.pid)).toBe(true);
+});

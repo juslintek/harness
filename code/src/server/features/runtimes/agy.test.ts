@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getSpec } from "../agents/api";
@@ -42,6 +42,7 @@ interface Opts {
   model?: string | null;
   idle?: number;
   abortAfter?: number;
+  onSpawn?: (pid: number) => void;
 }
 
 let seq = 0;
@@ -78,9 +79,11 @@ async function run(
     decide: () => Promise.resolve("deny"),
     onQuota: () => {},
     signal: abort.signal,
+    ...(opts.onSpawn ? { onSpawn: opts.onSpawn } : {}),
     idleTimeoutMs: opts.idle ?? 10_000,
   });
-  return { outcome, events, argv: JSON.parse(readFileSync(argvFile, "utf8")) };
+  const argv = existsSync(argvFile) ? JSON.parse(readFileSync(argvFile, "utf8")) : [];
+  return { outcome, events, argv };
 }
 
 const agentStep = (state: string, delta: string, extra = {}): string =>
@@ -194,4 +197,18 @@ test("silence past the idle limit is a timeout", async () => {
 test("abort ends the run as cancelled", async () => {
   const { outcome } = await run([init], { hang: true, abortAfter: 300 });
   expect(outcome).toMatchObject({ stopReason: "cancelled", error: null });
+});
+
+test("an onSpawn that throws ends the run as error and the process is gone", async () => {
+  let spawned = 0;
+  const { outcome } = await run([init], {
+    hang: true,
+    onSpawn: (pid) => {
+      spawned = pid;
+      throw new Error("pid write failed");
+    },
+  });
+  expect(outcome.stopReason).toBe("error");
+  expect(outcome.error).toContain("pid write failed");
+  expect(() => process.kill(spawned, 0)).toThrow();
 });

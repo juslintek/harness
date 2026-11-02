@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentSpec } from "../agents/api";
@@ -33,6 +33,7 @@ export interface Opts {
   model?: string | null;
   mcp?: RunContext["mcp"];
   abortWhen?: (e: NewEvent) => boolean;
+  onSpawn?: (pid: number) => void;
 }
 
 function decider(opts: Opts, asks: PermissionAsk[]): RunContext["decide"] {
@@ -52,6 +53,7 @@ export async function drive(script: unknown[], opts: Opts = {}): Promise<Harness
   const asks: PermissionAsk[] = [];
   const quotas: Harness["quotas"] = [];
   const abort = new AbortController();
+  let spawned = 0;
   const spec = opts.spec === undefined ? getSpec("claude") : opts.spec;
   if (!spec) throw new Error("spec missing");
   const outcome = await runAcp({
@@ -77,15 +79,19 @@ export async function drive(script: unknown[], opts: Opts = {}): Promise<Harness
     },
     decide: decider(opts, asks),
     ...(opts.decideTimeoutMs === undefined ? {} : { decideTimeoutMs: opts.decideTimeoutMs }),
+    onSpawn: (pid) => {
+      spawned = pid;
+      opts.onSpawn?.(pid);
+    },
     onQuota: (q) => quotas.push(q),
     signal: abort.signal,
     idleTimeoutMs: opts.idleTimeoutMs ?? 10_000,
   });
-  const requests = readFileSync(logFile, "utf8")
+  const requests = (existsSync(logFile) ? readFileSync(logFile, "utf8") : "")
     .split("\n")
     .filter(Boolean)
     .map((l) => JSON.parse(l));
-  return { outcome, events, asks, quotas, requests, pid: Number(readFileSync(pidFile, "utf8")) };
+  return { outcome, events, asks, quotas, requests, pid: spawned };
 }
 
 export function gone(pid: number): boolean {

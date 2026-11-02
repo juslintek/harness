@@ -6,7 +6,6 @@ CREATE TABLE runs (
   repo TEXT NOT NULL,
   worktree TEXT,
   branch TEXT,
-  pid INTEGER,
   prompt TEXT NOT NULL,
   state TEXT NOT NULL,
   reason TEXT,
