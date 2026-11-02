@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
 import { z } from "zod";
+import { appendEvent } from "../logs/api";
 import type { AgentSpec } from "./api";
 import {
   getSpec,
@@ -31,7 +32,17 @@ const noAcp: ModelSources = {
 export function agentRoutes(db: Database, models: ModelSources = noAcp): Hono {
   const app = new Hono();
   app.get("/", async (c) => c.json(await listAgents(db)));
-  app.get("/keys", async (c) => c.json(await keyStatus()));
+  app.get("/keys", async (c) =>
+    c.json(
+      await keyStatus(undefined, undefined, undefined, (provider) =>
+        appendEvent(db, {
+          kind: "error",
+          source: "keys",
+          body: `${provider} key is also left in the login keychain: the delete failed`,
+        }),
+      ),
+    ),
+  );
   app.get("/ollaya", async (c) => c.json(await ollayaStatus()));
   app.post("/keys/:provider", async (c) => {
     const provider = c.req.param("provider");

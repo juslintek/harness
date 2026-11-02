@@ -40,10 +40,10 @@ test("keyStatus reports the source and never the value", async () => {
   await storeKey("gemini", SECRET, home);
   const status = await keyStatus(fakeSpawn().spawn, { OPENAI_API_KEY: SECRET }, home);
   expect(status).toEqual([
-    { provider: "anthropic", source: null },
-    { provider: "openai", source: "env" },
-    { provider: "gemini", source: "keychain" },
-    { provider: "openrouter", source: null },
+    { provider: "anthropic", source: null, legacyLeft: false },
+    { provider: "openai", source: "env", legacyLeft: false },
+    { provider: "gemini", source: "keychain", legacyLeft: false },
+    { provider: "openrouter", source: null, legacyLeft: false },
   ]);
   expect(JSON.stringify(status)).not.toContain(SECRET);
 });
@@ -143,6 +143,50 @@ test("a failed Keychain delete keeps the key in the store", async () => {
   expect(JSON.parse(readFileSync(join(home, "secrets.json"), "utf8"))).toEqual({
     openai: "legacy-openai-0123456789",
   });
+});
+
+test("a Keychain delete that failed is retried on the next start", async () => {
+  const home = freshHome();
+  const stored = { openai: "legacy-openai-0123456789" };
+  const { spawn, calls } = fakeSpawn(stored);
+  const brokenDelete: SecuritySpawn = (argv, stdin) =>
+    argv[1] === "delete-generic-password"
+      ? Promise.reject(new Error("locked"))
+      : spawn(argv, stdin);
+  await migrateLegacy(home, brokenDelete);
+  expect(stored).toHaveProperty("openai");
+  await migrateLegacy(home, spawn);
+  expect(stored).not.toHaveProperty("openai");
+  expect(deletes(calls)).toBe(1);
+});
+
+test("a store value that differs from the old item leaves the old item alone on every start", async () => {
+  const home = freshHome();
+  await storeKey("openai", "new-store-key-0123456789", home);
+  const stored = { openai: "legacy-openai-0123456789" };
+  const { spawn, calls } = fakeSpawn(stored);
+  await migrateLegacy(home, spawn);
+  await migrateLegacy(home, spawn);
+  expect(deletes(calls)).toBe(0);
+  expect(stored).toHaveProperty("openai");
+});
+
+test("keyStatus flags a key whose old Keychain item could not be deleted and warns once", async () => {
+  const home = freshHome();
+  const { spawn } = fakeSpawn({ openai: "legacy-openai-0123456789" });
+  const brokenDelete: SecuritySpawn = (argv, stdin) =>
+    argv[1] === "delete-generic-password"
+      ? Promise.resolve({ code: 1, stdout: "" })
+      : spawn(argv, stdin);
+  const warned: string[] = [];
+  const warn = (provider: string) => warned.push(provider);
+  const first = await keyStatus(brokenDelete, {}, home, warn);
+  await keyStatus(brokenDelete, {}, home, warn);
+  expect(first.filter((k) => k.legacyLeft)).toEqual([
+    { provider: "openai", source: "keychain", legacyLeft: true },
+  ]);
+  expect(warned).toEqual(["openai"]);
+  expect(JSON.stringify(first)).not.toContain("legacy-openai");
 });
 
 test("an unreadable store fails loudly and is not overwritten", async () => {

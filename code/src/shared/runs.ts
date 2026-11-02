@@ -173,10 +173,13 @@ export const agentRowSchema: z.ZodType<AgentRow> = z.object({
 export interface KeyStatus {
   provider: string;
   source: "env" | "keychain" | null;
+  // The old login Keychain item could not be deleted, so the key is also there.
+  legacyLeft: boolean;
 }
 export const keyStatusSchema: z.ZodType<KeyStatus> = z.object({
   provider: z.string(),
   source: z.enum(["env", "keychain"]).nullable(),
+  legacyLeft: z.boolean(),
 });
 
 export interface OllayaStatus {

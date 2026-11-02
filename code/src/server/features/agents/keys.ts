@@ -143,36 +143,42 @@ async function readLegacy(provider: Provider, spawn: SecuritySpawn): Promise<str
   return code === 0 ? stdout.replace(/\n$/, "") || null : null;
 }
 
-// Copy, check the copy reads back, and only then delete the login Keychain item. A failure before
-// the delete leaves the Keychain item alone. A failed delete keeps the file entry: the key is safe
-// in the store and the old item is only a leftover.
+// Copy if the store lacks the key and check the copy reads back; the login Keychain item is deleted
+// only while the store holds the same value, so a failed delete is retried on the next start and a
+// different value in the store leaves the old item alone. A failure before the delete never deletes.
+// Returns the providers whose old item is still in the Keychain after a delete that failed.
 export async function migrateLegacy(
   home: string,
   spawn: SecuritySpawn,
   write: typeof updateStore = updateStore,
-): Promise<void> {
+): Promise<Provider[]> {
+  const left: Provider[] = [];
   for (const provider of providers) {
-    if ((await readStore(home))[provider]) continue;
     const legacy = await readLegacy(provider, spawn);
     if (!legacy) continue;
-    await write(home, provider, legacy);
-    if ((await readStore(home))[provider] !== legacy)
-      throw new Error(`could not migrate the ${provider} key`);
-    await spawn([
+    if (!(await readStore(home))[provider]) {
+      await write(home, provider, legacy);
+      if ((await readStore(home))[provider] !== legacy)
+        throw new Error(`could not migrate the ${provider} key`);
+    }
+    if ((await readStore(home))[provider] !== legacy) continue;
+    const deleted = await spawn([
       "security",
       "delete-generic-password",
       "-s",
       LEGACY_SERVICE,
       "-a",
       provider,
-    ]).catch(() => undefined);
+    ]).catch(() => ({ code: 1 }));
+    if (deleted.code !== 0) left.push(provider);
   }
+  return left;
 }
 
-const migrations = new Map<string, Promise<void>>();
+const migrations = new Map<string, Promise<Provider[]>>();
 
 // Once per process and home; a failed attempt is retried on the next call.
-function ready(home: string, spawn: SecuritySpawn): Promise<void> {
+function ready(home: string, spawn: SecuritySpawn): Promise<Provider[]> {
   let done = migrations.get(home);
   if (!done) {
     done = migrateLegacy(home, spawn);
@@ -191,17 +197,28 @@ async function fromStore(
   return (await readStore(home))[provider] || null;
 }
 
-// The source stays "keychain" for the UI contract in shared/runs.ts.
+const warned = new Set<string>();
+
+// The source stays "keychain" for the UI contract in shared/runs.ts. `warn` is called once per
+// process for each key whose old Keychain item could not be deleted; it never gets the value.
 export async function keyStatus(
   spawn: SecuritySpawn = spawnBounded,
   env: Env = process.env,
   home: string = loadConfig().home,
-): Promise<Array<{ provider: Provider; source: "env" | "keychain" | null }>> {
+  warn: (provider: Provider) => void = () => undefined,
+): Promise<Array<{ provider: Provider; source: "env" | "keychain" | null; legacyLeft: boolean }>> {
+  const left = await ready(home, spawn);
+  for (const provider of left) {
+    if (warned.has(`${home}:${provider}`)) continue;
+    warned.add(`${home}:${provider}`);
+    warn(provider);
+  }
   return Promise.all(
     providers.map(async (provider) => {
-      if (fromEnv(provider, env)) return { provider, source: "env" as const };
+      const legacyLeft = left.includes(provider);
+      if (fromEnv(provider, env)) return { provider, source: "env" as const, legacyLeft };
       const stored = await fromStore(provider, spawn, home);
-      return { provider, source: stored ? ("keychain" as const) : null };
+      return { provider, source: stored ? ("keychain" as const) : null, legacyLeft };
     }),
   );
 }
