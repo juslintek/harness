@@ -1,6 +1,30 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import { allowedHosts, COOKIE_NAME, loadOrCreateSecret, safeEqual, sessionValue } from "./admin";
+import {
+  createEnrollment,
+  newRecoveryCodes,
+  redeemEnrollment,
+  requestEmailCode,
+  useRecoveryCode,
+  verifyEmailCode,
+} from "./codes";
+import {
+  finishLogin,
+  finishRegistration,
+  finishStepUp,
+  loginOptions,
+  registrationOptions,
+  stepUpOptions,
+} from "./passkeys";
+import {
+  createSession,
+  hasFreshStepUp,
+  listSessions,
+  revokeSession,
+  sessionFromToken,
+} from "./sessions";
+import { countUsers, findUserByEmail, getUser } from "./users";
 
 export function ensureAdminSecret(home: string): string {
   return loadOrCreateSecret(home);
@@ -57,3 +81,29 @@ export function loginHandler(secret: string): (c: Context) => Response {
     return c.redirect("/");
   };
 }
+
+export type { Rp } from "./passkeys";
+export type { Session, SessionInfo } from "./sessions";
+export type { User } from "./users";
+export {
+  countUsers,
+  createEnrollment,
+  createSession,
+  findUserByEmail,
+  finishLogin,
+  finishRegistration,
+  finishStepUp,
+  getUser,
+  hasFreshStepUp,
+  listSessions,
+  loginOptions,
+  newRecoveryCodes,
+  redeemEnrollment,
+  registrationOptions,
+  requestEmailCode,
+  revokeSession,
+  sessionFromToken,
+  stepUpOptions,
+  useRecoveryCode,
+  verifyEmailCode,
+};
