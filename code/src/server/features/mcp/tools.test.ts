@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { listChannels, listMessages } from "../chat/api";
-import { createPosition } from "../orgs/api";
+import { addHumanMember, createPosition } from "../orgs/api";
 import { mintRunToken, type TokenScope } from "./api";
 import { ALL, type Db, call as kitCall, tokenFor as kitToken, listen, world } from "./test-kit";
 
@@ -154,6 +154,15 @@ test("chat_dm opens a private channel only the two members see", async () => {
   expect(
     (await call(tokenFor(x.id, w.a.id), "chat_dm", { handle: "nobody", body: "hi" })).isError,
   ).toBe(true);
+});
+
+test("chat_dm is refused for a viewer, as the HTTP DM route does", async () => {
+  const w = world(db);
+  w.agent(w.a.id, "ay");
+  const vee = addHumanMember(db, w.a.id, "v", "vee", "Vee", "viewer");
+  const res = await call(tokenFor(vee.id, w.a.id), "chat_dm", { handle: "ay", body: "hi" });
+  expect(res.isError).toBe(true);
+  expect(res.text).toContain("viewers cannot");
 });
 
 test("approvals_decide needs its scope and a manager over the requester", async () => {

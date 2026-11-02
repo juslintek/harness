@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ChannelView } from "../../../shared/chat";
 import { listChannels, listMessages, markRead, openDm, postMessage } from "../chat/api";
-import { findMemberByHandle } from "../orgs/api";
+import { findMemberByHandle, getMember, roleAtLeast } from "../orgs/api";
 import { defineTool, fail, handleOf, type ToolCtx, type ToolEnv } from "./tools-kit";
 
 const body = z.string().min(1).max(8000);
@@ -95,6 +95,8 @@ function registerWrites(server: McpServer, env: ToolEnv): void {
       shape: { handle: z.string(), body },
     },
     (ctx, a) => {
+      const self = getMember(ctx.db, ctx.memberId);
+      if (!self || !roleAtLeast(self.role, "member")) fail("viewers cannot send direct messages");
       const to = findMemberByHandle(ctx.db, ctx.orgId, a.handle.replace(/^@/, ""));
       if (!to) fail(`no member @${a.handle}`);
       const m = postMessage(ctx.db, {
