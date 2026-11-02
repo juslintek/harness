@@ -6,9 +6,8 @@ import { migrations } from "./db/migrations";
 import { appendEvent } from "./features/logs/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./http";
 import { wireRealtime } from "./realtime";
-import { adminHeaders, listenDeferred, openSocket } from "./test-support/app-kit";
+import { listenDeferred, openSocket, sessionHeaders } from "./test-support/app-kit";
 
-const SECRET = "s".repeat(64);
 const RUN_ID = "0190a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b";
 let db: Database;
 let port: number;
@@ -25,7 +24,7 @@ beforeEach(() => {
     db,
     home: "/unused",
     port,
-    secret: SECRET,
+    rp: { id: "localhost", name: "Harness", origin: `http://localhost:${port}` },
     instanceId: "abc",
     version: "1",
     runDeps: { home: "/unused", port, resolveSpec: () => null },
@@ -36,7 +35,9 @@ afterEach(async () => {
   await server.stop(true);
 });
 
-const cookie = (): Promise<Record<string, string>> => adminHeaders(app, port, SECRET);
+const cookie = async (): Promise<Record<string, string>> =>
+  (await sessionHeaders(db, { admin: true, stepUp: true, origin: `http://localhost:${port}` }))
+    .headers;
 
 async function call(path: string, method: string, body?: unknown): Promise<Response> {
   return app.request(path, {
@@ -111,20 +112,23 @@ test("approvals: raw command shown, decide 200 then 409, unknown 404, bad input 
   const done = await call("/api/approvals/a1", "POST", { decision: "approve" });
   expect(done.status).toBe(200);
   expect(approvalViewSchema.parse(await done.json()).status).toBe("approved");
+  expect(db.query("SELECT decided_by FROM approvals WHERE id = 'a1'").get()).toEqual({
+    decided_by: expect.stringMatching(/^user:/),
+  });
   expect((await call("/api/approvals/a1", "POST", { decision: "deny" })).status).toBe(409);
   expect((await call("/api/approvals/zzz", "POST", { decision: "deny" })).status).toBe(404);
 });
 
-test("approval and run routes need the admin cookie", async () => {
-  const host = { host: `127.0.0.1:${port}` };
+test("approval and run routes need a session cookie", async () => {
+  const host = { host: `localhost:${port}` };
   for (const path of ["/api/runs", "/api/approvals", "/api/halt"]) {
     expect((await app.request(path, { headers: host })).status).toBe(401);
   }
 });
 
 test("/ws without cookie or with a foreign origin is rejected before any upgrade", async () => {
-  const host = { host: `127.0.0.1:${port}` };
-  const origin = `http://127.0.0.1:${port}`;
+  const host = { host: `localhost:${port}` };
+  const origin = `http://localhost:${port}`;
   expect((await app.request("/ws?topic=runs", { headers: { ...host, origin } })).status).toBe(401);
   const headers = await cookie();
   const evil = { ...headers, origin: "http://evil.test" };
@@ -142,7 +146,7 @@ test("real socket: bad cookie rejected, admin cookie receives approval and run m
     await expect(
       openSocket(`ws://127.0.0.1:${port}/ws?topic=runs`, {
         ...headers,
-        cookie: "harness_admin=bad",
+        cookie: "harness_session=bad",
       }),
     ).rejects.toThrow();
     await expect(openSocket(`ws://127.0.0.1:${port}/ws?topic=bogus`, headers)).rejects.toThrow();

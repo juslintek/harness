@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
 import { z } from "zod";
 import { haltBody, type RunDetail, type RunView, startRunBody } from "../../../shared/runs";
+import { type AuthEnv, requireStepUp } from "../auth/api";
 import { listRunEvents, readBody } from "../logs/api";
 import { usageSummary } from "../usage/api";
 import {
@@ -104,10 +105,10 @@ export function runRoutes(db: Database, deps: RunDeps): Hono {
   return app;
 }
 
-export function haltRoutes(db: Database): Hono {
-  const app = new Hono();
+export function haltRoutes(db: Database): Hono<AuthEnv> {
+  const app = new Hono<AuthEnv>();
   app.get("/", (c) => c.json({ halted: isHalted(db) }));
-  app.post("/", async (c) => {
+  app.post("/", requireStepUp, async (c) => {
     const body = haltBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid body" }, 400);
     setHalted(db, body.data.halted);

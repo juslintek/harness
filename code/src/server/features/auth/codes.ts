@@ -111,6 +111,7 @@ export function createEnrollment(
 interface EnrollmentRow {
   user_id: string | null;
   email: string | null;
+  redeemed_user_id: string | null;
 }
 
 function userForEnrollment(
@@ -126,6 +127,11 @@ function userForEnrollment(
   return createUser(db, { ...profile, instanceAdmin: bootstrap });
 }
 
+const LIVE_ENROLLMENT =
+  "SELECT user_id, email, redeemed_user_id FROM enrollments WHERE code_hash = ? AND used_at IS NULL AND expires_at > ?";
+
+// Redeeming only fixes which user the code is for; the code stays live until completeEnrollment,
+// so a cancelled passkey prompt can ask again and get a fresh challenge for the same user.
 export function redeemEnrollment(
   db: Database,
   code: string,
@@ -133,16 +139,44 @@ export function redeemEnrollment(
 ): string | null {
   return db.transaction((): string | null => {
     const hash = sha256Hex(normalizeCode(code));
-    const now = Date.now();
-    const row = db
-      .query<EnrollmentRow, [string, number]>(
-        "SELECT user_id, email FROM enrollments WHERE code_hash = ? AND used_at IS NULL AND expires_at > ?",
-      )
-      .get(hash, now);
+    const row = db.query<EnrollmentRow, [string, number]>(LIVE_ENROLLMENT).get(hash, Date.now());
     if (!row) return null;
+    if (row.redeemed_user_id) return row.redeemed_user_id;
     const userId = userForEnrollment(db, row, profile);
     if (userId === null) return null;
-    db.query("UPDATE enrollments SET used_at = ? WHERE code_hash = ?").run(now, hash);
+    db.query("UPDATE enrollments SET redeemed_user_id = ? WHERE code_hash = ?").run(userId, hash);
     return userId;
   })();
+}
+
+export function enrollmentUser(db: Database, code: string): string | null {
+  const hash = sha256Hex(normalizeCode(code));
+  return (
+    db.query<EnrollmentRow, [string, number]>(LIVE_ENROLLMENT).get(hash, Date.now())
+      ?.redeemed_user_id ?? null
+  );
+}
+
+export function completeEnrollment(db: Database, code: string): void {
+  db.query("UPDATE enrollments SET used_at = ? WHERE code_hash = ? AND used_at IS NULL").run(
+    Date.now(),
+    sha256Hex(normalizeCode(code)),
+  );
+}
+
+// First run is an empty instance, or one whose bootstrap never got as far as a passkey. Older
+// unused bootstrap links die first so only one first-run link is ever live.
+export function firstRunEnrollment(db: Database, ttlMs: number): string | null {
+  const passkeys = db.query<{ n: number }, []>("SELECT count(*) AS n FROM passkeys").get()?.n ?? 0;
+  if (countUsers(db) > 0 && passkeys > 0) return null;
+  const owner = db
+    .query<{ id: string }, []>(
+      "SELECT id FROM users ORDER BY instance_admin DESC, created_at LIMIT 1",
+    )
+    .get();
+  db.query(
+    `UPDATE enrollments SET used_at = ?
+      WHERE used_at IS NULL AND ((user_id IS NULL AND email IS NULL) OR user_id = ?)`,
+  ).run(Date.now(), owner?.id ?? null);
+  return createEnrollment(db, owner ? { userId: owner.id, ttlMs } : { ttlMs });
 }

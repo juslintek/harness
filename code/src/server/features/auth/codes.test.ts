@@ -2,8 +2,10 @@ import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import {
+  completeEnrollment,
   countUsers,
   createEnrollment,
+  firstRunEnrollment,
   newRecoveryCodes,
   redeemEnrollment,
   requestEmailCode,
@@ -122,6 +124,8 @@ test("enrollment: bootstrap creates instance admin, reuse null", () => {
   expect(
     empty.query<{ instance_admin: number }, []>("SELECT instance_admin FROM users").get(),
   ).toEqual({ instance_admin: 1 });
+  expect(redeemEnrollment(empty, code, { email: "o2@example.com", name: "Owner" })).toBe(userId);
+  completeEnrollment(empty, code);
   expect(redeemEnrollment(empty, code, { email: "o2@example.com", name: "Owner" })).toBeNull();
   expect(countUsers(empty)).toBe(1);
   const late = createEnrollment(db, { ttlMs: MIN });
@@ -145,4 +149,23 @@ test("enrollment: expired null, existing-user code returns that user, email-boun
       .query<{ instance_admin: number }, [string]>("SELECT instance_admin FROM users WHERE id = ?")
       .get(joined ?? ""),
   ).toEqual({ instance_admin: 0 });
+});
+
+test("first run: one live bootstrap link, and a bootstrap that never got a passkey is offered again", () => {
+  const db = openDb(":memory:");
+  migrate(db, migrations);
+  const profile = { email: "o@example.com", name: "Owner" };
+  const first = firstRunEnrollment(db, MIN) ?? "";
+  const second = firstRunEnrollment(db, MIN) ?? "";
+  expect(redeemEnrollment(db, first, profile)).toBeNull();
+  const userId = redeemEnrollment(db, second, profile) ?? "";
+  expect(userId).not.toBe("");
+  const again = firstRunEnrollment(db, MIN) ?? "";
+  expect(redeemEnrollment(db, second, profile)).toBeNull();
+  expect(redeemEnrollment(db, again, profile)).toBe(userId);
+  db.run(
+    "INSERT INTO passkeys (id, user_id, public_key, counter, name, created_at) VALUES ('p', ?, x'00', 0, 'k', 1)",
+    [userId],
+  );
+  expect(firstRunEnrollment(db, MIN)).toBeNull();
 });

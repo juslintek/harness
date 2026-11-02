@@ -8,6 +8,7 @@ test("defaults expand ~ and use port 4100", () => {
     home: join(homedir(), ".harness"),
     port: 4100,
     host: "127.0.0.1",
+    rp: { id: "localhost", name: "Harness", origin: "http://localhost:4100" },
   });
 });
 
@@ -17,8 +18,19 @@ test("env overrides", () => {
       home: "/x",
       port: 5000,
       host: "0.0.0.0",
+      rp: { id: "localhost", name: "Harness", origin: "http://localhost:5000" },
     },
   );
+});
+
+test("HARNESS_ORIGIN sets the relying party and drops any path", () => {
+  const rp = loadConfig({ HARNESS_ORIGIN: "https://harness.example.com/x" }).rp;
+  expect(rp).toEqual({
+    id: "harness.example.com",
+    name: "Harness",
+    origin: "https://harness.example.com",
+  });
+  expect(() => loadConfig({ HARNESS_ORIGIN: "ftp://harness.example.com" })).toThrow();
 });
 
 test("bad port throws", () => {
