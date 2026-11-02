@@ -102,7 +102,7 @@ export class ViewerError extends Error {
   }
 }
 
-export function runNow(db: Database, memberId: string, causedBy: string): string {
+export function runNow(db: Database, memberId: string, causedBy: string, taskId?: string): string {
   const member = getMember(db, memberId);
   if (member?.kind !== "agent") throw new Error("not an agent member");
   if (member.paused) throw new Error("member is paused");
@@ -112,7 +112,7 @@ export function runNow(db: Database, memberId: string, causedBy: string): string
     logCap(db, member, Date.now());
     throw new WakeCapError();
   }
-  return store(db, member, { memberId, reason: "run_now", causedBy });
+  return store(db, member, { memberId, reason: "run_now", causedBy, taskId });
 }
 
 const excerpt = (text: string): string => text.slice(0, EXCERPT_CHARS);

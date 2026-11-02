@@ -73,8 +73,8 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => void {
   };
 }
 
-export function wakeNow(db: Database, memberId: string, causedBy: string): string {
-  const id = runNow(db, memberId, causedBy);
+export function wakeNow(db: Database, memberId: string, causedBy: string, taskId?: string): string {
+  const id = runNow(db, memberId, causedBy, taskId);
   for (const kick of kickers) kick();
   return id;
 }

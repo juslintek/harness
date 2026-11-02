@@ -44,7 +44,9 @@ function describe(db: Database, wake: WakeRow): string {
     case "schedule":
       return "Your scheduled heartbeat: look at the board for work that is yours.";
     case "run_now":
-      return "A person asked you to run now.";
+      return wake.taskId === null
+        ? "A person asked you to run now."
+        : `A person asked you to run now on ${taskLabel(db, wake.taskId)}.`;
   }
 }
 

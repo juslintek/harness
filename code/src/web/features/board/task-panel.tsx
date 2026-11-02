@@ -162,7 +162,10 @@ function TaskActions({
   };
   const wake = async (): Promise<void> => {
     try {
-      await api(`/api/members/${task.assigneeId}/wake`, z.unknown(), { method: "POST", body: {} });
+      await api(`/api/members/${task.assigneeId}/wake`, z.unknown(), {
+        method: "POST",
+        body: { taskId: task.id },
+      });
       setMessage(`Asked @${assignee?.handle} to run now`);
     } catch (err) {
       setMessage(errorText(err));

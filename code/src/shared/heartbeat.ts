@@ -27,6 +27,10 @@ export interface WakeupView {
   endedAt: number | null;
 }
 
+export const wakeBody: z.ZodType<{ taskId?: string | undefined }> = z.object({
+  taskId: z.string().min(1).optional(),
+});
+
 export const wakeupsQuery: z.ZodType<{ limit: number }> = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
