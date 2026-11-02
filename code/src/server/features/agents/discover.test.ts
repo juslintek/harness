@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { discoverAgents, type Runner } from "./discover";
 
 interface Reply {
@@ -102,4 +104,15 @@ test("a probe that throws gives unknown login state and the error", async () => 
 test("agents without a probe have unknown login state", async () => {
   const agent = await find({ "junie --version": { stdout: "junie 1.2.3" } }, "junie");
   expect(agent).toMatchObject({ installed: true, loggedIn: null });
+});
+
+test("the codex login probe runs against the real ~/.codex, the one runs symlink auth from", async () => {
+  const seen: Record<string, Record<string, string> | undefined> = {};
+  const run: Runner = async (argv, _timeout, env) => {
+    seen[argv.join(" ")] = env;
+    return { code: 0, stdout: "Logged in using ChatGPT", stderr: "" };
+  };
+  await discoverAgents(run);
+  expect(seen["codex login status"]).toEqual({ CODEX_HOME: join(homedir(), ".codex") });
+  expect(seen["claude auth status"]).toBeUndefined();
 });

@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 export interface AgentSpec {
@@ -9,7 +10,11 @@ export interface AgentSpec {
   /** Full argv of the installed CLI (not the adapter) that prints its version. */
   versionArgs: string[];
   /** Full argv, read-only. */
-  loginProbe: { args: string[]; loggedInWhen: "exit0" | { stdoutIncludes: string } } | null;
+  loginProbe: {
+    args: string[];
+    loggedInWhen: "exit0" | { stdoutIncludes: string };
+    env?: Record<string, string>;
+  } | null;
   /** Full argv of the interactive login command, null when the CLI has none. */
   loginArgs: string[] | null;
   modeOption: { configId: string; value: string } | null;
@@ -52,6 +57,9 @@ export const agentSpecs: readonly AgentSpec[] = [
     loginProbe: {
       args: ["codex", "login", "status"],
       loggedInWhen: { stdoutIncludes: "Logged in using ChatGPT" },
+      // Runs get a private CODEX_HOME that only symlinks ~/.codex/auth.json, so the login that
+      // matters is the one in ~/.codex, even if the server was started with another CODEX_HOME.
+      env: { CODEX_HOME: join(homedir(), ".codex") },
     },
     loginArgs: ["codex", "login"],
     modeOption: { configId: "mode", value: "workspace-write" },

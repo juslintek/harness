@@ -3,6 +3,7 @@ import { type AgentSpec, agentSpecs } from "./specs";
 export type Runner = (
   argv: string[],
   timeoutMs: number,
+  env?: Record<string, string>,
 ) => Promise<{ code: number; stdout: string; stderr: string }>;
 
 export interface DiscoveredAgent {
@@ -24,10 +25,16 @@ function errorText(err: unknown): string {
 export async function bunRunner(
   argv: string[],
   timeoutMs: number,
+  env?: Record<string, string>,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
   try {
-    proc = Bun.spawn(argv, { stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+    proc = Bun.spawn(argv, {
+      stdout: "pipe",
+      stderr: "pipe",
+      stdin: "ignore",
+      ...(env && { env: { ...process.env, ...env } }),
+    });
   } catch (err) {
     return { code: NOT_FOUND, stdout: "", stderr: errorText(err) };
   }
@@ -55,7 +62,11 @@ async function probeLogin(
 ): Promise<Pick<DiscoveredAgent, "loggedIn" | "error">> {
   if (!spec.loginProbe) return { loggedIn: null, error: null };
   try {
-    const { code, stdout, stderr } = await run(spec.loginProbe.args, TIMEOUT_MS);
+    const { code, stdout, stderr } = await run(
+      spec.loginProbe.args,
+      TIMEOUT_MS,
+      spec.loginProbe.env,
+    );
     const rule = spec.loginProbe.loggedInWhen;
     const loggedIn =
       code === 0 &&
