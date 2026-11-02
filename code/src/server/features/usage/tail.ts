@@ -128,6 +128,14 @@ function applyBatches(db: Database, lines: PendingLine[], parse: Parser, ctx: Li
   return added;
 }
 
+// The collector runs lazily; without a full GC a multi-GB backfill piled up to ~270 MB in-process.
+// A file with a stored offset only grew a little since the last sweep, so it skips the GC.
+// The sleep lets the HTTP server run between chunks.
+async function yieldBetweenChunks(backfill: boolean): Promise<void> {
+  if (backfill) Bun.gc(true);
+  await Bun.sleep(0);
+}
+
 async function tailFile(db: Database, source: TailSource, path: string): Promise<number> {
   const stat = statSync(path);
   const mtime = Math.floor(stat.mtimeMs);
@@ -162,10 +170,7 @@ async function tailFile(db: Database, source: TailSource, path: string): Promise
       added += applyBatches(db, lines, PARSERS[source.name], ctx);
       carry = Buffer.from(buf.subarray(consumed));
       saveOffset(db, path, readPos - carry.length, mtime);
-      // The collector runs lazily; without this a multi-GB backfill piled up to ~270 MB in-process.
-      Bun.gc(true);
-      // Lets the HTTP server run between chunks of a large backfill.
-      await Bun.sleep(0);
+      await yieldBetweenChunks(!saved);
     }
   } finally {
     closeSync(fd);

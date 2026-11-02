@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrate, openDb } from "../../db/db";
@@ -40,7 +40,7 @@ function usageEvents(): number {
   );
 }
 
-test("a backfill collects garbage after every chunk instead of piling it up", async () => {
+test("a backfill collects garbage after every chunk, later sweeps of a known file do not", async () => {
   let text = "";
   for (let i = 0; i < 30_000; i++) text += claudeLine(`msg_${i}`);
   writeFileSync(join(dir, "claude", "proj", "a.jsonl"), text);
@@ -51,6 +51,10 @@ test("a backfill collects garbage after every chunk instead of piling it up", as
     expect(await tailOnce(db, sources)).toBe(30_000);
     expect(usageEvents()).toBe(30_000);
     expect(gc.mock.calls.length).toBeGreaterThanOrEqual(chunks);
+    gc.mockClear();
+    appendFileSync(join(dir, "claude", "proj", "a.jsonl"), claudeLine("msg_late"));
+    expect(await tailOnce(db, sources)).toBe(1);
+    expect(gc).not.toHaveBeenCalled();
   } finally {
     gc.mockRestore();
   }
