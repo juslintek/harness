@@ -80,3 +80,18 @@ test("an assignee needs write access to the project", async () => {
   expect(viewer.text).toContain("cannot work");
   expect((await make("ay")).isError).toBe(false);
 });
+
+test("an assignee handle is found in a grantee org, and an ambiguous one is refused", async () => {
+  const w = world(db);
+  const x = w.agent(w.a.id, "ax");
+  w.agent(w.b.id, "gee");
+  grantProject(db, w.project.id, w.b.id, "write", x.id);
+  const t = tokenFor(db, x.id, w.a.id);
+  const make = (assignee: string) =>
+    call(server, t, "task_create", { project: "web", title: "n", assignee });
+  expect((await make("gee")).isError).toBe(false);
+  w.agent(w.a.id, "gee");
+  const twice = await make("gee");
+  expect(twice.isError).toBe(true);
+  expect(twice.text).toContain("unique handle");
+});

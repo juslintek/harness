@@ -15,7 +15,7 @@ import {
   taskDetail,
   updateTask,
 } from "../board/api";
-import { findMemberByHandle, projectAccess } from "../orgs/api";
+import { findMembersByHandle, projectAccess } from "../orgs/api";
 import { defineTool, fail, handleOf, type ToolCtx, type ToolEnv } from "./tools-kit";
 import { canWrite, project, task, visibleProjects } from "./tools-refs";
 
@@ -44,13 +44,18 @@ function compact(db: Database, t: TaskView): Record<string, unknown> {
   };
 }
 
+// A project can be worked by members of its owning org and of grantee orgs, so the handle is
+// matched across orgs among members who may write to it.
 function assigneeId(ctx: ToolCtx, handle: string | null, projectId: string): string | null {
   if (handle === null) return null;
-  const member =
-    findMemberByHandle(ctx.db, ctx.orgId, handle.replace(/^@/, "")) ?? fail(`no member @${handle}`);
-  const access = projectAccess(ctx.db, { memberId: member.id }, projectId);
-  if (access !== "write" && access !== "admin") fail(`@${handle} cannot work on this project`);
-  return member.id;
+  const known = findMembersByHandle(ctx.db, handle.replace(/^@/, ""));
+  if (known.length === 0) fail(`no member @${handle}`);
+  const writers = known.filter((m) => {
+    const access = projectAccess(ctx.db, { memberId: m.id }, projectId);
+    return access === "write" || access === "admin";
+  });
+  if (writers.length > 1) fail(`@${handle} matches more than one member, use a unique handle`);
+  return writers[0]?.id ?? fail(`@${handle} cannot work on this project`);
 }
 
 function moved(ctx: ToolCtx, r: MoveResult): unknown {
