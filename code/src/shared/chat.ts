@@ -63,3 +63,52 @@ export const messagesQuery: z.ZodType<MessagesQuery> = z
     limit: z.coerce.number().int().min(1).max(200).optional(),
   })
   .strict();
+
+const channelKind = z.enum(["org", "team", "project", "group", "dm"]);
+export const channelViewSchema: z.ZodType<ChannelView> = z.object({
+  id: z.string(),
+  orgId: z.string(),
+  kind: channelKind,
+  name: z.string(),
+  teamId: z.string().nullable(),
+  projectId: z.string().nullable(),
+  createdAt: z.number(),
+  unread: z.number(),
+});
+export const channelListSchema: z.ZodType<ChannelView[]> = z.array(channelViewSchema);
+
+export const messageViewSchema: z.ZodType<MessageView> = z.object({
+  id: z.string(),
+  channelId: z.string(),
+  threadRootId: z.string().nullable(),
+  authorId: z.string().nullable(),
+  body: z.string(),
+  createdAt: z.number(),
+  editedAt: z.number().nullable(),
+  replyCount: z.number(),
+  mentions: z.array(z.string()),
+  taskIds: z.array(z.string()),
+});
+export const messageListSchema: z.ZodType<MessageView[]> = z.array(messageViewSchema);
+
+export interface ChatMember {
+  id: string;
+  kind: "human" | "agent";
+  handle: string;
+  displayName: string;
+}
+export interface ChatOrgView {
+  me: { id: string; handle: string };
+  members: ChatMember[];
+}
+export const chatOrgSchema: z.ZodType<ChatOrgView> = z.object({
+  me: z.object({ id: z.string(), handle: z.string() }),
+  members: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.enum(["human", "agent"]),
+      handle: z.string(),
+      displayName: z.string(),
+    }),
+  ),
+});
