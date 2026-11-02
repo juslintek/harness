@@ -1,5 +1,6 @@
 import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
+import { gitEnv } from "../../git-env";
 
 export class NotAGitRepo extends Error {
   constructor(path: string) {
@@ -17,7 +18,12 @@ interface GitResult {
 }
 
 async function git(args: string[], cwd: string): Promise<GitResult> {
-  const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["git", ...args], {
+    cwd,
+    env: gitEnv(),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),

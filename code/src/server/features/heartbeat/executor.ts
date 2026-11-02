@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { gitEnv } from "../../git-env";
 import { getTask } from "../board/api";
 import { getChannel } from "../chat/api";
 import { appendEvent } from "../logs/api";
@@ -27,7 +28,7 @@ export interface ExecDeps {
 function git(args: string[], cwd: string): void {
   const res = Bun.spawnSync(
     ["git", "-c", "user.name=harness", "-c", "user.email=harness@localhost", ...args],
-    { cwd },
+    { cwd, env: gitEnv() },
   );
   if (res.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${res.stderr.toString()}`);
 }

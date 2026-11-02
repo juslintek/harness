@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { isAbsolute } from "node:path";
+import { gitEnv } from "../../git-env";
 
 export interface ProjectRow {
   id: string;
@@ -63,6 +64,7 @@ export function createProject(db: Database, input: NewProject): ProjectRow {
 function assertGitRepo(repo: string): void {
   if (!isAbsolute(repo)) throw new Error(`repo must be an absolute path: ${repo}`);
   const r = Bun.spawnSync(["git", "-C", repo, "rev-parse", "--git-dir"], {
+    env: gitEnv(),
     stdout: "ignore",
     stderr: "ignore",
   });

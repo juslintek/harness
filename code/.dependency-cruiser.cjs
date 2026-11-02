@@ -34,6 +34,7 @@ module.exports = {
           "(^|/)[^/]+\\.config\\.(c|m)?[jt]s$",
           "(^|/)\\.[^/]+\\.(c|m)?js$",
           "^src/main\\.ts$",
+          "^src/server/test-support/no-git-env\\.ts$",
           "^scripts/",
           "\\.d\\.ts$",
           "^src/web/pwa/sw\\.js$",

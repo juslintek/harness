@@ -9,6 +9,7 @@ import { migrations } from "../src/server/db/migrations";
 import { type AgentSpec, getSpec, listAgents } from "../src/server/features/agents/api";
 import { listRunEvents, readBody } from "../src/server/features/logs/api";
 import { startRun, waitForRun } from "../src/server/features/runtimes/api";
+import { gitEnv } from "../src/server/git-env";
 import { createApp } from "../src/server/http";
 import {
   approvalLog,
@@ -33,7 +34,7 @@ function check(ok: boolean, what: string): void {
 }
 
 function git(args: string[], cwd: string): string {
-  const res = Bun.spawnSync(["git", ...args], { cwd });
+  const res = Bun.spawnSync(["git", ...args], { cwd, env: gitEnv() });
   if (res.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${res.stderr.toString()}`);
   return res.stdout.toString().trim();
 }

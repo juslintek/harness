@@ -2,6 +2,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { openDb } from "../src/server/db/db";
+import { gitEnv } from "../src/server/git-env";
 
 type Db = ReturnType<typeof openDb>;
 
@@ -20,9 +21,7 @@ import {
 export function git(args: string[], cwd: string): string {
   const res = Bun.spawnSync(
     ["git", "-c", "user.name=gate", "-c", "user.email=gate@test", ...args],
-    {
-      cwd,
-    },
+    { cwd, env: gitEnv() },
   );
   if (res.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${res.stderr.toString()}`);
   return res.stdout.toString().trim();
