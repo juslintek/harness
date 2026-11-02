@@ -76,3 +76,16 @@ test("rank: move before X lands between X and its predecessor", () => {
   moveTask(db, a.id, "todo", member);
   expect(listTasks(db, a.projectId, { status: "todo" }).at(-1)?.title).toBe("a");
 });
+
+test("a beforeId in another status is ignored and the task goes to the end of the target lane", () => {
+  const { db, member, mk } = setup();
+  const lane = mk("lane", { status: "todo" });
+  const other = mk("other", { status: "backlog" });
+  const moving = mk("moving", { status: "backlog" });
+  const moved = moveTask(db, moving.id, "todo", member, { beforeId: other.id });
+  expect(moved.ok && moved.task.rank).toBeGreaterThan(lane.rank);
+  expect(listTasks(db, lane.projectId, { status: "todo" }).map((t) => t.title)).toEqual([
+    "lane",
+    "moving",
+  ]);
+});

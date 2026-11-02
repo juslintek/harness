@@ -83,7 +83,10 @@ export function release(db: Database, taskId: string, memberId: string): MoveRes
 
 function rankFor(db: Database, task: TaskView, to: Status, beforeId?: string): number {
   const before = beforeId === undefined ? null : getTask(db, beforeId);
-  if (!before || before.projectId !== task.projectId) return nextRank(db, task.projectId, to);
+  // A neighbour in another status or project would put the task in the wrong lane's rank range.
+  if (!before || before.projectId !== task.projectId || before.status !== to) {
+    return nextRank(db, task.projectId, to);
+  }
   const prev = db
     .query<{ m: number | null }, [string, string, number, string]>(
       "SELECT MAX(rank) AS m FROM tasks WHERE project_id = ? AND status = ? AND rank < ? AND id <> ?",
