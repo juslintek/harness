@@ -22,6 +22,7 @@ const eventSchema = z.union([
       step_type: z.string().optional(),
       text_delta: z.string().optional(),
       tool_name: z.string().optional(),
+      usage: usageSchema.optional(),
     }),
   }),
   z.object({
@@ -62,6 +63,16 @@ function parseEvent(line: string): z.infer<typeof eventSchema> | null {
   }
 }
 
+// Every model call closes with its own usage, so the breaker sees spend while the run is going
+// instead of at the end. A throwing listener is logged and never ends the run.
+function reportSpend(ctx: RunContext, tokens: number): void {
+  try {
+    ctx.onProgress?.({ contextTokens: tokens });
+  } catch (err) {
+    (ctx.logError ?? ((m, e) => console.error(m, e)))("agy progress listener failed", err);
+  }
+}
+
 function handleLine(ctx: RunContext, seen: Seen, line: string): void {
   const event = parseEvent(line);
   if (event === null) {
@@ -81,6 +92,7 @@ function handleLine(ctx: RunContext, seen: Seen, line: string): void {
     return;
   }
   const step = event.step_update;
+  if (step.usage) reportSpend(ctx, step.usage.input_tokens + step.usage.output_tokens);
   if (step.step_type === "agent_response") {
     seen.pending += step.text_delta ?? "";
     if (step.state !== "ACTIVE") flush(ctx, seen);

@@ -43,6 +43,7 @@ interface Opts {
   idle?: number;
   abortAfter?: number;
   onSpawn?: (pid: number) => void;
+  onProgress?: (p: { contextTokens: number }) => void;
 }
 
 let seq = 0;
@@ -78,6 +79,7 @@ async function run(
     emit: (e) => events.push(e),
     decide: () => Promise.resolve("deny"),
     onQuota: () => {},
+    ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
     signal: abort.signal,
     ...(opts.onSpawn ? { onSpawn: opts.onSpawn } : {}),
     idleTimeoutMs: opts.idle ?? 10_000,
@@ -234,4 +236,11 @@ test("argv never opens a permission mode or skips permissions", async () => {
   expect(argv).not.toContain("--mode");
   expect(argv).not.toContain("--dangerously-skip-permissions");
   expect(argv[argv.indexOf("--settings") + 1]).toBe('{"permissions":{"allow":[]}}');
+});
+
+test("each model call reports its spend to the breaker while the run is going", async () => {
+  const seen: number[] = [];
+  const { outcome } = await run(spike, { onProgress: (p) => seen.push(p.contextTokens) });
+  expect(outcome.stopReason).toBe("end_turn");
+  expect(seen).toEqual([31623 + 162]);
 });
