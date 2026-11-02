@@ -79,6 +79,15 @@ export function listTasks(
     .map(taskView);
 }
 
+export function listDeps(db: Database, projectId: string): { taskId: string; dependsOn: string }[] {
+  return db
+    .query<{ taskId: string; dependsOn: string }, [string]>(
+      `SELECT d.task_id AS taskId, d.depends_on AS dependsOn FROM task_deps d
+       JOIN tasks t ON t.id = d.task_id WHERE t.project_id = ?`,
+    )
+    .all(projectId);
+}
+
 export function nextRank(db: Database, projectId: string, status: Status): number {
   const r = db
     .query<{ m: number | null }, [string, string]>(

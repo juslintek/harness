@@ -53,6 +53,55 @@ export interface TaskDetail {
   comments: CommentView[];
 }
 
+export const taskViewSchema: z.ZodType<TaskView> = z.object({
+  id: z.string(),
+  orgId: z.string(),
+  projectId: z.string(),
+  number: z.number(),
+  parentId: z.string().nullable(),
+  title: z.string(),
+  description: z.string(),
+  status: statusSchema,
+  rank: z.number(),
+  assigneeId: z.string().nullable(),
+  holderId: z.string().nullable(),
+  checkedOutAt: z.number().nullable(),
+  estimateMinutes: z.number().nullable(),
+  createdBy: z.string(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+});
+
+export const taskDetailSchema: z.ZodType<TaskDetail> = z.object({
+  task: taskViewSchema,
+  deps: z.array(taskViewSchema),
+  subtasks: z.array(taskViewSchema),
+  comments: z.array(
+    z.object({
+      id: z.string(),
+      taskId: z.string(),
+      authorId: z.string().nullable(),
+      body: z.string(),
+      createdAt: z.number(),
+    }),
+  ),
+});
+
+export type MoveFailure =
+  | { ok: false; reason: "held"; holderId: string }
+  | { ok: false; reason: "deps_open" | "children_open"; open: number[] }
+  | { ok: false; reason: "not_found" };
+
+export const moveFailureSchema: z.ZodType<MoveFailure> = z.union([
+  z.object({ ok: z.literal(false), reason: z.literal("held"), holderId: z.string() }),
+  z.object({
+    ok: z.literal(false),
+    reason: z.enum(["deps_open", "children_open"]),
+    open: z.array(z.number()),
+  }),
+  z.object({ ok: z.literal(false), reason: z.literal("not_found") }),
+]);
+
 const id = z.string().min(1).max(64);
 const title = z.string().trim().min(1).max(200);
 

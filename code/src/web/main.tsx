@@ -19,7 +19,14 @@ function OrgRoute({ parts }: { parts: string[] }): preact.JSX.Element {
   const slug = parts[1] ?? "";
   if (parts[2] === "chat") return <ChatPage slug={slug} />;
   if (parts[2] === "settings") return <OrgPage slug={slug} />;
-  return <BoardPage slug={slug} />;
+  const taskNumber = Number(parts[4]);
+  return (
+    <BoardPage
+      slug={slug}
+      {...(parts[3] && { projectId: parts[3] })}
+      {...(taskNumber > 0 && { taskNumber })}
+    />
+  );
 }
 
 function Page(): preact.JSX.Element {

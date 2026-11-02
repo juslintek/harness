@@ -161,3 +161,92 @@ export interface RevokeBody {
   orgId: string;
 }
 export const revokeBody: z.ZodType<RevokeBody> = z.object({ orgId: id }).strict();
+
+export interface MemberView {
+  id: string;
+  orgId: string;
+  kind: "human" | "agent";
+  userId: string | null;
+  agentId: string | null;
+  model: string | null;
+  handle: string;
+  displayName: string;
+  role: Role;
+  specialties: string[];
+  heartbeatMinutes: number | null;
+  paused: boolean;
+}
+const memberViewSchema: z.ZodType<MemberView> = z.object({
+  id: z.string(),
+  orgId: z.string(),
+  kind: z.enum(["human", "agent"]),
+  userId: z.string().nullable(),
+  agentId: z.string().nullable(),
+  model: z.string().nullable(),
+  handle: z.string(),
+  displayName: z.string(),
+  role: roleSchema,
+  specialties: z.array(z.string()),
+  heartbeatMinutes: z.number().nullable(),
+  paused: z.boolean(),
+});
+
+interface TeamView {
+  id: string;
+  name: string;
+}
+export interface PositionView {
+  id: string;
+  teamId: string | null;
+  title: string;
+  memberId: string | null;
+  reportsTo: string | null;
+  isManager: boolean;
+}
+export interface ProjectView {
+  id: string;
+  orgId: string;
+  teamId: string | null;
+  key: string;
+  name: string;
+  repo: string | null;
+}
+export interface OrgDetail {
+  org: OrgView;
+  me: MemberView;
+  teams: TeamView[];
+  members: MemberView[];
+  positions: PositionView[];
+  projects: ProjectView[];
+}
+
+export const orgDetailSchema: z.ZodType<OrgDetail> = z.object({
+  org: z.object({ id: z.string(), slug: z.string(), name: z.string(), createdAt: z.number() }),
+  me: memberViewSchema,
+  teams: z.array(z.object({ id: z.string(), name: z.string() })),
+  members: z.array(memberViewSchema),
+  positions: z.array(
+    z.object({
+      id: z.string(),
+      teamId: z.string().nullable(),
+      title: z.string(),
+      memberId: z.string().nullable(),
+      reportsTo: z.string().nullable(),
+      isManager: z.boolean(),
+    }),
+  ),
+  projects: z.array(
+    z.object({
+      id: z.string(),
+      orgId: z.string(),
+      teamId: z.string().nullable(),
+      key: z.string(),
+      name: z.string(),
+      repo: z.string().nullable(),
+    }),
+  ),
+});
+
+export const inviteResultSchema: z.ZodType<{ enrollmentLink: string | null }> = z.object({
+  enrollmentLink: z.string().nullable(),
+});

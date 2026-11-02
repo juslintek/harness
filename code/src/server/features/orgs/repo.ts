@@ -1,19 +1,7 @@
 import type { Database } from "bun:sqlite";
-import { handleSchema, type OrgView, type Role } from "../../../shared/orgs";
+import { handleSchema, type MemberView, type OrgView, type Role } from "../../../shared/orgs";
 
-export interface MemberRow {
-  id: string;
-  orgId: string;
-  kind: "human" | "agent";
-  userId: string | null;
-  agentId: string | null;
-  model: string | null;
-  handle: string;
-  displayName: string;
-  role: Role;
-  specialties: string[];
-  heartbeatMinutes: number | null;
-  paused: boolean;
+export interface MemberRow extends MemberView {
   createdAt: number;
 }
 export interface TeamRow {
