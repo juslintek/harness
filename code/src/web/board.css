@@ -1,0 +1,148 @@
+.board-head {
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.board-layout {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.board {
+  display: flex;
+  flex: 1;
+  gap: 0.75rem;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.column {
+  flex: 0 0 15rem;
+  min-height: 8rem;
+  padding: 0 0.5rem 0.5rem;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
+.column[data-over="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.task {
+  position: relative;
+  margin: 0.5rem 0;
+  cursor: grab;
+}
+
+.task-title {
+  display: block;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 600;
+}
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.task-meta:empty {
+  display: none;
+}
+
+.move-menu {
+  display: block;
+}
+
+.move-btn {
+  min-height: 2rem;
+  font-size: 0.85rem;
+}
+
+/* Inline, not floating: the board scrolls sideways, which would clip an absolute menu. */
+.move-list {
+  margin-top: 0.25rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.move-list [role="option"] {
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+}
+
+.move-list [role="option"][data-active="true"] {
+  background: var(--accent);
+  color: var(--card);
+}
+
+.move-list [role="option"][aria-selected="true"]::after {
+  content: " (current)";
+}
+
+.task-panel {
+  flex: 0 0 24rem;
+  max-width: 100%;
+  margin-top: 0;
+}
+
+.comment-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.org-chart {
+  margin: 0;
+  padding-left: 1.5rem;
+  list-style: none;
+  border-left: 1px solid var(--border);
+}
+
+.org-chart.root {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.position {
+  display: inline-block;
+  margin: 0.25rem 0;
+}
+
+.enroll-link {
+  overflow-wrap: anywhere;
+}
+
+.specialties {
+  margin: 0.5rem 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+@media (max-width: 48rem) {
+  .board-layout {
+    flex-direction: column;
+  }
+
+  .board {
+    width: 100%;
+  }
+
+  .task-panel {
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+
+.position .badge {
+  margin-left: 0.5rem;
+}

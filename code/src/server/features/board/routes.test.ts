@@ -73,3 +73,15 @@ test("patch, dependencies and comments work and keep their bounds", async () => 
   const foreign = await k.call(owner, "PATCH", `/api/tasks/${one.id}`, { assigneeId: "nobody" });
   expect(foreign.status).toBe(400);
 });
+
+test("the project dependency list gives edges for the board counts", async () => {
+  const { k, owner, project, base } = await setup();
+  const one = await (await k.call(owner, "POST", base, { title: "one" })).json();
+  const two = await (await k.call(owner, "POST", base, { title: "two" })).json();
+  await k.call(owner, "POST", `/api/tasks/${two.id}/deps`, { dependsOn: one.id });
+  const res = await k.call(owner, "GET", `/api/projects/${project.id}/deps`);
+  expect(await res.json()).toEqual([{ taskId: two.id, dependsOn: one.id }]);
+  const stranger = await k.user();
+  k.org(stranger, "beta");
+  expect((await k.call(stranger, "GET", `/api/projects/${project.id}/deps`)).status).toBe(404);
+});

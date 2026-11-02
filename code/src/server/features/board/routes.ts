@@ -18,6 +18,7 @@ import {
   checkout,
   createTask,
   getTask,
+  listDeps,
   listTasks,
   moveTask,
   release,
@@ -66,6 +67,10 @@ function projectTaskRoutes(db: Database, app: Hono<AuthEnv>): void {
     const query = parseQuery(c, taskListQuery);
     if (query instanceof Response) return query;
     return c.json(listTasks(db, c.req.param("id"), defined(query)));
+  });
+  app.get("/projects/:id/deps", (c) => {
+    const found = scope(db, c, c.req.param("id"), "read");
+    return found instanceof Response ? found : c.json(listDeps(db, c.req.param("id")));
   });
   app.post("/projects/:id/tasks", async (c) => {
     const found = scope(db, c, c.req.param("id"), "write");
