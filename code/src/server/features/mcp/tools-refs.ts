@@ -10,8 +10,13 @@ export function visibleProjects(ctx: ToolCtx): ProjectRow[] {
 }
 
 export function project(ctx: ToolCtx, ref: string): ProjectRow {
-  const hit = visibleProjects(ctx).find((p) => p.id === ref || p.key === ref);
-  return hit ?? fail(`project not found: ${ref}`);
+  const visible = visibleProjects(ctx);
+  const byId = visible.find((p) => p.id === ref);
+  if (byId) return byId;
+  const byKey = visible.filter((p) => p.key === ref);
+  if (byKey.length > 1)
+    fail(`project key ${ref} matches more than one project, use the project id`);
+  return byKey[0] ?? fail(`project not found: ${ref}`);
 }
 
 export function canWrite(ctx: ToolCtx, projectId: string): boolean {

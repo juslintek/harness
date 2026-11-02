@@ -95,3 +95,18 @@ test("an assignee handle is found in a grantee org, and an ambiguous one is refu
   expect(twice.isError).toBe(true);
   expect(twice.text).toContain("unique handle");
 });
+
+test("a project key shared by own and granted projects asks for the project id", async () => {
+  const w = world(db);
+  const owner = w.agent(w.a.id, "ax");
+  const guest = w.agent(w.b.id, "bz");
+  grantProject(db, w.project.id, w.b.id, "write", owner.id);
+  const t = tokenFor(db, guest.id, w.b.id);
+  const ambiguous = await call(server, t, "task_create", { project: "web", title: "x" });
+  expect(ambiguous.isError).toBe(true);
+  expect(ambiguous.text).toContain("project id");
+  const byId = await call(server, t, "task_create", { project: w.projectB.id, title: "x" });
+  expect(byId.isError).toBe(false);
+  const granted = await call(server, t, "task_create", { project: w.project.id, title: "y" });
+  expect(granted.isError).toBe(false);
+});
