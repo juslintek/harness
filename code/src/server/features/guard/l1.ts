@@ -155,7 +155,14 @@ export function splitCommands(cmd: string): string[][] {
     .filter((argv) => argv.length > 0);
 }
 
+// Claude names its MCP tools mcp__harness__x and Codex mcp.harness.x; Codex files them under kind
+// execute with no command, which L1 would otherwise ask about.
+const HARNESS_TOOL = /^mcp(__|\.)harness(__|\.)/;
+
 export function evaluateL1(action: ActionRequest, scope: Scope): L1Result {
+  if (action.command === undefined && action.toolName && HARNESS_TOOL.test(action.toolName)) {
+    return allow(null, "harness tool, scoped by the run token", "other");
+  }
   switch (action.kind) {
     case "execute":
       return evaluateShell(action.command, scope);
@@ -170,9 +177,6 @@ export function evaluateL1(action: ActionRequest, scope: Scope): L1Result {
       // definitions. The harness's own tools are already limited by the run token's scopes.
       // Asking for either would stop every unattended agent before its first board call.
       if (action.toolName === "ToolSearch") return allow(null, "tool schema lookup", "other");
-      if (action.toolName?.startsWith("mcp__harness__")) {
-        return allow(null, "harness tool, scoped by the run token", "other");
-      }
       return ask("other.any", "unclassified action", "other");
   }
 }
