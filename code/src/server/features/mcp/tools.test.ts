@@ -1,40 +1,13 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
-import { listChannels, listMessages, wireChat } from "../chat/api";
-import { addAgentMember, createOrg, createPosition, createProject } from "../orgs/api";
-import { mcpHandler, mintRunToken, type TokenScope } from "./api";
+import { listChannels, listMessages } from "../chat/api";
+import { createPosition } from "../orgs/api";
+import { mintRunToken, type TokenScope } from "./api";
+import { ALL, type Db, call as kitCall, tokenFor as kitToken, listen, world } from "./test-kit";
 
-type Db = ReturnType<typeof openDb>;
 let db: Db;
 let server: ReturnType<typeof Bun.serve>;
-
-async function listen(database: Db): Promise<ReturnType<typeof Bun.serve>> {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const own: ReturnType<typeof Bun.serve> = Bun.serve({
-      port: 0,
-      fetch: (req) =>
-        mcpHandler(
-          database,
-          { onReport: () => {}, harnessHome: "/Users/x/.harness" },
-          own.port as number,
-        )(req),
-    });
-    try {
-      const res = await fetch(`http://127.0.0.1:${own.port}/`, {
-        method: "POST",
-        keepalive: false,
-      });
-      if (res.status === 401) return own;
-    } catch {
-      // port unreachable, try another
-    }
-    await own.stop(true);
-  }
-  throw new Error("no loopback port became reachable");
-}
 
 function pendingApproval(database: Db, memberId: string): string {
   const runId = Bun.randomUUIDv7();
@@ -56,43 +29,10 @@ function pendingApproval(database: Db, memberId: string): string {
   return id;
 }
 
-const ALL: TokenScope[] = ["report", "guard_hook", "board", "chat"];
-
-function world(database: Db) {
-  const org = (slug: string, handle: string) =>
-    createOrg(database, {
-      name: slug,
-      slug,
-      ownerUserId: handle,
-      ownerName: handle,
-      ownerHandle: handle,
-    });
-  const a = org("acme", "owner");
-  const b = org("beta", "boss");
-  wireChat(database);
-  const agent = (orgId: string, handle: string) =>
-    addAgentMember(database, orgId, { agentId: "x", handle, displayName: handle, specialties: [] });
-  const project = createProject(database, { orgId: a.id, key: "web", name: "Web" });
-  const projectB = createProject(database, { orgId: b.id, key: "web", name: "Web B" });
-  return { a, b, agent, project, projectB };
-}
-
-function tokenFor(memberId: string, orgId: string, scopes: TokenScope[] = ALL): string {
-  return mintRunToken(db, Bun.randomUUIDv7(), scopes, { memberId, orgId });
-}
-
-async function call(token: string, name: string, args: Record<string, unknown> = {}) {
-  const client = new Client({ name: "test", version: "0" });
-  await client.connect(
-    new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${server.port}/`), {
-      requestInit: { headers: { authorization: `Bearer ${token}` } },
-    }),
-  );
-  const result = await client.callTool({ name, arguments: args });
-  await client.close();
-  const text = (result.content as { text: string }[])[0]?.text ?? "";
-  return { isError: result.isError === true, text };
-}
+const call = (token: string, name: string, args: Record<string, unknown> = {}) =>
+  kitCall(server, token, name, args);
+const tokenFor = (memberId: string, orgId: string, scopes: TokenScope[] = ALL): string =>
+  kitToken(db, memberId, orgId, scopes);
 
 beforeEach(async () => {
   db = openDb(":memory:");

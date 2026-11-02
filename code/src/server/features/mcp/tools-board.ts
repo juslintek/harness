@@ -13,6 +13,7 @@ import {
   type MoveResult,
   moveTask,
   release,
+  type TaskPatch,
   taskDetail,
   updateTask,
 } from "../board/api";
@@ -48,11 +49,24 @@ function canWrite(ctx: ToolCtx, projectId: string): boolean {
   return access === "write" || access === "admin";
 }
 
-// Numbers are per org; an id may also name a task of a project another org granted us.
+// Numbers are per org. Your own org wins; otherwise a number may name a task of a project another
+// org granted us, as long as exactly one such task matches. An id always names one task.
+function byNumber(ctx: ToolCtx, number: number): TaskView | null {
+  const own = getTaskByNumber(ctx.db, ctx.orgId, number);
+  if (own) return own;
+  const visible = new Map(visibleProjects(ctx).map((p) => [p.id, p]));
+  const orgs = new Set([...visible.values()].map((p) => p.orgId));
+  const hits = [...orgs]
+    .map((orgId) => getTaskByNumber(ctx.db, orgId, number))
+    .filter((t): t is TaskView => t !== null && visible.has(t.projectId));
+  if (hits.length > 1) fail(`task #${number} exists in more than one org, use the task id`);
+  return hits[0] ?? null;
+}
+
 function task(ctx: ToolCtx, ref: number | string, write: boolean): TaskView {
   const found =
     typeof ref === "number" || /^\d+$/.test(ref)
-      ? getTaskByNumber(ctx.db, ctx.orgId, Number(ref))
+      ? byNumber(ctx, Number(ref))
       : getTask(ctx.db, ref);
   const ok =
     found &&
@@ -74,12 +88,13 @@ function compact(db: Database, t: TaskView): Record<string, unknown> {
   };
 }
 
-function assigneeId(ctx: ToolCtx, handle: string | null): string | null {
+function assigneeId(ctx: ToolCtx, handle: string | null, projectId: string): string | null {
   if (handle === null) return null;
-  return (
-    findMemberByHandle(ctx.db, ctx.orgId, handle.replace(/^@/, ""))?.id ??
-    fail(`no member @${handle}`)
-  );
+  const member =
+    findMemberByHandle(ctx.db, ctx.orgId, handle.replace(/^@/, "")) ?? fail(`no member @${handle}`);
+  const access = projectAccess(ctx.db, { memberId: member.id }, projectId);
+  if (access !== "write" && access !== "admin") fail(`@${handle} cannot work on this project`);
+  return member.id;
 }
 
 function moved(ctx: ToolCtx, r: MoveResult): unknown {
@@ -141,6 +156,24 @@ function registerReads(server: McpServer, env: ToolEnv): void {
   );
 }
 
+function updatePatch(
+  ctx: ToolCtx,
+  a: {
+    title?: string | undefined;
+    description?: string | undefined;
+    estimateMinutes?: number | null | undefined;
+    assignee?: string | null | undefined;
+  },
+  projectId: string,
+): TaskPatch {
+  return {
+    ...(a.title === undefined ? {} : { title: a.title }),
+    ...(a.description === undefined ? {} : { description: a.description }),
+    ...(a.estimateMinutes === undefined ? {} : { estimateMinutes: a.estimateMinutes }),
+    ...(a.assignee === undefined ? {} : { assigneeId: assigneeId(ctx, a.assignee, projectId) }),
+  };
+}
+
 function registerWrites(server: McpServer, env: ToolEnv): void {
   defineTool(
     server,
@@ -161,7 +194,7 @@ function registerWrites(server: McpServer, env: ToolEnv): void {
     (ctx, a) => {
       const p = project(ctx, a.project);
       if (!canWrite(ctx, p.id)) fail("no write access to this project");
-      const assignee = a.assignee === undefined ? null : assigneeId(ctx, a.assignee);
+      const assignee = a.assignee === undefined ? null : assigneeId(ctx, a.assignee, p.id);
       return compact(
         ctx.db,
         createTask(ctx.db, {
@@ -193,12 +226,7 @@ function registerWrites(server: McpServer, env: ToolEnv): void {
     },
     (ctx, a) => {
       const t = task(ctx, a.task, true);
-      const patch = {
-        ...(a.title === undefined ? {} : { title: a.title }),
-        ...(a.description === undefined ? {} : { description: a.description }),
-        ...(a.estimateMinutes === undefined ? {} : { estimateMinutes: a.estimateMinutes }),
-        ...(a.assignee === undefined ? {} : { assigneeId: assigneeId(ctx, a.assignee) }),
-      };
+      const patch = updatePatch(ctx, a, t.projectId);
       return compact(ctx.db, updateTask(ctx.db, t.id, patch, ctx.memberId));
     },
   );
