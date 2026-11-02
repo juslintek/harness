@@ -102,6 +102,23 @@ test("an assignee must be able to write, and a domain refusal is a 400 with its 
   expect(await bad.json()).toEqual({ error: "parent must be in the project" });
 });
 
+test("a patch that keeps an assignee who lost write access is accepted", async () => {
+  const { k, owner, a, base } = await setup();
+  const user = await k.user();
+  const member = k.join(a.id, user, "member", "mem");
+  const made = await (
+    await k.call(owner, "POST", base, { title: "t", assigneeId: member.id })
+  ).json();
+  k.db.run("UPDATE members SET role = 'viewer' WHERE id = ?", [member.id]);
+  const url = `/api/tasks/${made.id}`;
+  const keep = await k.call(owner, "PATCH", url, { title: "renamed", assigneeId: member.id });
+  expect(keep.status).toBe(200);
+  expect(await keep.json()).toMatchObject({ title: "renamed", assigneeId: member.id });
+  const other = await k.user();
+  const reader = k.join(a.id, other, "viewer", "vee");
+  expect((await k.call(owner, "PATCH", url, { assigneeId: reader.id })).status).toBe(400);
+});
+
 test("a grantee sees the handle of an assignee from the owning org", async () => {
   const { k, owner, a, project, base } = await setup();
   const guest = await k.user();

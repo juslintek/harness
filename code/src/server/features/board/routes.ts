@@ -129,7 +129,9 @@ function taskRoutes(db: Database, app: Hono<AuthEnv>): void {
     if (found instanceof Response) return found;
     const body = await parseBody(c, taskPatchBody);
     if (body instanceof Response) return body;
-    if (!assignable(db, found.task.projectId, body.assigneeId)) {
+    // An assignee who has since lost write access stays on the task; only a change is checked.
+    const changed = body.assigneeId !== undefined && body.assigneeId !== found.task.assigneeId;
+    if (changed && !assignable(db, found.task.projectId, body.assigneeId)) {
       return c.json({ error: "invalid assignee" }, 400);
     }
     return c.json(updateTask(db, found.task.id, defined(body), found.member.id));
