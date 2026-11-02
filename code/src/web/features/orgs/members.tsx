@@ -60,12 +60,21 @@ function MemberRow({
           <span class="badge">{member.role}</span>
         )}
         {admin && member.kind === "agent" && (
-          <button type="button" onClick={() => call("PATCH", { paused: !member.paused })}>
+          <button
+            type="button"
+            aria-label={`${member.paused ? "Resume" : "Pause"} @${member.handle}`}
+            onClick={() => call("PATCH", { paused: !member.paused })}
+          >
             {member.paused ? "Resume" : "Pause"}
           </button>
         )}
         {admin && (
-          <button type="button" class="danger" onClick={() => call("DELETE")}>
+          <button
+            type="button"
+            class="danger"
+            aria-label={`Remove @${member.handle}`}
+            onClick={() => call("DELETE")}
+          >
             Remove
           </button>
         )}

@@ -20,7 +20,7 @@ export const STATUS_LABEL: Record<Status, string> = {
 
 const numbers = (open: number[]): string => open.map((n) => `#${n}`).join(", ");
 
-function failureText(f: MoveFailure, handleOf: (memberId: string) => string): string {
+export function failureText(f: MoveFailure, handleOf: (memberId: string) => string): string {
   if (f.reason === "held") return `held by @${handleOf(f.holderId)}`;
   if (f.reason === "deps_open") return `waiting on ${numbers(f.open)}`;
   if (f.reason === "children_open") return `subtasks open: ${numbers(f.open)}`;

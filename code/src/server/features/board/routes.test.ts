@@ -81,4 +81,7 @@ test("the project dependency list gives edges for the board counts", async () =>
   await k.call(owner, "POST", `/api/tasks/${two.id}/deps`, { dependsOn: one.id });
   const res = await k.call(owner, "GET", `/api/projects/${project.id}/deps`);
   expect(await res.json()).toEqual([{ taskId: two.id, dependsOn: one.id }]);
+  const stranger = await k.user();
+  k.org(stranger, "beta");
+  expect((await k.call(stranger, "GET", `/api/projects/${project.id}/deps`)).status).toBe(404);
 });

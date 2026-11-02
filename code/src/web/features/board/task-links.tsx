@@ -46,7 +46,11 @@ function Deps({
               #{d.number} {d.title}
             </a>
             <span class="badge">{d.status}</span>
-            <button type="button" onClick={() => void call("DELETE", d.id)}>
+            <button
+              type="button"
+              aria-label={`Remove dependency #${d.number}`}
+              onClick={() => void call("DELETE", d.id)}
+            >
               Remove
             </button>
           </li>

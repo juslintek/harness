@@ -91,6 +91,9 @@ function useMoves(
     document.querySelector<HTMLElement>(`[data-task-id="${pending.id}"] .move-btn`)?.focus();
     setPending(null);
   }, [board.data, pending]);
+  useEffect(() => {
+    if (board.error) setPending(null);
+  }, [board.error]);
   return {
     notice,
     move: (id, to, beforeId) => {

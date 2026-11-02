@@ -72,10 +72,12 @@ function MoveList({
 }
 
 export function MoveMenu({
+  label,
   taskId,
   current,
   onMove,
 }: {
+  label: string;
   taskId: string;
   current: Status;
   onMove: (to: Status) => void;
@@ -89,6 +91,7 @@ export function MoveMenu({
         type="button"
         class="move-btn"
         ref={button}
+        aria-label={label}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen(true)}

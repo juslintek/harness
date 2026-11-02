@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { z } from "zod";
 import { type TaskView, taskDetailSchema, taskViewSchema } from "../../../shared/board";
 import type { OrgDetail } from "../../../shared/orgs";
@@ -10,6 +10,32 @@ import { postTaskAction } from "./moves-client";
 import { TaskComments } from "./task-comments";
 import { TaskLinks } from "./task-links";
 
+interface Fields {
+  title: string;
+  description: string;
+  estimate: string;
+  assignee: string;
+}
+
+const fieldsOf = (task: TaskView): Fields => ({
+  title: task.title,
+  description: task.description,
+  estimate: task.estimateMinutes?.toString() ?? "",
+  assignee: task.assigneeId ?? "",
+});
+
+// A remote change only replaces the form while the user has not edited it.
+function useTaskFields(task: TaskView): [Fields, (f: Fields) => void] {
+  const [form, setForm] = useState(fieldsOf(task));
+  const base = useRef(form);
+  useEffect(() => {
+    const dirty = (Object.keys(form) as (keyof Fields)[]).some((k) => form[k] !== base.current[k]);
+    base.current = fieldsOf(task);
+    if (!dirty) setForm(base.current);
+  }, [task.updatedAt]);
+  return [form, setForm];
+}
+
 function TaskEdit({
   task,
   detail,
@@ -19,10 +45,12 @@ function TaskEdit({
   detail: OrgDetail;
   onSaved: () => void;
 }): preact.JSX.Element {
-  const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description);
-  const [estimate, setEstimate] = useState(task.estimateMinutes?.toString() ?? "");
-  const [assignee, setAssignee] = useState(task.assigneeId ?? "");
+  const [form, setForm] = useTaskFields(task);
+  const { title, description, estimate, assignee } = form;
+  const setTitle = (v: string): void => setForm({ ...form, title: v });
+  const setDescription = (v: string): void => setForm({ ...form, description: v });
+  const setEstimate = (v: string): void => setForm({ ...form, estimate: v });
+  const setAssignee = (v: string): void => setForm({ ...form, assignee: v });
   const action = useAction();
   const save = (e: Event): void => {
     e.preventDefault();
@@ -157,7 +185,7 @@ export function TaskPanel({
         </strong>
         <a href={closeHref}>Close</a>
       </p>
-      <TaskEdit key={task.updatedAt} task={task} detail={detail} onSaved={reload} />
+      <TaskEdit task={task} detail={detail} onSaved={reload} />
       <TaskActions task={task} detail={detail} onDone={reload} />
       {loaded.error && <ErrorLine message={loaded.error} />}
       {loaded.data && (

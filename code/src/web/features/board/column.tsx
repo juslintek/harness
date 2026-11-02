@@ -1,7 +1,7 @@
 import { useState } from "preact/hooks";
 import type { Status, TaskView } from "../../../shared/board";
 import { STATUS_LABEL } from "./moves-client";
-import { type BoardCtx, TaskCard } from "./task-card";
+import { type BoardCtx, TASK_MIME, TaskCard } from "./task-card";
 
 export function Column({
   status,
@@ -26,7 +26,7 @@ export function Column({
       onDrop={(e) => {
         e.preventDefault();
         setOver(false);
-        const dragged = e.dataTransfer?.getData("text/plain");
+        const dragged = e.dataTransfer?.getData(TASK_MIME);
         if (dragged) ctx.move(dragged, status);
       }}
     >

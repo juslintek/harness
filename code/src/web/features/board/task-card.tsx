@@ -1,6 +1,9 @@
 import type { Status, TaskView } from "../../../shared/board";
 import { MoveMenu } from "./move-menu";
 
+// A custom type keeps text dragged in from elsewhere from being read as a task id.
+export const TASK_MIME = "application/x-harness-task";
+
 export interface BoardCtx {
   slug: string;
   handleOf: (memberId: string | null) => string;
@@ -17,10 +20,10 @@ export function TaskCard({ task, ctx }: { task: TaskView; ctx: BoardCtx }): prea
   const subtasks = ctx.subtasks.get(task.id) ?? 0;
   const deps = ctx.deps.get(task.id) ?? 0;
   const drop = (e: DragEvent): void => {
-    const dragged = e.dataTransfer?.getData("text/plain");
-    if (!dragged || dragged === task.id) return;
     e.preventDefault();
     e.stopPropagation();
+    const dragged = e.dataTransfer?.getData(TASK_MIME);
+    if (!dragged || dragged === task.id) return;
     ctx.move(dragged, task.status, task.id);
   };
   return (
@@ -29,7 +32,7 @@ export function TaskCard({ task, ctx }: { task: TaskView; ctx: BoardCtx }): prea
       data-task-id={task.id}
       draggable
       onDragStart={(e) => {
-        e.dataTransfer?.setData("text/plain", task.id);
+        e.dataTransfer?.setData(TASK_MIME, task.id);
         if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
       }}
       onDragOver={(e) => e.preventDefault()}
@@ -45,7 +48,12 @@ export function TaskCard({ task, ctx }: { task: TaskView; ctx: BoardCtx }): prea
         {deps > 0 && <span>{deps} dep</span>}
         {subtasks > 0 && <span>{subtasks} sub</span>}
       </p>
-      <MoveMenu taskId={task.id} current={task.status} onMove={(to) => ctx.move(task.id, to)} />
+      <MoveMenu
+        label={`Move #${task.number} to…`}
+        taskId={task.id}
+        current={task.status}
+        onMove={(to) => ctx.move(task.id, to)}
+      />
       {ctx.notice?.taskId === task.id && (
         <p class="error" role="alert">
           {ctx.notice.text}
