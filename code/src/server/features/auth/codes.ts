@@ -55,14 +55,14 @@ export function requestEmailCode(
   deliver: (email: string, code: string) => void,
 ): "sent" | "rate_limited" {
   const now = Date.now();
-  const recent = db
-    .query<{ n: number }, [string, number]>(
-      "SELECT count(*) AS n FROM email_codes WHERE email = ? AND created_at > ?",
-    )
-    .get(email, now - EMAIL_WINDOW_MS)?.n;
-  if ((recent ?? 0) >= EMAIL_MAX_PER_WINDOW) return "rate_limited";
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  db.transaction(() => {
+  // Count and insert share one transaction so concurrent requests cannot both pass the limit.
+  const allowed = db.transaction((): boolean => {
+    db.query("DELETE FROM email_codes WHERE created_at < ?").run(now - EMAIL_WINDOW_MS);
+    const recent = db
+      .query<{ n: number }, [string]>("SELECT count(*) AS n FROM email_codes WHERE email = ?")
+      .get(email)?.n;
+    if ((recent ?? 0) >= EMAIL_MAX_PER_WINDOW) return false;
     db.query("UPDATE email_codes SET used_at = ? WHERE email = ? AND used_at IS NULL").run(
       now,
       email,
@@ -70,7 +70,9 @@ export function requestEmailCode(
     db.query(
       "INSERT INTO email_codes (id, email, code_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
     ).run(Bun.randomUUIDv7(), email, sha256Hex(code), now, now + EMAIL_CODE_TTL_MS);
+    return true;
   })();
+  if (!allowed) return "rate_limited";
   if (findUserByEmail(db, email)) deliver(email, code);
   return "sent";
 }

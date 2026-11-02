@@ -119,6 +119,7 @@ test("wrong origin fails", async () => {
   };
   const result = await finishLogin(x.db, rp, login.challengeId, { ...forged, response: tampered });
   expect(result.ok).toBe(false);
+  expect(result.ok === false && result.reason).toMatch(/origin/i);
 });
 
 test("a counter that went backwards fails", async () => {
@@ -156,4 +157,79 @@ test("step-up challenge issued for another user fails", async () => {
   const response = await x.device.get({ ...options, allowCredentials: [] });
   const result = await finishStepUp(x.db, rp, id, x.userId, options.challengeId, response);
   expect(result.ok).toBe(false);
+});
+
+test("step-up with a session of another user fails and sets nothing", async () => {
+  const x = setup();
+  await register(x);
+  const other = createUser(x.db, { email: "b@example.com", name: "Bo", instanceAdmin: false });
+  const foreign = createSession(x.db, other, "passkey", null);
+  const options = await stepUpOptions(x.db, rp, x.userId);
+  const response = await x.device.get(options);
+  const result = await finishStepUp(x.db, rp, foreign.id, x.userId, options.challengeId, response);
+  expect(result).toEqual({ ok: false, reason: "unknown session" });
+  expect(live(x.db, foreign.token).stepUpAt).toBeNull();
+});
+
+test("step-up on a revoked session fails", async () => {
+  const x = setup();
+  await register(x);
+  const { id } = createSession(x.db, x.userId, "passkey", null);
+  x.db.query("UPDATE sessions SET revoked_at = ?").run(Date.now());
+  const options = await stepUpOptions(x.db, rp, x.userId);
+  const response = await x.device.get(options);
+  expect((await finishStepUp(x.db, rp, id, x.userId, options.challengeId, response)).ok).toBe(
+    false,
+  );
+});
+
+test("step-up requires user verification, login does not", async () => {
+  const x = setup();
+  await register(x);
+  const { id } = createSession(x.db, x.userId, "passkey", null);
+  const options = await stepUpOptions(x.db, rp, x.userId);
+  expect(options.userVerification).toBe("required");
+  const weak = await x.device.get(options, { userVerified: false });
+  expect((await finishStepUp(x.db, rp, id, x.userId, options.challengeId, weak)).ok).toBe(false);
+  const login = await loginOptions(x.db, rp);
+  const response = await x.device.get(login, { userVerified: false });
+  expect((await finishLogin(x.db, rp, login.challengeId, response)).ok).toBe(true);
+});
+
+test("a challenge of another purpose is refused", async () => {
+  const x = setup();
+  await register(x);
+  const { id } = createSession(x.db, x.userId, "passkey", null);
+  const login = await loginOptions(x.db, rp);
+  const asStepUp = await finishStepUp(
+    x.db,
+    rp,
+    id,
+    x.userId,
+    login.challengeId,
+    await x.device.get(login),
+  );
+  expect(asStepUp.ok).toBe(false);
+  const reg = await registrationOptions(x.db, rp, x.userId);
+  const asLogin = await finishLogin(
+    x.db,
+    rp,
+    reg.challengeId,
+    await x.device.get(await loginOptions(x.db, rp)),
+  );
+  expect(asLogin.ok).toBe(false);
+});
+
+test("step-up with another user's credential fails", async () => {
+  const x = setup();
+  await register(x);
+  const other = createUser(x.db, { email: "b@example.com", name: "Bo", instanceAdmin: false });
+  const otherDevice = createSoftAuthenticator(rp);
+  const reg = await registrationOptions(x.db, rp, other);
+  await finishRegistration(x.db, rp, other, reg.challengeId, await otherDevice.create(reg), "bo");
+  const { id } = createSession(x.db, x.userId, "passkey", null);
+  const options = await stepUpOptions(x.db, rp, x.userId);
+  const response = await otherDevice.get({ ...options, allowCredentials: [] });
+  const result = await finishStepUp(x.db, rp, id, x.userId, options.challengeId, response);
+  expect(result).toEqual({ ok: false, reason: "unknown credential" });
 });

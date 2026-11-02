@@ -161,7 +161,7 @@ export async function stepUpOptions(
 ): Promise<PublicKeyCredentialRequestOptionsJSON & { challengeId: string }> {
   const options = await generateAuthenticationOptions({
     rpID: rp.id,
-    userVerification: "preferred",
+    userVerification: "required",
     allowCredentials: userPasskeys(db, userId),
   });
   return { ...options, challengeId: storeChallenge(db, options.challenge, "step_up", userId) };
@@ -175,6 +175,7 @@ async function verifyAssertion(
   expectedUserId: string | null,
   response: AuthenticationResponseJSON,
 ): Promise<{ ok: true; userId: string } | Failure> {
+  const requireUserVerification = purpose === "step_up";
   const challenge = consumeChallenge(db, challengeId, purpose, expectedUserId);
   if (challenge === null) return { ok: false, reason: "challenge expired or already used" };
   const row = db
@@ -192,7 +193,7 @@ async function verifyAssertion(
       expectedChallenge: challenge,
       expectedOrigin: rp.origin,
       expectedRPID: rp.id,
-      requireUserVerification: false,
+      requireUserVerification,
       credential: {
         id: row.id,
         publicKey: new Uint8Array(row.public_key),
@@ -201,7 +202,8 @@ async function verifyAssertion(
       },
     });
     if (!result.verified) return { ok: false, reason: "not verified" };
-    db.query("UPDATE passkeys SET counter = ?, last_used_at = ? WHERE id = ?").run(
+    // max() so a slower parallel assertion cannot lower a counter another one already raised.
+    db.query("UPDATE passkeys SET counter = max(counter, ?), last_used_at = ? WHERE id = ?").run(
       result.authenticationInfo.newCounter,
       Date.now(),
       row.id,
@@ -231,10 +233,12 @@ export async function finishStepUp(
 ): Promise<{ ok: true } | Failure> {
   const result = await verifyAssertion(db, rp, challengeId, "step_up", userId, response);
   if (!result.ok) return result;
-  db.query("UPDATE sessions SET step_up_at = ? WHERE id = ? AND user_id = ?").run(
-    Date.now(),
-    sessionId,
-    userId,
-  );
-  return { ok: true };
+  const now = Date.now();
+  const updated = db
+    .query(
+      `UPDATE sessions SET step_up_at = ?
+        WHERE id = ? AND user_id = ? AND revoked_at IS NULL AND expires_at > ?`,
+    )
+    .run(now, sessionId, userId, now);
+  return updated.changes === 1 ? { ok: true } : { ok: false, reason: "unknown session" };
 }

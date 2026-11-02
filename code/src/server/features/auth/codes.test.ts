@@ -81,7 +81,15 @@ test("email code: a newer request voids the older code", () => {
   const { db, userId } = setup();
   const older = lastCode(db);
   const newer = lastCode(db);
-  if (older !== newer) expect(verifyEmailCode(db, "a@example.com", older)).toBeNull();
+  expect(
+    db.query<{ n: number }, []>("SELECT count(*) AS n FROM email_codes WHERE used_at IS NULL").get()
+      ?.n,
+  ).toBe(1);
+  const voided = db
+    .query<{ used_at: number | null }, []>("SELECT used_at FROM email_codes ORDER BY rowid LIMIT 1")
+    .get();
+  expect(voided?.used_at).not.toBeNull();
+  expect(older.length).toBe(6);
   expect(verifyEmailCode(db, "a@example.com", newer)).toBe(userId);
 });
 

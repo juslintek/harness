@@ -86,7 +86,10 @@ interface StoredCredential {
 
 export interface SoftAuthenticator {
   create(options: PublicKeyCredentialCreationOptionsJSON): Promise<RegistrationResponseJSON>;
-  get(options: PublicKeyCredentialRequestOptionsJSON): Promise<AuthenticationResponseJSON>;
+  get(
+    options: PublicKeyCredentialRequestOptionsJSON,
+    opts?: { userVerified?: boolean },
+  ): Promise<AuthenticationResponseJSON>;
 }
 
 interface Rp {
@@ -160,9 +163,10 @@ async function assert(
   rp: Rp,
   credential: StoredCredential,
   options: PublicKeyCredentialRequestOptionsJSON,
+  userVerified: boolean,
 ): Promise<AuthenticationResponseJSON> {
   credential.counter += 1;
-  const data = await authData(rp, FLAG_UP | FLAG_UV, credential.counter);
+  const data = await authData(rp, userVerified ? FLAG_UP | FLAG_UV : FLAG_UP, credential.counter);
   const client = clientData(rp, "webauthn.get", options.challenge);
   const signed = concat(data, await sha256(client));
   const raw = new Uint8Array(
@@ -194,13 +198,13 @@ export function createSoftAuthenticator(rp: Rp): SoftAuthenticator {
       credentials.set(response.id, stored);
       return response;
     },
-    get(options) {
+    get(options, opts) {
       const allowed = options.allowCredentials?.map((entry) => entry.id) ?? [];
       const candidates = allowed.length > 0 ? allowed : [...credentials.keys()].reverse();
       const key = candidates.find((id) => credentials.has(id));
       const credential = key === undefined ? undefined : credentials.get(key);
       if (!credential) return Promise.reject(new Error("no matching credential"));
-      return assert(rp, credential, options);
+      return assert(rp, credential, options, opts?.userVerified ?? true);
     },
   };
 }
