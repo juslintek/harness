@@ -81,6 +81,15 @@ export function settleRun(db: Database, runId: string): void {
 // wakes of the oldest wake's project; the others wait for the next batch.
 function nextBatch(db: Database, memberId: string): { wakes: WakeRow[]; projectId: string | null } {
   const wakes = pendingWakes(db, memberId);
+  if (getMember(db, memberId)?.role === "viewer") {
+    setStatus(
+      db,
+      wakes.map((w) => w.id),
+      "skipped",
+      { detail: { reason: "viewer" } },
+    );
+    return { wakes: [], projectId: null };
+  }
   const lost = wakes.filter((w) => !mayWork(db, memberId, w));
   setStatus(
     db,
