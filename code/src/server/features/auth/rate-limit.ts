@@ -1,14 +1,24 @@
 import type { Server } from "bun";
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 
 const MAX_TRACKED = 10_000;
 
+// Behind a proxy the socket address is the proxy's, so the key is the rightmost X-Forwarded-For
+// entry: the one the proxy itself appended, which the client cannot forge. Without a proxy the
+// header is ignored.
+function clientKey(c: Context, trustProxy: boolean): string {
+  const env = c.env as { server?: Server<unknown> } | undefined;
+  const socket = env?.server?.requestIP(c.req.raw)?.address ?? "unknown";
+  if (!trustProxy) return socket;
+  const forwarded = c.req.header("x-forwarded-for")?.split(",").at(-1)?.trim();
+  return forwarded || socket;
+}
+
 // In memory on purpose: a restart resets the counters, and the throttle only has to slow guessing.
-export function rateLimit(limit: number, windowMs: number): MiddlewareHandler {
+export function rateLimit(limit: number, windowMs: number, trustProxy = false): MiddlewareHandler {
   const hits = new Map<string, { count: number; resetAt: number }>();
   return async (c, next) => {
-    const env = c.env as { server?: Server<unknown> } | undefined;
-    const address = env?.server?.requestIP(c.req.raw)?.address ?? "unknown";
+    const address = clientKey(c, trustProxy);
     const now = Date.now();
     if (hits.size > MAX_TRACKED) {
       for (const [key, entry] of hits) if (entry.resetAt <= now) hits.delete(key);

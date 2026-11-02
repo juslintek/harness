@@ -35,6 +35,7 @@ export interface AppDeps {
   home: string;
   port: number;
   rp: Rp;
+  trustProxy?: boolean;
   deliverEmailCode?: (email: string, code: string) => void | Promise<void>;
   instanceId: string;
   version: string;
@@ -135,6 +136,7 @@ export function createApp(deps: AppDeps): Hono {
     publicAuthRoutes({
       db,
       rp: deps.rp,
+      ...(deps.trustProxy === undefined ? {} : { trustProxy: deps.trustProxy }),
       deliverEmailCode:
         deps.deliverEmailCode ?? ((email, code) => console.log(`email code for ${email}: ${code}`)),
     }),

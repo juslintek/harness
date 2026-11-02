@@ -36,6 +36,7 @@ import { rateLimit } from "./rate-limit";
 export interface AuthDeps {
   db: Database;
   rp: Rp;
+  trustProxy?: boolean;
   deliverEmailCode: (email: string, code: string) => void | Promise<void>;
 }
 
@@ -161,7 +162,7 @@ function enrollRoutes(app: Hono, deps: AuthDeps): void {
 // Everything here works without a session, so it is mounted ahead of the session middleware.
 export function publicAuthRoutes(deps: AuthDeps): Hono {
   const app = new Hono();
-  const limiter = rateLimit(ATTEMPTS_PER_MINUTE, 60_000);
+  const limiter = rateLimit(ATTEMPTS_PER_MINUTE, 60_000, deps.trustProxy);
   for (const path of ["/login/*", "/email/*", "/recovery", "/enroll/*"]) app.use(path, limiter);
   loginRoutes(app, deps);
   enrollRoutes(app, deps);

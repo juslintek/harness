@@ -8,6 +8,7 @@ test("defaults expand ~ and use port 4100", () => {
     home: join(homedir(), ".harness"),
     port: 4100,
     host: "127.0.0.1",
+    trustProxy: false,
     rp: { id: "localhost", name: "Harness", origin: "http://localhost:4100" },
   });
 });
@@ -18,6 +19,7 @@ test("env overrides", () => {
       home: "/x",
       port: 5000,
       host: "0.0.0.0",
+      trustProxy: false,
       rp: { id: "localhost", name: "Harness", origin: "http://localhost:5000" },
     },
   );
@@ -47,4 +49,10 @@ test("bad port throws", () => {
 
 test("port 0 is rejected because the host check needs the real port", () => {
   expect(() => loadConfig({ HARNESS_PORT: "0" })).toThrow();
+});
+
+test("HARNESS_TRUST_PROXY defaults to false and accepts true", () => {
+  expect(loadConfig({}).trustProxy).toBe(false);
+  expect(loadConfig({ HARNESS_TRUST_PROXY: "true" }).trustProxy).toBe(true);
+  expect(() => loadConfig({ HARNESS_TRUST_PROXY: "maybe" })).toThrow();
 });

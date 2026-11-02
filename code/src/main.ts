@@ -31,6 +31,7 @@ const app = createApp({
   home: config.home,
   port: config.port,
   rp: config.rp,
+  trustProxy: config.trustProxy,
   instanceId,
   version: "0.0.0",
 });

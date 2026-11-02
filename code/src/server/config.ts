@@ -8,6 +8,7 @@ export interface Config {
   port: number;
   host: string;
   rp: Rp;
+  trustProxy: boolean;
 }
 
 const envSchema = z.object({
@@ -22,6 +23,8 @@ const envSchema = z.object({
       return url.protocol === "https:" || url.hostname === "localhost";
     }, "HARNESS_ORIGIN must be https unless the host is localhost")
     .optional(),
+  // Only behind a reverse proxy that sets X-Forwarded-For; otherwise a client could pick its own key.
+  HARNESS_TRUST_PROXY: z.stringbool().default(false),
 });
 
 function expandHome(path: string): string {
@@ -36,6 +39,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     home: expandHome(parsed.HARNESS_HOME),
     port: parsed.HARNESS_PORT,
     host: parsed.HARNESS_HOST,
+    trustProxy: parsed.HARNESS_TRUST_PROXY,
     // WebAuthn rejects IP-address RP IDs, which is why the default is localhost and not 127.0.0.1.
     rp: { id: new URL(origin).hostname, name: "Harness", origin },
   };
