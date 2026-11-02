@@ -1,4 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
+import { checkout, createTask, getTask } from "../board/api";
 import { verifyRunToken } from "../mcp/api";
 import {
   addAgentMember,
@@ -110,7 +111,10 @@ test("lowering or revoking a grant kills the grantee org's live runs in that pro
   const first = await start(visitor, guest.id);
   grantProject(x.db, project.id, guest.id, "write", granter);
   expect(getRun(x.db, first)?.endedAt).toBeNull();
+  const held = createTask(x.db, { projectId: project.id, title: "t", createdBy: granter });
+  checkout(x.db, held.id, visitor.id);
   grantProject(x.db, project.id, guest.id, "read", granter);
+  expect(getTask(x.db, held.id)).toMatchObject({ holderId: null, checkedOutAt: null });
   const lowered = await waitForRun(first);
   expect([lowered.state, lowered.reason]).toEqual(["killed", "grant_changed"]);
   grantProject(x.db, project.id, guest.id, "write", granter);

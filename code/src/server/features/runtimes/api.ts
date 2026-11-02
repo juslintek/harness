@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { type AgentSpec, getSpec } from "../agents/api";
+import { releaseHeldBy } from "../board/api";
 import { expireApprovals } from "../guard/api";
 import type { NewEvent } from "../logs/api";
 import { onGrantChanged, onMemberDemoted, onMemberRemoved } from "../orgs/api";
@@ -67,7 +68,8 @@ function endRunsOf(db: Database, memberId: string, reason = "member_removed"): v
   for (const { id } of ids) kill(db, id, reason);
 }
 
-// A grantee org's agents must stop working in a project once their org lost write access to it.
+// A grantee org's agents must stop working in a project once their org lost write access to it,
+// and the tasks they held there go back to the pool.
 function endRunsOnGrant(db: Database, projectId: string, orgId: string): void {
   const ids = db
     .query<{ id: string }, [string, string]>(
@@ -76,6 +78,7 @@ function endRunsOnGrant(db: Database, projectId: string, orgId: string): void {
     )
     .all(projectId, orgId);
   for (const { id } of ids) kill(db, id, "grant_changed");
+  releaseHeldBy(db, projectId, orgId);
 }
 
 let wired = false;

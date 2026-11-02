@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { onMemberRemoved } from "../orgs/api";
-import { checkout, moveTask, release } from "./moves";
+import { checkout, moveTask, release, releaseHeldBy } from "./moves";
 import {
   addComment,
   addDependency,
@@ -34,6 +34,7 @@ export {
   moveTask,
   onTaskChange,
   release,
+  releaseHeldBy,
   removeDependency,
   taskDetail,
   updateTask,

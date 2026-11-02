@@ -2,7 +2,15 @@ import { expect, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { addAgentMember, createOrg, createProject } from "../orgs/api";
-import { checkout, createTask, getTask, listTasks, moveTask } from "./api";
+import {
+  checkout,
+  createTask,
+  getTask,
+  listTasks,
+  moveTask,
+  onTaskChange,
+  releaseHeldBy,
+} from "./api";
 
 function setup() {
   const db = openDb(":memory:");
@@ -106,4 +114,36 @@ test("sixty inserts into one gap keep a strict order by renumbering the lane whe
   const ranks = lane.map((t) => t.rank);
   expect(new Set(ranks).size).toBe(ranks.length);
   expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
+});
+
+test("releaseHeldBy frees only that org's holders in that project, keeps status, emits released", () => {
+  const { db, member, mk } = setup();
+  const guest = createOrg(db, {
+    name: "Guest",
+    slug: "guest",
+    ownerUserId: "u2",
+    ownerName: "G",
+    ownerHandle: "gg",
+  });
+  const visitor = addAgentMember(db, guest.id, {
+    agentId: "a",
+    handle: "vv",
+    displayName: "vv",
+    specialties: [],
+  }).id;
+  const [theirs, ours] = [mk("theirs"), mk("ours")] as const;
+  checkout(db, theirs.id, visitor);
+  checkout(db, ours.id, member);
+  const released: string[] = [];
+  const off = onTaskChange((c) => c.kind === "released" && released.push(c.task.id));
+  const projectId = theirs.projectId;
+  releaseHeldBy(db, projectId, guest.id);
+  off();
+  expect(getTask(db, theirs.id)).toMatchObject({
+    status: "in_progress",
+    holderId: null,
+    checkedOutAt: null,
+  });
+  expect(getTask(db, ours.id)?.holderId).toBe(member);
+  expect(released).toEqual([theirs.id]);
 });

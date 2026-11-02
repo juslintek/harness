@@ -81,6 +81,18 @@ export function release(db: Database, taskId: string, memberId: string): MoveRes
   return { ok: true, task };
 }
 
+// A grantee org that lost write access must not keep tasks checked out in the project: nobody
+// there can finish or release them. Status stays, so the work is visible and can be picked up again.
+export function releaseHeldBy(db: Database, projectId: string, orgId: string): void {
+  const held = db
+    .query<{ id: string; holder_id: string }, [string, string]>(
+      `SELECT t.id, t.holder_id FROM tasks t JOIN members m ON m.id = t.holder_id
+        WHERE t.project_id = ? AND m.org_id = ?`,
+    )
+    .all(projectId, orgId);
+  for (const { id, holder_id } of held) release(db, id, holder_id);
+}
+
 // Ranks are midpoints, so repeated inserts into one gap eventually stop yielding a value strictly
 // between the neighbours. Renumbering the lane 1..n keeps the order and restores the room.
 function renormalizeLane(db: Database, projectId: string, status: Status): void {
