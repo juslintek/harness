@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { mkdir } from "node:fs/promises";
+import { mkdir, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentSpec } from "../agents/api";
@@ -76,9 +76,13 @@ export async function createLaunch(
   repo: string,
   member?: RunMember,
 ): Promise<Launch> {
-  const tree = await createWorktree(repo, runId, deps.home);
+  // srt's sandbox profile matches resolved paths only, so a home behind a symlink (macOS /var)
+  // would leave the run's own tmp dir read-only and break heredocs.
+  await mkdir(deps.home, { recursive: true });
+  const home = await realpath(deps.home);
+  const tree = await createWorktree(repo, runId, home);
   const branch = await defaultBranch(repo);
-  const runDir = join(deps.home, "runs", runId);
+  const runDir = join(home, "runs", runId);
   const token = member
     ? mintRunToken(db, runId, member.scopes, member)
     : mintRunToken(db, runId, ["report", "guard_hook"]);
@@ -90,7 +94,7 @@ export async function createLaunch(
     gitWorktreeDir: await worktreeAdminDir(tree.path),
     branch: tree.branch,
     agentId: spec.id,
-    harnessHome: deps.home,
+    harnessHome: home,
     agentStateWrite: spec.stateWrite,
     agentEgress: spec.egress,
     preset: "dev",
@@ -117,7 +121,7 @@ export async function createLaunch(
     env,
     mcp: { url: `${base}/mcp`, token },
     claudeSettings: claudeSettings(process.execPath, HOOK_SCRIPT),
-    scope: { root: tree.path, home: homedir(), harnessHome: deps.home, defaultBranch: branch },
+    scope: { root: tree.path, home: homedir(), harnessHome: home, defaultBranch: branch },
   };
 }
 
