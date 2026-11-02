@@ -4,6 +4,7 @@ import { postMessage } from "../chat/api";
 import type { triageWake } from "../laya/api";
 import { addAgentMember, createOrg, grantProject, listMembers, revokeGrant } from "../orgs/api";
 import { holdRuns, type Kit, setup, until, wakes } from "./kit";
+import { mayWork } from "./triggers";
 
 // Each run cuts a real git worktree, which is slow when the whole suite runs at once.
 setDefaultTimeout(30_000);
@@ -235,4 +236,11 @@ test("a grantee agent needs write access to be woken, and a revoked grant stops 
   addComment(k.db, task.id, k.human.id, "secret plans");
   await Bun.sleep(100);
   expect(wakes(k.db, guest.id)).toHaveLength(1);
+});
+
+test("a wake that points at a task which no longer exists is not allowed", () => {
+  const k = setup();
+  const task = k.task("t");
+  expect(mayWork(k.db, k.human.id, { taskId: task.id })).toBe(true);
+  expect(mayWork(k.db, k.human.id, { taskId: "gone" })).toBe(false);
 });

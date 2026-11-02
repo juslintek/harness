@@ -64,9 +64,12 @@ export function mayWork(
   memberId: string,
   wake: { taskId?: string | null | undefined; channelId?: string | null | undefined },
 ): boolean {
-  const task = wake.taskId ? getTask(db, wake.taskId) : null;
-  const taskAccess = task ? projectAccess(db, { memberId }, task.projectId) : "write";
-  if (taskAccess !== "write" && taskAccess !== "admin") return false;
+  if (wake.taskId) {
+    const task = getTask(db, wake.taskId);
+    if (!task) return false;
+    const taskAccess = projectAccess(db, { memberId }, task.projectId);
+    if (taskAccess !== "write" && taskAccess !== "admin") return false;
+  }
   if (!wake.channelId) return true;
   const access = channelAccess(db, memberId, wake.channelId);
   return getChannel(db, wake.channelId)?.projectId ? access === "write" : access !== "none";
