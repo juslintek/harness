@@ -10,7 +10,7 @@ import {
 } from "../../../shared/orgs";
 import { defined, forbidden, notFound, parseBody } from "../../route-kit";
 import { getSpec } from "../agents/api";
-import { type AuthEnv, createEnrollment, createUser, findUserByEmail } from "../auth/api";
+import { type AuthEnv, createUser, findUserByEmail, inviteEnrollment } from "../auth/api";
 import {
   addAgentMember,
   addHumanMember,
@@ -69,7 +69,8 @@ function orgMember(db: Database, ctx: OrgCtx, id: string | undefined): MemberRow
   return member?.orgId === ctx.org.id ? member : null;
 }
 
-// A new address gets a user row plus an enrollment link to set up a passkey; a known one is just added.
+// A new address, or a known user without a passkey, gets an enrollment link bound to that user; one
+// with a passkey is just added.
 function inviteHuman(
   db: Database,
   origin: string,
@@ -83,9 +84,8 @@ function inviteHuman(
       existing?.id ?? createUser(db, { email: body.email, name, instanceAdmin: false });
     const handle = body.handle ?? handleFromEmail(body.email);
     const member = addHumanMember(db, org.id, userId, handle, name, body.role);
-    if (existing) return { member, enrollmentLink: null };
-    const code = createEnrollment(db, { userId, email: body.email, ttlMs: ENROLLMENT_TTL_MS });
-    return { member, enrollmentLink: `${origin}/#/enroll/${code}` };
+    const code = inviteEnrollment(db, { userId, email: body.email, ttlMs: ENROLLMENT_TTL_MS });
+    return { member, enrollmentLink: code === null ? null : `${origin}/#/enroll/${code}` };
   })();
 }
 
