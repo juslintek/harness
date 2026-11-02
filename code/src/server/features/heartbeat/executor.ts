@@ -17,7 +17,7 @@ import {
   type WakeRow,
   wakesOfRun,
 } from "./repo";
-import { overCap } from "./triggers";
+import { mayWork, overCap } from "./triggers";
 
 export interface ExecDeps {
   runDeps: RunDeps;
@@ -76,9 +76,23 @@ export function settleRun(db: Database, runId: string): void {
   setStatus(db, ids, run.state === "completed" ? "done" : "failed", { detail });
 }
 
+// A wake stored before a grant was revoked or lowered must not start a run in that project.
+function reachableWakes(db: Database, memberId: string): WakeRow[] {
+  const wakes = pendingWakes(db, memberId);
+  const lost = wakes.filter((w) => !mayWork(db, memberId, w));
+  setStatus(
+    db,
+    lost.map((w) => w.id),
+    "skipped",
+    { detail: { reason: "no_access" } },
+  );
+  return wakes.filter((w) => !lost.includes(w));
+}
+
 async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<boolean> {
   const member = getMember(db, memberId);
-  const wakes = pendingWakes(db, memberId);
+  const wakes = reachableWakes(db, memberId);
+  if (wakes.length === 0) return false;
   const ids = wakes.map((w) => w.id);
   if (!member || member.agentId === null || member.paused) {
     setStatus(db, ids, "skipped", { detail: { reason: "member cannot run" } });

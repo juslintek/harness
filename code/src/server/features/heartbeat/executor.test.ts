@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { updateTask } from "../board/api";
 import { postMessage } from "../chat/api";
-import { createPosition } from "../orgs/api";
+import { addAgentMember, createOrg, createPosition, grantProject } from "../orgs/api";
 import { setHalted } from "../runtimes/api";
 import { wakeNow } from "./api";
 import { setup, until, wakes } from "./kit";
@@ -186,4 +186,32 @@ test("no schedule wakes are made while halted", async () => {
   stops.push(k.start());
   await Bun.sleep(150);
   expect(wakes(k.db, b.id)).toHaveLength(0);
+});
+
+test("a wake whose grant was lowered to read before launch is skipped and starts no run", async () => {
+  const k = setup();
+  const beta = createOrg(k.db, {
+    name: "Beta",
+    slug: "beta",
+    ownerUserId: "u2",
+    ownerName: "B",
+    ownerHandle: "bee",
+  });
+  const guest = addAgentMember(k.db, beta.id, {
+    agentId: "fake",
+    handle: "guest",
+    displayName: "guest",
+    specialties: [],
+  });
+  grantProject(k.db, k.projectId, beta.id, "write", k.human.id);
+  stops.push(k.start());
+  setHalted(k.db, true);
+  const task = k.task("t");
+  updateTask(k.db, task.id, { assigneeId: guest.id }, k.human.id);
+  await until(() => wakes(k.db, guest.id).length === 1);
+  grantProject(k.db, k.projectId, beta.id, "read", k.human.id);
+  setHalted(k.db, false);
+  await until(() => wakes(k.db, guest.id)[0]?.status === "skipped");
+  expect(JSON.parse(wakes(k.db, guest.id)[0]?.detail ?? "{}")).toEqual({ reason: "no_access" });
+  expect(k.seen).toHaveLength(0);
 });

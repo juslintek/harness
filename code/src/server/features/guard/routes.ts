@@ -4,7 +4,8 @@ import { z } from "zod";
 import { decisionBody } from "../../../shared/runs";
 import { forbidden } from "../../route-kit";
 import { type AuthEnv, requireStepUp } from "../auth/api";
-import { getMember, listOrgsForUser, orgAccess, roleAtLeast } from "../orgs/api";
+import { getTask } from "../board/api";
+import { getMember, getProject, listOrgsForUser, orgAccess, roleAtLeast } from "../orgs/api";
 import { type ApprovalRow, approvalView, decideApproval, findApproval, listApprovals } from "./api";
 import { orgAdminRefusal } from "./manager-limits";
 
@@ -22,11 +23,18 @@ function administeredOrgs(db: Database, userId: string): Set<string> {
   );
 }
 
+// A run on a task works in that task's project repo, so the org owning the project decides,
+// not a grantee org whose agent happens to run there.
 function runOrg(db: Database, runId: string): string | null {
   const run = db
-    .query<{ member_id: string | null }, [string]>("SELECT member_id FROM runs WHERE id = ?")
+    .query<{ member_id: string | null; task_id: string | null }, [string]>(
+      "SELECT member_id, task_id FROM runs WHERE id = ?",
+    )
     .get(runId);
-  return run?.member_id ? (getMember(db, run.member_id)?.orgId ?? null) : null;
+  if (!run?.member_id) return null;
+  const task = run.task_id === null ? null : getTask(db, run.task_id);
+  const project = task ? getProject(db, task.projectId) : null;
+  return project?.orgId ?? getMember(db, run.member_id)?.orgId ?? null;
 }
 
 // The instance admin sees everything; an org owner or admin sees the runs of its own members.
