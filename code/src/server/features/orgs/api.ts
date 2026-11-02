@@ -7,7 +7,14 @@ import {
   reportsTransitivelyTo,
   updatePosition,
 } from "./positions";
-import { createProject, getProject, grantProject, listProjects, revokeGrant } from "./projects";
+import {
+  createProject,
+  getProject,
+  grantProject,
+  listGrantOrgIds,
+  listProjects,
+  revokeGrant,
+} from "./projects";
 import {
   addAgentMember,
   addHumanMember,
@@ -27,7 +34,7 @@ import {
   removeMember,
   updateMember,
 } from "./repo";
-import { orgAccess, projectAccess, roleAtLeast } from "./roles";
+import { orgAccess, projectAccess, projectMember, roleAtLeast } from "./roles";
 
 export type { Role } from "../../../shared/orgs";
 export type { PositionPatch, PositionRow } from "./positions";
@@ -48,6 +55,7 @@ export {
   getOrgBySlug,
   getProject,
   grantProject,
+  listGrantOrgIds,
   listMembers,
   listOrgsForUser,
   listPositions,
@@ -59,6 +67,7 @@ export {
   onOrgCreated,
   orgAccess,
   projectAccess,
+  projectMember,
   removeFromTeam,
   removeMember,
   reportsTransitivelyTo,
@@ -68,7 +77,7 @@ export {
   updatePosition,
 };
 
-function handleFromEmail(email: string): string {
+export function handleFromEmail(email: string): string {
   const local = (email.split("@")[0] ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, "-")

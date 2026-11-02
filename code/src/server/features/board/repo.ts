@@ -17,7 +17,13 @@ export function onTaskChange(fn: (change: TaskChange) => void): () => void {
   return () => listeners.delete(fn);
 }
 export function emit(change: TaskChange): void {
-  for (const fn of listeners) fn(change);
+  for (const fn of listeners) {
+    try {
+      fn(change);
+    } catch (err) {
+      console.error("board listener failed", err);
+    }
+  }
 }
 
 const taskView = (r: Raw): TaskView => ({

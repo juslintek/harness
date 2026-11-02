@@ -16,6 +16,7 @@ import {
   requireInstanceAdmin,
   requireStepUp,
   sessionMiddleware,
+  stepUpRequired,
 } from "./middleware";
 import {
   finishLogin,
@@ -67,6 +68,7 @@ export {
   sessionFromToken,
   sessionMiddleware,
   stepUpOptions,
+  stepUpRequired,
   useRecoveryCode,
   verifyEmailCode,
 };

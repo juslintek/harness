@@ -1,8 +1,12 @@
 import type { Database } from "bun:sqlite";
 import type { Server, WebSocketHandler } from "bun";
 import type { Context } from "hono";
-import { type WsMessage, wsTopicSchema } from "../shared/runs";
+import { type WsMessage, wsTopicSchema } from "../shared/realtime";
+import type { AuthEnv } from "./features/auth/api";
+import { onTaskChange } from "./features/board/api";
+import { onMessage } from "./features/chat/api";
 import { onApprovalChange } from "./features/guard/api";
+import { getProject, listGrantOrgIds, orgAccess } from "./features/orgs/api";
 import { getRun, onRunEvent } from "./features/runtimes/api";
 import { viewRun } from "./features/runtimes/routes";
 
@@ -20,15 +24,29 @@ export const websocket: WebSocketHandler<WsData> = {
   idleTimeout: 120,
 };
 
-// Runs behind hostGuard, adminMiddleware and originGuard, so only an admin browser tab gets here.
-export function wsUpgrade(c: Context): Response {
-  const topic = wsTopicSchema.safeParse(c.req.query("topic"));
-  if (!topic.success) return c.json({ error: "invalid topic" }, 400);
-  const env = c.env as { server?: Server<WsData> } | undefined;
-  if (!env?.server?.upgrade(c.req.raw, { data: { topic: topic.data } })) {
-    return c.json({ error: "upgrade failed" }, 426);
-  }
-  return new Response(null);
+// Runs behind hostGuard, the session and originGuard. Run topics stay admin-only; an org topic
+// is open to any member of that org, whatever their role.
+export function wsUpgrade(db: Database): (c: Context<AuthEnv>) => Response {
+  return (c) => {
+    const topic = wsTopicSchema.safeParse(c.req.query("topic"));
+    if (!topic.success) return c.json({ error: "invalid topic" }, 400);
+    const actor = c.get("actor");
+    const orgId = topic.data.startsWith("org:") ? topic.data.slice(4) : null;
+    const allowed = orgId ? orgAccess(db, actor.userId, orgId) !== null : actor.instanceAdmin;
+    if (!allowed) return c.json({ error: "forbidden" }, 403);
+    const env = c.env as { server?: Server<WsData> } | undefined;
+    if (!env?.server?.upgrade(c.req.raw, { data: { topic: topic.data } })) {
+      return c.json({ error: "upgrade failed" }, 426);
+    }
+    return new Response(null);
+  };
+}
+
+// A shared project is visible to its owner org and every grantee org.
+function projectTopics(db: Database, projectId: string): string[] {
+  const project = getProject(db, projectId);
+  if (!project) return [];
+  return [project.orgId, ...listGrantOrgIds(db, projectId)].map((id) => `org:${id}`);
 }
 
 export function wireRealtime(db: Database, server: Server<WsData>): () => void {
@@ -48,8 +66,31 @@ export function wireRealtime(db: Database, server: Server<WsData>): () => void {
       event: { kind: "approval", ts: null },
     });
   });
+  const offTask = onTaskChange((change) => {
+    const message: WsMessage = {
+      type: "task",
+      projectId: change.task.projectId,
+      taskId: change.task.id,
+      kind: change.kind,
+    };
+    for (const topic of projectTopics(db, change.task.projectId)) send(topic, message);
+  });
+  const offChat = onMessage(({ message, channel }) => {
+    const nudge: WsMessage = {
+      type: "chat",
+      channelId: channel.id,
+      messageId: message.id,
+      threadRootId: message.threadRootId,
+    };
+    const topics = channel.projectId
+      ? projectTopics(db, channel.projectId)
+      : [`org:${channel.orgId}`];
+    for (const topic of topics) send(topic, nudge);
+  });
   return () => {
     offRun();
     offApproval();
+    offTask();
+    offChat();
   };
 }

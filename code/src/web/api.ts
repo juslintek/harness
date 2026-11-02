@@ -1,7 +1,7 @@
 import { type Signal, signal } from "@preact/signals";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
-import { type WsMessage, wsMessageSchema } from "../shared/runs";
+import { type WsMessage, wsMessageSchema } from "../shared/realtime";
 
 // Set when any call gets a 401, so the shell can tell the user how to log in instead of showing broken pages.
 const RECONNECT_MIN_MS = 1000;

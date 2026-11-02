@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { addAgentMember, createOrg, createProject, removeMember } from "../orgs/api";
@@ -154,4 +154,23 @@ test("releaseAllFor frees held tasks; lookup and filters work", () => {
   });
   expect(listTasks(s.db, p, { assigneeId: b }).map((x) => x.id)).toEqual([t.id]);
   expect(listTasks(s.db, p, { status: "in_progress" })).toHaveLength(1);
+});
+
+test("a throwing listener does not fail a committed change or starve later listeners", () => {
+  const s = setup();
+  const projectId = s.project("p1");
+  const seen: string[] = [];
+  const off = [
+    onTaskChange(() => {
+      throw new Error("boom");
+    }),
+    onTaskChange((change) => seen.push(change.kind)),
+  ];
+  const quiet = spyOn(console, "error").mockImplementation(() => {});
+  const task = mk(s, projectId, "x");
+  expect(quiet).toHaveBeenCalled();
+  quiet.mockRestore();
+  for (const stop of off) stop();
+  expect(seen).toEqual(["created"]);
+  expect(listTasks(s.db, projectId).map((t) => t.id)).toEqual([task.id]);
 });

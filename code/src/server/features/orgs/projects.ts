@@ -95,3 +95,10 @@ export function grantProject(
 export function revokeGrant(db: Database, projectId: string, granteeOrgId: string): void {
   db.query("DELETE FROM grants WHERE project_id = ? AND org_id = ?").run(projectId, granteeOrgId);
 }
+
+export function listGrantOrgIds(db: Database, projectId: string): string[] {
+  return db
+    .query<{ org_id: string }, [string]>("SELECT org_id FROM grants WHERE project_id = ?")
+    .all(projectId)
+    .map((r) => r.org_id);
+}
