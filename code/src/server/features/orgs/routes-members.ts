@@ -139,6 +139,8 @@ function changeMemberRoutes(db: Database, app: Hono<AuthEnv>): void {
     const { ctx, target } = found;
     const denied = target.role === "owner" ? ownershipGuard(db, c, ctx, target, null) : null;
     if (denied) return denied;
+    const stepUp = roleAtLeast(target.role, "admin") ? needStepUp(c) : null;
+    if (stepUp) return stepUp;
     removeMember(db, target.id);
     return c.json({ ok: true });
   });

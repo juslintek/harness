@@ -45,8 +45,11 @@ export function positionRoutes(db: Database, app: Hono<AuthEnv>): void {
     const body = await parseBody(c, positionPatchBody);
     if (body instanceof Response) return body;
     if (foreignRef(db, ctx, body)) return c.json({ error: "team or member not in org" }, 400);
-    const manager = body.isManager !== undefined && body.isManager !== current.isManager;
-    const stepUp = manager ? needStepUp(c) : null;
+    // Manager authority comes from the flag, the holder and the reporting line, so all three count.
+    const authority = (["isManager", "memberId", "reportsTo"] as const).some(
+      (key) => body[key] !== undefined && body[key] !== current[key],
+    );
+    const stepUp = authority ? needStepUp(c) : null;
     return stepUp ?? c.json(updatePosition(db, current.id, defined(body)));
   });
 }

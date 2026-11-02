@@ -63,6 +63,10 @@ test("an org topic refuses users outside the org and run topics refuse non-admin
   ];
   const a = k.org("acme", alice);
   k.org("beta", bob);
+  const denied = await fetch(`http://127.0.0.1:${k.port}/ws?topic=org:${a.id}`, {
+    headers: { ...bob.headers, host: `localhost:${k.port}` },
+  });
+  expect(denied.status).toBe(403);
   await expect(k.listen(bob, `org:${a.id}`)).rejects.toThrow();
   await expect(k.listen(alice, "runs")).rejects.toThrow();
   await expect(k.listen(await k.user(true), `org:${a.id}`)).rejects.toThrow();

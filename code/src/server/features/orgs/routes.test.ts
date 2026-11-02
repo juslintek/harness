@@ -139,3 +139,29 @@ test("grants need step-up and an admin of the owning org", async () => {
   const channels = k.db.query("SELECT 1 FROM channels WHERE project_id = ?").all(project.id);
   expect(channels).toHaveLength(1);
 });
+
+test("reassigning a manager position or removing an admin needs step-up", async () => {
+  const k = bootApi();
+  const owner = await k.user({ stepUp: true });
+  const plain = await k.user();
+  const o = k.org(owner, "acme");
+  const plainMember = k.join(o.id, plain, "admin", "adm");
+  const made = await k.call(owner, "POST", "/api/orgs/acme/positions", {
+    title: "Lead",
+    isManager: true,
+  });
+  const id = (await made.json()).id;
+  const reassign = await k.call(plain, "PATCH", `/api/orgs/acme/positions/${id}`, {
+    memberId: o.owner.id,
+  });
+  expect(reassign.status).toBe(403);
+  expect((await reassign.json()).error).toBe("step_up_required");
+  const remove = await k.call(owner, "DELETE", `/api/orgs/acme/members/${plainMember.id}`);
+  expect(remove.status).toBe(200);
+  const other = await k.user();
+  const otherMember = k.join(o.id, other, "admin", "adm2");
+  const noStep = await k.user();
+  k.join(o.id, noStep, "admin", "adm3");
+  const denied = await k.call(noStep, "DELETE", `/api/orgs/acme/members/${otherMember.id}`);
+  expect((await denied.json()).error).toBe("step_up_required");
+});
