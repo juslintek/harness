@@ -24,3 +24,7 @@ test("env overrides", () => {
 test("bad port throws", () => {
   expect(() => loadConfig({ HARNESS_PORT: "nope" })).toThrow();
 });
+
+test("port 0 is rejected because the host check needs the real port", () => {
+  expect(() => loadConfig({ HARNESS_PORT: "0" })).toThrow();
+});

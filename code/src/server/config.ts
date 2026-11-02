@@ -10,7 +10,7 @@ export interface Config {
 
 const envSchema = z.object({
   HARNESS_HOME: z.string().min(1).default("~/.harness"),
-  HARNESS_PORT: z.coerce.number().int().min(0).max(65535).default(4100),
+  HARNESS_PORT: z.coerce.number().int().min(1).max(65535).default(4100),
   HARNESS_HOST: z.string().min(1).default("127.0.0.1"),
 });
 
