@@ -20,6 +20,7 @@ export interface Harness {
   asks: PermissionAsk[];
   quotas: Array<Parameters<RunContext["onQuota"]>[0]>;
   pid: number;
+  faults: unknown[];
   requests: Array<{ method: string; params: Record<string, unknown> }>;
 }
 
@@ -51,6 +52,7 @@ export async function drive(script: unknown[], opts: Opts = {}): Promise<Harness
   const logFile = join(dir, `log-${id}`);
   const events: NewEvent[] = [];
   const asks: PermissionAsk[] = [];
+  const faults: unknown[] = [];
   const quotas: Harness["quotas"] = [];
   const abort = new AbortController();
   let spawned = 0;
@@ -85,13 +87,14 @@ export async function drive(script: unknown[], opts: Opts = {}): Promise<Harness
     },
     onQuota: (q) => quotas.push(q),
     signal: abort.signal,
+    logError: (_message, err) => faults.push(err),
     idleTimeoutMs: opts.idleTimeoutMs ?? 10_000,
   });
   const requests = (existsSync(logFile) ? readFileSync(logFile, "utf8") : "")
     .split("\n")
     .filter(Boolean)
     .map((l) => JSON.parse(l));
-  return { outcome, events, asks, quotas, requests, pid: spawned };
+  return { outcome, events, asks, quotas, requests, faults, pid: spawned };
 }
 
 export function gone(pid: number): boolean {

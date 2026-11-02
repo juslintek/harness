@@ -62,6 +62,7 @@ test("an emit that throws ends the run as error quickly and kills the child", as
   });
   expect(h.outcome.stopReason).toBe("error");
   expect(h.outcome.error).toContain("db busy");
+  expect(h.faults).toEqual([new Error("db busy")]);
   expect(Date.now() - started).toBeLessThan(4000);
   expect(gone(h.pid)).toBe(true);
 });

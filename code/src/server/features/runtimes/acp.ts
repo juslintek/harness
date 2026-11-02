@@ -42,7 +42,10 @@ interface Shared {
 
 // An exception from emit, a handler or the permission path ends the run as `error` right away
 // instead of waiting for the idle clock.
-function newShared(): { shared: Shared; faulted: Promise<"fault"> } {
+function newShared(log: NonNullable<RunContext["logError"]>): {
+  shared: Shared;
+  faulted: Promise<"fault">;
+} {
   let trip: (v: "fault") => void = () => {};
   const faulted = new Promise<"fault">((resolve) => {
     trip = resolve;
@@ -53,7 +56,7 @@ function newShared(): { shared: Shared; faulted: Promise<"fault"> } {
     fault: null,
     raise(err) {
       if (this.fault !== null) return;
-      console.error("acp run fault", err);
+      log("acp run fault", err);
       this.fault = err instanceof Error ? err.message : String(err);
       trip("fault");
     },
@@ -220,7 +223,7 @@ export const runAcp: Adapter = async (ctx) => {
     stderr: "pipe",
     detached: true,
   });
-  const { shared, faulted } = newShared();
+  const { shared, faulted } = newShared(ctx.logError ?? ((m, e) => console.error(m, e)));
   const safe: RunContext = {
     ...ctx,
     emit: (e) => {

@@ -36,6 +36,8 @@ export interface RunContext {
   // The agent is spawned detached, so its pid is also its process group id.
   onSpawn?(pid: number): void;
   signal: AbortSignal;
+  // Where an internal run fault is reported; console.error when absent.
+  logError?(message: string, err: unknown): void;
   idleTimeoutMs: number;
   // Upper bound for one decide() call; must exceed the approval timeout T8 enforces itself.
   decideTimeoutMs?: number;
