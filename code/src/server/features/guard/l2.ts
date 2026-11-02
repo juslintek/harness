@@ -1,23 +1,7 @@
+import type { Category, L1Result } from "./l1";
 import { decide, type LayaAnswer, type LayaQuestion } from "./laya";
 
-export type Category =
-  | "read"
-  | "edit"
-  | "shell"
-  | "network"
-  | "delete"
-  | "git_push"
-  | "secret"
-  | "other";
-
-export interface L1Result {
-  verdict: "allow" | "ask" | "deny";
-  rule: string | null;
-  reason: string;
-  category: Category;
-}
-
-interface L2Result {
+export interface L2Result {
   verdict: "allow" | "ask" | "deny";
   reason: string;
   source: "laya" | "fallback";

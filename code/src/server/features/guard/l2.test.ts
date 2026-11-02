@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { startStub, stopStubs } from "../../test-support/stub-server";
-import { escalateL2, type L1Result } from "./l2";
+import type { L1Result } from "./l1";
+import { escalateL2 } from "./l2";
 import { resetLayaCircuit } from "./laya";
 
 let hits = { n: 0 };
