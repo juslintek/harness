@@ -13,6 +13,7 @@ import {
   writeSrtSettings,
 } from "../guard/api";
 import { mintRunToken } from "../mcp/api";
+import type { Adapter } from "./adapter";
 import { prepareCodexHome } from "./codex-home";
 import { createWorktree, defaultBranch } from "./worktree";
 
@@ -25,6 +26,8 @@ export interface RunDeps {
   breaker?: { maxEventsPerMinute: number; maxTokens: number };
   // Test hook: the real run env is scrubbed, so a fake agent gets its script through here.
   agentEnv?: (runDir: string) => Record<string, string>;
+  // Test hook: replaces the lane adapter so a test controls when and how the lane returns.
+  lane?: Adapter;
 }
 
 export interface Launch {

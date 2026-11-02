@@ -115,11 +115,10 @@ function finalize(
   state: RunState,
   reason: string | null,
 ): RunRow {
-  // Shutdown and the lane's own return can both end the same run; the first one wins.
-  if (!live.has(id)) {
-    const done = getRun(db, id);
-    if (done) return done;
-  }
+  // Shutdown and the lane's own return can both end the same run; the first one wins. Keyed on the
+  // stored row, so a first finalize that threw before markEnded still lets the retry through.
+  const done = getRun(db, id);
+  if (done?.endedAt != null) return done;
   try {
     markEnded(db, id, state, reason);
     const body = reason === null ? state : `${state}: ${reason}`;
@@ -217,7 +216,9 @@ async function execute(
   let state: RunState = "failed";
   let reason: string | null = "internal_error";
   try {
-    const outcome = await LANES[spec.lane](buildContext(db, deps, spec, input, launch, run));
+    const outcome = await (deps.lane ?? LANES[spec.lane])(
+      buildContext(db, deps, spec, input, launch, run),
+    );
     const conversation = outcome.sessionId === null ? {} : { conversationId: outcome.sessionId };
     recordUsage(db, { id: input.id, agent: spec.id, ...conversation }, outcome.usage);
     [state, reason] = endState(db, input.id, run, outcome);
