@@ -7,6 +7,7 @@ import {
   grantProject,
   removeMember,
   revokeGrant,
+  updateMember,
 } from "../orgs/api";
 import type { RunOutcome } from "./adapter";
 import { getRun, startRun, waitForRun, wireRuntimes } from "./api";
@@ -118,4 +119,37 @@ test("lowering or revoking a grant kills the grantee org's live runs in that pro
   expect((await waitForRun(second)).reason).toBe("grant_changed");
   release();
   expect((await waitForRun(ownRun)).state).toBe("completed");
+});
+
+test("demoting an agent member to viewer kills its live run", async () => {
+  wireRuntimes();
+  const x = fixture();
+  const org = createOrg(x.db, {
+    name: "D",
+    slug: "demo",
+    ownerUserId: "u",
+    ownerName: "O",
+    ownerHandle: "owner",
+  });
+  const agent = addAgentMember(x.db, org.id, {
+    agentId: "fake",
+    handle: "bot",
+    displayName: "bot",
+    specialties: [],
+  });
+  const lane = async (ctx: { signal: AbortSignal }): Promise<RunOutcome> => {
+    await new Promise<void>((resolve) => ctx.signal.addEventListener("abort", () => resolve()));
+    return done;
+  };
+  const run = await startRun(x.db, fakeDeps(x, [], { lane }), {
+    agentId: "fake",
+    repo: x.repo,
+    prompt: "bot",
+    member: { memberId: agent.id, orgId: org.id, scopes: ["report"] },
+  });
+  updateMember(x.db, agent.id, { paused: true });
+  expect(getRun(x.db, run)?.endedAt).toBeNull();
+  updateMember(x.db, agent.id, { role: "viewer" });
+  const row = await waitForRun(run);
+  expect([row.state, row.reason]).toEqual(["killed", "member_demoted"]);
 });

@@ -42,6 +42,7 @@ const teamRow = (r: Raw): TeamRow => ({
 });
 const orgCreated = new Set<(db: Database, org: OrgView, owner: MemberRow) => void>();
 const memberRemoved = new Set<(db: Database, member: MemberRow) => void>();
+const memberDemoted = new Set<(db: Database, member: MemberRow) => void>();
 
 export function onOrgCreated(
   fn: (db: Database, org: OrgView, owner: MemberRow) => void,
@@ -52,6 +53,11 @@ export function onOrgCreated(
 export function onMemberRemoved(fn: (db: Database, member: MemberRow) => void): () => void {
   memberRemoved.add(fn);
   return () => memberRemoved.delete(fn);
+}
+
+export function onMemberDemoted(fn: (db: Database, member: MemberRow) => void): () => void {
+  memberDemoted.add(fn);
+  return () => memberDemoted.delete(fn);
 }
 
 export interface NewOrg {
@@ -206,7 +212,9 @@ export function updateMember(db: Database, id: string, patch: MemberPatch): Memb
     n.paused ? 1 : 0,
     id,
   );
-  return getMember(db, id) as MemberRow;
+  const next = getMember(db, id) as MemberRow;
+  if (cur.role !== "viewer" && next.role === "viewer") for (const fn of memberDemoted) fn(db, next);
+  return next;
 }
 
 export function removeMember(db: Database, id: string): void {
