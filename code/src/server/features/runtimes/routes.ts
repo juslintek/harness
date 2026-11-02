@@ -25,6 +25,7 @@ type Tokens = { input: number; output: number };
 function runView(row: RunRow, tokens: Tokens): RunView {
   return {
     id: row.id,
+    memberId: row.memberId,
     agentId: row.agentId,
     model: row.model,
     repo: row.repo,

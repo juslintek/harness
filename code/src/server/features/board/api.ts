@@ -14,6 +14,7 @@ import {
   updateTask,
 } from "./repo";
 
+export type { MoveResult } from "./moves";
 export type { TaskChange } from "./repo";
 
 export {

@@ -100,7 +100,10 @@ export function createApp(deps: AppDeps): Hono {
   });
   const mcp = mcpHandler(
     db,
-    (runId, text) => appendEvent(db, { kind: "message", source: "mcp", runId, body: text }),
+    {
+      onReport: (runId, text) =>
+        appendEvent(db, { kind: "message", source: "mcp", runId, body: text }),
+    },
     deps.port,
   );
   app.all("/mcp", (c) => mcp(c.req.raw));

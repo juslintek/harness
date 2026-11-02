@@ -12,7 +12,12 @@ function freshDb(): ReturnType<typeof openDb> {
 test("minted token verifies, revoked does not, random string does not", () => {
   const db = freshDb();
   const token = mintRunToken(db, "run-1", ["report"]);
-  expect(verifyRunToken(db, token)).toEqual({ runId: "run-1", scopes: ["report"] });
+  expect(verifyRunToken(db, token)).toEqual({
+    runId: "run-1",
+    scopes: ["report"],
+    memberId: null,
+    orgId: null,
+  });
   expect(verifyRunToken(db, "not-a-token")).toBeNull();
   revokeRunTokens(db, "run-1");
   expect(verifyRunToken(db, token)).toBeNull();
