@@ -205,6 +205,11 @@ export function addComment(
   return commentView(row);
 }
 
+export function getComment(db: Database, id: string): CommentView | null {
+  const r = db.query<Raw, [string]>("SELECT * FROM comments WHERE id = ?").get(id);
+  return r ? commentView(r) : null;
+}
+
 export function taskDetail(db: Database, id: string): TaskDetail {
   const task = getTask(db, id);
   if (!task) throw new BoardError(`unknown task: ${id}`);

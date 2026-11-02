@@ -29,7 +29,9 @@ const wakeRow = (r: Raw): WakeRow => ({
   memberId: r.member_id as string,
   reason: r.reason as WakeReason,
   taskId: r.task_id as string | null,
+  taskNumber: null,
   channelId: r.channel_id as string | null,
+  channelName: null,
   messageId: r.message_id as string | null,
   detail: parse(r.detail as string | null),
   causedBy: r.caused_by as string | null,
@@ -79,12 +81,28 @@ export function membersWithPending(db: Database): string[] {
     .map((r) => r.member_id);
 }
 
+// The runs table is the truth: a started wake whose run has ended no longer blocks the member,
+// even if the end event never reached us. A started wake without a run id is mid-launch.
 export function hasLiveWake(db: Database, memberId: string): boolean {
   return (
     db
-      .query("SELECT 1 FROM wakeups WHERE member_id = ? AND status = 'started' LIMIT 1")
+      .query(
+        `SELECT 1 FROM wakeups w LEFT JOIN runs r ON r.id = w.run_id
+         WHERE w.member_id = ? AND w.status = 'started'
+           AND (w.run_id IS NULL OR (r.id IS NOT NULL AND r.ended_at IS NULL)) LIMIT 1`,
+      )
       .get(memberId) !== null
   );
+}
+
+export function endedStartedRuns(db: Database): string[] {
+  return db
+    .query<{ run_id: string }, []>(
+      `SELECT DISTINCT w.run_id AS run_id FROM wakeups w LEFT JOIN runs r ON r.id = w.run_id
+       WHERE w.status = 'started' AND w.run_id IS NOT NULL AND (r.id IS NULL OR r.ended_at IS NOT NULL)`,
+    )
+    .all()
+    .map((r) => r.run_id);
 }
 
 export function pendingWakes(db: Database, memberId: string): WakeRow[] {

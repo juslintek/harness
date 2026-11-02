@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { WakeReason } from "../../../shared/heartbeat";
-import { type TaskChange, taskDetail } from "../board/api";
+import { getComment, type TaskChange } from "../board/api";
 import { type ChatEvent, channelAccess } from "../chat/api";
 import type { triageWake } from "../laya/api";
 import { appendEvent } from "../logs/api";
@@ -36,9 +36,20 @@ function logCap(db: Database, member: MemberRow, now: number): void {
   });
 }
 
+export class WakeCapError extends Error {
+  constructor() {
+    super("wake_cap");
+    this.name = "WakeCapError";
+  }
+}
+
+export function overCap(db: Database, memberId: string): boolean {
+  return startedRunsSince(db, memberId, Date.now() - HOUR_MS) >= HOURLY_CAP;
+}
+
 function store(db: Database, member: MemberRow, input: WakeInput): string {
   const now = Date.now();
-  if (startedRunsSince(db, member.id, now - HOUR_MS) >= HOURLY_CAP) {
+  if (overCap(db, member.id)) {
     logCap(db, member, now);
     const detail = { ...(input.detail as object | undefined), cap: "hourly" };
     return insertWake(db, { ...input, detail, status: "skipped" });
@@ -58,6 +69,10 @@ export function runNow(db: Database, memberId: string, causedBy: string): string
   const member = getMember(db, memberId);
   if (member?.kind !== "agent") throw new Error("not an agent member");
   if (member.paused) throw new Error("member is paused");
+  if (overCap(db, memberId)) {
+    logCap(db, member, Date.now());
+    throw new WakeCapError();
+  }
   return store(db, member, { memberId, reason: "run_now", causedBy });
 }
 
@@ -70,7 +85,7 @@ export function onTask(db: Database, change: TaskChange): void {
     recordWake(db, { ...base, memberId: task.assigneeId, reason: "assignment" });
   }
   if (change.kind !== "commented") return;
-  const body = taskDetail(db, task.id).comments.find((c) => c.id === change.commentId)?.body;
+  const body = change.commentId === undefined ? undefined : getComment(db, change.commentId)?.body;
   const detail = body === undefined ? undefined : { excerpt: excerpt(body) };
   const targets = new Set([task.assigneeId, task.holderId]);
   for (const memberId of targets) {
@@ -84,6 +99,7 @@ export async function onChat(
   triage: typeof triageWake,
 ): Promise<void> {
   const { message, mentions, channel } = event;
+  const author = message.authorId === null ? null : getMember(db, message.authorId);
   const base = { channelId: channel.id, messageId: message.id, causedBy: message.authorId };
   const detail = { excerpt: excerpt(message.body) };
   if (mentions.length > 0) {
@@ -92,6 +108,8 @@ export async function onChat(
     return;
   }
   if (channel.kind !== "team" && channel.kind !== "project") return;
+  // Agents talking among themselves must not wake each other through Laya.
+  if (author?.kind === "agent") return;
   const result = await triage(message.body);
   if (result.specialty === null) return;
   const specialty = result.specialty;

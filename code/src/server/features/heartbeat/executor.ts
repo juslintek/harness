@@ -9,6 +9,7 @@ import { getMember, getProject, type MemberRow, managerPositionsOf } from "../or
 import { getRun, HaltedError, isHalted, type RunDeps, startRun } from "../runtimes/api";
 import { buildPrompt } from "./prompt";
 import {
+  endedStartedRuns,
   hasLiveWake,
   membersWithPending,
   pendingWakes,
@@ -16,6 +17,7 @@ import {
   type WakeRow,
   wakesOfRun,
 } from "./repo";
+import { overCap } from "./triggers";
 
 export interface ExecDeps {
   runDeps: RunDeps;
@@ -64,8 +66,12 @@ function fail(db: Database, ids: string[], err: unknown): void {
 // as well as on the run event.
 export function settleRun(db: Database, runId: string): void {
   const run = getRun(db, runId);
-  if (!run || run.endedAt === null) return;
   const ids = wakesOfRun(db, runId);
+  if (!run) {
+    setStatus(db, ids, "failed", { detail: { state: "missing" } });
+    return;
+  }
+  if (run.endedAt === null) return;
   const detail = { state: run.state, reason: run.reason };
   setStatus(db, ids, run.state === "completed" ? "done" : "failed", { detail });
 }
@@ -76,6 +82,10 @@ async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<b
   const ids = wakes.map((w) => w.id);
   if (!member || member.agentId === null || member.paused) {
     setStatus(db, ids, "skipped", { detail: { reason: "member cannot run" } });
+    return false;
+  }
+  if (overCap(db, memberId)) {
+    setStatus(db, ids, "skipped", { detail: { cap: "hourly" } });
     return false;
   }
   setStatus(db, ids, "started");
@@ -113,4 +123,11 @@ export async function runPending(db: Database, deps: ExecDeps): Promise<boolean>
     deferred = (await launch(db, deps, memberId)) || deferred;
   }
   return deferred;
+}
+
+// Settles wakes whose run ended without an event reaching us; true when it changed anything.
+export function sweepEnded(db: Database): boolean {
+  const runs = endedStartedRuns(db);
+  for (const runId of runs) settleRun(db, runId);
+  return runs.length > 0;
 }

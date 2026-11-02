@@ -16,5 +16,5 @@ CREATE TABLE wakeups (
 
 CREATE INDEX wakeups_member_status ON wakeups (member_id, status);
 CREATE INDEX wakeups_member_created ON wakeups (member_id, created_at);
-CREATE INDEX wakeups_run ON wakeups (run_id) WHERE run_id IS NOT NULL;
+CREATE INDEX wakeups_started ON wakeups (run_id) WHERE status = 'started';
 CREATE INDEX members_heartbeat ON members (heartbeat_minutes) WHERE heartbeat_minutes IS NOT NULL;

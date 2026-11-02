@@ -169,3 +169,29 @@ test("an explicit mention skips Laya", async () => {
   expect(wakes(k.db, b.id).map((w) => w.reason)).toEqual(["mention"]);
   expect(calls).toBe(0);
 });
+
+test("an agent-authored message without a mention skips Laya, a human one does not", async () => {
+  const k = setup();
+  const dba = k.agent("dba", ["database"]);
+  const other = k.agent("other");
+  let calls = 0;
+  boot(k, async (text) => {
+    calls++;
+    return database(text);
+  });
+  postMessage(k.db, {
+    channelId: k.teamChannel.id,
+    authorId: other.id,
+    body: "index the orders table",
+  });
+  await Bun.sleep(100);
+  expect(calls).toBe(0);
+  expect(wakes(k.db, dba.id)).toHaveLength(0);
+  postMessage(k.db, {
+    channelId: k.teamChannel.id,
+    authorId: k.human.id,
+    body: "index the orders table",
+  });
+  await until(() => wakes(k.db, dba.id).length === 1);
+  expect(calls).toBe(1);
+});

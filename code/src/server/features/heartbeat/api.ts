@@ -1,11 +1,12 @@
 import type { Database } from "bun:sqlite";
 import type { WakeupView } from "../../../shared/heartbeat";
-import { onTaskChange } from "../board/api";
-import { onMessage } from "../chat/api";
+import { getTask, onTaskChange } from "../board/api";
+import { channelAccess, getChannel, onMessage } from "../chat/api";
 import { triageWake } from "../laya/api";
 import { appendEvent } from "../logs/api";
-import { onRunEvent, type RunDeps } from "../runtimes/api";
-import { type ExecDeps, runPending, settleRun } from "./executor";
+import { projectAccess } from "../orgs/api";
+import { isHalted, onRunEvent, type RunDeps } from "../runtimes/api";
+import { type ExecDeps, runPending, settleRun, sweepEnded } from "./executor";
 import { failStartedWakes, listWakeups as list } from "./repo";
 import { dueSchedules, onChat, onTask, runNow } from "./triggers";
 
@@ -46,13 +47,19 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => void {
     }),
     onRunEvent((runId, event) => {
       if (event.kind !== "run") return;
-      settleRun(db, runId);
+      try {
+        settleRun(db, runId);
+      } catch (err) {
+        report("run end", err);
+      }
       kick();
     }),
   ];
   const timer = setInterval(() => {
     try {
-      if (dueSchedules(db, Date.now()) > 0 || deferred) kick();
+      const swept = sweepEnded(db);
+      const scheduled = isHalted(db) ? 0 : dueSchedules(db, Date.now());
+      if (swept || scheduled > 0 || deferred) kick();
     } catch (err) {
       report("schedule tick", err);
     }
@@ -72,6 +79,32 @@ export function wakeNow(db: Database, memberId: string, causedBy: string): strin
   return id;
 }
 
-export function listWakeups(db: Database, orgId: string, limit: number): WakeupView[] {
-  return list(db, orgId, limit);
+function visibleChannel(db: Database, w: WakeupView, viewerId: string): WakeupView {
+  const channel = w.channelId === null ? null : getChannel(db, w.channelId);
+  if (!channel || channelAccess(db, viewerId, channel.id) === "none") {
+    return { ...w, channelId: null, channelName: null, messageId: null };
+  }
+  return { ...w, channelName: channel.name };
+}
+
+function visibleTask(db: Database, w: WakeupView, viewerId: string): WakeupView {
+  const task = w.taskId === null ? null : getTask(db, w.taskId);
+  if (!task || projectAccess(db, { memberId: viewerId }, task.projectId) === "none") {
+    return { ...w, taskId: null, taskNumber: null };
+  }
+  return { ...w, taskNumber: task.number };
+}
+
+// The list is for any org member, so it carries no message or comment text, and a channel or task
+// only shows for a viewer who may open it (a DM must not leak through its wake).
+export function listWakeups(
+  db: Database,
+  orgId: string,
+  limit: number,
+  viewerId: string,
+): WakeupView[] {
+  return list(db, orgId, limit).map((w) => {
+    const { excerpt: _text, ...detail } = (w.detail ?? {}) as Record<string, unknown>;
+    return visibleTask(db, visibleChannel(db, { ...w, detail }, viewerId), viewerId);
+  });
 }

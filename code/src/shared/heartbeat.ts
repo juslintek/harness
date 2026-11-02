@@ -14,7 +14,9 @@ export interface WakeupView {
   memberId: string;
   reason: WakeReason;
   taskId: string | null;
+  taskNumber: number | null;
   channelId: string | null;
+  channelName: string | null;
   messageId: string | null;
   detail: unknown;
   causedBy: string | null;
