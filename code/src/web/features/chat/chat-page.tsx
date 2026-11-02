@@ -56,7 +56,7 @@ function ChatView({ slug, orgId }: { slug: string; orgId: string }): preact.JSX.
             {messages.error}
           </p>
         )}
-        <MessageList messages={messages.data ?? []} ctx={ctx} onOpenThread={data.setThread} />
+        <MessageList history={data.history} ctx={ctx} onOpenThread={data.setThread} />
         {active && <Composer key={active.id} members={others} label="Message" onSend={send} />}
       </section>
       {thread && (

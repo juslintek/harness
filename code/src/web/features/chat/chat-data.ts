@@ -12,12 +12,14 @@ import {
 import { api, type Loaded, useLoad, useTopic } from "../../api";
 import { routeParts } from "../../route";
 import { ignored } from "../auth/me";
+import { type History, PAGE_SIZE, useHistory } from "./chat-history";
 
 export interface ChatData {
   org: Loaded<ChatOrgView>;
   channels: Loaded<ChannelView[]>;
   channelMembers: ChatMember[];
   messages: Loaded<MessageView[]>;
+  history: History;
   active: ChannelView | null;
   thread: MessageView | null;
   setThread: (m: MessageView | null) => void;
@@ -45,9 +47,12 @@ export function useChatData(slug: string, orgId: string): ChatData {
   const active = pickActive(channels.data);
   const messages = useLoad(
     () =>
-      active ? api(`/api/channels/${active.id}/messages`, messageListSchema) : Promise.resolve([]),
+      active
+        ? api(`/api/channels/${active.id}/messages?limit=${PAGE_SIZE}`, messageListSchema)
+        : Promise.resolve([]),
     [active?.id],
   );
+  const history = useHistory(active?.id ?? null, messages.data);
   const channelMembers = useLoad(
     () =>
       active ? api(`/api/channels/${active.id}/members`, chatMembersSchema) : Promise.resolve([]),
@@ -73,6 +78,7 @@ export function useChatData(slug: string, orgId: string): ChatData {
     channels,
     channelMembers: channelMembers.data ?? [],
     messages,
+    history,
     active,
     thread,
     setThread,

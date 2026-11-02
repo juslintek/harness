@@ -1,4 +1,6 @@
+import { useState } from "preact/hooks";
 import type { ChatMember, MessageView } from "../../../shared/chat";
+import type { History } from "./chat-history";
 
 const TOKEN =
   /((?<![A-Za-z0-9_@.-])@[a-z0-9][a-z0-9_-]{1,31}(?![a-z0-9_-])|(?<![\w&])#\d{1,9}(?!\w))/g;
@@ -81,17 +83,49 @@ export function MessageItem(props: {
   );
 }
 
+function LoadOlder({ onLoad }: { onLoad: () => Promise<void> }): preact.JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const click = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onLoad();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div>
+      <button type="button" class="link" disabled={busy} onClick={click}>
+        {busy ? "Loading…" : "Load older messages"}
+      </button>
+      {error && (
+        <p class="error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function MessageList(props: {
-  messages: MessageView[];
+  history: History;
   ctx: MessageContext;
   onOpenThread: (m: MessageView) => void;
 }): preact.JSX.Element {
-  if (props.messages.length === 0) return <p class="muted">No messages yet.</p>;
+  const { messages, hasOlder, loadOlder } = props.history;
+  if (messages.length === 0) return <p class="muted">No messages yet.</p>;
   return (
-    <ul class="plain messages" aria-label="Messages">
-      {props.messages.map((m) => (
-        <MessageItem key={m.id} message={m} ctx={props.ctx} onOpenThread={props.onOpenThread} />
-      ))}
-    </ul>
+    <>
+      {hasOlder && <LoadOlder onLoad={loadOlder} />}
+      <ul class="plain messages" aria-label="Messages">
+        {messages.map((m) => (
+          <MessageItem key={m.id} message={m} ctx={props.ctx} onOpenThread={props.onOpenThread} />
+        ))}
+      </ul>
+    </>
   );
 }
