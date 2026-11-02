@@ -81,6 +81,7 @@ function sessionRoutes(app: Hono<AuthEnv>, db: Database): void {
   app.delete("/sessions/:id", (c) => {
     const actor = c.get("actor");
     const id = c.req.param("id");
+    // Revoking the current session is the same as logout, so it skips step-up on purpose.
     if (id !== actor.id && !hasFreshStepUp(actor)) return stepUpRequired(c);
     return revokeSession(db, actor.userId, id)
       ? c.json({ ok: true })

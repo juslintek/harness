@@ -98,7 +98,7 @@ export async function registrationOptions(
     userID: new TextEncoder().encode(user.id),
     attestationType: "none",
     excludeCredentials: userPasskeys(db, userId),
-    authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" },
+    authenticatorSelection: { residentKey: "preferred", userVerification: "required" },
   });
   return { ...options, challengeId: storeChallenge(db, options.challenge, "register", userId) };
 }
@@ -119,7 +119,7 @@ export async function finishRegistration(
       expectedChallenge: challenge,
       expectedOrigin: rp.origin,
       expectedRPID: rp.id,
-      requireUserVerification: false,
+      requireUserVerification: true,
     });
     if (!result.verified) return { ok: false, reason: "not verified" };
     const { credential } = result.registrationInfo;

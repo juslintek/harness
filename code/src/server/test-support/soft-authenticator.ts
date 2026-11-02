@@ -85,7 +85,10 @@ interface StoredCredential {
 }
 
 export interface SoftAuthenticator {
-  create(options: PublicKeyCredentialCreationOptionsJSON): Promise<RegistrationResponseJSON>;
+  create(
+    options: PublicKeyCredentialCreationOptionsJSON,
+    opts?: { userVerified?: boolean },
+  ): Promise<RegistrationResponseJSON>;
   get(
     options: PublicKeyCredentialRequestOptionsJSON,
     opts?: { userVerified?: boolean },
@@ -116,6 +119,7 @@ async function authData(
 async function attest(
   rp: Rp,
   options: PublicKeyCredentialCreationOptionsJSON,
+  userVerified: boolean,
 ): Promise<{ stored: StoredCredential; response: RegistrationResponseJSON }> {
   const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
     "sign",
@@ -135,7 +139,12 @@ async function attest(
     id,
     cbor(cose),
   );
-  const data = await authData(rp, FLAG_UP | FLAG_UV | FLAG_AT, 0, attested);
+  const data = await authData(
+    rp,
+    (userVerified ? FLAG_UP | FLAG_UV : FLAG_UP) | FLAG_AT,
+    0,
+    attested,
+  );
   const attestationObject = cbor(
     new Map<Cbor, Cbor>([
       ["fmt", "none"],
@@ -193,8 +202,8 @@ async function assert(
 export function createSoftAuthenticator(rp: Rp): SoftAuthenticator {
   const credentials = new Map<string, StoredCredential>();
   return {
-    async create(options) {
-      const { stored, response } = await attest(rp, options);
+    async create(options, opts) {
+      const { stored, response } = await attest(rp, options, opts?.userVerified ?? true);
       credentials.set(response.id, stored);
       return response;
     },

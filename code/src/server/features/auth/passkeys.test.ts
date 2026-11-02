@@ -183,6 +183,15 @@ test("step-up on a revoked session fails", async () => {
   );
 });
 
+test("registration without user verification is refused", async () => {
+  const x = setup();
+  const options = await registrationOptions(x.db, rp, x.userId);
+  expect(options.authenticatorSelection?.userVerification).toBe("required");
+  const response = await x.device.create(options, { userVerified: false });
+  const done = await finishRegistration(x.db, rp, x.userId, options.challengeId, response, "weak");
+  expect(done.ok).toBe(false);
+});
+
 test("step-up requires user verification, login does not", async () => {
   const x = setup();
   await register(x);
