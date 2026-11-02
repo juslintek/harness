@@ -173,12 +173,21 @@ function parseAgyModels(stdout: string): ModelList {
   return models;
 }
 
+type ModelSource = { listAcp: (spec: AgentSpec) => Promise<ModelList>; run?: Runner };
+
+const refreshing = new Map<string, Promise<ModelList>>();
+
+// A probe starts a sandboxed agent, so concurrent requests for one agent share a single probe.
+export function refreshModels(db: Database, id: string, how: ModelSource): Promise<ModelList> {
+  const running = refreshing.get(id);
+  if (running) return running;
+  const probe = probeModels(db, id, how).finally(() => refreshing.delete(id));
+  refreshing.set(id, probe);
+  return probe;
+}
+
 // The agent is the source of model ids; nothing is hard-coded and a failed probe keeps the old list.
-export async function refreshModels(
-  db: Database,
-  id: string,
-  how: { listAcp: (spec: AgentSpec) => Promise<ModelList>; run?: Runner },
-): Promise<ModelList> {
+async function probeModels(db: Database, id: string, how: ModelSource): Promise<ModelList> {
   const spec = getSpec(id);
   if (!spec) throw new ModelsError(404, "unknown agent");
   let models: ModelList;

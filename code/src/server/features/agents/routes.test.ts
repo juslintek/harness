@@ -131,7 +131,7 @@ test("models refresh: agy output is parsed and saved, failures keep the old list
   saveModels(db, "agy", [{ id: "old", name: "Old" }]);
   const ok = agentRoutes(db, {
     listAcp: noAcp,
-    run: agyOut("gemini-x-low\tGemini X Low\nplain-id\n\n"),
+    run: agyOut("Fetching available models...\ngemini-x-low\tGemini X Low\nplain-id\n\n"),
   });
   const res = await post(ok, "/agy/models", {});
   expect(res.status).toBe(200);
@@ -170,4 +170,26 @@ test("models refresh: ACP agents go through listAcp, unknown agents are 404", as
   expect((await post(app, "/nope/models", {})).status).toBe(404);
   const broken = agentRoutes(db, { listAcp: noAcp });
   expect((await post(broken, "/claude/models", {})).status).toBe(502);
+});
+
+test("models refresh: concurrent requests for one agent share one probe", async () => {
+  let probes = 0;
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const app = agentRoutes(db, {
+    listAcp: async () => {
+      probes++;
+      await gate;
+      return [{ id: "m1", name: "M1" }];
+    },
+  });
+  const both = Promise.all([post(app, "/claude/models", {}), post(app, "/claude/models", {})]);
+  await Bun.sleep(20);
+  release();
+  expect((await both).map((r) => r.status)).toEqual([200, 200]);
+  expect(probes).toBe(1);
+  await post(app, "/claude/models", {});
+  expect(probes).toBe(2);
 });
