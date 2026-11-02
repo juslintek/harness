@@ -1,23 +1,26 @@
 import type { Database } from "bun:sqlite";
-import { beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import { approvalViewSchema, runDetailSchema, wsMessageSchema } from "../shared/runs";
 import { migrate, openDb } from "./db/db";
 import { migrations } from "./db/migrations";
 import { appendEvent } from "./features/logs/api";
 import { createApp } from "./http";
-import { websocket, wireRealtime } from "./realtime";
-import { adminHeaders, freePort, openSocket } from "./test-support/app-kit";
+import { wireRealtime } from "./realtime";
+import { adminHeaders, listenDeferred, openSocket } from "./test-support/app-kit";
 
 const SECRET = "s".repeat(64);
 const RUN_ID = "0190a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b";
 let db: Database;
 let port: number;
+let server: ReturnType<typeof listenDeferred>["server"];
 let app: ReturnType<typeof createApp>;
 
 beforeEach(() => {
   db = openDb(":memory:");
   migrate(db, migrations);
-  port = freePort();
+  const listener = listenDeferred();
+  server = listener.server;
+  port = listener.port;
   app = createApp({
     db,
     home: "/unused",
@@ -27,6 +30,10 @@ beforeEach(() => {
     version: "1",
     runDeps: { home: "/unused", port, resolveSpec: () => null },
   });
+  listener.attach(app);
+});
+afterEach(async () => {
+  await server.stop(true);
 });
 
 const cookie = (): Promise<Record<string, string>> => adminHeaders(app, port, SECRET);
@@ -129,12 +136,6 @@ test("/ws without cookie or with a foreign origin is rejected before any upgrade
 });
 
 test("real socket: bad cookie rejected, admin cookie receives approval and run messages", async () => {
-  const server = Bun.serve({
-    port,
-    hostname: "127.0.0.1",
-    fetch: (req, srv) => app.fetch(req, { server: srv }),
-    websocket,
-  });
   const off = wireRealtime(db, server);
   try {
     const headers = await cookie();
@@ -171,6 +172,5 @@ test("real socket: bad cookie rejected, admin cookie receives approval and run m
     ws.close();
   } finally {
     off();
-    await server.stop(true);
   }
 });

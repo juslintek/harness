@@ -1,8 +1,28 @@
-export function freePort(): number {
-  const probe = Bun.serve({ port: 0, fetch: () => new Response("") });
-  const free = probe.port ?? 0;
-  void probe.stop(true);
-  return free;
+import type { createApp } from "../http";
+import { websocket } from "../realtime";
+
+// The listener is bound first and the app is attached once the port is known. Probing for a free
+// port and binding it later raced with other processes taking that port in between.
+export function listenDeferred(): {
+  server: ReturnType<typeof Bun.serve>;
+  port: number;
+  attach: (app: ReturnType<typeof createApp>) => void;
+} {
+  let current: ReturnType<typeof createApp> | undefined;
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch: (req, srv) =>
+      current ? current.fetch(req, { server: srv }) : new Response("not ready", { status: 503 }),
+    websocket,
+  });
+  return {
+    server,
+    port: server.port as number,
+    attach: (app) => {
+      current = app;
+    },
+  };
 }
 
 export async function adminHeaders(

@@ -1,7 +1,10 @@
-import { expect, test } from "bun:test";
+import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+// Each case cold-starts a bun process, which can exceed the 5s default when the machine is busy.
+setDefaultTimeout(30_000);
 
 const script = join(import.meta.dir, "../../../../scripts/guard-hook.ts");
 const baseEnv: Record<string, string> = {

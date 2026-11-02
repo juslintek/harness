@@ -10,16 +10,37 @@ let token: string;
 let db: ReturnType<typeof openDb>;
 const reports: [string, string][] = [];
 
-beforeEach(() => {
+// Some hosts block or reset traffic to a fresh loopback port for a while (the 403 "Sandbox policy
+// blocks local/private network addresses" and ECONNRESET failures). A port is only used once an
+// unauthenticated POST has reached our own handler (401); a blocked port is dropped for a new one.
+async function listen(database: ReturnType<typeof openDb>): Promise<ReturnType<typeof Bun.serve>> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    // Bound to this test's own db and server: a request still in flight from the previous test must
+    // not see the next test's port (it answered 403 for the wrong Host) or token store.
+    const own: ReturnType<typeof Bun.serve> = Bun.serve({
+      port: 0,
+      fetch: (req) => mcpHandler(database, (r, t) => reports.push([r, t]), own.port as number)(req),
+    });
+    try {
+      const res = await fetch(`http://127.0.0.1:${own.port}/`, {
+        method: "POST",
+        keepalive: false,
+      });
+      if (res.status === 401) return own;
+    } catch {
+      // port unreachable, try another
+    }
+    await own.stop(true);
+  }
+  throw new Error("no loopback port became reachable");
+}
+
+beforeEach(async () => {
   db = openDb(":memory:");
   migrate(db, migrations);
   token = mintRunToken(db, "run-7", ["report"]);
   reports.length = 0;
-  // the port is only known after listen, so the handler is built per request
-  server = Bun.serve({
-    port: 0,
-    fetch: (req) => mcpHandler(db, (r, t) => reports.push([r, t]), server.port as number)(req),
-  });
+  server = await listen(db);
 });
 afterEach(() => {
   server.stop(true);

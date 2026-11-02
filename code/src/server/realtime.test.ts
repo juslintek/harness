@@ -11,8 +11,8 @@ import {
   gone,
 } from "./features/runtimes/manager-kit";
 import { createApp } from "./http";
-import { websocket, wireRealtime } from "./realtime";
-import { adminHeaders, freePort, openSocket, until } from "./test-support/app-kit";
+import { wireRealtime } from "./realtime";
+import { adminHeaders, listenDeferred, openSocket, until } from "./test-support/app-kit";
 
 afterAll(cleanup);
 
@@ -30,7 +30,7 @@ async function boot(x: Fixture): Promise<{
   headers: Record<string, string>;
   stop: () => Promise<void>;
 }> {
-  const port = freePort();
+  const { server, port, attach } = listenDeferred();
   const deps = fakeDeps(x, [{ say: "working" }, { hang: true }], { port });
   const app = createApp({
     db: x.db,
@@ -41,12 +41,7 @@ async function boot(x: Fixture): Promise<{
     version: "1",
     runDeps: deps,
   });
-  const server = Bun.serve({
-    port,
-    hostname: "127.0.0.1",
-    fetch: (req, srv) => app.fetch(req, { server: srv }),
-    websocket,
-  });
+  attach(app);
   const off = wireRealtime(x.db, server);
   const headers = await adminHeaders(app, port, SECRET);
   return {
