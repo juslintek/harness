@@ -145,21 +145,30 @@ async function tailFile(db: Database, source: TailSource, path: string): Promise
     return 0;
   }
   const ctx: LineContext = { file: path, sessionId };
-  const file = Bun.file(path);
+  // One reused read buffer; a fresh ArrayBuffer per chunk is freed lazily by the collector.
+  const chunk = Buffer.allocUnsafe(CHUNK_BYTES);
+  const fd = openSync(path, "r");
   let added = 0;
   let readPos = start;
   let carry: Buffer = Buffer.alloc(0);
-  while (readPos < stat.size) {
-    const end = Math.min(readPos + CHUNK_BYTES, stat.size);
-    const chunk = Buffer.from(await file.slice(readPos, end).arrayBuffer());
-    readPos = end;
-    const buf = carry.length > 0 ? Buffer.concat([carry, chunk]) : chunk;
-    const { lines, consumed } = completeLines(buf, readPos - buf.length);
-    added += applyBatches(db, lines, PARSERS[source.name], ctx);
-    carry = buf.subarray(consumed);
-    saveOffset(db, path, readPos - carry.length, mtime);
-    // Lets the HTTP server run between chunks of a large backfill.
-    await Bun.sleep(0);
+  try {
+    while (readPos < stat.size) {
+      const n = readSync(fd, chunk, 0, Math.min(CHUNK_BYTES, stat.size - readPos), readPos);
+      if (n === 0) break;
+      readPos += n;
+      const buf =
+        carry.length > 0 ? Buffer.concat([carry, chunk.subarray(0, n)]) : chunk.subarray(0, n);
+      const { lines, consumed } = completeLines(buf, readPos - buf.length);
+      added += applyBatches(db, lines, PARSERS[source.name], ctx);
+      carry = Buffer.from(buf.subarray(consumed));
+      saveOffset(db, path, readPos - carry.length, mtime);
+      // The collector runs lazily; without this a multi-GB backfill piled up to ~270 MB in-process.
+      Bun.gc(true);
+      // Lets the HTTP server run between chunks of a large backfill.
+      await Bun.sleep(0);
+    }
+  } finally {
+    closeSync(fd);
   }
   return added;
 }
