@@ -123,6 +123,11 @@ test("a run may read its own agent's credentials and not the others'", () => {
   const agy = buildSrtSettings({ ...baseInput, agentId: "agy" }).filesystem.denyRead;
   expect(agy).not.toContain(join(homedir(), ".gemini/oauth_creds.json"));
   expect(agy).toContain(join(homedir(), ".codex/auth.json"));
+  const copilotToken = join(homedir(), ".config/github-copilot/oauth.json");
+  expect(agy).toContain(copilotToken);
+  expect(buildSrtSettings({ ...baseInput, agentId: "copilot" }).filesystem.denyRead).not.toContain(
+    copilotToken,
+  );
 });
 
 test("git access without the worktree dir and branch is refused", () => {

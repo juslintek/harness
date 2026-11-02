@@ -112,6 +112,14 @@ const GEMINI_CREDENTIALS = underHome("~/.gemini", [
 const AGENT_CREDENTIALS: Record<string, string[]> = {
   claude: ["~/.claude/.credentials.json"],
   codex: ["~/.codex/auth.json"],
+  // Copilot's CLI login token lives in the keychain and cannot be file-denied. These are the
+  // plaintext files the IDE plugin and the CLI's fallback store write.
+  copilot: [
+    "~/.config/github-copilot/oauth.json",
+    "~/.config/github-copilot/apps.json",
+    "~/.config/github-copilot/auth.db",
+    "~/.copilot/config.json",
+  ],
   gemini: GEMINI_CREDENTIALS,
   agy: GEMINI_CREDENTIALS,
 };
