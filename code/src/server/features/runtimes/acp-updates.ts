@@ -169,17 +169,14 @@ export function pickOption(
   return { optionId: null, allowAlwaysOnly };
 }
 
-// Codex counts cached tokens inside inputTokens, Claude does not. Stored input is always the
-// non-cached part, the same rule as the codex tailer, so sums never double count.
-function record(model: string | null, t: Rec, inputIncludesCache: boolean): UsageRecord {
-  const cacheRead = num(t.cachedInputTokens ?? t.cachedReadTokens);
+// Both agents report inputTokens without the cached part (codex-acp measured live: 20037 input +
+// 123264 cached + 675 output = 143976 total), so it is stored as reported.
+function record(model: string | null, t: Rec): UsageRecord {
   return {
     model,
-    inputTokens: inputIncludesCache
-      ? Math.max(0, num(t.inputTokens) - cacheRead)
-      : num(t.inputTokens),
+    inputTokens: num(t.inputTokens),
     outputTokens: num(t.outputTokens),
-    cacheReadTokens: cacheRead,
+    cacheReadTokens: num(t.cachedInputTokens ?? t.cachedReadTokens),
     cacheWriteTokens: num(t.cachedWriteTokens ?? t.cacheWriteInputTokens),
     reasoningTokens: num(t.reasoningOutputTokens ?? t.thoughtTokens),
     reportedCostUsd: null,
@@ -194,7 +191,6 @@ export function usageRecords(
   response: Rec,
   model: string | null,
   costUsd: number | null,
-  inputIncludesCache: boolean,
 ): UsageRecord[] {
   const perModel = rec(rec(response._meta).quota).model_usage;
   const rows = Array.isArray(perModel)
@@ -202,12 +198,12 @@ export function usageRecords(
         const row = rec(m);
         const tokens = row.token_count;
         return typeof tokens === "object" && tokens !== null
-          ? [record(str(row.model) ?? model, rec(tokens), inputIncludesCache)]
+          ? [record(str(row.model) ?? model, rec(tokens))]
           : [];
       })
     : [];
   if (rows.length === 0 && response.usage != null) {
-    rows.push(record(model, rec(response.usage), inputIncludesCache));
+    rows.push(record(model, rec(response.usage)));
   }
   const [first] = rows;
   if (first && costUsd !== null) first.reportedCostUsd = costUsd;

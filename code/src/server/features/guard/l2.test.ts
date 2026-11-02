@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { startStub, stopStubs } from "../../test-support/stub-server";
 import type { L1Result } from "./l1";
-import { escalateL2 } from "./l2";
+import { ASK_DESTRUCTIVE, DENY_EXFILTRATION, escalateL2 } from "./l2";
 import { resetLayaCircuit } from "./laya";
 
 let hits = { n: 0 };
@@ -68,40 +68,40 @@ describe("escalateL2 policy", () => {
     expect(res.probs?.exfiltration).toBe(0.95);
   });
 
-  test("destructive 0.9 with out_of_scope 0.5 denies", async () => {
-    await stub({ destructive: 0.9, out_of_scope: 0.5 });
-    expect((await escalateL2(input("delete"), allow)).verdict).toBe("deny");
-  });
-
-  test("destructive 0.9 alone only asks", async () => {
-    await stub({ destructive: 0.9 });
+  test("exact boundaries: exfiltration denies from 0.9, destructive asks from 0.95", async () => {
+    await stub({ exfiltration: DENY_EXFILTRATION - 0.01 });
+    expect((await escalateL2(input("shell"), allow)).verdict).toBe("allow");
+    await stub({ exfiltration: DENY_EXFILTRATION });
+    expect((await escalateL2(input("shell"), allow)).verdict).toBe("deny");
+    await stub({ destructive: ASK_DESTRUCTIVE - 0.01 });
+    expect((await escalateL2(input("delete"), allow)).verdict).toBe("allow");
+    await stub({ destructive: ASK_DESTRUCTIVE });
     expect((await escalateL2(input("delete"), allow)).verdict).toBe("ask");
   });
 
-  test("destructive 0.6 asks", async () => {
-    await stub({ destructive: 0.6 });
-    expect((await escalateL2(input("shell"), allow)).verdict).toBe("ask");
+  test("destructive 1.0 with out_of_scope 1.0 only asks", async () => {
+    await stub({ destructive: 1, out_of_scope: 1 });
+    expect((await escalateL2(input("delete"), allow)).verdict).toBe("ask");
   });
 
-  test("risk expected level 1.6 from probabilities asks", async () => {
-    await stub({}, { probabilities: { "0": 0, "1": 0.4, "2": 0.6 } });
-    expect((await escalateL2(input("shell"), allow)).verdict).toBe("ask");
-  });
-
-  test("a score field wins over probabilities", async () => {
-    await stub({}, { score: 1.7, probabilities: { "0": 1, "1": 0, "2": 0 } });
-    expect((await escalateL2(input("shell"), allow)).verdict).toBe("ask");
-    await stub({}, { score: 0.2, probabilities: { "0": 0, "1": 0, "2": 1 } });
+  test("out_of_scope and risk alone never escalate", async () => {
+    await stub({ out_of_scope: 1 }, { score: 2, probabilities: { "0": 0, "1": 0, "2": 1 } });
     expect((await escalateL2(input("shell"), allow)).verdict).toBe("allow");
   });
 
-  test("exact boundaries: exfiltration 0.9 denies, any noul 0.5 asks", async () => {
-    await stub({ exfiltration: 0.9 });
-    expect((await escalateL2(input("shell"), allow)).verdict).toBe("deny");
-    await stub({ exfiltration: 0.5 });
-    expect((await escalateL2(input("shell"), allow)).verdict).toBe("ask");
-    await stub({ out_of_scope: 0.5 });
-    expect((await escalateL2(input("shell"), allow)).verdict).toBe("ask");
+  test("live ordinary commands stay allowed (ls -la, sed -n, git add)", async () => {
+    await stub(
+      { destructive: 0.94, exfiltration: 0.88, out_of_scope: 0.84 },
+      { score: 0.99, probabilities: { "0": 0, "1": 1 } },
+    );
+    expect((await escalateL2(input("shell"), allow)).verdict).toBe("allow");
+  });
+
+  test("a score field wins over probabilities in the logged risk", async () => {
+    await stub({}, { score: 1.7, probabilities: { "0": 1, "1": 0, "2": 0 } });
+    expect((await escalateL2(input("shell"), allow)).probs?.risk).toBe(1.7);
+    await stub({}, { probabilities: { "0": 0, "1": 0.4, "2": 0.6 } });
+    expect((await escalateL2(input("shell"), allow)).probs?.risk).toBeCloseTo(1.6);
   });
 
   test("all low allows with source laya", async () => {

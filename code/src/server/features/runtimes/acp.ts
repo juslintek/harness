@@ -104,7 +104,7 @@ async function converse(
   return {
     stopReason: stop ?? "error",
     text: sink.text,
-    usage: usageRecords(response, ctx.model, sink.costUsd, ctx.spec.id === "codex"),
+    usage: usageRecords(response, ctx.model, sink.costUsd),
     error: stop ? null : `unexpected stop reason ${String(response.stopReason)}`,
     sessionId,
   };

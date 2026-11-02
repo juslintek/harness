@@ -31,13 +31,13 @@ const run = {
 };
 const exec = (command: string): ActionRequest => ({ kind: "execute", command, paths: [] });
 
-function layaAnswers(exfiltration: number): Response {
+function layaAnswers(exfiltration: number, destructive = 0.1): Response {
   const noul = (n: number): { type: string; noul: number } => ({ type: "noul", noul: n });
   return Response.json({
     model: "laya:en",
     state_truncated: false,
     answers: {
-      destructive: noul(0.1),
+      destructive: noul(destructive),
       exfiltration: noul(exfiltration),
       out_of_scope: noul(0.1),
       risk: { type: "score", probabilities: { "0": 0.9, "1": 0.1 } },
@@ -45,8 +45,8 @@ function layaAnswers(exfiltration: number): Response {
   });
 }
 
-async function stubLaya(exfiltration: number): Promise<void> {
-  process.env.OLLAYA_URL = (await startStub(() => layaAnswers(exfiltration))).url;
+async function stubLaya(exfiltration: number, destructive = 0.1): Promise<void> {
+  process.env.OLLAYA_URL = (await startStub(() => layaAnswers(exfiltration, destructive))).url;
 }
 
 const layers = (): string[] =>
@@ -139,7 +139,7 @@ describe("checkAction with L3", () => {
   });
 
   test("L2 ask escalates to L3", async () => {
-    await stubLaya(0.6);
+    await stubLaya(0.1, 0.97);
     const { id, outcome } = await startPending("bun test src/webhook.test.ts");
     decideApproval(db, id, "approve", "alice");
     expect(await outcome).toMatchObject({ verdict: "allow", layer: "L3" });

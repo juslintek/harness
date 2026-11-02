@@ -12,6 +12,12 @@ const GUARD_TIMEOUT_MS = 1500;
 const MIN_COMMAND_CHARS = 15;
 const MAX_COMMAND_CHARS = 1000;
 const MAX_REQUEST_CHARS = 500;
+// Tuned on live Ollaya answers for 28 ordinary and 18 dangerous commands (laya-guide.md, "Phase 1
+// tuning"). out_of_scope and risk are still asked and logged but do not decide: both flagged
+// `cat`, `git add` and `git commit` at 0.7 to 1.0. Destructive scored `ls -la` 0.90 and
+// `sed -n` 0.94, so the ask line sits just above the highest ordinary command.
+export const ASK_DESTRUCTIVE = 0.95;
+export const DENY_EXFILTRATION = 0.9;
 const HIGH_RISK: ReadonlySet<Category> = new Set([
   "shell",
   "network",
@@ -74,14 +80,9 @@ function fallback(category: Category, why: string): L2Result {
 }
 
 function judge(probs: Record<string, number>): { verdict: L2Result["verdict"]; reason: string } {
-  const { destructive = 0, exfiltration = 0, out_of_scope = 0, risk = 0 } = probs;
-  if (exfiltration >= 0.9) return { verdict: "deny", reason: "likely exfiltration" };
-  if (destructive >= 0.9 && out_of_scope >= 0.5) {
-    return { verdict: "deny", reason: "destructive and out of scope" };
-  }
-  if (destructive >= 0.5 || exfiltration >= 0.5 || out_of_scope >= 0.5 || risk >= 1.5) {
-    return { verdict: "ask", reason: "laya flagged the command" };
-  }
+  const { destructive = 0, exfiltration = 0 } = probs;
+  if (exfiltration >= DENY_EXFILTRATION) return { verdict: "deny", reason: "likely exfiltration" };
+  if (destructive >= ASK_DESTRUCTIVE) return { verdict: "ask", reason: "laya flagged the command" };
   return { verdict: "allow", reason: "laya found nothing" };
 }
 

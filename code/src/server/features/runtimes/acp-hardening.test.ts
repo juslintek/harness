@@ -2,13 +2,14 @@ import { expect, test } from "bun:test";
 import { getSpec } from "../agents/api";
 import { drive, gone } from "./acp-kit";
 
-test("codex input is stored without the cached part, cache writes from either key", async () => {
+test("codex input is stored as reported, cache writes from either key", async () => {
   const h = await drive(
     [
       {
         usage: {
           inputTokens: 36463,
           outputTokens: 38,
+          totalTokens: 72725,
           cachedReadTokens: 36224,
           cachedWriteTokens: 5,
         },
@@ -16,11 +17,11 @@ test("codex input is stored without the cached part, cache writes from either ke
     ],
     { spec: getSpec("codex") },
   );
-  expect(h.outcome.usage[0]).toMatchObject({
-    inputTokens: 239,
-    cacheReadTokens: 36224,
-    cacheWriteTokens: 5,
-  });
+  const [row] = h.outcome.usage;
+  expect(row).toMatchObject({ inputTokens: 36463, cacheReadTokens: 36224, cacheWriteTokens: 5 });
+  expect((row?.inputTokens ?? 0) + (row?.cacheReadTokens ?? 0) + (row?.outputTokens ?? 0)).toBe(
+    72725,
+  );
   const split = await drive(
     [
       {
@@ -38,7 +39,7 @@ test("codex input is stored without the cached part, cache writes from either ke
     ],
     { spec: getSpec("codex") },
   );
-  expect(split.outcome.usage[0]).toMatchObject({ inputTokens: 0, cacheWriteTokens: 7 });
+  expect(split.outcome.usage[0]).toMatchObject({ inputTokens: 10, cacheWriteTokens: 7 });
 });
 
 test("claude input is already non-cached and stays as reported", async () => {
