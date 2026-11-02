@@ -28,7 +28,11 @@ export function confusionAt(samples: Sample[], threshold: number): Fit {
 
 export function bestFit(samples: Sample[], current: number): Fit {
   let best = confusionAt(samples, current);
-  const candidates = new Set(samples.map((s) => Number((s.destructive + 0.001).toFixed(3))));
+  // A denied sample is caught only at thresholds up to its own score, an approved one dropped only
+  // above it, so each score and the value just above it are both candidate cuts.
+  const candidates = new Set(
+    samples.flatMap((s) => [s.destructive, Number((s.destructive + 0.001).toFixed(3))]),
+  );
   for (const threshold of [...candidates].sort((a, b) => a - b)) {
     const fit = confusionAt(samples, threshold);
     if (fit.wrongEscalations + fit.misses < best.wrongEscalations + best.misses) best = fit;
