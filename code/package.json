@@ -15,6 +15,7 @@
     "check": "bun run lint && bun run typecheck && bun run test && bun run knip && bun run deps && bun run dup && bun run size"
   },
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.81",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@preact/signals": "2.11.4",
     "hono": "4.13.16",

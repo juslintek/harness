@@ -1,0 +1,59 @@
+import { join } from "node:path";
+
+export class NotAGitRepo extends Error {
+  constructor(path: string) {
+    super(`not a git repository: ${path}`);
+    this.name = "NotAGitRepo";
+  }
+}
+
+const RUN_ID = /^[0-9a-f-]{36}$/;
+
+interface GitResult {
+  code: number;
+  out: string;
+  err: string;
+}
+
+async function git(args: string[], cwd: string): Promise<GitResult> {
+  const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const [out, err, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  return { code, out: out.trim(), err: err.trim() };
+}
+
+async function gitOk(args: string[], cwd: string): Promise<string> {
+  const res = await git(args, cwd);
+  if (res.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${res.err}`);
+  return res.out;
+}
+
+export async function createWorktree(
+  repo: string,
+  runId: string,
+  home: string,
+): Promise<{ path: string; branch: string; gitCommonDir: string; base: string }> {
+  if (!RUN_ID.test(runId)) throw new Error(`invalid run id: ${runId}`);
+  const probe = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"], repo);
+  if (probe.code !== 0) throw new NotAGitRepo(repo);
+  const path = join(home, "worktrees", runId);
+  const branch = `harness/${runId}`;
+  await gitOk(["worktree", "add", "-b", branch, path, "HEAD"], repo);
+  const base = await gitOk(["rev-parse", "HEAD"], repo);
+  return { path, branch, gitCommonDir: probe.out, base };
+}
+
+export async function defaultBranch(repo: string): Promise<string> {
+  const origin = await git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], repo);
+  if (origin.code === 0) return origin.out.replace(/^origin\//, "");
+  return gitOk(["symbolic-ref", "--short", "HEAD"], repo);
+}
+
+// The branch stays so the manager can still review or merge the work after cleanup.
+export async function removeWorktree(path: string): Promise<void> {
+  const common = await gitOk(["rev-parse", "--path-format=absolute", "--git-common-dir"], path);
+  await gitOk(["--git-dir", common, "worktree", "remove", "--force", path], common);
+}

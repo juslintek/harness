@@ -15,6 +15,8 @@ export interface AgentSpec {
   modeOption: { configId: string; value: string } | null;
   egress: string[];
   stateWrite: string[];
+  /** Opens com.apple.trustd.agent in srt; needed by Go and Rust TLS clients (codex, agy). */
+  weakerNetworkIsolation: boolean;
   claudeMeta: boolean;
 }
 
@@ -35,8 +37,14 @@ export const agentSpecs: readonly AgentSpec[] = [
     },
     loginArgs: ["claude", "auth", "login"],
     modeOption: { configId: "mode", value: "default" },
-    egress: ["api.anthropic.com", "statsig.anthropic.com", "claude.ai"],
-    stateWrite: ["~/.claude", "~/.claude.json"],
+    egress: ["api.anthropic.com"],
+    stateWrite: [
+      "~/.claude",
+      "~/.claude.json",
+      "/private/tmp/claude-<uid>",
+      "/private/tmp/claude-*-cwd",
+    ],
+    weakerNetworkIsolation: false,
     claudeMeta: true,
   },
   {
@@ -46,11 +54,15 @@ export const agentSpecs: readonly AgentSpec[] = [
     bin: adapterBin("codex-acp"),
     args: [],
     versionArgs: ["codex", "--version"],
-    loginProbe: { args: ["codex", "login", "status"], loggedInWhen: "exit0" },
+    loginProbe: {
+      args: ["codex", "login", "status"],
+      loggedInWhen: { stdoutIncludes: "Logged in using ChatGPT" },
+    },
     loginArgs: ["codex", "login"],
     modeOption: { configId: "mode", value: "workspace-write" },
-    egress: ["chatgpt.com", "api.openai.com", "auth.openai.com"],
-    stateWrite: ["~/.codex"],
+    egress: ["chatgpt.com"],
+    stateWrite: [],
+    weakerNetworkIsolation: true,
     claudeMeta: false,
   },
   {
@@ -65,6 +77,7 @@ export const agentSpecs: readonly AgentSpec[] = [
     modeOption: null,
     egress: ["junie.jetbrains.com", "api.jetbrains.ai"],
     stateWrite: ["~/.junie"],
+    weakerNetworkIsolation: false,
     claudeMeta: false,
   },
   {
@@ -79,6 +92,7 @@ export const agentSpecs: readonly AgentSpec[] = [
     modeOption: null,
     egress: ["api.github.com", "api.githubcopilot.com", "github.com"],
     stateWrite: ["~/.copilot"],
+    weakerNetworkIsolation: false,
     claudeMeta: false,
   },
   {
@@ -88,11 +102,12 @@ export const agentSpecs: readonly AgentSpec[] = [
     bin: "agent",
     args: ["acp"],
     versionArgs: ["agent", "--version"],
-    loginProbe: { args: ["agent", "status"], loggedInWhen: { stdoutIncludes: "Logged in" } },
+    loginProbe: null,
     loginArgs: ["agent", "login"],
     modeOption: null,
     egress: ["api2.cursor.sh", "cursor.com"],
     stateWrite: ["~/.cursor"],
+    weakerNetworkIsolation: false,
     claudeMeta: false,
   },
   {
@@ -107,6 +122,7 @@ export const agentSpecs: readonly AgentSpec[] = [
     modeOption: null,
     egress: ["generativelanguage.googleapis.com"],
     stateWrite: ["~/.gemini"],
+    weakerNetworkIsolation: false,
     claudeMeta: false,
   },
   {
@@ -116,11 +132,12 @@ export const agentSpecs: readonly AgentSpec[] = [
     bin: "agy",
     args: [],
     versionArgs: ["agy", "--version"],
-    loginProbe: null,
+    loginProbe: { args: ["agy", "models"], loggedInWhen: "exit0" },
     loginArgs: null,
     modeOption: null,
-    egress: ["daily-cloudcode-pa.googleapis.com", "oauth2.googleapis.com"],
+    egress: ["daily-cloudcode-pa.googleapis.com", "www.googleapis.com"],
     stateWrite: ["~/.gemini"],
+    weakerNetworkIsolation: true,
     claudeMeta: false,
   },
 ];
