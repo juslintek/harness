@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { z } from "zod";
-import { type TaskView, taskDetailSchema, taskViewSchema } from "../../../shared/board";
+import {
+  type ProjectMemberView,
+  projectMemberSchema,
+  type TaskView,
+  taskDetailSchema,
+  taskViewSchema,
+} from "../../../shared/board";
 import type { OrgDetail } from "../../../shared/orgs";
 import { api, useLoad } from "../../api";
 import { errorText } from "../../format";
@@ -36,15 +42,30 @@ function useTaskFields(task: TaskView): [Fields, (f: Fields) => void] {
   return [form, setForm];
 }
 
-function TaskEdit({
-  task,
-  detail,
-  onSaved,
-}: {
-  task: TaskView;
-  detail: OrgDetail;
-  onSaved: () => void;
-}): preact.JSX.Element {
+// Writers come from the project, so grantee-org members show up; the current assignee stays
+// selectable even when they lost write access, otherwise saving would silently unassign them.
+function useAssignees(task: TaskView): ProjectMemberView[] {
+  const loaded = useLoad(
+    () => api(`/api/projects/${task.projectId}/members`, z.array(projectMemberSchema)),
+    [task.projectId],
+  );
+  const list = loaded.data ?? [];
+  if (task.assigneeId === null || list.some((m) => m.id === task.assigneeId)) return list;
+  const { assigneeId: id, assignee } = task;
+  return [
+    ...list,
+    {
+      id,
+      handle: assignee?.handle ?? "unknown",
+      displayName: assignee?.displayName ?? "",
+      kind: assignee?.kind ?? "human",
+      orgName: "",
+    },
+  ];
+}
+
+function TaskEdit({ task, onSaved }: { task: TaskView; onSaved: () => void }): preact.JSX.Element {
+  const assignees = useAssignees(task);
   const [form, setForm] = useTaskFields(task);
   const { title, description, estimate, assignee } = form;
   const setTitle = (v: string): void => setForm({ ...form, title: v });
@@ -102,9 +123,10 @@ function TaskEdit({
           Assignee
           <select value={assignee} onChange={(e) => setAssignee(e.currentTarget.value)}>
             <option value="">Unassigned</option>
-            {detail.members.map((m) => (
+            {assignees.map((m) => (
               <option key={m.id} value={m.id}>
                 @{m.handle}
+                {assignees.some((o) => o.id !== m.id && o.handle === m.handle) && ` (${m.orgName})`}
               </option>
             ))}
           </select>
@@ -187,7 +209,7 @@ export function TaskPanel({
         </strong>
         <a href={closeHref}>Close</a>
       </p>
-      <TaskEdit task={task} detail={detail} onSaved={reload} />
+      <TaskEdit task={task} onSaved={reload} />
       <TaskActions task={task} detail={detail} onDone={reload} />
       {loaded.error && <ErrorLine message={loaded.error} />}
       {loaded.data && (

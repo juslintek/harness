@@ -116,3 +116,27 @@ test("a grantee sees the handle of an assignee from the owning org", async () =>
   const again = await (await k.call(guest, "GET", `/api/tasks/${made.id}`)).json();
   expect(again.comments[0].author.handle).toBe("own-acme");
 });
+
+test("project members lists writers of the owning and grantee orgs, never readers or strangers", async () => {
+  const { k, owner, a, project } = await setup();
+  const viewer = await k.user();
+  k.join(a.id, viewer, "viewer", "view");
+  const guest = await k.user();
+  k.org(guest, "beta");
+  const beta = k.db.query<{ id: string }, []>("SELECT id FROM orgs WHERE slug = 'beta'").get();
+  const outsider = await k.user();
+  k.org(outsider, "gamma");
+  const url = `/api/projects/${project.id}/members`;
+  expect((await k.call(outsider, "GET", url)).status).toBe(404);
+  const handles = async (): Promise<string[]> =>
+    ((await (await k.call(owner, "GET", url)).json()) as { handle: string }[]).map((m) => m.handle);
+  expect(await handles()).not.toContain("view");
+  expect((await handles()).length).toBe(1);
+  grantProject(k.db, project.id, beta?.id as string, "write", a.owner.id);
+  const listed = (await (await k.call(guest, "GET", url)).json()) as {
+    handle: string;
+    orgName: string;
+  }[];
+  expect(listed.map((m) => m.orgName).sort()).toEqual(["acme", "beta"]);
+  expect(listed.some((m) => m.handle === "view")).toBe(false);
+});

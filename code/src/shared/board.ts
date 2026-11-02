@@ -173,3 +173,18 @@ export interface TaskListQuery {
 export const taskListQuery: z.ZodType<TaskListQuery> = z
   .object({ status: statusSchema.optional(), assigneeId: id.optional() })
   .strict();
+
+export interface ProjectMemberView {
+  id: string;
+  handle: string;
+  displayName: string;
+  kind: "human" | "agent";
+  orgName: string;
+}
+export const projectMemberSchema: z.ZodType<ProjectMemberView> = z.object({
+  id: z.string(),
+  handle: z.string(),
+  displayName: z.string(),
+  kind: z.enum(["human", "agent"]),
+  orgName: z.string(),
+});

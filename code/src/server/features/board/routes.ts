@@ -5,13 +5,23 @@ import {
   createTaskBody,
   depBody,
   moveBody,
+  type ProjectMemberView,
   type TaskView,
   taskListQuery,
   taskPatchBody,
 } from "../../../shared/board";
 import { defined, forbidden, notFound, parseBody, parseQuery, routeError } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
-import { type Access, type MemberRow, projectAccess, projectMember } from "../orgs/api";
+import {
+  type Access,
+  getOrg,
+  getProject,
+  listGrantOrgIds,
+  listMembers,
+  type MemberRow,
+  projectAccess,
+  projectMember,
+} from "../orgs/api";
 import {
   addComment,
   addDependency,
@@ -63,6 +73,24 @@ function assignable(db: Database, projectId: string, memberId: string | null | u
   return access === "write" || access === "admin";
 }
 
+// Everyone `assignable` would accept: write or admin access in the owning org or a grantee org.
+function projectWriters(db: Database, projectId: string): ProjectMemberView[] {
+  const project = getProject(db, projectId);
+  if (!project) return [];
+  return [project.orgId, ...listGrantOrgIds(db, projectId)].flatMap((orgId) => {
+    const orgName = getOrg(db, orgId)?.name ?? "";
+    return listMembers(db, orgId)
+      .filter((m) => assignable(db, projectId, m.id))
+      .map((m) => ({
+        id: m.id,
+        handle: m.handle,
+        displayName: m.displayName,
+        kind: m.kind,
+        orgName,
+      }));
+  });
+}
+
 function projectTaskRoutes(db: Database, app: Hono<AuthEnv>): void {
   app.get("/projects/:id/tasks", (c) => {
     const found = scope(db, c, c.req.param("id"), "read");
@@ -70,6 +98,10 @@ function projectTaskRoutes(db: Database, app: Hono<AuthEnv>): void {
     const query = parseQuery(c, taskListQuery);
     if (query instanceof Response) return query;
     return c.json(listTasks(db, c.req.param("id"), defined(query)));
+  });
+  app.get("/projects/:id/members", (c) => {
+    const found = scope(db, c, c.req.param("id"), "read");
+    return found instanceof Response ? found : c.json(projectWriters(db, c.req.param("id")));
   });
   app.get("/projects/:id/deps", (c) => {
     const found = scope(db, c, c.req.param("id"), "read");
