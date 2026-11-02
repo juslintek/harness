@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { ApprovalView } from "../../../shared/runs";
 import { appendEvent, redact } from "../logs/api";
 import {
   type ApprovalRow,
@@ -7,7 +8,9 @@ import {
   decideApproval as decide,
   expireApprovals as expire,
   expireRunApprovals as expireRun,
+  getApproval,
   listApprovals as list,
+  approvalView as toApprovalView,
 } from "./approvals";
 import { claudeSettings as buildClaudeSettings, type ClaudeSettings } from "./claude-settings";
 import { codexRules as buildCodexRules } from "./codex-rules";
@@ -45,6 +48,33 @@ interface GuardRun {
 }
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 600_000;
+
+const approvalListeners = new Set<(approval: ApprovalView) => void>();
+
+export function onApprovalChange(listener: (approval: ApprovalView) => void): () => void {
+  approvalListeners.add(listener);
+  return () => approvalListeners.delete(listener);
+}
+
+export function approvalView(row: ApprovalRow): ApprovalView {
+  return toApprovalView(row);
+}
+
+export function findApproval(db: Database, id: string): ApprovalRow | null {
+  return getApproval(db, id);
+}
+
+function notifyApproval(db: Database, id: string): void {
+  const row = getApproval(db, id);
+  if (!row) return;
+  for (const listener of approvalListeners) {
+    try {
+      listener(toApprovalView(row));
+    } catch (err) {
+      console.error("approval listener failed", err);
+    }
+  }
+}
 
 export function decideApproval(
   db: Database,
@@ -139,7 +169,9 @@ async function askHuman(
     timeoutMs: approvalTimeout(opts),
   });
   opts?.onApprovalPending?.(id);
+  notifyApproval(db, id);
   const status = await awaitApproval(db, id, expiresAt);
+  notifyApproval(db, id);
   const approved = status === "approved";
   const reason = approved ? "approved" : status === "denied" ? "denied" : "approval_timeout";
   logLayer(

@@ -10,6 +10,7 @@ import {
   setLinked,
   startLogin,
 } from "./api";
+import type { Runner } from "./discover";
 import { agentRoutes } from "./routes";
 
 let db: Database;
@@ -119,4 +120,54 @@ test("saved models and link state show up in the agent list", async () => {
     installed: false,
     models: [{ id: "m1", name: "Model One" }],
   });
+});
+
+const agyOut =
+  (stdout: string, code = 0): Runner =>
+  async () => ({ code, stdout, stderr: code === 0 ? "" : "Error: please sign in" });
+const noAcp = (): Promise<never> => Promise.reject(new Error("not used"));
+
+test("models refresh: agy output is parsed and saved, failures keep the old list", async () => {
+  saveModels(db, "agy", [{ id: "old", name: "Old" }]);
+  const ok = agentRoutes(db, {
+    listAcp: noAcp,
+    run: agyOut("gemini-x-low\tGemini X Low\nplain-id\n\n"),
+  });
+  const res = await post(ok, "/agy/models", {});
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    models: [
+      { id: "gemini-x-low", name: "Gemini X Low" },
+      { id: "plain-id", name: "plain-id" },
+    ],
+  });
+  expect(
+    (await listAgents(db, async () => ({ code: 0, stdout: "", stderr: "" })))
+      .find((a) => a.id === "agy")
+      ?.models.map((m) => m.id),
+  ).toEqual(["gemini-x-low", "plain-id"]);
+  const failing = agentRoutes(db, { listAcp: noAcp, run: agyOut("", 1) });
+  expect((await post(failing, "/agy/models", {})).status).toBe(502);
+  expect(
+    (await post(agentRoutes(db, { listAcp: noAcp, run: agyOut("\n") }), "/agy/models", {})).status,
+  ).toBe(502);
+  expect(db.query("SELECT count(*) AS n FROM agent_models WHERE agent_id = 'agy'").get()).toEqual({
+    n: 2,
+  });
+});
+
+test("models refresh: ACP agents go through listAcp, unknown agents are 404", async () => {
+  const seen: string[] = [];
+  const app = agentRoutes(db, {
+    listAcp: async (spec) => {
+      seen.push(spec.id);
+      return [{ id: "m1", name: "M1" }];
+    },
+  });
+  const res = await post(app, "/claude/models", {});
+  expect(res.status).toBe(200);
+  expect(seen).toEqual(["claude"]);
+  expect((await post(app, "/nope/models", {})).status).toBe(404);
+  const broken = agentRoutes(db, { listAcp: noAcp });
+  expect((await post(broken, "/claude/models", {})).status).toBe(502);
 });

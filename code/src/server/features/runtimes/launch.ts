@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentSpec } from "../agents/api";
@@ -96,4 +97,35 @@ export async function createLaunch(
     claudeSettings: claudeSettings(`${process.execPath} ${HOOK_SCRIPT}`),
     scope: { root: tree.path, home: homedir(), defaultBranch: branch },
   };
+}
+
+// A throwaway sandbox for asking an agent which models it offers: same srt wrapping and scrubbed
+// env as a run, but no worktree, no run token and no MCP.
+export async function createProbeLaunch(
+  deps: RunDeps,
+  spec: AgentSpec,
+): Promise<{ argv: string[]; env: Record<string, string>; cwd: string; dir: string }> {
+  const dir = join(deps.home, "model-probes", Bun.randomUUIDv7());
+  const cwd = join(dir, "cwd");
+  await mkdir(cwd, { recursive: true });
+  const codexHome = spec.id === "codex" ? await prepareCodexHome(dir, codexRules()) : null;
+  const settingsPath = await writeSrtSettings({
+    runDir: dir,
+    worktree: cwd,
+    gitCommonDir: null,
+    harnessHome: deps.home,
+    agentStateWrite: spec.stateWrite,
+    agentEgress: spec.egress,
+    preset: "dev",
+    weakerNetworkIsolation: spec.weakerNetworkIsolation,
+    codexHome,
+  });
+  const tmp = runTmpDir(dir);
+  const env = scrubEnv(process.env, {
+    ...deps.agentEnv?.(dir),
+    TMPDIR: tmp,
+    CLAUDE_CODE_TMPDIR: tmp,
+    ...(codexHome === null ? {} : { CODEX_HOME: codexHome }),
+  });
+  return { argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]), env, cwd, dir };
 }

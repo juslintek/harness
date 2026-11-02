@@ -4,8 +4,10 @@ import { loadConfig } from "./server/config";
 import { ensureInstance, migrate, openDb } from "./server/db/db";
 import { migrations } from "./server/db/migrations";
 import { ensureAdminSecret } from "./server/features/auth/api";
+import { recoverRuns } from "./server/features/runtimes/api";
 import { startTailers } from "./server/features/usage/api";
 import { createApp } from "./server/http";
+import { type WsData, websocket, wireRealtime } from "./server/realtime";
 import indexHtml from "./web/index.html";
 
 const config = loadConfig();
@@ -15,6 +17,7 @@ const db = openDb(join(config.home, "harness.db"));
 migrate(db, migrations);
 const instanceId = ensureInstance(db);
 
+recoverRuns(db);
 const secret = ensureAdminSecret(config.home);
 const app = createApp({
   db,
@@ -26,14 +29,17 @@ const app = createApp({
 });
 startTailers(db);
 
-const server = Bun.serve({
+const server = Bun.serve<WsData>({
   hostname: config.host,
   port: config.port,
   routes: { "/": indexHtml },
-  fetch: app.fetch,
+  fetch: (req, srv) => app.fetch(req, { server: srv }),
+  websocket,
   maxRequestBodySize: 1024 * 1024,
   development: process.env.NODE_ENV !== "production",
 });
+
+wireRealtime(db, server);
 
 console.log(`harness listening on ${server.url}`);
 console.log(`admin login: http://127.0.0.1:${config.port}/login?k=${secret}`);

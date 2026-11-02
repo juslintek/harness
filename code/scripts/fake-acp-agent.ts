@@ -160,7 +160,16 @@ async function handle(msg: Incoming): Promise<void> {
   } else if (msg.method === "initialize") {
     reply({ protocolVersion: 1, agentCapabilities: {}, authMethods: [] });
   } else if (msg.method === "session/new") {
-    reply({ sessionId });
+    reply({
+      sessionId,
+      configOptions: [
+        {
+          id: "model",
+          currentValue: "fake-a",
+          options: [{ value: "fake-a", name: "Fake A" }, { value: "fake-b" }],
+        },
+      ],
+    });
   } else if (msg.method === "session/set_config_option") {
     if (process.env.FAKE_AGENT_FAIL_CONFIG) {
       send({ jsonrpc: "2.0", id: msg.id, error: { code: -32602, message: "config refused" } });

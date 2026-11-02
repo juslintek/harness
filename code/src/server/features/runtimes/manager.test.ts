@@ -11,6 +11,7 @@ import {
   listRuns,
   onRunEvent,
   recoverRuns,
+  refreshAcpModels,
   setHalted,
   startRun,
   UnknownAgent,
@@ -174,4 +175,19 @@ test("quota readings land on the claude provider row", async () => {
     ["seven_day", 50],
   ]);
   expect((await probeQuota(x.db)).some((q) => q.provider === "anthropic")).toBe(false);
+});
+
+test("refreshAcpModels reads the model option from session/new under srt and cleans up", async () => {
+  const x = fixture();
+  const deps = fakeDeps(x, []);
+  const spec = deps.resolveSpec?.("fake");
+  if (!spec) throw new Error("fake spec missing");
+  expect(await refreshAcpModels(deps, spec)).toEqual([
+    { id: "fake-a", name: "Fake A" },
+    { id: "fake-b", name: "fake-b" },
+  ]);
+  const left = Bun.spawnSync(["ls", join(x.home, "model-probes")])
+    .stdout.toString()
+    .trim();
+  expect(left).toBe("");
 });

@@ -33,6 +33,18 @@ export function adminMiddleware(secret: string, port: number): MiddlewareHandler
   };
 }
 
+// A WebSocket handshake is a GET, so adminMiddleware skips its Origin check; browsers always send
+// Origin on it, and a socket without one has no business here.
+export function originGuard(port: number): MiddlewareHandler {
+  const origins = allowedHosts(port).map((host) => `http://${host}`);
+  return async (c, next) => {
+    if (!origins.includes(c.req.header("origin") ?? "")) {
+      return c.json({ error: "forbidden origin" }, 403);
+    }
+    await next();
+  };
+}
+
 export function loginHandler(secret: string): (c: Context) => Response {
   return (c) => {
     const k = c.req.query("k");

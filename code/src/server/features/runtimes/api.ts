@@ -1,8 +1,10 @@
 import type { Database } from "bun:sqlite";
-import { getSpec } from "../agents/api";
+import { rm } from "node:fs/promises";
+import { type AgentSpec, getSpec } from "../agents/api";
 import { expireApprovals } from "../guard/api";
 import type { NewEvent } from "../logs/api";
-import type { RunDeps } from "./launch";
+import { listAcpModels } from "./acp-models";
+import { createProbeLaunch, type RunDeps } from "./launch";
 import {
   setHalted as halt,
   isHalted as halted,
@@ -73,4 +75,16 @@ export function onRunEvent(listener: (runId: string, e: NewEvent) => void): () =
 export function recoverRuns(db: Database): void {
   failLiveRuns(db, "harness_restart");
   expireApprovals(db, Number.MAX_SAFE_INTEGER);
+}
+
+export async function refreshAcpModels(
+  deps: RunDeps,
+  spec: AgentSpec,
+): Promise<Array<{ id: string; name: string }>> {
+  const probe = await createProbeLaunch(deps, spec);
+  try {
+    return await listAcpModels(spec, probe.argv, probe.env, probe.cwd);
+  } finally {
+    await rm(probe.dir, { recursive: true, force: true });
+  }
 }

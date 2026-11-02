@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { type DiscoveredAgent, discoverAgents, type Runner } from "./discover";
+import { bunRunner, type DiscoveredAgent, discoverAgents, type Runner } from "./discover";
 import { getKey, type Provider } from "./keys";
 import { type AgentSpec, agentSpecs } from "./specs";
 
@@ -148,4 +148,56 @@ export async function ollayaStatus(): Promise<{ up: boolean; version: string | n
   } catch {
     return { up: false, version: null };
   }
+}
+
+export type ModelList = Array<{ id: string; name: string }>;
+
+export class ModelsError extends Error {
+  readonly status: 404 | 409 | 502;
+  constructor(status: 404 | 409 | 502, message: string) {
+    super(message);
+    this.name = "ModelsError";
+    this.status = status;
+  }
+}
+
+const AGY_MODELS_TIMEOUT_MS = 5000;
+
+// `agy models` prints one model per line, id and display name separated by a tab.
+function parseAgyModels(stdout: string): ModelList {
+  const models: ModelList = [];
+  for (const line of stdout.split("\n")) {
+    const [id = "", name = ""] = line.split("\t").map((part) => part.trim());
+    if (/^\S+$/.test(id)) models.push({ id, name: name || id });
+  }
+  return models;
+}
+
+// The agent is the source of model ids; nothing is hard-coded and a failed probe keeps the old list.
+export async function refreshModels(
+  db: Database,
+  id: string,
+  how: { listAcp: (spec: AgentSpec) => Promise<ModelList>; run?: Runner },
+): Promise<ModelList> {
+  const spec = getSpec(id);
+  if (!spec) throw new ModelsError(404, "unknown agent");
+  let models: ModelList;
+  try {
+    if (spec.lane === "agy") {
+      const out = await (how.run ?? bunRunner)(["agy", "models"], AGY_MODELS_TIMEOUT_MS);
+      if (out.code !== 0)
+        throw new Error(out.stderr.trim() || `agy models exited with ${out.code}`);
+      models = parseAgyModels(out.stdout);
+    } else if (spec.lane === "acp") {
+      models = await how.listAcp(spec);
+    } else {
+      throw new ModelsError(409, `${spec.name} has no model list to refresh`);
+    }
+  } catch (err) {
+    if (err instanceof ModelsError) throw err;
+    throw new ModelsError(502, err instanceof Error ? err.message : String(err));
+  }
+  if (models.length === 0) throw new ModelsError(502, "the agent returned no models");
+  saveModels(db, id, models);
+  return models;
 }

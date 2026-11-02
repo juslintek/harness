@@ -1,13 +1,34 @@
 import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
 import { z } from "zod";
-import { getSpec, LoginError, listAgents, ollayaStatus, setLinked, startLogin } from "./api";
+import type { AgentSpec } from "./api";
+import {
+  getSpec,
+  LoginError,
+  listAgents,
+  type ModelList,
+  ModelsError,
+  ollayaStatus,
+  refreshModels,
+  setLinked,
+  startLogin,
+} from "./api";
+import type { Runner } from "./discover";
 import { keyStatus, type Provider, providers, storeKey } from "./keys";
 
 const linkBody = z.object({ enabled: z.boolean() });
 const keyBody = z.object({ key: z.string().regex(/^[\x20-\x7e]{20,400}$/) });
 
-export function agentRoutes(db: Database): Hono {
+export interface ModelSources {
+  listAcp: (spec: AgentSpec) => Promise<ModelList>;
+  run?: Runner;
+}
+
+const noAcp: ModelSources = {
+  listAcp: () => Promise.reject(new Error("ACP model listing is not wired")),
+};
+
+export function agentRoutes(db: Database, models: ModelSources = noAcp): Hono {
   const app = new Hono();
   app.get("/", async (c) => c.json(await listAgents(db)));
   app.get("/keys", async (c) => c.json(await keyStatus()));
@@ -28,6 +49,14 @@ export function agentRoutes(db: Database): Hono {
     if (!body.success) return c.json({ error: "invalid body" }, 400);
     setLinked(db, id, body.data.enabled);
     return c.json({ ok: true });
+  });
+  app.post("/:id/models", async (c) => {
+    try {
+      return c.json({ models: await refreshModels(db, c.req.param("id"), models) });
+    } catch (err) {
+      if (err instanceof ModelsError) return c.json({ error: err.message }, err.status);
+      throw err;
+    }
   });
   app.post("/:id/login", (c) => {
     const id = c.req.param("id");

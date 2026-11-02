@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { ApprovalView } from "../../../shared/runs";
 
 type ApprovalStatus = "pending" | "approved" | "denied" | "expired";
 
@@ -97,16 +98,8 @@ export function decideApproval(
   return false;
 }
 
-export function listApprovals(db: Database, status?: string): ApprovalRow[] {
-  const rows =
-    status === undefined
-      ? db.query<DbApproval, []>("SELECT * FROM approvals ORDER BY created_at, id").all()
-      : db
-          .query<DbApproval, [string]>(
-            "SELECT * FROM approvals WHERE status = ? ORDER BY created_at, id",
-          )
-          .all(status);
-  return rows.map((r) => ({
+function toRow(r: DbApproval): ApprovalRow {
+  return {
     id: r.id,
     runId: r.run_id,
     action: r.action,
@@ -117,7 +110,19 @@ export function listApprovals(db: Database, status?: string): ApprovalRow[] {
     createdAt: r.created_at,
     expiresAt: r.expires_at,
     decidedAt: r.decided_at,
-  }));
+  };
+}
+
+export function listApprovals(db: Database, status?: string): ApprovalRow[] {
+  const rows =
+    status === undefined
+      ? db.query<DbApproval, []>("SELECT * FROM approvals ORDER BY created_at, id").all()
+      : db
+          .query<DbApproval, [string]>(
+            "SELECT * FROM approvals WHERE status = ? ORDER BY created_at, id",
+          )
+          .all(status);
+  return rows.map(toRow);
 }
 
 export function expireApprovals(db: Database, now: number): number {
@@ -139,4 +144,41 @@ export function expireRunApprovals(db: Database, runId: string): number {
     if (markExpired(db, id, null)) waiters.get(id)?.("expired");
   }
   return ids.length;
+}
+
+export function getApproval(db: Database, id: string): ApprovalRow | null {
+  const row = db.query<DbApproval, [string]>("SELECT * FROM approvals WHERE id = ?").get(id);
+  return row ? toRow(row) : null;
+}
+
+function parsed(json: string): { command?: unknown; paths?: unknown; reason?: unknown } {
+  try {
+    const value: unknown = JSON.parse(json);
+    return typeof value === "object" && value !== null ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+// The human decides on the raw command, so it is surfaced as-is (already redacted at creation).
+export function approvalView(row: ApprovalRow): ApprovalView {
+  const action = parsed(row.action);
+  const command =
+    typeof action.command === "string"
+      ? action.command
+      : Array.isArray(action.paths)
+        ? action.paths.join(" ")
+        : "";
+  const reason = parsed(row.l1).reason;
+  return {
+    id: row.id,
+    runId: row.runId,
+    command,
+    reason: typeof reason === "string" ? reason : null,
+    status: row.status,
+    decidedBy: row.decidedBy,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    decidedAt: row.decidedAt,
+  };
 }

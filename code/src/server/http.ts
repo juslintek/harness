@@ -5,10 +5,14 @@ import { z } from "zod";
 import { type Health, healthSchema } from "../shared/health";
 import { searchQuerySchema, usageQuerySchema } from "../shared/query";
 import { agentRoutes } from "./features/agents/routes";
-import { adminMiddleware, hostGuard, loginHandler } from "./features/auth/api";
+import { adminMiddleware, hostGuard, loginHandler, originGuard } from "./features/auth/api";
+import { approvalRoutes } from "./features/guard/routes";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { mcpHandler, verifyRunToken } from "./features/mcp/api";
+import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
+import { haltRoutes, runRoutes } from "./features/runtimes/routes";
 import { probeQuota, usageSummary } from "./features/usage/api";
+import { wsUpgrade } from "./realtime";
 
 export interface AppDeps {
   db: Database;
@@ -17,6 +21,7 @@ export interface AppDeps {
   secret: string;
   instanceId: string;
   version: string;
+  runDeps?: RunDeps;
 }
 
 const hookBody = z.object({
@@ -54,9 +59,14 @@ function guardHook(db: Database): Hono {
   return app;
 }
 
-function adminRoutes(db: Database): Hono {
+function adminRoutes(deps: AppDeps): Hono {
+  const { db } = deps;
+  const runDeps = deps.runDeps ?? { home: deps.home, port: deps.port };
   const app = new Hono();
-  app.route("/agents", agentRoutes(db));
+  app.route("/runs", runRoutes(db, runDeps));
+  app.route("/approvals", approvalRoutes(db));
+  app.route("/halt", haltRoutes(db));
+  app.route("/agents", agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }));
   app.get("/search", (c) => {
     const query = searchQuerySchema.safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid query" }, 400);
@@ -93,6 +103,8 @@ export function createApp(deps: AppDeps): Hono {
   app.all("/mcp", (c) => mcp(c.req.raw));
   app.route("/api/guard/hook", guardHook(db));
   app.use("/api/*", adminMiddleware(deps.secret, deps.port));
-  app.route("/api", adminRoutes(db));
+  app.route("/api", adminRoutes(deps));
+  app.use("/ws", adminMiddleware(deps.secret, deps.port), originGuard(deps.port));
+  app.get("/ws", wsUpgrade);
   return app;
 }

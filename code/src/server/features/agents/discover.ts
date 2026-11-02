@@ -21,7 +21,7 @@ function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-async function bunRunner(
+export async function bunRunner(
   argv: string[],
   timeoutMs: number,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
