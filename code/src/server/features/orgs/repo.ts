@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { handleSchema, type MemberView, type OrgView, type Role } from "../../../shared/orgs";
+import type { PersonRef } from "../../../shared/people";
 
 export interface MemberRow extends MemberView {
   createdAt: number;
@@ -102,6 +103,10 @@ export function getOrg(db: Database, id: string): OrgView | null {
 export function getMember(db: Database, id: string): MemberRow | null {
   const r = db.query<Raw, [string]>("SELECT * FROM members WHERE id = ?").get(id);
   return r ? memberRow(r) : null;
+}
+export function personOf(db: Database, id: string | null): PersonRef | null {
+  const m = id === null ? null : getMember(db, id);
+  return m ? { handle: m.handle, displayName: m.displayName, kind: m.kind } : null;
 }
 export function memberForUser(db: Database, orgId: string, userId: string): MemberRow | null {
   const r = db

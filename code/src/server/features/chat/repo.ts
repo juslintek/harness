@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { ChannelKind, ChannelView, MessageView } from "../../../shared/chat";
+import { personOf } from "../orgs/api";
 
 type Raw = Record<string, string | number | null>;
 
@@ -169,6 +170,7 @@ export function getMessage(db: Database, id: string): MessageView | null {
 
 export interface MessageQuery {
   before?: number;
+  beforeId?: string;
   threadRootId?: string;
   limit?: number;
 }
@@ -176,11 +178,17 @@ export interface MessageQuery {
 export function queryMessages(db: Database, channelId: string, opts: MessageQuery): MessageView[] {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
   const rows = db
-    .query<Raw, [string, string | null, number, number]>(
-      `${SELECT_MESSAGE} WHERE m.channel_id = ? AND m.thread_root_id IS ? AND m.created_at < ?
-       ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
+    .query<Raw, [string, string | null, number, string, number]>(
+      `${SELECT_MESSAGE} WHERE m.channel_id = ? AND m.thread_root_id IS ?
+       AND (m.created_at, m.id) < (?, ?) ORDER BY m.created_at DESC, m.id DESC LIMIT ?`,
     )
-    .all(channelId, opts.threadRootId ?? null, opts.before ?? Number.MAX_SAFE_INTEGER, limit);
+    .all(
+      channelId,
+      opts.threadRootId ?? null,
+      opts.before ?? Number.MAX_SAFE_INTEGER,
+      opts.beforeId ?? "",
+      limit,
+    );
   return hydrate(db, rows.reverse());
 }
 
@@ -235,6 +243,7 @@ function hydrate(db: Database, rows: Raw[]): MessageView[] {
     channelId: r.channel_id as string,
     threadRootId: r.thread_root_id as string | null,
     authorId: r.author_id as string | null,
+    author: personOf(db, r.author_id as string | null),
     body: r.body as string,
     createdAt: r.created_at as number,
     editedAt: r.edited_at as number | null,

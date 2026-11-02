@@ -90,8 +90,12 @@ function messageRoutes(db: Database, app: Hono<AuthEnv>): void {
     if (found instanceof Response) return found;
     const query = parseQuery(c, messagesQuery);
     if (query instanceof Response) return query;
-    const { thread, ...rest } = query;
-    return c.json(listMessages(db, found.channel.id, defined({ ...rest, threadRootId: thread })));
+    const { thread, before, ...rest } = query;
+    const [ts, beforeId] = before?.split(":") ?? [];
+    const cursor = ts === undefined ? {} : { before: Number(ts), beforeId };
+    return c.json(
+      listMessages(db, found.channel.id, defined({ ...rest, ...cursor, threadRootId: thread })),
+    );
   });
   app.post("/channels/:id/messages", async (c) => {
     const found = channelScope(db, c, "write");

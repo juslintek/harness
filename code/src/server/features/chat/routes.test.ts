@@ -104,3 +104,39 @@ test("channel members lists only who can read the channel, and 404s for outsider
   expect(await handles(carol, general?.id ?? "")).toContain("carol");
   expect(await handles(carol, general?.id ?? "")).toHaveLength(3);
 });
+
+test("pages by a (createdAt, id) cursor so messages sharing a millisecond are not skipped", async () => {
+  const { k, owner, channels } = await setup();
+  const general = (await channels(owner)).find((c) => c.kind === "org");
+  const path = `/api/channels/${general?.id}/messages`;
+  const bodies = ["a", "b", "c", "d"];
+  for (const body of bodies) await k.call(owner, "POST", path, { body });
+  k.db.run("UPDATE messages SET created_at = 1000 WHERE channel_id = ?", [general?.id as string]);
+  type Msg = { id: string; body: string; createdAt: number; author: { kind: string } | null };
+  const seen: string[] = [];
+  let query = "?limit=2";
+  for (let page = 0; page < 5; page++) {
+    const rows = (await (await k.call(owner, "GET", path + query)).json()) as Msg[];
+    const first = rows[0];
+    if (!first) break;
+    seen.unshift(...rows.map((m) => m.body));
+    query = `?limit=2&before=${first.createdAt}:${first.id}`;
+  }
+  expect(seen.toSorted()).toEqual(bodies);
+  const legacy = await k.call(owner, "GET", `${path}?before=1000`);
+  expect(await legacy.json()).toEqual([]);
+  expect((await k.call(owner, "GET", `${path}?before=nope`)).status).toBe(400);
+});
+
+test("a message carries its author's handle and kind whatever org the reader is in", async () => {
+  const { k, owner, channels } = await setup();
+  const general = (await channels(owner)).find((c) => c.kind === "org");
+  const path = `/api/channels/${general?.id}/messages`;
+  const posted = await (await k.call(owner, "POST", path, { body: "hi" })).json();
+  expect(posted.author).toMatchObject({ kind: "human" });
+  expect(posted.author.handle).toBe(
+    k.db
+      .query<{ handle: string }, [string]>("SELECT handle FROM members WHERE id = ?")
+      .get(posted.authorId)?.handle,
+  );
+});

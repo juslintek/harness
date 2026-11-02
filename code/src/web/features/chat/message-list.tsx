@@ -5,7 +5,6 @@ const TOKEN =
 
 export interface MessageContext {
   slug: string;
-  byId: Map<string, ChatMember>;
   byHandle: Map<string, ChatMember>;
 }
 
@@ -60,7 +59,7 @@ export function MessageItem(props: {
   onOpenThread?: (m: MessageView) => void;
 }): preact.JSX.Element {
   const { message, ctx, onOpenThread } = props;
-  const author = message.authorId ? ctx.byId.get(message.authorId) : undefined;
+  const { author } = message;
   return (
     <li class="message">
       <div class="meta">

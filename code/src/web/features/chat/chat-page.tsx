@@ -14,7 +14,6 @@ function useMessageContext(slug: string, data: ChatData): MessageContext {
   return useMemo(
     () => ({
       slug,
-      byId: new Map(members.map((m) => [m.id, m])),
       byHandle: new Map(members.map((m) => [m.handle, m])),
     }),
     [slug, data.org.data],

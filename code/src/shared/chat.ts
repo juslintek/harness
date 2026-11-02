@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { type PersonRef, personRefSchema } from "./people";
 
 export const messageBodySchema: z.ZodString = z.string().min(1).max(8000);
 
@@ -20,6 +21,7 @@ export interface MessageView {
   channelId: string;
   threadRootId: string | null;
   authorId: string | null;
+  author: PersonRef | null;
   body: string;
   createdAt: number;
   editedAt: number | null;
@@ -53,13 +55,17 @@ export const postMessageBody: z.ZodType<PostMessageBody> = z
   .strict();
 
 export interface MessagesQuery {
-  before?: number | undefined;
+  before?: string | undefined;
   thread?: string | undefined;
   limit?: number | undefined;
 }
 export const messagesQuery: z.ZodType<MessagesQuery> = z
   .object({
-    before: z.coerce.number().int().positive().optional(),
+    // `<createdAt>` or `<createdAt>:<id>`; the id breaks ties between messages made in one millisecond.
+    before: z
+      .string()
+      .regex(/^[1-9]\d{0,15}(:[\w-]{1,64})?$/)
+      .optional(),
     thread: id.optional(),
     limit: z.coerce.number().int().min(1).max(200).optional(),
   })
@@ -83,6 +89,7 @@ export const messageViewSchema: z.ZodType<MessageView> = z.object({
   channelId: z.string(),
   threadRootId: z.string().nullable(),
   authorId: z.string().nullable(),
+  author: personRefSchema.nullable(),
   body: z.string(),
   createdAt: z.number(),
   editedAt: z.number().nullable(),
