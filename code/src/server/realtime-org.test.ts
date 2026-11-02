@@ -3,7 +3,14 @@ import { type WsMessage, wsMessageSchema } from "../shared/realtime";
 import { migrate, openDb } from "./db/db";
 import { migrations } from "./db/migrations";
 import { wireChat } from "./features/chat/api";
-import { addHumanMember, createOrg, createProject, grantProject } from "./features/orgs/api";
+import {
+  addHumanMember,
+  createOrg,
+  createProject,
+  grantProject,
+  removeMember,
+  revokeGrant,
+} from "./features/orgs/api";
 import { createApp } from "./http";
 import { wireRealtime } from "./realtime";
 import { listenDeferred, openSocket, sessionHeaders, until } from "./test-support/app-kit";
@@ -52,7 +59,17 @@ async function boot() {
       headers: { ...who.headers, host: `localhost:${port}` },
       body: JSON.stringify(body),
     });
-  return { db, user, org, listen, post, port };
+  // Resolves to a flag that flips when the server closes the socket.
+  const watch = async (who: { headers: Record<string, string> }, topic: string) => {
+    const ws = await openSocket(`ws://127.0.0.1:${port}/ws?topic=${topic}`, who.headers);
+    const state = { closed: false };
+    ws.onclose = () => {
+      state.closed = true;
+    };
+    stops.push(() => ws.close());
+    return state;
+  };
+  return { db, user, org, listen, watch, post, port };
 }
 
 test("an org topic refuses users outside the org and run topics refuse non-admins", async () => {
@@ -128,4 +145,39 @@ test("a granted project also nudges the grantee org", async () => {
   await k.post(alice, `/api/projects/${project.id}/tasks`, { title: "shared" });
   await until(() => heard.length === 1);
   expect(heard[0]?.type).toBe("task");
+  revokeGrant(k.db, project.id, b.id);
+  const mine = await k.listen(alice, `org:${a.id}`);
+  await k.post(alice, `/api/projects/${project.id}/tasks`, { title: "private" });
+  await until(() => mine.length === 1);
+  expect(heard.length).toBe(1);
+});
+
+test("logging out closes that session's sockets and leaves other sessions open", async () => {
+  const k = await boot();
+  const admin = await k.user(true);
+  const other = await k.user(true);
+  const approvals = await k.watch(admin, "approvals");
+  const runs = await k.watch(admin, "runs");
+  const untouched = await k.watch(other, "runs");
+  expect((await k.post(admin, "/api/auth/logout", {})).status).toBe(200);
+  await until(() => approvals.closed && runs.closed);
+  await Bun.sleep(50);
+  expect(untouched.closed).toBe(false);
+});
+
+test("removing a member closes its socket on that org only", async () => {
+  const k = await boot();
+  const [alice, bob] = [await k.user(), await k.user()] as [
+    Awaited<ReturnType<typeof k.user>>,
+    Awaited<ReturnType<typeof k.user>>,
+  ];
+  const a = k.org("acme", alice);
+  const b = k.org("beta", bob);
+  const member = addHumanMember(k.db, a.id, bob.userId, "bob", "bob", "member");
+  const onA = await k.watch(bob, `org:${a.id}`);
+  const onB = await k.watch(bob, `org:${b.id}`);
+  removeMember(k.db, member.id);
+  await until(() => onA.closed);
+  await Bun.sleep(50);
+  expect(onB.closed).toBe(false);
 });

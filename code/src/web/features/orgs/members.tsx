@@ -3,7 +3,7 @@ import type { OrgDetail } from "../../../shared/orgs";
 import { inviteResultSchema, type MemberView, type Role } from "../../../shared/orgs";
 import { api } from "../../api";
 import { ErrorLine } from "../auth/error-line";
-import { ignored } from "../auth/me";
+import { ignored, me } from "../auth/me";
 import { useAction } from "../auth/use-action";
 import { AddAgent } from "./add-agent";
 import { isAdmin } from "./org-data";
@@ -168,7 +168,9 @@ export function Members({
       {isAdmin(detail) && (
         <>
           <InviteHuman detail={detail} onChange={onChange} />
-          <AddAgent detail={detail} onChange={onChange} />
+          {me.value?.user.instanceAdmin === true && (
+            <AddAgent detail={detail} onChange={onChange} />
+          )}
         </>
       )}
     </section>

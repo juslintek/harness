@@ -49,7 +49,7 @@ export function TaskCard({ task, ctx }: { task: TaskView; ctx: BoardCtx }): prea
         {subtasks > 0 && <span>{subtasks} sub</span>}
       </p>
       <MoveMenu
-        label={`Move #${task.number} to…`}
+        label={`Move to… (#${task.number})`}
         taskId={task.id}
         current={task.status}
         onMove={(to) => ctx.move(task.id, to)}

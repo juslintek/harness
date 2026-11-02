@@ -2,8 +2,15 @@ import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { updateTask } from "../board/api";
-import { postMessage } from "../chat/api";
-import { createPosition } from "../orgs/api";
+import { ensureProjectChannel, postMessage } from "../chat/api";
+import {
+  addAgentMember,
+  createOrg,
+  createPosition,
+  createProject,
+  grantProject,
+  listMembers,
+} from "../orgs/api";
 import { setHalted } from "../runtimes/api";
 import { wakeNow } from "./api";
 import { setup, until, wakes } from "./kit";
@@ -186,4 +193,63 @@ test("no schedule wakes are made while halted", async () => {
   stops.push(k.start());
   await Bun.sleep(150);
   expect(wakes(k.db, b.id)).toHaveLength(0);
+});
+
+// A second org whose agent the first org's project is granted to with write access.
+function grantee(k: ReturnType<typeof setup>) {
+  const beta = createOrg(k.db, {
+    name: "Beta",
+    slug: "beta",
+    ownerUserId: "u2",
+    ownerName: "B",
+    ownerHandle: "bee",
+  });
+  const guest = addAgentMember(k.db, beta.id, {
+    agentId: "fake",
+    handle: "guest",
+    displayName: "guest",
+    specialties: [],
+  });
+  grantProject(k.db, k.projectId, beta.id, "write", k.human.id);
+  return { beta, guest };
+}
+
+test("a wake whose grant was lowered to read before launch is skipped and starts no run", async () => {
+  const k = setup();
+  const { beta, guest } = grantee(k);
+  stops.push(k.start());
+  setHalted(k.db, true);
+  const task = k.task("t");
+  updateTask(k.db, task.id, { assigneeId: guest.id }, k.human.id);
+  await until(() => wakes(k.db, guest.id).length === 1);
+  grantProject(k.db, k.projectId, beta.id, "read", k.human.id);
+  setHalted(k.db, false);
+  await until(() => wakes(k.db, guest.id)[0]?.status === "skipped");
+  expect(JSON.parse(wakes(k.db, guest.id)[0]?.detail ?? "{}")).toEqual({ reason: "no_access" });
+  expect(k.seen).toHaveLength(0);
+});
+
+test("wakes in two projects start two runs, each recording its own project", async () => {
+  const k = setup();
+  const { beta, guest } = grantee(k);
+  const own = createProject(k.db, { orgId: beta.id, key: "own", name: "Own" });
+  const channel = ensureProjectChannel(k.db, own.id);
+  const bee = listMembers(k.db, beta.id).find((m) => m.handle === "bee");
+  stops.push(k.start());
+  setHalted(k.db, true);
+  postMessage(k.db, { channelId: channel.id, authorId: bee?.id as string, body: "@guest look" });
+  const task = k.task("theirs");
+  updateTask(k.db, task.id, { assigneeId: guest.id }, k.human.id);
+  await until(() => wakes(k.db, guest.id).length === 2);
+  setHalted(k.db, false);
+  await until(() => wakes(k.db, guest.id).every((w) => w.status === "done"));
+  const runs = k.db
+    .query<{ project_id: string; task_id: string | null }, [string]>(
+      "SELECT project_id, task_id FROM runs WHERE member_id = ? ORDER BY created_at",
+    )
+    .all(guest.id);
+  expect(runs).toEqual([
+    { project_id: own.id, task_id: null },
+    { project_id: k.projectId, task_id: task.id },
+  ]);
 });

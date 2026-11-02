@@ -34,6 +34,8 @@ export interface RunMember {
   memberId: string;
   orgId: string;
   scopes: TokenScope[];
+  // The project whose repo the run works in; its org decides the run's approvals.
+  projectId?: string | undefined;
 }
 
 export interface Launch {

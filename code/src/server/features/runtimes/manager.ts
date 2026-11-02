@@ -263,7 +263,7 @@ export async function startRun(
   insertRun(db, {
     id: full.id,
     taskId: input.taskId ?? null,
-    memberId: input.member?.memberId ?? null,
+    member: input.member ?? null,
     agentId: spec.id,
     model: input.model ?? null,
     repo: input.repo,

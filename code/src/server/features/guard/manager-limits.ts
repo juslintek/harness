@@ -4,16 +4,19 @@ import { appendEvent } from "../logs/api";
 import { getMember, managerPositionsOf, reportsTransitivelyTo } from "../orgs/api";
 import { type ApprovalRow, decideApproval, getApproval, listApprovals } from "./approvals";
 
-export interface DecideContext {
-  requesterMemberId: string | null;
-  managerMemberId: string;
-  inSubtree: boolean;
+interface ActionContext {
   category: string | null;
   rule: string | null;
   kind: string;
   command: string;
   paths: string[];
   harnessHome: string;
+}
+
+export interface DecideContext extends ActionContext {
+  requesterMemberId: string | null;
+  managerMemberId: string;
+  inSubtree: boolean;
 }
 
 // Text that points at the harness itself, its sandbox or its agent config: a manager agent must
@@ -48,11 +51,9 @@ function normalizeText(text: string): string {
 // at the text, so a human must read those commands.
 const SHELL_INDIRECTION = /['"\\*?[\]{}$`]|(^|[\s;&|(])cd\s/;
 
-export function managerMayDecide(ctx: DecideContext): string | null {
-  if (ctx.requesterMemberId === null) return "the run has no member";
-  if (ctx.requesterMemberId === ctx.managerMemberId)
-    return "managers cannot decide their own request";
-  if (!ctx.inSubtree) return "the requester does not report to you";
+// What only the instance admin may wave through, whoever else asks: a manager agent or a human
+// who administers an org. Such an org can be anyone's personal org, so it earns no host trust.
+function actionRefusal(ctx: ActionContext): string | null {
   if (ctx.category === "network" || ctx.category === "secret" || ctx.kind === "fetch") {
     return "network and secret actions need a human";
   }
@@ -71,6 +72,14 @@ export function managerMayDecide(ctx: DecideContext): string | null {
   return hit === undefined ? null : `the action mentions ${hit}`;
 }
 
+export function managerMayDecide(ctx: DecideContext): string | null {
+  if (ctx.requesterMemberId === null) return "the run has no member";
+  if (ctx.requesterMemberId === ctx.managerMemberId)
+    return "managers cannot decide their own request";
+  if (!ctx.inSubtree) return "the requester does not report to you";
+  return actionRefusal(ctx);
+}
+
 function field(json: string | null, key: string): unknown {
   try {
     const value: unknown = json === null ? null : JSON.parse(json);
@@ -83,6 +92,22 @@ function field(json: string | null, key: string): unknown {
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
+
+function actionContext(approval: ApprovalRow, harnessHome: string): ActionContext {
+  const paths = field(approval.action, "paths");
+  return {
+    category: str(field(approval.l1, "category")) || null,
+    rule: str(field(approval.l1, "rule")) || null,
+    kind: str(field(approval.action, "kind")),
+    command: str(field(approval.action, "command")),
+    paths: Array.isArray(paths) ? paths.map(str) : [],
+    harnessHome,
+  };
+}
+
+export function orgAdminRefusal(approval: ApprovalRow, harnessHome: string): string | null {
+  return actionRefusal(actionContext(approval, harnessHome));
+}
 
 function contextFor(
   db: Database,
@@ -100,18 +125,7 @@ function contextFor(
     managerPositionsOf(db, managerMemberId).some(
       (p) => p.orgId === requester.orgId && reportsTransitivelyTo(db, requester.id, p.id),
     );
-  const paths = field(approval.action, "paths");
-  return {
-    requesterMemberId,
-    managerMemberId,
-    inSubtree,
-    category: str(field(approval.l1, "category")) || null,
-    rule: str(field(approval.l1, "rule")) || null,
-    kind: str(field(approval.action, "kind")),
-    command: str(field(approval.action, "command")),
-    paths: Array.isArray(paths) ? paths.map(str) : [],
-    harnessHome,
-  };
+  return { ...actionContext(approval, harnessHome), requesterMemberId, managerMemberId, inSubtree };
 }
 
 export function decidableApprovals(

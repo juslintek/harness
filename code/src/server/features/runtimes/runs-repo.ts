@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { RunMember } from "./launch";
 
 export type RunState =
   | "queued"
@@ -47,7 +48,7 @@ interface DbRun {
 export interface NewRun {
   id: string;
   taskId: string | null;
-  memberId?: string | null;
+  member?: RunMember | null;
   agentId: string;
   model: string | null;
   repo: string;
@@ -75,11 +76,12 @@ function toRow(r: DbRun): RunRow {
 
 export function insertRun(db: Database, run: NewRun): void {
   db.run(
-    "INSERT INTO runs (id, task_id, member_id, agent_id, model, repo, prompt, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?)",
+    "INSERT INTO runs (id, task_id, member_id, project_id, agent_id, model, repo, prompt, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)",
     [
       run.id,
       run.taskId,
-      run.memberId ?? null,
+      run.member?.memberId ?? null,
+      run.member?.projectId ?? null,
       run.agentId,
       run.model,
       run.repo,

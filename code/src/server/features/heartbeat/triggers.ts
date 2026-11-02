@@ -1,10 +1,10 @@
 import type { Database } from "bun:sqlite";
 import type { WakeReason } from "../../../shared/heartbeat";
-import { getComment, type TaskChange } from "../board/api";
-import { type ChatEvent, channelAccess } from "../chat/api";
+import { getComment, getTask, type TaskChange } from "../board/api";
+import { type ChatEvent, channelAccess, getChannel } from "../chat/api";
 import type { triageWake } from "../laya/api";
 import { appendEvent } from "../logs/api";
-import { getMember, listMembers, type MemberRow } from "../orgs/api";
+import { getMember, listMembers, type MemberRow, projectAccess } from "../orgs/api";
 import { insertWake, scheduleCandidates, startedRunsSince } from "./repo";
 
 const HOURLY_CAP = 20;
@@ -57,11 +57,26 @@ function store(db: Database, member: MemberRow, input: WakeInput): string {
   return insertWake(db, input);
 }
 
-// Agents only, never for their own doing and never while paused.
+// A task or project wake hands the agent that project's repo and text, so it needs write access
+// there; any other channel only has to be readable. Grants change, so launch checks again.
+export function mayWork(
+  db: Database,
+  memberId: string,
+  wake: { taskId?: string | null | undefined; channelId?: string | null | undefined },
+): boolean {
+  const task = wake.taskId ? getTask(db, wake.taskId) : null;
+  const taskAccess = task ? projectAccess(db, { memberId }, task.projectId) : "write";
+  if (taskAccess !== "write" && taskAccess !== "admin") return false;
+  if (!wake.channelId) return true;
+  const access = channelAccess(db, memberId, wake.channelId);
+  return getChannel(db, wake.channelId)?.projectId ? access === "write" : access !== "none";
+}
+
+// Agents only, never for their own doing, never while paused and never where they cannot work.
 function recordWake(db: Database, input: WakeInput): string | null {
   const member = getMember(db, input.memberId);
   if (member?.kind !== "agent" || member.paused) return null;
-  if (input.causedBy === member.id) return null;
+  if (input.causedBy === member.id || !mayWork(db, member.id, input)) return null;
   return store(db, member, input);
 }
 

@@ -120,14 +120,23 @@ export function listSessions(db: Database, userId: string): SessionInfo[] {
     }));
 }
 
+const sessionRevoked = new Set<(sessionId: string) => void>();
+
+// Live connections (WebSockets) authenticated by a session must end when the session does.
+export function onSessionRevoked(fn: (sessionId: string) => void): () => void {
+  sessionRevoked.add(fn);
+  return () => sessionRevoked.delete(fn);
+}
+
 export function revokeSession(db: Database, userId: string, sessionId: string): boolean {
-  return (
+  const revoked =
     db
       .query(
         "UPDATE sessions SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL",
       )
-      .run(Date.now(), sessionId, userId).changes > 0
-  );
+      .run(Date.now(), sessionId, userId).changes > 0;
+  if (revoked) for (const fn of sessionRevoked) fn(sessionId);
+  return revoked;
 }
 
 export function hasFreshStepUp(session: Session, now: number = Date.now()): boolean {

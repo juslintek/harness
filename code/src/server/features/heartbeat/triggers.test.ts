@@ -2,7 +2,7 @@ import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { addComment, updateTask } from "../board/api";
 import { postMessage } from "../chat/api";
 import type { triageWake } from "../laya/api";
-import { listMembers } from "../orgs/api";
+import { addAgentMember, createOrg, grantProject, listMembers, revokeGrant } from "../orgs/api";
 import { holdRuns, type Kit, setup, until, wakes } from "./kit";
 
 // Each run cuts a real git worktree, which is slow when the whole suite runs at once.
@@ -194,4 +194,33 @@ test("an agent-authored message without a mention skips Laya, a human one does n
   });
   await until(() => wakes(k.db, dba.id).length === 1);
   expect(calls).toBe(1);
+});
+
+test("a grantee agent needs write access to be woken, and a revoked grant stops comment wakes", async () => {
+  const k = setup();
+  const beta = createOrg(k.db, {
+    name: "B",
+    slug: "beta",
+    ownerUserId: "u2",
+    ownerName: "B",
+    ownerHandle: "bee",
+  });
+  const guest = addAgentMember(k.db, beta.id, {
+    agentId: "fake",
+    handle: "guest",
+    displayName: "g",
+    specialties: [],
+  });
+  boot(k);
+  grantProject(k.db, k.projectId, beta.id, "read", k.human.id);
+  const task = k.task("t");
+  updateTask(k.db, task.id, { assigneeId: guest.id }, k.human.id);
+  expect(wakes(k.db, guest.id)).toHaveLength(0);
+  grantProject(k.db, k.projectId, beta.id, "write", k.human.id);
+  addComment(k.db, task.id, k.human.id, "now you can");
+  await until(() => wakes(k.db, guest.id)[0]?.status === "done");
+  revokeGrant(k.db, k.projectId, beta.id);
+  addComment(k.db, task.id, k.human.id, "secret plans");
+  await Bun.sleep(100);
+  expect(wakes(k.db, guest.id)).toHaveLength(1);
 });

@@ -4,8 +4,9 @@ import { z } from "zod";
 import { decisionBody } from "../../../shared/runs";
 import { forbidden } from "../../route-kit";
 import { type AuthEnv, requireStepUp } from "../auth/api";
-import { getMember, listOrgsForUser, orgAccess, roleAtLeast } from "../orgs/api";
+import { getMember, getProject, listOrgsForUser, orgAccess, roleAtLeast } from "../orgs/api";
 import { type ApprovalRow, approvalView, decideApproval, findApproval, listApprovals } from "./api";
+import { orgAdminRefusal } from "./manager-limits";
 
 const statusQuery = z.enum(["pending", "approved", "denied", "expired"]);
 
@@ -21,11 +22,17 @@ function administeredOrgs(db: Database, userId: string): Set<string> {
   );
 }
 
+// A run in a project works in that project's repo, so the org owning the project decides, not a
+// grantee org whose agent happens to run there.
 function runOrg(db: Database, runId: string): string | null {
   const run = db
-    .query<{ member_id: string | null }, [string]>("SELECT member_id FROM runs WHERE id = ?")
+    .query<{ member_id: string | null; project_id: string | null }, [string]>(
+      "SELECT member_id, project_id FROM runs WHERE id = ?",
+    )
     .get(runId);
-  return run?.member_id ? (getMember(db, run.member_id)?.orgId ?? null) : null;
+  if (!run?.member_id) return null;
+  const project = run.project_id === null ? null : getProject(db, run.project_id);
+  return project?.orgId ?? getMember(db, run.member_id)?.orgId ?? null;
 }
 
 // The instance admin sees everything; an org owner or admin sees the runs of its own members.
@@ -39,7 +46,7 @@ function mayDecide(
   return orgId !== null && administeredOrgs(db, actor.userId).has(orgId);
 }
 
-export function approvalRoutes(db: Database): Hono<AuthEnv> {
+export function approvalRoutes(db: Database, harnessHome: string): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
   // Someone who administers no org has nothing to do here, whatever they send.
   app.use("*", async (c, next) => {
@@ -66,8 +73,11 @@ export function approvalRoutes(db: Database): Hono<AuthEnv> {
     const id = c.req.param("id");
     const approval = findApproval(db, id);
     if (!approval) return c.json({ error: "unknown approval" }, 404);
-    if (!mayDecide(db, c.get("actor"), approval)) return forbidden(c);
-    if (!decideApproval(db, id, body.data.decision, `user:${c.get("actor").userId}`)) {
+    const actor = c.get("actor");
+    if (!mayDecide(db, actor, approval)) return forbidden(c);
+    const refusal = actor.instanceAdmin ? null : orgAdminRefusal(approval, harnessHome);
+    if (refusal !== null) return c.json({ error: "instance_admin_required", reason: refusal }, 403);
+    if (!decideApproval(db, id, body.data.decision, `user:${actor.userId}`)) {
       return c.json({ error: "not pending" }, 409);
     }
     const row = findApproval(db, id);
