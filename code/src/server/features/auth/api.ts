@@ -1,5 +1,8 @@
 import {
+  completeEnrollment,
   createEnrollment,
+  enrollmentUser,
+  firstRunEnrollment,
   newRecoveryCodes,
   redeemEnrollment,
   requestEmailCode,
@@ -36,14 +39,17 @@ export type { Rp } from "./passkeys";
 export type { Session, SessionInfo } from "./sessions";
 export type { User } from "./users";
 export {
+  completeEnrollment,
   countUsers,
   createEnrollment,
   createSession,
   createUser,
+  enrollmentUser,
   findUserByEmail,
   finishLogin,
   finishRegistration,
   finishStepUp,
+  firstRunEnrollment,
   getUser,
   hasFreshStepUp,
   hostGuard,

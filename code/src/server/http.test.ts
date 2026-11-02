@@ -80,7 +80,8 @@ test("mutating requests need the configured Origin", async () => {
 test("foreign Host is 403 everywhere, including health and the auth endpoints", async () => {
   for (const host of ["evil.test", `127.0.0.1:${PORT}`]) {
     for (const path of ["/api/health", "/api/auth/me", "/api/agents"]) {
-      expect((await app.request(path, { headers: { host } })).status).toBe(403);
+      const expected = host.startsWith("127") && path === "/api/health" ? 200 : 403;
+      expect((await app.request(path, { headers: { host } })).status).toBe(expected);
     }
   }
 });

@@ -162,3 +162,68 @@ test("a foreign or missing Origin on POST is 403, and GET / on 127.0.0.1 redirec
   expect(loopback.status).toBe(302);
   expect(loopback.headers.get("location")).toBe(kit.origin);
 });
+
+test("a failed passkey prompt can retry the same code, and a finished code is dead", async () => {
+  const kit = bootKit();
+  const code = createEnrollment(kit.db, { ttlMs: 60_000 });
+  const who = { email: "owner@example.com", name: "Owner" };
+  const options = (): Promise<Response> =>
+    kit.call("POST", `/api/auth/enroll/${code}/options`, who);
+  const first = await (await options()).json();
+  const real = await kit.authn.create(first);
+  const broken = { ...real, response: { ...real.response, clientDataJSON: "eA" } };
+  const verify = (
+    opts: { challengeId: string; userId: string },
+    response: unknown,
+  ): Promise<Response> =>
+    kit.call("POST", `/api/auth/enroll/${code}/verify`, { ...opts, response, name: "Laptop" });
+  expect((await verify(first, broken)).status).toBe(400);
+  const retry = await (await options()).json();
+  expect(retry.userId).toBe(first.userId);
+  expect(retry.challengeId).not.toBe(first.challengeId);
+  expect((await verify(retry, await kit.authn.create(retry))).status).toBe(200);
+  expect(kit.db.query("SELECT count(*) AS n FROM users").get()).toEqual({ n: 1 });
+  expect((await options()).status).toBe(400);
+});
+
+test("enroll verify refuses codes that are not live for that user", async () => {
+  const kit = bootKit();
+  const done = createEnrollment(kit.db, { ttlMs: 60_000 });
+  const cookie = cookieOf(await kit.enroll(done));
+  const options = await (
+    await kit.call("POST", "/api/auth/passkeys/options", {}, { cookie })
+  ).json();
+  const response = await kit.authn.create(options);
+  const me = await (await kit.call("GET", "/api/auth/me", undefined, { cookie })).json();
+  const body = { challengeId: options.challengeId, userId: me.user.id, response, name: "Side" };
+  expect((await kit.call("POST", `/api/auth/enroll/${done}/verify`, body)).status).toBe(400);
+  expect((await kit.call("POST", "/api/auth/enroll/nope/verify", body)).status).toBe(400);
+  expect(kit.db.query("SELECT count(*) AS n FROM passkeys").get()).toEqual({ n: 1 });
+});
+
+test("a non-admin session is forbidden on every admin surface", async () => {
+  const kit = bootKit();
+  const { headers } = await sessionHeaders(kit.db, { admin: false, stepUp: true });
+  const surfaces = [
+    ["GET", "/api/approvals"],
+    ["POST", "/api/approvals/x"],
+    ["POST", "/api/halt"],
+    ["GET", "/api/agents"],
+    ["GET", "/api/search?q=a"],
+    ["GET", "/api/usage?by=agent"],
+    ["GET", "/api/quota"],
+  ] as const;
+  for (const [method, path] of surfaces) {
+    expect([method, path, (await kit.call(method, path, undefined, headers)).status]).toEqual([
+      method,
+      path,
+      403,
+    ]);
+  }
+  const socket = await kit.request("/ws?topic=runs", {
+    ...headers,
+    host: new URL(kit.origin).host,
+    origin: kit.origin,
+  });
+  expect(socket.status).toBe(403);
+});

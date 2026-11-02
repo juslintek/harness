@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { loadConfig } from "./server/config";
 import { ensureInstance, migrate, openDb } from "./server/db/db";
 import { migrations } from "./server/db/migrations";
-import { countUsers, createEnrollment } from "./server/features/auth/api";
+import { firstRunEnrollment } from "./server/features/auth/api";
 import { recoverRuns, shutdownRuns } from "./server/features/runtimes/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
@@ -50,10 +50,8 @@ wireRealtime(db, server);
 
 console.log(`harness listening on ${server.url}`);
 
-if (countUsers(db) === 0) {
-  const code = createEnrollment(db, { ttlMs: ENROLLMENT_TTL_MS });
-  console.log(`first-run enrollment: ${config.rp.origin}/#/enroll/${code}`);
-}
+const firstRun = firstRunEnrollment(db, ENROLLMENT_TTL_MS);
+if (firstRun) console.log(`first-run enrollment: ${config.rp.origin}/#/enroll/${firstRun}`);
 
 // Agent groups are detached, so the terminal's Ctrl-C does not reach them.
 let stopping = false;

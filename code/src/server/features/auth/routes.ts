@@ -12,7 +12,9 @@ import {
 } from "../../../shared/auth";
 import { ensurePersonalOrg } from "../orgs/api";
 import {
+  completeEnrollment,
   createSession,
+  enrollmentUser,
   finishLogin,
   finishRegistration,
   getUser,
@@ -115,8 +117,8 @@ function loginRoutes(app: Hono, deps: AuthDeps): void {
   });
 }
 
-// Redeeming at the options step creates the user, so the passkey can be bound to a real id; the
-// verify step then proves the challenge it was issued for.
+// The options step fixes the user so the passkey can be bound to a real id and may be repeated
+// after a cancelled prompt; only a registered passkey in verify finishes the code.
 function enrollRoutes(app: Hono, deps: AuthDeps): void {
   const { db, rp } = deps;
   app.post("/enroll/:code/options", async (c) => {
@@ -129,6 +131,10 @@ function enrollRoutes(app: Hono, deps: AuthDeps): void {
   app.post("/enroll/:code/verify", async (c) => {
     const body = await parseBody(c, enrollVerifyBody);
     if (!body) return invalidBody(c);
+    // Without this the route would register a passkey for any user id, enrollment or not.
+    if (enrollmentUser(db, c.req.param("code")) !== body.userId) {
+      return c.json({ error: "enrollment code is not valid" }, 400);
+    }
     const result = await finishRegistration(
       db,
       rp,
@@ -138,6 +144,7 @@ function enrollRoutes(app: Hono, deps: AuthDeps): void {
       body.name,
     );
     if (!result.ok) return c.json({ error: result.reason }, 400);
+    completeEnrollment(db, c.req.param("code"));
     return signIn(c, deps, body.userId, "enroll", {
       recoveryCodes: newRecoveryCodes(db, body.userId),
     });

@@ -10,8 +10,8 @@ export interface AuthEnv {
 }
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-// Agents reach these by the loopback address with a run token, not through the browser origin.
-const LOOPBACK_PATHS = new Set(["/mcp", "/api/guard/hook"]);
+// Agents reach the first two by the loopback address with a run token; health is for local probes.
+const LOOPBACK_PATHS = new Set(["/mcp", "/api/guard/hook", "/api/health"]);
 
 // Rejects DNS-rebinding: a page on evil.test resolving to 127.0.0.1 still sends its own Host.
 export function hostGuard(origin: string, port: number): MiddlewareHandler {

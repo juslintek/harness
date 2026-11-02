@@ -65,6 +65,7 @@ CREATE TABLE enrollments (
   code_hash TEXT PRIMARY KEY,
   user_id TEXT REFERENCES users ON DELETE CASCADE,
   email TEXT,
+  redeemed_user_id TEXT REFERENCES users ON DELETE CASCADE,
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
   used_at INTEGER
