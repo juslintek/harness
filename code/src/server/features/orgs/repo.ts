@@ -120,6 +120,12 @@ export function findMemberByHandle(db: Database, orgId: string, handle: string):
     .get(orgId, handle);
   return r ? memberRow(r) : null;
 }
+export function findMembersByHandle(db: Database, handle: string): MemberRow[] {
+  return db
+    .query<Raw, [string]>("SELECT * FROM members WHERE handle = ? ORDER BY created_at, id")
+    .all(handle)
+    .map(memberRow);
+}
 export function listMembers(db: Database, orgId: string): MemberRow[] {
   return db
     .query<Raw, [string]>("SELECT * FROM members WHERE org_id = ? ORDER BY created_at, id")

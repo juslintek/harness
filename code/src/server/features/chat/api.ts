@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { type ChannelView, type MessageView, messageBodySchema } from "../../../shared/chat";
 import {
-  findMemberByHandle,
+  findMembersByHandle,
   getMember,
   getProject,
   listMembers,
@@ -204,8 +204,11 @@ export function postMessage(db: Database, input: PostInput): MessageView {
   if (input.threadRootId !== undefined) checkThreadRoot(db, channel.id, input.threadRootId);
   const parsed = parseMessage(input.body);
   const mentions = parsed.handles.flatMap((handle) => {
-    const member = findMemberByHandle(db, channel.orgId, handle);
-    return member && channelAccess(db, member.id, channel.id) !== "none" ? [member.id] : [];
+    // A project channel is open to grantee-org members, so the same handle can match two people.
+    const open = findMembersByHandle(db, handle).filter(
+      (m) => channelAccess(db, m.id, channel.id) !== "none",
+    );
+    return open.length === 1 && open[0] ? [open[0].id] : [];
   });
   const message = insertMessage(db, {
     channelId: channel.id,
