@@ -32,3 +32,7 @@ test("a script with single quotes inside is re-quoted by Codex and still matches
   const ask = sink.describe({ toolCallId: "t2", rawInput: { command: requoted } });
   expect(ask.command).toBe(withQuotes);
 });
+
+test("an unparseable command is kept as asked so L1 can ask about it", () => {
+  expect(ask('echo "unterminated')).toBe('echo "unterminated');
+});

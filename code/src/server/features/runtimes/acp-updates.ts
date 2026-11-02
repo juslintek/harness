@@ -22,10 +22,19 @@ function commandOf(rawInput: unknown): string | undefined {
 // Codex shell-quotes a multi-statement script into one word in the permission request, which L1
 // reads as a dynamic command name. The tool_call announced the same call unquoted, so the asked
 // command is replaced only when it is exactly that one word.
+// An unparseable command must reach L1 unchanged so its shell.unparseable ask path applies.
+function splitOrNull(command: string): string[][] | null {
+  try {
+    return splitCommands(command);
+  } catch {
+    return null;
+  }
+}
+
 function unquoted(asked: string | undefined, announced: string | undefined): string | undefined {
   if (asked === undefined || announced === undefined) return asked ?? announced;
-  const lines = splitCommands(asked);
-  return lines.length === 1 && lines[0]?.length === 1 && lines[0][0] === announced
+  const lines = splitOrNull(asked);
+  return lines !== null && lines.length === 1 && lines[0]?.length === 1 && lines[0][0] === announced
     ? announced
     : asked;
 }
