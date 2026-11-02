@@ -6,6 +6,7 @@ import { forbidden } from "../../route-kit";
 import { type AuthEnv, requireStepUp } from "../auth/api";
 import { getMember, listOrgsForUser, orgAccess, roleAtLeast } from "../orgs/api";
 import { type ApprovalRow, approvalView, decideApproval, findApproval, listApprovals } from "./api";
+import { orgAdminRefusal } from "./manager-limits";
 
 const statusQuery = z.enum(["pending", "approved", "denied", "expired"]);
 
@@ -39,7 +40,7 @@ function mayDecide(
   return orgId !== null && administeredOrgs(db, actor.userId).has(orgId);
 }
 
-export function approvalRoutes(db: Database): Hono<AuthEnv> {
+export function approvalRoutes(db: Database, harnessHome: string): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
   // Someone who administers no org has nothing to do here, whatever they send.
   app.use("*", async (c, next) => {
@@ -66,8 +67,11 @@ export function approvalRoutes(db: Database): Hono<AuthEnv> {
     const id = c.req.param("id");
     const approval = findApproval(db, id);
     if (!approval) return c.json({ error: "unknown approval" }, 404);
-    if (!mayDecide(db, c.get("actor"), approval)) return forbidden(c);
-    if (!decideApproval(db, id, body.data.decision, `user:${c.get("actor").userId}`)) {
+    const actor = c.get("actor");
+    if (!mayDecide(db, actor, approval)) return forbidden(c);
+    const refusal = actor.instanceAdmin ? null : orgAdminRefusal(approval, harnessHome);
+    if (refusal !== null) return c.json({ error: "instance_admin_required", reason: refusal }, 403);
+    if (!decideApproval(db, id, body.data.decision, `user:${actor.userId}`)) {
       return c.json({ error: "not pending" }, 409);
     }
     const row = findApproval(db, id);

@@ -84,7 +84,7 @@ function adminRoutes(deps: AppDeps): Hono {
     app.use(`${path}/*`, requireInstanceAdmin);
   }
   app.route("/runs", runRoutes(db, runDeps));
-  app.route("/approvals", approvalRoutes(db));
+  app.route("/approvals", approvalRoutes(db, deps.home));
   app.route("/halt", haltRoutes(db));
   app.route("/agents", agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }));
   app.get("/search", (c) => {

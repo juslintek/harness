@@ -114,6 +114,9 @@ function addAgentRoutes(db: Database, app: Hono<AuthEnv>): void {
   app.post("/orgs/:org/members/agents", async (c) => {
     const ctx = resolveOrg(db, c, "admin");
     if (ctx instanceof Response) return ctx;
+    // An agent member runs on this host with the instance's agent logins, so only the instance
+    // admin may create one; org admins then manage its schedule and wakes.
+    if (!c.get("actor").instanceAdmin) return forbidden(c);
     const body = await parseBody(c, addAgentBody);
     if (body instanceof Response) return body;
     const input = { ...defined(body), specialties: body.specialties ?? [] };

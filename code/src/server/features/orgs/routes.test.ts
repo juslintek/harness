@@ -165,3 +165,16 @@ test("reassigning a manager position or removing an admin needs step-up", async 
   const denied = await k.call(noStep, "DELETE", `/api/orgs/acme/members/${otherMember.id}`);
   expect((await denied.json()).error).toBe("step_up_required");
 });
+
+test("only the instance admin adds agent members, even to an org someone else owns", async () => {
+  const k = bootApi();
+  const owner = await k.user({ stepUp: true });
+  const admin = await k.user({ admin: true });
+  const o = k.org(owner, "acme");
+  k.join(o.id, admin, "admin", "boss");
+  const body = { agentId: "claude", handle: "bot", displayName: "Bot" };
+  const denied = await k.call(owner, "POST", "/api/orgs/acme/members/agents", body);
+  expect(denied.status).toBe(403);
+  const ok = await k.call(admin, "POST", "/api/orgs/acme/members/agents", body);
+  expect(ok.status).toBe(201);
+});

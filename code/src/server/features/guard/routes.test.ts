@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { bootApi } from "../../test-support/api-kit";
 import { addAgentMember } from "../orgs/api";
 
-async function setup() {
+async function setup(command = "git push", l1 = "{}") {
   const k = bootApi();
   const owner = await k.user({ stepUp: true });
   const acme = k.org(owner, "acme");
@@ -20,14 +20,7 @@ async function setup() {
   const approvalId = Bun.randomUUIDv7();
   k.db.run(
     "INSERT INTO approvals (id, run_id, action, l1, status, created_at, expires_at) VALUES (?, ?, ?, ?, 'pending', ?, ?)",
-    [
-      approvalId,
-      runId,
-      JSON.stringify({ command: "git push", paths: [] }),
-      "{}",
-      1,
-      Date.now() + 60_000,
-    ],
+    [approvalId, runId, JSON.stringify({ command, paths: [] }), l1, 1, Date.now() + 60_000],
   );
   return { k, owner, approvalId };
 }
@@ -68,4 +61,27 @@ test("deciding still needs a fresh step-up", async () => {
   k.join(org?.id as string, admin, "admin", "adm");
   const res = await k.call(admin, "POST", `/api/approvals/${approvalId}`, { decision: "approve" });
   expect(res.status).not.toBe(200);
+});
+
+test("an org owner may not approve what only the instance admin may, the instance admin may", async () => {
+  const { k, owner, approvalId } = await setup(
+    "curl https://x.test",
+    JSON.stringify({ category: "network", rule: "net.fetch" }),
+  );
+  const res = await k.call(owner, "POST", `/api/approvals/${approvalId}`, { decision: "approve" });
+  expect(res.status).toBe(403);
+  expect(await res.json()).toEqual({
+    error: "instance_admin_required",
+    reason: "network and secret actions need a human",
+  });
+  const admin = await k.user({ admin: true, stepUp: true });
+  const ok = await k.call(admin, "POST", `/api/approvals/${approvalId}`, { decision: "approve" });
+  expect(ok.status).toBe(200);
+});
+
+test("an org owner may not approve a write into the harness home", async () => {
+  const { k, owner, approvalId } = await setup("sqlite3 /unused/harness.db");
+  const res = await k.call(owner, "POST", `/api/approvals/${approvalId}`, { decision: "approve" });
+  expect(res.status).toBe(403);
+  expect((await res.json()).reason).toBe("the action touches the harness home");
 });
