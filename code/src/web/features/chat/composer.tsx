@@ -65,7 +65,8 @@ function MentionList({ mention, id }: { mention: Mention; id: string }): preact.
             mention.insert(m);
           }}
         >
-          @{m.handle} <span class="muted">{m.displayName}</span>
+          @{m.handle}{" "}
+          <span class="muted">{m.orgName ? `${m.displayName} (${m.orgName})` : m.displayName}</span>
         </div>
       ))}
     </div>

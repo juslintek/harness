@@ -10,6 +10,7 @@ import {
 import { defined, forbidden, notFound, parseBody, parseQuery, routeError } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
 import {
+  getOrg,
   getOrgBySlug,
   type MemberRow,
   memberForUser,
@@ -108,13 +109,20 @@ function messageRoutes(db: Database, app: Hono<AuthEnv>): void {
   app.get("/channels/:id/members", (c) => {
     const found = channelScope(db, c, "read");
     if (found instanceof Response) return found;
-    const members = channelMembers(db, found.channel).map((m) => ({
-      id: m.id,
-      kind: m.kind,
-      handle: m.handle,
-      displayName: m.displayName,
-    }));
-    return c.json(members);
+    const all = channelMembers(db, found.channel);
+    // Mentions of a handle shared across orgs stay unresolved, so the list names the org instead.
+    const shared = new Set(
+      all.filter((m, i) => all.findIndex((o) => o.handle === m.handle) !== i).map((m) => m.handle),
+    );
+    return c.json(
+      all.map((m) => ({
+        id: m.id,
+        kind: m.kind,
+        handle: m.handle,
+        displayName: m.displayName,
+        ...(shared.has(m.handle) ? { orgName: getOrg(db, m.orgId)?.name ?? "" } : {}),
+      })),
+    );
   });
   app.post("/channels/:id/read", (c) => {
     const found = channelScope(db, c, "read");

@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { bootApi } from "../../test-support/api-kit";
 import { createTask } from "../board/api";
-import { createProject } from "../orgs/api";
+import { createProject, grantProject } from "../orgs/api";
+import { ensureProjectChannel } from "./api";
 
 async function setup() {
   const k = bootApi();
@@ -139,4 +140,52 @@ test("a message carries its author's handle and kind whatever org the reader is 
       .query<{ handle: string }, [string]>("SELECT handle FROM members WHERE id = ?")
       .get(posted.authorId)?.handle,
   );
+});
+
+test("a project channel lists grantee-org members too, naming the org only for a shared handle", async () => {
+  const { k, owner, a } = await setup();
+  const guest = await k.user();
+  const b = k.org(guest, "beta");
+  const project = createProject(k.db, { orgId: a.id, key: "web", name: "Web" });
+  const channel = ensureProjectChannel(k.db, project.id);
+  grantProject(k.db, project.id, b.id, "write", a.owner.id);
+  const twin = await k.user();
+  k.join(a.id, twin, "member", "own-beta");
+  const list = async () =>
+    (await (await k.call(owner, "GET", `/api/channels/${channel.id}/members`)).json()) as {
+      handle: string;
+      orgName?: string;
+    }[];
+  const before = await list();
+  expect(before.map((m) => m.handle).sort()).toEqual(["own-acme", "own-beta", "own-beta"]);
+  expect(before.filter((m) => m.handle === "own-beta").map((m) => m.orgName)).toEqual([
+    "acme",
+    "beta",
+  ]);
+  expect(before.find((m) => m.handle === "own-acme")?.orgName).toBeUndefined();
+  const outsider = await k.user();
+  k.org(outsider, "gamma");
+  expect((await k.call(outsider, "GET", `/api/channels/${channel.id}/members`)).status).toBe(404);
+});
+
+test("thread replies page with limit and a before cursor, apart from the channel", async () => {
+  const { k, owner, channels } = await setup();
+  const general = (await channels(owner)).find((c) => c.kind === "org");
+  const path = `/api/channels/${general?.id}/messages`;
+  const root = await (await k.call(owner, "POST", path, { body: "root" })).json();
+  for (const body of ["r1", "r2", "r3"]) {
+    await k.call(owner, "POST", path, { body, threadRootId: root.id });
+  }
+  k.db.run("UPDATE messages SET created_at = 1000 WHERE thread_root_id = ?", [root.id]);
+  type Msg = { id: string; body: string; createdAt: number };
+  const thread = `${path}?thread=${root.id}`;
+  const newest = (await (await k.call(owner, "GET", `${thread}&limit=2`)).json()) as Msg[];
+  const oldest = newest[0] as Msg;
+  const older = (await (
+    await k.call(owner, "GET", `${thread}&limit=2&before=${oldest.createdAt}:${oldest.id}`)
+  ).json()) as Msg[];
+  expect([...older, ...newest].map((m) => m.body).toSorted()).toEqual(["r1", "r2", "r3"]);
+  expect(older).toHaveLength(1);
+  const top = (await (await k.call(owner, "GET", path)).json()) as Msg[];
+  expect(top.map((m) => m.body)).toEqual(["root"]);
 });

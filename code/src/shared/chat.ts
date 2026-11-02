@@ -105,6 +105,8 @@ export interface ChatMember {
   kind: "human" | "agent";
   handle: string;
   displayName: string;
+  // Set only when another listed member has the same handle, so the picker can tell them apart.
+  orgName?: string | undefined;
 }
 export const chatMembersSchema: z.ZodType<ChatMember[]> = z.array(
   z.object({
@@ -112,6 +114,7 @@ export const chatMembersSchema: z.ZodType<ChatMember[]> = z.array(
     kind: z.enum(["human", "agent"]),
     handle: z.string(),
     displayName: z.string(),
+    orgName: z.string().optional(),
   }),
 );
 

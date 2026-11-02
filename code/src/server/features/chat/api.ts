@@ -4,6 +4,7 @@ import {
   findMembersByHandle,
   getMember,
   getProject,
+  listGrantOrgIds,
   listMembers,
   type MemberRow,
   onOrgCreated,
@@ -120,12 +121,15 @@ export function channelAccess(
   return isChannelMember(db, channelId, memberId) ? "write" : "none";
 }
 
-// Mentions only resolve inside the channel's own org, so a project channel lists its org's members
-// who can reach the project rather than members of grantee orgs.
+// Same candidates as mention resolution: every member of the channel's org, and of the grantee
+// orgs for a project channel, who can open the channel.
 export function channelMembers(db: Database, channel: ChannelView): MemberRow[] {
-  return listMembers(db, channel.orgId).filter(
-    (m) => channelAccess(db, m.id, channel.id) !== "none",
-  );
+  const orgIds = channel.projectId
+    ? [channel.orgId, ...listGrantOrgIds(db, channel.projectId)]
+    : [channel.orgId];
+  return orgIds
+    .flatMap((orgId) => listMembers(db, orgId))
+    .filter((m) => channelAccess(db, m.id, channel.id) !== "none");
 }
 
 function requireMember(db: Database, memberId: string, orgId: string): void {
