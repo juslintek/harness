@@ -115,6 +115,11 @@ function finalize(
   state: RunState,
   reason: string | null,
 ): RunRow {
+  // Shutdown and the lane's own return can both end the same run; the first one wins.
+  if (!live.has(id)) {
+    const done = getRun(db, id);
+    if (done) return done;
+  }
   try {
     markEnded(db, id, state, reason);
     const body = reason === null ? state : `${state}: ${reason}`;

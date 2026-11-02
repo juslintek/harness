@@ -1,4 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
+import { listRunEvents, readBody } from "../logs/api";
 import { mintRunToken, verifyRunToken } from "../mcp/api";
 import { getRun, recoverRuns, shutdownRuns, startRun, waitForRun } from "./api";
 import { agentPid, cleanup, fakeDeps, fixture, gone, transcript } from "./manager-kit";
@@ -31,6 +32,10 @@ test("shutdownRuns kills the agent group, ends the run killed and revokes its to
   await shutdownRuns(x.db, 5000);
   const row = await waitForRun(id);
   expect([row.state, row.reason]).toEqual(["killed", "harness_shutdown"]);
+  const ends = listRunEvents(x.db, id).filter(
+    (e) => e.kind === "run" && readBody(x.db, e.rowid)?.startsWith("killed"),
+  );
+  expect(ends).toHaveLength(1);
   expect(gone(agentPid(x, id))).toBe(true);
   const live = x.db
     .query<{ n: number }, [string]>(
