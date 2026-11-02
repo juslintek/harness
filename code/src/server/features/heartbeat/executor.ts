@@ -18,7 +18,7 @@ import {
   type WakeRow,
   wakesOfRun,
 } from "./repo";
-import { mayWork, overCap } from "./triggers";
+import { mayWork, overCap, staleAssignment } from "./triggers";
 
 export interface ExecDeps {
   runDeps: RunDeps;
@@ -88,7 +88,15 @@ function nextBatch(db: Database, memberId: string): { wakes: WakeRow[]; projectI
     "skipped",
     { detail: { reason: "no_access" } },
   );
-  const reachable = wakes.filter((w) => !lost.includes(w));
+  const kept = wakes.filter((w) => !lost.includes(w));
+  const stale = kept.filter((w) => staleAssignment(db, memberId, w));
+  setStatus(
+    db,
+    stale.map((w) => w.id),
+    "skipped",
+    { detail: { reason: "stale" } },
+  );
+  const reachable = kept.filter((w) => !stale.includes(w));
   const first = reachable[0];
   const projectId = first ? wakeProject(db, first) : null;
   return { wakes: reachable.filter((w) => wakeProject(db, w) === projectId), projectId };

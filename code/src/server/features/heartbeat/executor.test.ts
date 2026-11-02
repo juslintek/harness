@@ -1,7 +1,7 @@
 import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { updateTask } from "../board/api";
+import { moveTask, updateTask } from "../board/api";
 import { ensureProjectChannel, postMessage } from "../chat/api";
 import {
   addAgentMember,
@@ -45,9 +45,8 @@ test("only a manager member gets approvals_decide", async () => {
   const dev = k.agent("dev");
   createPosition(k.db, { orgId: k.orgId, title: "Lead", memberId: boss.id, isManager: true });
   stops.push(k.start());
-  const task = k.task("t");
-  updateTask(k.db, task.id, { assigneeId: boss.id }, k.human.id);
-  updateTask(k.db, task.id, { assigneeId: dev.id }, k.human.id);
+  updateTask(k.db, k.task("t1").id, { assigneeId: boss.id }, k.human.id);
+  updateTask(k.db, k.task("t2").id, { assigneeId: dev.id }, k.human.id);
   await until(() => k.seen.length === 2);
   const scopesOf = (id: string): string[] => k.seen.find((s) => s.memberId === id)?.scopes ?? [];
   expect(scopesOf(boss.id)).toContain("approvals_decide");
@@ -240,6 +239,26 @@ test("a wake whose grant was lowered to read before launch is skipped and starts
   await until(() => wakes(k.db, guest.id)[0]?.status === "skipped");
   expect(JSON.parse(wakes(k.db, guest.id)[0]?.detail ?? "{}")).toEqual({ reason: "no_access" });
   expect(k.seen).toHaveLength(0);
+});
+
+test("an assignment wake whose task was reassigned or finished meanwhile is skipped as stale", async () => {
+  const k = setup();
+  const [bob, other] = [k.agent("bob"), k.agent("other")] as const;
+  stops.push(k.start());
+  setHalted(k.db, true);
+  const [moved, closed] = [k.task("moved"), k.task("closed")] as const;
+  updateTask(k.db, moved.id, { assigneeId: bob.id }, k.human.id);
+  updateTask(k.db, closed.id, { assigneeId: bob.id }, k.human.id);
+  await until(() => wakes(k.db, bob.id).length === 2);
+  updateTask(k.db, moved.id, { assigneeId: other.id }, k.human.id);
+  moveTask(k.db, closed.id, "done", k.human.id);
+  setHalted(k.db, false);
+  await until(() => wakes(k.db, bob.id).every((w) => w.status === "skipped"));
+  expect(wakes(k.db, bob.id).map((w) => JSON.parse(w.detail ?? "{}"))).toEqual([
+    { reason: "stale" },
+    { reason: "stale" },
+  ]);
+  expect(k.seen.filter((s) => s.memberId === bob.id)).toHaveLength(0);
 });
 
 test("wakes in two projects start two runs, each recording its own project", async () => {

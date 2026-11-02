@@ -75,6 +75,18 @@ export function mayWork(
   return getChannel(db, wake.channelId)?.projectId ? access === "write" : access !== "none";
 }
 
+// An assignment wake stored earlier must not start work that was since finished or handed on.
+export function staleAssignment(
+  db: Database,
+  memberId: string,
+  wake: { reason: WakeReason; taskId?: string | null | undefined },
+): boolean {
+  if (wake.reason !== "assignment" || !wake.taskId) return false;
+  const task = getTask(db, wake.taskId);
+  if (!task) return true;
+  return task.status === "done" || task.status === "cancelled" || task.assigneeId !== memberId;
+}
+
 // Agents only, never for their own doing, never while paused and never where they cannot work.
 function recordWake(db: Database, input: WakeInput): string | null {
   const member = getMember(db, input.memberId);
