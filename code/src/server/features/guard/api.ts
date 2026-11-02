@@ -219,7 +219,7 @@ export async function checkAction(
   }
   let l2: L2Result | null = null;
   if (l1.verdict === "allow") {
-    l2 = await escalateL2({ request: run.prompt, command, category: l1.category }, l1);
+    l2 = await escalateL2({ request: run.prompt, command }, l1);
     logLayer(db, run, "L2", l2.verdict, l2.source, command, l2.reason);
     if (l2.verdict !== "ask") {
       return {

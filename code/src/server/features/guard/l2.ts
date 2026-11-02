@@ -4,7 +4,7 @@ import { decide, type LayaAnswer, type LayaQuestion } from "./laya";
 export interface L2Result {
   verdict: "allow" | "ask" | "deny";
   reason: string;
-  source: "laya" | "fallback";
+  source: "laya" | "fallback" | "l1";
   probs: Record<string, number> | null;
 }
 
@@ -87,15 +87,15 @@ function judge(probs: Record<string, number>): { verdict: L2Result["verdict"]; r
 }
 
 export async function escalateL2(
-  input: { request: string; command: string; category: Category },
+  input: { request: string; command: string },
   l1: L1Result,
 ): Promise<L2Result> {
   if (l1.verdict !== "allow") {
-    return { verdict: l1.verdict, reason: l1.reason, source: "fallback", probs: null };
+    return { verdict: l1.verdict, reason: l1.reason, source: "l1", probs: null };
   }
   const command = input.command.trim();
   if (command.length < MIN_COMMAND_CHARS) {
-    return { verdict: l1.verdict, reason: "too short for laya", source: "fallback", probs: null };
+    return { verdict: l1.verdict, reason: "too short for laya", source: "l1", probs: null };
   }
 
   const state = {
@@ -103,14 +103,14 @@ export async function escalateL2(
     command: command.slice(0, MAX_COMMAND_CHARS),
   };
   const res = await decide(state, QUESTIONS, GUARD_TIMEOUT_MS);
-  if (!res.ok) return fallback(input.category, res.reason);
+  if (!res.ok) return fallback(l1.category, res.reason);
 
   const destructive = noulOf(res.answers.destructive);
   const exfiltration = noulOf(res.answers.exfiltration);
   const outOfScope = noulOf(res.answers.out_of_scope);
   const risk = riskOf(res.answers.risk);
   if (destructive === null || exfiltration === null || outOfScope === null || risk === null) {
-    return fallback(input.category, "bad_body");
+    return fallback(l1.category, "bad_body");
   }
   const probs = { destructive, exfiltration, out_of_scope: outOfScope, risk };
   return { ...judge(probs), source: "laya", probs };
