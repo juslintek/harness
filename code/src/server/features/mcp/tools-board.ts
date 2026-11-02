@@ -30,7 +30,8 @@ const STATUSES = [
 ] as const;
 const status = z.enum(STATUSES);
 const taskRef = z.union([z.number().int(), z.string()]);
-const MAX_LISTED = 100;
+const DEFAULT_LISTED = 100;
+const MAX_LISTED = 200;
 
 function compact(db: Database, t: TaskView): Record<string, unknown> {
   return {
@@ -72,11 +73,14 @@ function registerReads(server: McpServer, env: ToolEnv): void {
     {
       name: "board_list",
       scope: "board",
-      description: "List tasks on the projects you can see",
+      description:
+        "List tasks on the projects you can see; pass the returned next as cursor for the next page",
       shape: {
         project: z.string().optional(),
         status: status.optional(),
         mine: z.boolean().optional(),
+        cursor: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(MAX_LISTED).optional(),
       },
     },
     (ctx, a) => {
@@ -85,10 +89,13 @@ function registerReads(server: McpServer, env: ToolEnv): void {
         ...(a.status === undefined ? {} : { status: a.status as Status }),
         ...(a.mine ? { assigneeId: ctx.memberId } : {}),
       };
-      return projects
-        .flatMap((p) => listTasks(ctx.db, p.id, filter))
-        .slice(0, MAX_LISTED)
-        .map((t) => compact(ctx.db, t));
+      const all = projects.flatMap((p) => listTasks(ctx.db, p.id, filter));
+      const from = a.cursor ?? 0;
+      const to = from + (a.limit ?? DEFAULT_LISTED);
+      return {
+        tasks: all.slice(from, to).map((t) => compact(ctx.db, t)),
+        ...(all.length > to ? { next: to } : {}),
+      };
     },
   );
   defineTool(

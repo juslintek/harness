@@ -110,3 +110,25 @@ test("a project key shared by own and granted projects asks for the project id",
   const granted = await call(server, t, "task_create", { project: w.project.id, title: "y" });
   expect(granted.isError).toBe(false);
 });
+
+test("board_list pages through more than 100 tasks with cursor and limit", async () => {
+  const w = world(db);
+  const x = w.agent(w.a.id, "ax");
+  for (let i = 0; i < 130; i++) {
+    createTask(db, { projectId: w.project.id, title: `t${i}`, createdBy: x.id });
+  }
+  const t = tokenFor(db, x.id, w.a.id);
+  const list = async (args: Record<string, unknown>) =>
+    JSON.parse((await call(server, t, "board_list", args)).text);
+  const first = await list({});
+  expect(first.tasks).toHaveLength(100);
+  expect(first.next).toBe(100);
+  const rest = await list({ cursor: first.next });
+  expect(rest.tasks).toHaveLength(30);
+  expect(rest.next).toBeUndefined();
+  const seen = new Set([...first.tasks, ...rest.tasks].map((r: { id: string }) => r.id));
+  expect(seen.size).toBe(130);
+  const small = await list({ limit: 5, cursor: 10 });
+  expect([small.tasks.length, small.next]).toEqual([5, 15]);
+  expect((await call(server, t, "board_list", { limit: 201 })).isError).toBe(true);
+});

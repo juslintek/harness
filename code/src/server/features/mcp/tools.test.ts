@@ -102,7 +102,7 @@ test("board tools list, get, update, comment, move and depend", async () => {
   expect(got).toMatchObject({ title: "uno", estimateMinutes: 30, assignee: "ax" });
   expect(got.comments[0]).toMatchObject({ author: "ax", body: "hello" });
   expect(got.subtasks).toHaveLength(1);
-  const mine = JSON.parse((await call(t, "board_list", { mine: true })).text);
+  const mine = JSON.parse((await call(t, "board_list", { mine: true })).text).tasks;
   expect(mine.map((r: { title: string }) => r.title)).toEqual(["uno"]);
 });
 
@@ -114,7 +114,7 @@ test("an agent of another org cannot see or touch this org's board", async () =>
     (await call(tokenFor(x.id, w.a.id), "task_create", { project: "web", title: "secret" })).text,
   );
   const t = tokenFor(outsider.id, w.b.id);
-  expect(JSON.parse((await call(t, "board_list")).text)).toEqual([]);
+  expect(JSON.parse((await call(t, "board_list")).text)).toEqual({ tasks: [] });
   expect((await call(t, "task_get", { task: made.id })).isError).toBe(true);
   expect((await call(t, "task_get", { task: made.number })).isError).toBe(true);
   expect((await call(t, "task_checkout", { task: made.id })).isError).toBe(true);
