@@ -104,7 +104,7 @@ export async function createLaunch(
     argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]),
     env,
     mcp: { url: `${base}/mcp`, token },
-    claudeSettings: claudeSettings(`${process.execPath} ${HOOK_SCRIPT}`),
+    claudeSettings: claudeSettings(process.execPath, HOOK_SCRIPT),
     scope: { root: tree.path, home: homedir(), defaultBranch: branch },
   };
 }

@@ -97,8 +97,8 @@ export function expireRunApprovals(db: Database, runId: string): number {
   return expireRun(db, runId);
 }
 
-export function claudeSettings(hookCmd: string): ClaudeSettings {
-  return buildClaudeSettings(hookCmd);
+export function claudeSettings(bin: string, script: string): ClaudeSettings {
+  return buildClaudeSettings(bin, script);
 }
 
 export function codexRules(): string {
@@ -153,6 +153,19 @@ function logLayer(
   });
 }
 
+function redactAction(action: ActionRequest): ActionRequest {
+  return {
+    ...action,
+    ...(action.command === undefined ? {} : { command: redact(action.command) }),
+    ...(action.title === undefined ? {} : { title: redact(action.title) }),
+    paths: action.paths.map(redact),
+  };
+}
+
+function redactReason<T extends { reason: string }>(result: T): T {
+  return { ...result, reason: redact(result.reason) };
+}
+
 async function askHuman(
   db: Database,
   run: GuardRun,
@@ -163,9 +176,9 @@ async function askHuman(
 ): Promise<GuardOutcome> {
   const { id, expiresAt } = createApproval(db, {
     runId: run.id,
-    action: redact(JSON.stringify(action)),
-    l1: JSON.stringify(l1),
-    l2: l2 ? JSON.stringify(l2) : null,
+    action: JSON.stringify(redactAction(action)),
+    l1: JSON.stringify(redactReason(l1)),
+    l2: l2 ? JSON.stringify(redactReason(l2)) : null,
     timeoutMs: approvalTimeout(opts),
   });
   opts?.onApprovalPending?.(id);

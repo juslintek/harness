@@ -168,19 +168,31 @@ describe("escalateL2 malformed and short input", () => {
     });
   });
 
-  test("a whitespace-only command skips Laya", async () => {
+  test("a whitespace-only command skips Laya and keeps the L1 verdict", async () => {
     await stub({});
     const res = await escalateL2(input("shell", `${" ".repeat(20)}`), allow);
     expect(hits.n).toBe(0);
-    expect(res).toMatchObject({ verdict: "ask", source: "fallback" });
+    expect(res).toMatchObject({ verdict: "allow", source: "fallback" });
   });
 
   test("a command under 15 chars skips Laya", async () => {
     await stub({ exfiltration: 0.99 });
-    const res = await escalateL2(input("shell", "ls -la"), allow);
+    for (const command of ["bun test", "make", "cat a.ts"]) {
+      const res = await escalateL2(input("shell", command), allow);
+      expect(res).toMatchObject({
+        verdict: "allow",
+        reason: "too short for laya",
+        source: "fallback",
+      });
+    }
     expect(hits.n).toBe(0);
-    expect(res).toMatchObject({ verdict: "ask", source: "fallback" });
-    expect((await escalateL2(input("read", "cat a.ts"), allow)).verdict).toBe("allow");
+    const ask: L1Result = {
+      verdict: "ask",
+      rule: "r1",
+      reason: "needs a human",
+      category: "shell",
+    };
+    expect((await escalateL2(input("shell", "git push"), ask)).verdict).toBe("ask");
   });
 });
 

@@ -177,3 +177,15 @@ describe("sandbox wrappers", () => {
     expect(category).toBe("shell");
   });
 });
+
+test("the stored approval action is redacted field by field", async () => {
+  const command = `git push origin feature/x --password "a b" -H 'Authorization: Bearer abcdefgh123'`;
+  const { id, outcome } = await startPending(command);
+  const stored = listApprovals(db).find((a) => a.id === id);
+  const action = JSON.parse(stored?.action ?? "{}") as ActionRequest;
+  expect(action.command).not.toContain("a b");
+  expect(action.command).not.toContain("abcdefgh123");
+  expect(action.command).toContain("git push origin feature/x");
+  decideApproval(db, id, "deny", "admin");
+  await outcome;
+});

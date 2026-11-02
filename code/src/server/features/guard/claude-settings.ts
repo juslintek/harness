@@ -19,7 +19,17 @@ export interface ClaudeSettings {
   };
 }
 
-export function claudeSettings(hookCmd: string): ClaudeSettings {
+const quote = (arg: string): string => `'${arg.replaceAll("'", `'\\''`)}'`;
+
+// Claude treats exit 1 from a hook as non-blocking, and a bun that cannot load the script exits 1.
+// The wrapper maps every non-zero exit to 2 so a broken launcher blocks the tool call.
+export function hookCommand(bin: string, script: string): string {
+  const inner = `${quote(bin)} ${quote(script)}; c=$?; [ $c -eq 0 ] || exit 2`;
+  return `sh -c ${quote(inner)}`;
+}
+
+export function claudeSettings(bin: string, script: string): ClaudeSettings {
+  const hookCmd = hookCommand(bin, script);
   return {
     permissions: { deny: [...CLAUDE_DENY] },
     hooks: { PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: hookCmd }] }] },

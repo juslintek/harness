@@ -94,7 +94,9 @@ export async function escalateL2(
     return { verdict: l1.verdict, reason: l1.reason, source: "fallback", probs: null };
   }
   const command = input.command.trim();
-  if (command.length < MIN_COMMAND_CHARS) return fallback(input.category, "command too short");
+  if (command.length < MIN_COMMAND_CHARS) {
+    return { verdict: l1.verdict, reason: "too short for laya", source: "fallback", probs: null };
+  }
 
   const state = {
     request: input.request.slice(0, MAX_REQUEST_CHARS),

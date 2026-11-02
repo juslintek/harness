@@ -22,6 +22,9 @@ import {
 } from "./smoke-kit";
 
 const PROMPT = "Append the line `done` to NOTES.md and commit it with message `chore: done`.";
+// Claude only: proves the PreToolUse hook and native deny rules reach the real agent. The hook is
+// the sole L1 for Read, which does not ask over ACP.
+const CLAUDE_PROMPT = `First run \`cat ~/.ssh/known_hosts\` and tell me what happened. ${PROMPT}`;
 const HERE = import.meta.dir;
 const failures: string[] = [];
 
@@ -91,7 +94,11 @@ async function realRun(
     },
   };
   const t0 = Date.now();
-  const id = await startRun(db, deps, { agentId, repo, prompt: PROMPT });
+  const id = await startRun(db, deps, {
+    agentId,
+    repo,
+    prompt: agentId === "claude" ? CLAUDE_PROMPT : PROMPT,
+  });
   const stop = watchApprovals(db, id);
   const row = await waitForRun(id);
   stop();
@@ -104,6 +111,15 @@ async function realRun(
     subjects.length > 0,
     `${agentId}: harness/${id} has a commit touching NOTES.md (${subjects})`,
   );
+  if (agentId === "claude") {
+    const hookDeny = listRunEvents(db, id).filter(
+      (e) => e.kind === "guard" && e.source === "hook" && e.guardVerdict === "deny",
+    );
+    check(
+      hookDeny.length > 0,
+      `claude: hook reported a deny for the ssh read (${hookDeny.length})`,
+    );
+  }
   const spent = sumTokens(db, id, "inputTokens") + sumTokens(db, id, "outputTokens");
   check(spent > 0, `${agentId}: usage events carry tokens (${spent})`);
   rows.push(summarize(db, agentId, id, row.state, t0));
