@@ -1,5 +1,5 @@
 import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
-import { addComment, updateTask } from "../board/api";
+import { addComment, createTask, updateTask } from "../board/api";
 import { postMessage } from "../chat/api";
 import type { triageWake } from "../laya/api";
 import { listMembers } from "../orgs/api";
@@ -47,6 +47,18 @@ test("assigning a task to agent B creates one assignment wake and one run with m
   expect(k.seen[0]).toMatchObject({ memberId: b.id });
   expect(k.seen[0]?.scopes).toEqual(["report", "guard_hook", "board", "chat"]);
   expect(runsOf(k, b.id)).toBe(1);
+});
+
+test("creating a task already assigned to agent B wakes B, creating one for yourself does not", async () => {
+  const k = setup();
+  const b = k.agent("bob");
+  boot(k);
+  const input = { projectId: k.task("seed").projectId, title: "split", createdBy: k.human.id };
+  createTask(k.db, { ...input, assigneeId: b.id });
+  createTask(k.db, { ...input, assigneeId: k.human.id });
+  await until(() => wakes(k.db, b.id)[0]?.status === "done");
+  expect(wakes(k.db, b.id).map((w) => w.reason)).toEqual(["assignment"]);
+  expect(wakes(k.db, k.human.id)).toHaveLength(0);
 });
 
 test("a human assigning to a human, and B commenting on its own task, wake nobody", async () => {

@@ -81,7 +81,9 @@ const excerpt = (text: string): string => text.slice(0, EXCERPT_CHARS);
 export function onTask(db: Database, change: TaskChange): void {
   const { task } = change;
   const base = { taskId: task.id, causedBy: change.by };
-  if (change.kind === "assigned" && task.assigneeId !== null) {
+  // A task created with an assignee (a lead splitting work for a dev) is an assignment too.
+  const assigns = change.kind === "assigned" || change.kind === "created";
+  if (assigns && task.assigneeId !== null && task.assigneeId !== change.by) {
     recordWake(db, { ...base, memberId: task.assigneeId, reason: "assignment" });
   }
   if (change.kind !== "commented") return;
