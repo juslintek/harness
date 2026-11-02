@@ -2,5 +2,11 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": ["src/web/main.tsx", "scripts/*.ts", "src/**/*.test.ts"],
   "project": ["src/**/*.{ts,tsx}", "scripts/*.ts"],
-  "ignoreDependencies": ["lefthook", "@commitlint/cli", "typescript7"]
+  "ignoreDependencies": [
+    "lefthook",
+    "@commitlint/cli",
+    "typescript7",
+    "@agentclientprotocol/claude-agent-acp",
+    "@agentclientprotocol/codex-acp"
+  ]
 }

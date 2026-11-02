@@ -2,6 +2,8 @@ import type { Database } from "bun:sqlite";
 import { type DiscoveredAgent, discoverAgents, type Runner } from "./discover";
 import { type AgentSpec, agentSpecs } from "./specs";
 
+export type { AgentSpec } from "./specs";
+
 export interface AgentView {
   id: string;
   name: string;
