@@ -1,14 +1,9 @@
-import type { Database } from "bun:sqlite";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { approvalView, decidableApprovals, managerDecide } from "../guard/api";
-import type { RunIdentity } from "./tokens";
-import { defineTool, fail } from "./tools-kit";
+import { defineTool, fail, type ToolEnv } from "./tools-kit";
 
-export function registerApprovalTools(
-  server: McpServer,
-  env: { db: Database; identity: RunIdentity },
-): void {
+export function registerApprovalTools(server: McpServer, env: ToolEnv): void {
   defineTool(
     server,
     env,
@@ -19,7 +14,7 @@ export function registerApprovalTools(
       shape: {},
     },
     (ctx) =>
-      decidableApprovals(ctx.db, ctx.memberId).map((row) => {
+      decidableApprovals(ctx.db, ctx.memberId, ctx.harnessHome).map((row) => {
         const v = approvalView(row);
         return {
           id: v.id,
@@ -47,6 +42,7 @@ export function registerApprovalTools(
       const r = managerDecide(ctx.db, {
         approvalId: a.id,
         managerMemberId: ctx.memberId,
+        harnessHome: ctx.harnessHome,
         decision: a.decision,
         reason: a.reason,
       });

@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { getMember } from "../orgs/api";
 
 export type TokenScope = "report" | "guard_hook" | "board" | "chat" | "approvals_decide";
 
@@ -19,6 +20,9 @@ export function mint(
   scopes: TokenScope[],
   member?: { memberId: string; orgId: string },
 ): string {
+  if (member && getMember(db, member.memberId)?.orgId !== member.orgId) {
+    throw new Error("member does not belong to the org");
+  }
   const token = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
   db.query(
     `INSERT INTO run_tokens (hash, run_id, scopes, created_at, member_id, org_id)

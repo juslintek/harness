@@ -98,8 +98,12 @@ export function managerDecide(
   return result;
 }
 
-export function decidableApprovals(db: Database, managerMemberId: string): ApprovalRow[] {
-  return decidable(db, managerMemberId);
+export function decidableApprovals(
+  db: Database,
+  managerMemberId: string,
+  harnessHome: string,
+): ApprovalRow[] {
+  return decidable(db, managerMemberId, harnessHome);
 }
 
 export function listApprovals(db: Database, status?: string): ApprovalRow[] {

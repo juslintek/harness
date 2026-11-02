@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { migrate, openDb } from "../../db/db";
@@ -15,7 +15,12 @@ async function listen(database: Db): Promise<ReturnType<typeof Bun.serve>> {
   for (let attempt = 0; attempt < 20; attempt++) {
     const own: ReturnType<typeof Bun.serve> = Bun.serve({
       port: 0,
-      fetch: (req) => mcpHandler(database, { onReport: () => {} }, own.port as number)(req),
+      fetch: (req) =>
+        mcpHandler(
+          database,
+          { onReport: () => {}, harnessHome: "/Users/x/.harness" },
+          own.port as number,
+        )(req),
     });
     try {
       const res = await fetch(`http://127.0.0.1:${own.port}/`, {
@@ -248,4 +253,19 @@ test("approvals_decide needs its scope and a manager over the requester", async 
     .query<{ status: string }, [string]>("SELECT status FROM approvals WHERE id = ?")
     .get(pending);
   expect(row?.status).toBe("approved");
+});
+
+test("only known domain errors reach the agent, anything else is an internal error", async () => {
+  const w = world(db);
+  const x = w.agent(w.a.id, "ax");
+  const t = tokenFor(x.id, w.a.id);
+  const made = JSON.parse((await call(t, "task_create", { project: "web", title: "t" })).text);
+  const cycle = await call(t, "task_depend", { task: made.number, dependsOn: made.number });
+  expect(cycle).toEqual({ isError: true, text: "dependency cycle" });
+  const silence = spyOn(console, "error").mockImplementation(() => {});
+  db.run("DROP TABLE comments");
+  const broken = await call(t, "task_comment", { task: made.number, body: "x" });
+  expect(broken).toEqual({ isError: true, text: "internal error" });
+  expect(silence).toHaveBeenCalled();
+  silence.mockRestore();
 });

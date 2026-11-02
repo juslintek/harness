@@ -20,7 +20,11 @@ async function listen(database: ReturnType<typeof openDb>): Promise<ReturnType<t
     const own: ReturnType<typeof Bun.serve> = Bun.serve({
       port: 0,
       fetch: (req) =>
-        mcpHandler(database, { onReport: (r, t) => reports.push([r, t]) }, own.port as number)(req),
+        mcpHandler(
+          database,
+          { onReport: (r, t) => reports.push([r, t]), harnessHome: "/h" },
+          own.port as number,
+        )(req),
     });
     try {
       const res = await fetch(`http://127.0.0.1:${own.port}/`, {

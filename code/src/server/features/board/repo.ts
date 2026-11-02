@@ -3,6 +3,9 @@ import type { CommentView, Status, TaskDetail, TaskView } from "../../../shared/
 
 type Raw = Record<string, string | number | null>;
 
+// Expected refusals (bad reference, cycle, wrong project) as opposed to database faults.
+export class BoardError extends Error {}
+
 export interface TaskChange {
   kind: "created" | "updated" | "moved" | "assigned" | "commented" | "checked_out" | "released";
   task: TaskView;
@@ -97,10 +100,11 @@ export function createTask(db: Database, input: NewTask): TaskView {
     const project = db
       .query<{ org_id: string }, [string]>("SELECT org_id FROM projects WHERE id = ?")
       .get(input.projectId);
-    if (!project) throw new Error(`unknown project: ${input.projectId}`);
+    if (!project) throw new BoardError(`unknown project: ${input.projectId}`);
     if (input.parentId !== undefined) {
       const parent = getTask(db, input.parentId);
-      if (parent?.projectId !== input.projectId) throw new Error("parent must be in the project");
+      if (parent?.projectId !== input.projectId)
+        throw new BoardError("parent must be in the project");
     }
     const now = Date.now();
     db.query(
@@ -139,7 +143,7 @@ export interface TaskPatch {
 
 export function updateTask(db: Database, id: string, patch: TaskPatch, by: string): TaskView {
   const cur = getTask(db, id);
-  if (!cur) throw new Error(`unknown task: ${id}`);
+  if (!cur) throw new BoardError(`unknown task: ${id}`);
   db.query(
     `UPDATE tasks SET title = ?, description = ?, estimate_minutes = ?, assignee_id = ?, updated_at = ?
      WHERE id = ?`,
@@ -159,8 +163,8 @@ export function updateTask(db: Database, id: string, patch: TaskPatch, by: strin
 export function addDependency(db: Database, taskId: string, dependsOn: string): void {
   const a = getTask(db, taskId);
   const b = getTask(db, dependsOn);
-  if (!a || !b) throw new Error("unknown task");
-  if (a.projectId !== b.projectId) throw new Error("dependency must be in the same project");
+  if (!a || !b) throw new BoardError("unknown task");
+  if (a.projectId !== b.projectId) throw new BoardError("dependency must be in the same project");
   const cycle = db
     .query<Raw, [string, string]>(
       `WITH RECURSIVE reach(id) AS (
@@ -168,7 +172,7 @@ export function addDependency(db: Database, taskId: string, dependsOn: string): 
        ) SELECT 1 FROM reach WHERE id = ?2`,
     )
     .get(dependsOn, taskId);
-  if (cycle) throw new Error("dependency cycle");
+  if (cycle) throw new BoardError("dependency cycle");
   db.query("INSERT OR IGNORE INTO task_deps (task_id, depends_on) VALUES (?, ?)").run(
     taskId,
     dependsOn,
@@ -185,7 +189,7 @@ export function addComment(
   body: string,
 ): CommentView {
   const task = getTask(db, taskId);
-  if (!task) throw new Error(`unknown task: ${taskId}`);
+  if (!task) throw new BoardError(`unknown task: ${taskId}`);
   const id = Bun.randomUUIDv7();
   db.query(
     "INSERT INTO comments (id, task_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -197,7 +201,7 @@ export function addComment(
 
 export function taskDetail(db: Database, id: string): TaskDetail {
   const task = getTask(db, id);
-  if (!task) throw new Error(`unknown task: ${id}`);
+  if (!task) throw new BoardError(`unknown task: ${id}`);
   const tasks = (sql: string): TaskView[] => db.query<Raw, [string]>(sql).all(id).map(taskView);
   return {
     task,

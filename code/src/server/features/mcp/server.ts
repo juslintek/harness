@@ -12,6 +12,7 @@ const MAX_REPORT_CHARS = 4000;
 
 export interface McpDeps {
   onReport: (runId: string, text: string) => void;
+  harnessHome: string;
 }
 
 function whoami(db: Database, identity: RunIdentity): unknown {
@@ -34,7 +35,7 @@ function whoami(db: Database, identity: RunIdentity): unknown {
 
 function buildServer(db: Database, identity: RunIdentity, deps: McpDeps): McpServer {
   const server = new McpServer({ name: "harness", version: "1.0.0" });
-  const env = { db, identity };
+  const env = { db, identity, harnessHome: deps.harnessHome };
   server.registerTool(
     "whoami",
     { description: "Identify the run and member this token belongs to" },

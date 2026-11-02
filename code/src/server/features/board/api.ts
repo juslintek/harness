@@ -4,6 +4,7 @@ import { checkout, moveTask, release } from "./moves";
 import {
   addComment,
   addDependency,
+  BoardError,
   createTask,
   getTask,
   getTaskByNumber,
@@ -20,6 +21,7 @@ export type { TaskChange } from "./repo";
 export {
   addComment,
   addDependency,
+  BoardError,
   checkout,
   createTask,
   getTask,

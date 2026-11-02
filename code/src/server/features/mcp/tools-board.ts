@@ -17,8 +17,7 @@ import {
   updateTask,
 } from "../board/api";
 import { findMemberByHandle, listProjects, type ProjectRow, projectAccess } from "../orgs/api";
-import type { RunIdentity } from "./tokens";
-import { defineTool, fail, handleOf, type ToolCtx } from "./tools-kit";
+import { defineTool, fail, handleOf, type ToolCtx, type ToolEnv } from "./tools-kit";
 
 const STATUSES = [
   "backlog",
@@ -90,7 +89,7 @@ function moved(ctx: ToolCtx, r: MoveResult): unknown {
   return fail(`${r.reason}: open tasks ${r.open.map((n) => `#${n}`).join(", ")}`);
 }
 
-function registerReads(server: McpServer, env: { db: Database; identity: RunIdentity }): void {
+function registerReads(server: McpServer, env: ToolEnv): void {
   defineTool(
     server,
     env,
@@ -142,7 +141,7 @@ function registerReads(server: McpServer, env: { db: Database; identity: RunIden
   );
 }
 
-function registerWrites(server: McpServer, env: { db: Database; identity: RunIdentity }): void {
+function registerWrites(server: McpServer, env: ToolEnv): void {
   defineTool(
     server,
     env,
@@ -205,7 +204,7 @@ function registerWrites(server: McpServer, env: { db: Database; identity: RunIde
   );
 }
 
-function registerFlow(server: McpServer, env: { db: Database; identity: RunIdentity }): void {
+function registerFlow(server: McpServer, env: ToolEnv): void {
   defineTool(
     server,
     env,
@@ -269,10 +268,7 @@ function registerFlow(server: McpServer, env: { db: Database; identity: RunIdent
   );
 }
 
-export function registerBoardTools(
-  server: McpServer,
-  env: { db: Database; identity: RunIdentity },
-): void {
+export function registerBoardTools(server: McpServer, env: ToolEnv): void {
   registerReads(server, env);
   registerWrites(server, env);
   registerFlow(server, env);

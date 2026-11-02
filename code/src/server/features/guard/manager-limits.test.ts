@@ -11,6 +11,7 @@ const base: DecideContext = {
   managerMemberId: "m",
   inSubtree: true,
   category: "shell",
+  rule: null,
   kind: "execute",
   command: "bun test",
   paths: [],
@@ -27,6 +28,22 @@ test("manager-limits refuses what a manager agent may never decide", () => {
     { kind: "fetch" },
     { command: "cat $HARNESS_HOME/harness.db" },
     { command: "ls /Users/x/.harness/runs" },
+    { command: "cat ~/.harness/harness.db" },
+    { command: "cat $HOME/.harness/secrets.json" },
+    { command: `cat $\{HOME}/.harness/secrets.json` },
+    { command: "cat /repo/../../Users/x/.harness/x" },
+    { command: "cat /Users/x/./.harness//x" },
+    { kind: "read", command: "", paths: ["/repo/../Users/x/.harness/harness.db"] },
+    { harnessHome: "~/foo".replace("~", "/Users/x"), command: "cat /Users/x/foo/db" },
+    { command: "cat features/guard/l1.ts" },
+    { command: "cat features/./guard/l1.ts" },
+    { command: "cat features//auth/admin.ts" },
+    { command: "cat src/server/features/x/../policies/p.ts" },
+    { kind: "edit", command: "", paths: ["features/guard/l1.ts"] },
+    { rule: "write.outside-root" },
+    { rule: "read.outside-root" },
+    { rule: "exec.escalate" },
+    { rule: "env.injection" },
     { kind: "edit", command: "", paths: ["/repo/src/server/features/guard/l1.ts"] },
     { command: "bun run deploy" },
     { command: "srt --settings x sh" },
@@ -37,7 +54,10 @@ test("manager-limits refuses what a manager agent may never decide", () => {
     expect(managerMayDecide({ ...base, ...change })).toEqual(expect.any(String));
   }
   expect(managerMayDecide(base)).toBeNull();
+  expect(managerMayDecide({ ...base, category: "git_push", rule: "git.push" })).toBeNull();
 });
+
+const HOME = "/Users/x/.harness";
 
 function setup() {
   const db = openDb(":memory:");
@@ -86,11 +106,12 @@ function ask(db: ReturnType<typeof openDb>, memberId: string | null, command: st
 test("managerDecide resolves a waiting approval and the guard event carries source manager_agent", async () => {
   const { db, boss, dev, peer } = setup();
   const a = ask(db, dev, "bun test");
-  expect(decidableApprovals(db, boss).map((x) => x.id)).toEqual([a.id]);
-  expect(decidableApprovals(db, peer)).toEqual([]);
+  expect(decidableApprovals(db, boss, HOME).map((x) => x.id)).toEqual([a.id]);
+  expect(decidableApprovals(db, peer, HOME)).toEqual([]);
 
   const input = {
     approvalId: a.id,
+    harnessHome: HOME,
     managerMemberId: boss,
     decision: "approve" as const,
     reason: "safe",
@@ -121,7 +142,12 @@ test("managerDecide resolves a waiting approval and the guard event carries sour
 test("managerDecide refuses a run without a member and an unknown approval", () => {
   const { db, boss } = setup();
   const a = ask(db, null, "bun test");
-  const input = { managerMemberId: boss, decision: "deny" as const, reason: "no" };
+  const input = {
+    harnessHome: HOME,
+    managerMemberId: boss,
+    decision: "deny" as const,
+    reason: "no",
+  };
   expect(managerDecide(db, { ...input, approvalId: a.id }).ok).toBe(false);
   expect(managerDecide(db, { ...input, approvalId: "nope" }).ok).toBe(false);
 });

@@ -101,6 +101,7 @@ export function createApp(deps: AppDeps): Hono {
   const mcp = mcpHandler(
     db,
     {
+      harnessHome: deps.home,
       onReport: (runId, text) =>
         appendEvent(db, { kind: "message", source: "mcp", runId, body: text }),
     },

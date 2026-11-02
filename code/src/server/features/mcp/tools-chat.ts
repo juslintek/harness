@@ -1,11 +1,9 @@
-import type { Database } from "bun:sqlite";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ChannelView } from "../../../shared/chat";
 import { listChannels, listMessages, markRead, openDm, postMessage } from "../chat/api";
 import { findMemberByHandle } from "../orgs/api";
-import type { RunIdentity } from "./tokens";
-import { defineTool, fail, handleOf, type ToolCtx } from "./tools-kit";
+import { defineTool, fail, handleOf, type ToolCtx, type ToolEnv } from "./tools-kit";
 
 const body = z.string().min(1).max(8000);
 
@@ -18,7 +16,7 @@ function channel(ctx: ToolCtx, ref: string): ChannelView {
   return named[0] ?? fail(`channel not found: ${ref}`);
 }
 
-function registerReads(server: McpServer, env: { db: Database; identity: RunIdentity }): void {
+function registerReads(server: McpServer, env: ToolEnv): void {
   defineTool(
     server,
     env,
@@ -67,7 +65,7 @@ function registerReads(server: McpServer, env: { db: Database; identity: RunIden
   );
 }
 
-function registerWrites(server: McpServer, env: { db: Database; identity: RunIdentity }): void {
+function registerWrites(server: McpServer, env: ToolEnv): void {
   defineTool(
     server,
     env,
@@ -109,10 +107,7 @@ function registerWrites(server: McpServer, env: { db: Database; identity: RunIde
   );
 }
 
-export function registerChatTools(
-  server: McpServer,
-  env: { db: Database; identity: RunIdentity },
-): void {
+export function registerChatTools(server: McpServer, env: ToolEnv): void {
   registerReads(server, env);
   registerWrites(server, env);
 }

@@ -1,6 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, posix, resolve } from "node:path";
 import { appendEvent } from "../logs/api";
 import { getMember, managerPositionsOf, reportsTransitivelyTo } from "../orgs/api";
 import { type ApprovalRow, decideApproval, getApproval, listApprovals } from "./approvals";
@@ -10,6 +9,7 @@ export interface DecideContext {
   managerMemberId: string;
   inSubtree: boolean;
   category: string | null;
+  rule: string | null;
   kind: string;
   command: string;
   paths: string[];
@@ -17,11 +17,11 @@ export interface DecideContext {
 }
 
 // Text that points at the harness itself, its sandbox or its agent config: a manager agent must
-// never wave those through, whoever asks.
+// never wave those through, whoever asks. Matched without a leading slash so relative paths count.
 const FORBIDDEN = [
-  "/features/guard",
-  "/features/auth",
-  "/features/policies",
+  "features/guard",
+  "features/auth",
+  "features/policies",
   "deploy",
   "srt",
   "sandbox",
@@ -30,6 +30,19 @@ const FORBIDDEN = [
   "codex_home",
   "harness_",
 ];
+// A guard rule that means the guard could not see what really runs or that widens the scope.
+const BLIND_RULES = ["exec.escalate", "env.injection"];
+
+// `..` is resolved per word so `/repo/../../x/.harness` cannot hide the target; `/./` and
+// repeated slashes are collapsed first.
+function normalizeText(text: string): string {
+  const flat = text
+    .toLowerCase()
+    .replace(/\/+/g, "/")
+    .replace(/(\/\.)+(?=\/|$)/g, "");
+  const words = flat.split(/[\s"'=:;|&<>()]+/).filter((w) => w.includes("/"));
+  return [flat, ...words.map((w) => posix.normalize(w))].join("\n");
+}
 
 export function managerMayDecide(ctx: DecideContext): string | null {
   if (ctx.requesterMemberId === null) return "the run has no member";
@@ -39,8 +52,14 @@ export function managerMayDecide(ctx: DecideContext): string | null {
   if (ctx.category === "network" || ctx.category === "secret" || ctx.kind === "fetch") {
     return "network and secret actions need a human";
   }
-  const text = [ctx.command, ...ctx.paths].join("\n").toLowerCase();
-  if (text.includes(ctx.harnessHome.toLowerCase())) return "the action touches the harness home";
+  if (ctx.rule !== null && (ctx.rule.endsWith(".outside-root") || BLIND_RULES.includes(ctx.rule))) {
+    return `the guard rule ${ctx.rule} needs a human`;
+  }
+  const text = normalizeText([ctx.command, ...ctx.paths.map((p) => resolve(p))].join("\n"));
+  const home = resolve(ctx.harnessHome).toLowerCase();
+  if (text.includes(home) || text.includes(basename(home))) {
+    return "the action touches the harness home";
+  }
   const hit = FORBIDDEN.find((word) => text.includes(word));
   return hit === undefined ? null : `the action mentions ${hit}`;
 }
@@ -58,11 +77,12 @@ function field(json: string | null, key: string): unknown {
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
-function harnessHome(): string {
-  return process.env.HARNESS_HOME ?? join(homedir(), ".harness");
-}
-
-function contextFor(db: Database, approval: ApprovalRow, managerMemberId: string): DecideContext {
+function contextFor(
+  db: Database,
+  approval: ApprovalRow,
+  managerMemberId: string,
+  harnessHome: string,
+): DecideContext {
   const run = db
     .query<{ member_id: string | null }, [string]>("SELECT member_id FROM runs WHERE id = ?")
     .get(approval.runId);
@@ -79,16 +99,24 @@ function contextFor(db: Database, approval: ApprovalRow, managerMemberId: string
     managerMemberId,
     inSubtree,
     category: str(field(approval.l1, "category")) || null,
+    rule: str(field(approval.l1, "rule")) || null,
     kind: str(field(approval.action, "kind")),
     command: str(field(approval.action, "command")),
     paths: Array.isArray(paths) ? paths.map(str) : [],
-    harnessHome: harnessHome(),
+    harnessHome,
   };
 }
 
-export function decidableApprovals(db: Database, managerMemberId: string): ApprovalRow[] {
+export function decidableApprovals(
+  db: Database,
+  managerMemberId: string,
+  harnessHome: string,
+): ApprovalRow[] {
+  const now = Date.now();
   return listApprovals(db, "pending").filter(
-    (a) => managerMayDecide(contextFor(db, a, managerMemberId)) === null,
+    (a) =>
+      a.expiresAt > now &&
+      managerMayDecide(contextFor(db, a, managerMemberId, harnessHome)) === null,
   );
 }
 
@@ -97,13 +125,14 @@ export function managerDecide(
   input: {
     approvalId: string;
     managerMemberId: string;
+    harnessHome: string;
     decision: "approve" | "deny";
     reason: string;
   },
 ): { ok: true } | { ok: false; reason: string } {
   const approval = getApproval(db, input.approvalId);
   if (!approval) return { ok: false, reason: "unknown approval" };
-  const ctx = contextFor(db, approval, input.managerMemberId);
+  const ctx = contextFor(db, approval, input.managerMemberId, input.harnessHome);
   const refusal = managerMayDecide(ctx);
   if (refusal !== null) return { ok: false, reason: refusal };
   if (!decideApproval(db, approval.id, input.decision, `agent:${input.managerMemberId}`)) {
