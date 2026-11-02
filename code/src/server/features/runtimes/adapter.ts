@@ -11,7 +11,7 @@ export interface PermissionAsk {
 }
 
 interface QuotaReading {
-  provider: "anthropic";
+  provider: "claude";
   window: "five_hour" | "seven_day";
   usedPercent: number;
   // Epoch ms, like the rest of the harness.
@@ -31,6 +31,8 @@ export interface RunContext {
   emit(e: NewEvent): void;
   decide(ask: PermissionAsk): Promise<"allow" | "deny">;
   onQuota(q: QuotaReading): void;
+  // Context fill reported by the agent on every usage_update, before any turn-end usage exists.
+  onProgress?(p: { contextTokens: number }): void;
   signal: AbortSignal;
   idleTimeoutMs: number;
   // Upper bound for one decide() call; must exceed the approval timeout T8 enforces itself.

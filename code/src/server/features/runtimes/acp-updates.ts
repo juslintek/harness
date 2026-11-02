@@ -121,13 +121,14 @@ export class UpdateSink {
   private usage(update: Rec): void {
     const amount = rec(update.cost).amount;
     if (typeof amount === "number") this.costUsd = amount;
+    if (typeof update.used === "number") this.ctx.onProgress?.({ contextTokens: update.used });
     const windows = rec(rec(rec(update._meta)["_claude/rateLimit"]).unifiedWindows);
     for (const window of WINDOWS) {
       const w = rec(windows[window]);
       if (typeof w.utilization !== "number") continue;
       // Claude reports 0..1 and epoch seconds; the harness stores percent and epoch ms.
       this.ctx.onQuota({
-        provider: "anthropic",
+        provider: "claude",
         window,
         usedPercent: w.utilization * 100,
         resetsAt: typeof w.resetsAt === "number" ? w.resetsAt * 1000 : null,

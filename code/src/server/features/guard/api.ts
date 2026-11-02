@@ -6,6 +6,7 @@ import {
   createApproval,
   decideApproval as decide,
   expireApprovals as expire,
+  expireRunApprovals as expireRun,
   listApprovals as list,
 } from "./approvals";
 import { claudeSettings as buildClaudeSettings, type ClaudeSettings } from "./claude-settings";
@@ -60,6 +61,10 @@ export function listApprovals(db: Database, status?: string): ApprovalRow[] {
 
 export function expireApprovals(db: Database, now: number): number {
   return expire(db, now);
+}
+
+export function expireRunApprovals(db: Database, runId: string): number {
+  return expireRun(db, runId);
 }
 
 export function claudeSettings(hookCmd: string): ClaudeSettings {

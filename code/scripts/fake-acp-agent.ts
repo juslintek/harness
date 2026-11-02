@@ -20,6 +20,7 @@ type Step =
         rateLimit?: { fiveHour: number; sevenDay: number; resetsAt: number };
       };
     }
+  | { usageUpdate: number }
   | { crash: true }
   | { hang: true };
 
@@ -92,20 +93,28 @@ async function ask(a: { command: string; kind?: string; options?: OptionSet }): 
   say(`permission ${result.outcome.outcome} ${result.outcome.optionId ?? ""}`.trim());
 }
 
+function fsOrUpdate(step: Step): boolean {
+  if ("say" in step) say(step.say);
+  else if ("readFile" in step) fsStep("read", step.readFile);
+  else if ("writeFile" in step) fsStep("write", step.writeFile);
+  else if ("usageUpdate" in step) {
+    update({ sessionUpdate: "usage_update", used: step.usageUpdate, size: 1000 });
+  } else return false;
+  return true;
+}
+
 async function prompt(): Promise<unknown> {
   let usage: Record<string, unknown> | null = null;
   for (const step of script) {
-    if ("say" in step) say(step.say);
-    else if ("ask" in step) await ask(step.ask);
-    else if ("readFile" in step) fsStep("read", step.readFile);
-    else if ("writeFile" in step) fsStep("write", step.writeFile);
+    if (fsOrUpdate(step)) continue;
+    if ("ask" in step) await ask(step.ask);
     else if ("crash" in step) {
       process.stderr.write("fake agent crashing\n");
       process.exit(3);
     } else if ("hang" in step) {
       await cancelled;
       return { stopReason: "cancelled" };
-    } else {
+    } else if ("usage" in step) {
       usage = reportUsage(step.usage);
     }
   }

@@ -127,3 +127,16 @@ export function expireApprovals(db: Database, now: number): number {
   );
   return res.changes;
 }
+
+// Settles live waiters too, so a killed run does not keep a decide() promise and its timer.
+export function expireRunApprovals(db: Database, runId: string): number {
+  const ids = db
+    .query<{ id: string }, [string]>(
+      "SELECT id FROM approvals WHERE run_id = ? AND status = 'pending'",
+    )
+    .all(runId);
+  for (const { id } of ids) {
+    if (markExpired(db, id, null)) waiters.get(id)?.("expired");
+  }
+  return ids.length;
+}

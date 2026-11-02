@@ -179,8 +179,8 @@ test("claude rate-limit windows reach onQuota as percent and epoch ms", async ()
     },
   ]);
   expect(h.quotas).toEqual([
-    { provider: "anthropic", window: "five_hour", usedPercent: 8, resetsAt: 1793605200000 },
-    { provider: "anthropic", window: "seven_day", usedPercent: 50, resetsAt: 1793605200000 },
+    { provider: "claude", window: "five_hour", usedPercent: 8, resetsAt: 1793605200000 },
+    { provider: "claude", window: "seven_day", usedPercent: 50, resetsAt: 1793605200000 },
   ]);
 });
 
