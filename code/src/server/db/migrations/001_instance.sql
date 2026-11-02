@@ -1,0 +1,1 @@
+CREATE TABLE instance (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL) STRICT;
