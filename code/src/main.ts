@@ -8,6 +8,7 @@ import { wireBoard } from "./server/features/board/api";
 import { recoverRuns, shutdownRuns } from "./server/features/runtimes/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
+import { pwaResponse } from "./server/pwa";
 import { type WsData, websocket, wireRealtime } from "./server/realtime";
 import indexHtml from "./web/index.html";
 
@@ -37,7 +38,10 @@ const server = Bun.serve<WsData>({
   // The bundle lives on its own path so "/" can still reach the app and redirect the loopback IP.
   routes: { "/_app": indexHtml },
   fetch: (req, srv) => {
-    const entry = new URL(req.url).pathname === "/";
+    const { pathname } = new URL(req.url);
+    const pwa = pwaResponse(pathname);
+    if (pwa) return pwa;
+    const entry = pathname === "/";
     if (entry && req.headers.get("host") !== `127.0.0.1:${config.port}`) {
       return fetch(new URL("/_app", srv.url));
     }

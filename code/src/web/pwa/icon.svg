@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Harness">
+  <title>Harness</title>
+  <rect width="512" height="512" fill="#1558d6"/>
+  <path d="M168 128v256M344 128v256M168 256h176" fill="none" stroke="#fff" stroke-width="56" stroke-linecap="round"/>
+</svg>

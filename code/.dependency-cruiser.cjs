@@ -36,6 +36,7 @@ module.exports = {
           "^src/main\\.ts$",
           "^scripts/",
           "\\.d\\.ts$",
+          "^src/web/pwa/sw\\.js$",
         ],
       },
       to: {},

@@ -1,13 +1,10 @@
-import { type Signal, signal } from "@preact/signals";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { type WsMessage, wsMessageSchema } from "../shared/runs";
+import { stepUp } from "./features/auth/webauthn";
 
-// Set when any call gets a 401, so the shell can tell the user how to log in instead of showing broken pages.
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
-
-export const loggedOut: Signal<boolean> = signal(false);
 
 class ApiError extends Error {
   readonly status: number;
@@ -18,28 +15,49 @@ class ApiError extends Error {
   }
 }
 
-export async function api<T>(
-  path: string,
-  schema: z.ZodType<T>,
-  init?: { method: "POST"; body: unknown },
-): Promise<T> {
-  const res = await fetch(path, {
+export interface ApiInit {
+  method: "POST" | "PATCH" | "DELETE";
+  body?: unknown;
+}
+
+const send = (path: string, init: ApiInit | undefined): Promise<Response> =>
+  fetch(path, {
     ...(init
       ? {
           method: init.method,
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(init.body),
+          ...(init.body === undefined
+            ? {}
+            : { headers: { "content-type": "application/json" }, body: JSON.stringify(init.body) }),
         }
       : {}),
     credentials: "same-origin",
   });
-  if (res.status === 401) loggedOut.value = true;
-  const body: unknown = await res.json().catch(() => null);
-  if (!res.ok) {
-    const message =
-      typeof body === "object" && body !== null && "error" in body ? String(body.error) : "";
-    throw new ApiError(res.status, message || `HTTP ${res.status}`);
+
+const errorOf = (body: unknown): string =>
+  typeof body === "object" && body !== null && "error" in body ? String(body.error) : "";
+
+// The login and enroll pages answer 401 themselves (a wrong code is not an expired session).
+function sessionLost(): void {
+  if (!/^#\/(login|enroll)/.test(location.hash)) location.hash = "#/login";
+}
+
+async function postJson(path: string, body: unknown): Promise<unknown> {
+  const res = await send(path, { method: "POST", body });
+  const parsed: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, errorOf(parsed) || `HTTP ${res.status}`);
+  return parsed;
+}
+
+export async function api<T>(path: string, schema: z.ZodType<T>, init?: ApiInit): Promise<T> {
+  let res = await send(path, init);
+  let body: unknown = await res.json().catch(() => null);
+  if (res.status === 403 && errorOf(body) === "step_up_required") {
+    await stepUp(postJson);
+    res = await send(path, init);
+    body = await res.json().catch(() => null);
   }
+  if (res.status === 401) sessionLost();
+  if (!res.ok) throw new ApiError(res.status, errorOf(body) || `HTTP ${res.status}`);
   return schema.parse(body);
 }
 
