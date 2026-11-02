@@ -18,6 +18,14 @@ function commandOf(rawInput: unknown): string | undefined {
   return str(cmd);
 }
 
+// Codex quotes a multi-statement script as one word in the permission request, which L1 reads as
+// a dynamic command name. The tool_call announced the same call unquoted, so that is only
+// stripped when it matches it.
+function unquoted(asked: string | undefined, announced: string | undefined): string | undefined {
+  if (asked === undefined || announced === undefined) return asked ?? announced;
+  return asked === `"${announced}"` ? announced : asked;
+}
+
 function pathsOf(locations: unknown): string[] {
   if (!Array.isArray(locations)) return [];
   return locations.flatMap((l) => {
@@ -75,7 +83,7 @@ export class UpdateSink {
   describe(toolCall: Rec): PermissionAsk {
     const known = this.tools.get(str(toolCall.toolCallId) ?? "");
     const kind = str(toolCall.kind) ?? known?.kind;
-    const command = commandOf(toolCall.rawInput) ?? known?.command;
+    const command = unquoted(commandOf(toolCall.rawInput), known?.command);
     const paths = pathsOf(toolCall.locations);
     const toolName = str(toolCall.name) ?? known?.title;
     const title = str(toolCall.title) ?? known?.title;
