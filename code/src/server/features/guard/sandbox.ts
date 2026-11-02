@@ -218,6 +218,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
         ...DENY_READ_HOME.map(expand),
         join(input.harnessHome, "harness.db*"),
         join(input.harnessHome, "secret"),
+        join(input.harnessHome, "secrets.*"),
         join(input.harnessHome, "runs"),
         join(input.harnessHome, "worktrees"),
         ...otherAgentCredentials(input.agentId).map(expand),

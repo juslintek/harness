@@ -33,6 +33,7 @@ test("settings snapshot: paths expanded, domains merged without duplicates", () 
   expect(s.filesystem.denyRead).toContain(join(homedir(), ".ssh"));
   expect(s.filesystem.denyRead).toContain("/hh/harness.db*");
   expect(s.filesystem.denyRead).toContain("/hh/secret");
+  expect(s.filesystem.denyRead).toContain("/hh/secrets.*");
   expect(s.filesystem.allowWrite).toEqual(
     expect.arrayContaining([
       "/wt/r1",
@@ -192,7 +193,13 @@ async function liveFixture(): Promise<Live> {
   await Bun.$`git init -q -b main ${repo}`.quiet();
   await Bun.$`git -C ${repo} -c user.name=t -c user.email=t@t commit -q --allow-empty -m init`.quiet();
   await Bun.$`git -C ${repo} worktree add -q -b harness/x ${worktree}`.quiet();
-  for (const f of ["harness.db", "harness.db-wal", "secret", "runs/other/srt.json"]) {
+  for (const f of [
+    "harness.db",
+    "harness.db-wal",
+    "secret",
+    "secrets.json",
+    "runs/other/srt.json",
+  ]) {
     await Bun.write(join(harnessHome, f), "s");
   }
   const gitDir = join(repo, ".git");
@@ -236,7 +243,13 @@ test("live srt: l0 holds for worktree, harness home and home", async () => {
     expect(await run("touch $TMPDIR/x")).toBe(0);
     expect(existsSync(join(runTmpDir(runDir), "x"))).toBe(true);
     expect(await run(`touch ${join(tmpdir(), "harness-sys-tmp-canary")}`)).not.toBe(0);
-    for (const f of ["harness.db", "harness.db-wal", "secret", "runs/other/srt.json"]) {
+    for (const f of [
+      "harness.db",
+      "harness.db-wal",
+      "secret",
+      "secrets.json",
+      "runs/other/srt.json",
+    ]) {
       expect(await run(`cat ${join(harnessHome, f)}`)).not.toBe(0);
     }
     expect(await run(`cat ${join(runDir, "srt.json")} ${worktree}/a`)).toBe(0);

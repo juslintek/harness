@@ -27,6 +27,7 @@ const SECRET_PATHS = [
   ".config/gcloud",
   ".claude/.credentials.json",
   ".codex/auth.json",
+  ".harness/secrets.json",
 ];
 // A word we cannot resolve but that still names a credential location is not safe to pass.
 const SECRET_WORD = /\.ssh|\.aws|\.gnupg|\.netrc|\.config\/gh|Keychains|\.git-credentials/i;
