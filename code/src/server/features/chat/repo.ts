@@ -190,6 +190,29 @@ function groupBy(rows: { message_id: string; v: string }[]): Map<string, string[
   return out;
 }
 
+// The board owns `tasks`; the number and project are read only when that table exists.
+function taskLinks(
+  db: Database,
+  byMessage: Map<string, string[]>,
+): Map<string, { number: number; projectId: string }[]> {
+  const out = new Map<string, { number: number; projectId: string }[]>();
+  const exists = db
+    .query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tasks'")
+    .get();
+  if (!exists) return out;
+  const lookup = db.query<{ number: number; project_id: string }, [string]>(
+    "SELECT number, project_id FROM tasks WHERE id = ?",
+  );
+  for (const [messageId, taskIds] of byMessage) {
+    const found = taskIds.flatMap((id) => lookup.get(id) ?? []);
+    out.set(
+      messageId,
+      found.map((t) => ({ number: t.number, projectId: t.project_id })),
+    );
+  }
+  return out;
+}
+
 function hydrate(db: Database, rows: Raw[]): MessageView[] {
   const ids = JSON.stringify(rows.map((r) => r.id));
   const mentions = groupBy(
@@ -206,6 +229,7 @@ function hydrate(db: Database, rows: Raw[]): MessageView[] {
       )
       .all(ids),
   );
+  const links = taskLinks(db, tasks);
   return rows.map((r) => ({
     id: r.id as string,
     channelId: r.channel_id as string,
@@ -217,5 +241,6 @@ function hydrate(db: Database, rows: Raw[]): MessageView[] {
     replyCount: r.reply_count as number,
     mentions: mentions.get(r.id as string) ?? [],
     taskIds: tasks.get(r.id as string) ?? [],
+    tasks: links.get(r.id as string) ?? [],
   }));
 }

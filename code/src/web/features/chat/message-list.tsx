@@ -5,35 +5,48 @@ const TOKEN =
 
 export interface MessageContext {
   slug: string;
-  projectId: string | null;
   byId: Map<string, ChatMember>;
   byHandle: Map<string, ChatMember>;
 }
 
-function Token({ text, ctx }: { text: string; ctx: MessageContext }): preact.JSX.Element | string {
+function Token(props: {
+  text: string;
+  ctx: MessageContext;
+  tasks: MessageView["tasks"];
+}): preact.JSX.Element | string {
+  const { text, ctx } = props;
   if (text.startsWith("@")) {
     return ctx.byHandle.has(text.slice(1)) ? <span class="mention">{text}</span> : text;
   }
-  if (ctx.projectId) {
+  const task = props.tasks.find((t) => t.number === Number(text.slice(1)));
+  if (task) {
     return (
-      <a class="task-link" href={`#/o/${ctx.slug}/board/${ctx.projectId}/${text.slice(1)}`}>
+      <a class="task-link" href={`#/o/${ctx.slug}/board/${task.projectId}/${task.number}`}>
         {text}
       </a>
     );
   }
   return (
-    <span class="task-ref" title="Open the project board to see this task">
+    <span class="task-ref" title="No task with this number">
       {text}
     </span>
   );
 }
 
 // Plain text nodes only: a message body is never parsed as HTML.
-function MessageText({ body, ctx }: { body: string; ctx: MessageContext }): preact.JSX.Element {
-  const parts = body.split(TOKEN);
+function MessageText({
+  message,
+  ctx,
+}: {
+  message: MessageView;
+  ctx: MessageContext;
+}): preact.JSX.Element {
+  const parts = message.body.split(TOKEN);
   return (
     <p class="body">
-      {parts.map((part, i) => (i % 2 === 1 ? <Token text={part} ctx={ctx} /> : part))}
+      {parts.map((part, i) =>
+        i % 2 === 1 ? <Token text={part} ctx={ctx} tasks={message.tasks} /> : part,
+      )}
     </p>
   );
 }
@@ -57,7 +70,7 @@ export function MessageItem(props: {
           {clock(message.createdAt)}
         </time>
       </div>
-      <MessageText body={message.body} ctx={ctx} />
+      <MessageText message={message} ctx={ctx} />
       {onOpenThread && (
         <button type="button" class="link" onClick={() => onOpenThread(message)}>
           {message.replyCount > 0

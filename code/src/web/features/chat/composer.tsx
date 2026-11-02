@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { ChatMember } from "../../../shared/chat";
 
 const TRAILING_MENTION = /(?<![A-Za-z0-9_@.-])@([a-z0-9_-]*)$/;
@@ -72,6 +72,34 @@ function MentionList({ mention, id }: { mention: Mention; id: string }): preact.
   );
 }
 
+// The ref closes the gap before the busy state re-renders, so a double Enter posts once.
+function useSender(
+  text: string,
+  clear: () => void,
+  post: (body: string) => Promise<void>,
+): { busy: boolean; error: string | null; send: () => Promise<void> } {
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+  const send = async (): Promise<void> => {
+    const body = text.trim();
+    if (!body || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      await post(body);
+      clear();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
+  return { busy, error, send };
+}
+
 export function Composer(props: {
   members: ChatMember[];
   label: string;
@@ -79,24 +107,21 @@ export function Composer(props: {
 }): preact.JSX.Element {
   const [text, setText] = useState("");
   const [caret, setCaret] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const placeCaret = useRef<number | null>(null);
   const mention = useMention(props.members, text, caret, (t, c) => {
     setText(t);
     setCaret(c);
+    placeCaret.current = c;
   });
+  useEffect(() => {
+    if (placeCaret.current === null) return;
+    field.current?.setSelectionRange(placeCaret.current, placeCaret.current);
+    placeCaret.current = null;
+  }, [text]);
   const open = mention.options.length > 0;
   const listId = `mention-${props.label.replaceAll(" ", "-")}`;
-  const send = async (): Promise<void> => {
-    const body = text.trim();
-    if (!body) return;
-    try {
-      await props.onSend(body);
-      setText("");
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  };
+  const { busy, error, send } = useSender(text, () => setText(""), props.onSend);
   const onKeyDown = (e: KeyboardEvent): void => {
     if (mention.keyDown(e)) e.preventDefault();
     else if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
@@ -115,10 +140,11 @@ export function Composer(props: {
       <label>
         <span class="sr-only">{props.label}</span>
         <textarea
+          ref={field}
           rows={2}
           value={text}
           placeholder={props.label}
-          aria-controls={listId}
+          aria-controls={open ? listId : undefined}
           aria-autocomplete="list"
           aria-activedescendant={open ? `${listId}-${mention.active}` : undefined}
           onInput={(e) => {
@@ -137,7 +163,9 @@ export function Composer(props: {
           {error}
         </p>
       )}
-      <button type="submit">Send</button>
+      <button type="submit" disabled={busy}>
+        Send
+      </button>
     </form>
   );
 }

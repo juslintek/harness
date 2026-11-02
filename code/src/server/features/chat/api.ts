@@ -4,6 +4,8 @@ import {
   findMemberByHandle,
   getMember,
   getProject,
+  listMembers,
+  type MemberRow,
   onOrgCreated,
   projectAccess,
 } from "../orgs/api";
@@ -116,6 +118,14 @@ export function channelAccess(
     return access === "read" ? "read" : "write";
   }
   return isChannelMember(db, channelId, memberId) ? "write" : "none";
+}
+
+// Mentions only resolve inside the channel's own org, so a project channel lists its org's members
+// who can reach the project rather than members of grantee orgs.
+export function channelMembers(db: Database, channel: ChannelView): MemberRow[] {
+  return listMembers(db, channel.orgId).filter(
+    (m) => channelAccess(db, m.id, channel.id) !== "none",
+  );
 }
 
 function requireMember(db: Database, memberId: string, orgId: string): void {

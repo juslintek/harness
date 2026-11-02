@@ -26,6 +26,7 @@ export interface MessageView {
   replyCount: number;
   mentions: string[];
   taskIds: string[];
+  tasks: { number: number; projectId: string }[];
 }
 
 const id = z.string().min(1).max(64);
@@ -88,6 +89,7 @@ export const messageViewSchema: z.ZodType<MessageView> = z.object({
   replyCount: z.number(),
   mentions: z.array(z.string()),
   taskIds: z.array(z.string()),
+  tasks: z.array(z.object({ number: z.number(), projectId: z.string() })),
 });
 export const messageListSchema: z.ZodType<MessageView[]> = z.array(messageViewSchema);
 
@@ -97,18 +99,20 @@ export interface ChatMember {
   handle: string;
   displayName: string;
 }
+export const chatMembersSchema: z.ZodType<ChatMember[]> = z.array(
+  z.object({
+    id: z.string(),
+    kind: z.enum(["human", "agent"]),
+    handle: z.string(),
+    displayName: z.string(),
+  }),
+);
+
 export interface ChatOrgView {
   me: { id: string; handle: string };
   members: ChatMember[];
 }
 export const chatOrgSchema: z.ZodType<ChatOrgView> = z.object({
   me: z.object({ id: z.string(), handle: z.string() }),
-  members: z.array(
-    z.object({
-      id: z.string(),
-      kind: z.enum(["human", "agent"]),
-      handle: z.string(),
-      displayName: z.string(),
-    }),
-  ),
+  members: chatMembersSchema,
 });

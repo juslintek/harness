@@ -19,6 +19,7 @@ import {
 import {
   ChatError,
   channelAccess,
+  channelMembers,
   createGroup,
   getChannel,
   listChannels,
@@ -99,6 +100,17 @@ function messageRoutes(db: Database, app: Hono<AuthEnv>): void {
     if (body instanceof Response) return body;
     const input = { ...defined(body), channelId: found.channel.id, authorId: found.member.id };
     return c.json(postMessage(db, input), 201);
+  });
+  app.get("/channels/:id/members", (c) => {
+    const found = channelScope(db, c, "read");
+    if (found instanceof Response) return found;
+    const members = channelMembers(db, found.channel).map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      handle: m.handle,
+      displayName: m.displayName,
+    }));
+    return c.json(members);
   });
   app.post("/channels/:id/read", (c) => {
     const found = channelScope(db, c, "read");

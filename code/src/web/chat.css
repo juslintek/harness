@@ -128,7 +128,7 @@ button.link {
   justify-content: space-between;
 }
 
-dialog {
+.chat dialog {
   width: min(28rem, 90vw);
   background: var(--card);
   color: var(--fg);
@@ -136,11 +136,11 @@ dialog {
   border-radius: 6px;
 }
 
-dialog input[type="radio"] {
+.chat dialog input[type="radio"] {
   width: auto;
 }
 
-fieldset {
+.chat fieldset {
   max-height: 14rem;
   overflow: auto;
 }

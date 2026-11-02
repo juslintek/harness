@@ -1,8 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
 import {
   type ChannelView,
+  type ChatMember,
   type ChatOrgView,
   channelListSchema,
+  chatMembersSchema,
   chatOrgSchema,
   type MessageView,
   messageListSchema,
@@ -14,6 +16,7 @@ import { ignored } from "../auth/me";
 export interface ChatData {
   org: Loaded<ChatOrgView>;
   channels: Loaded<ChannelView[]>;
+  channelMembers: ChatMember[];
   messages: Loaded<MessageView[]>;
   active: ChannelView | null;
   thread: MessageView | null;
@@ -45,6 +48,11 @@ export function useChatData(slug: string, orgId: string): ChatData {
       active ? api(`/api/channels/${active.id}/messages`, messageListSchema) : Promise.resolve([]),
     [active?.id],
   );
+  const channelMembers = useLoad(
+    () =>
+      active ? api(`/api/channels/${active.id}/members`, chatMembersSchema) : Promise.resolve([]),
+    [active?.id],
+  );
   const [thread, setThread] = useState<MessageView | null>(null);
   const [threadNudge, setThreadNudge] = useState(0);
 
@@ -60,5 +68,14 @@ export function useChatData(slug: string, orgId: string): ChatData {
     if (m && m.channelId === active?.id) markRead(m.channelId).then(channels.reload);
     else channels.reload();
   });
-  return { org, channels, messages, active, thread, setThread, threadNudge };
+  return {
+    org,
+    channels,
+    channelMembers: channelMembers.data ?? [],
+    messages,
+    active,
+    thread,
+    setThread,
+    threadNudge,
+  };
 }

@@ -78,4 +78,29 @@ test("a #n in a message links the real board task of the channel's org", async (
   expect(posted.taskIds).toEqual([task.id]);
   const listed = await (await k.call(owner, "GET", path)).json();
   expect(listed.at(-1).taskIds).toEqual([task.id]);
+  expect(listed.at(-1).tasks).toEqual([{ number: task.number, projectId: project.id }]);
+});
+
+test("channel members lists only who can read the channel, and 404s for outsiders", async () => {
+  const { k, owner, a, channels } = await setup();
+  const [bob, carol] = [await k.user(), await k.user()] as [typeof owner, typeof owner];
+  const bobMember = k.join(a.id, bob, "member", "bob");
+  k.join(a.id, carol, "member", "carol");
+  const dm = await (
+    await k.call(owner, "POST", "/api/orgs/acme/dms", { memberId: bobMember.id })
+  ).json();
+  const handles = async (who: typeof owner, id: string) =>
+    (
+      (await (await k.call(who, "GET", `/api/channels/${id}/members`)).json()) as {
+        handle: string;
+      }[]
+    )
+      .map((m) => m.handle)
+      .sort();
+  expect(await handles(bob, dm.id)).toHaveLength(2);
+  expect(await handles(bob, dm.id)).toContain("bob");
+  expect((await k.call(carol, "GET", `/api/channels/${dm.id}/members`)).status).toBe(404);
+  const general = (await channels(owner)).find((c) => c.kind === "org");
+  expect(await handles(carol, general?.id ?? "")).toContain("carol");
+  expect(await handles(carol, general?.id ?? "")).toHaveLength(3);
 });
