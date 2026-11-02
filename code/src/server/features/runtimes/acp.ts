@@ -223,7 +223,8 @@ export const runAcp: Adapter = async (ctx) => {
     stderr: "pipe",
     detached: true,
   });
-  const { shared, faulted } = newShared(ctx.logError ?? ((m, e) => console.error(m, e)));
+  const log = ctx.logError ?? ((m, e) => console.error(m, e));
+  const { shared, faulted } = newShared(log);
   const safe: RunContext = {
     ...ctx,
     emit: (e) => {
@@ -231,6 +232,14 @@ export const runAcp: Adapter = async (ctx) => {
         ctx.emit(e);
       } catch (err) {
         shared.raise(err);
+      }
+    },
+    // Progress only feeds the breaker; a listener that throws must not end a healthy run.
+    onProgress: (p) => {
+      try {
+        ctx.onProgress?.(p);
+      } catch (err) {
+        log("acp progress listener failed", err);
       }
     },
   };

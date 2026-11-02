@@ -67,6 +67,16 @@ test("an emit that throws ends the run as error quickly and kills the child", as
   expect(gone(h.pid)).toBe(true);
 });
 
+test("a progress listener that throws is logged and the run still completes", async () => {
+  const h = await drive([{ usageUpdate: 10 }, { say: "after" }], {
+    onProgress: () => {
+      throw new Error("breaker broke");
+    },
+  });
+  expect(h.outcome.stopReason).toBe("end_turn");
+  expect(h.faults).toEqual([new Error("breaker broke")]);
+});
+
 test("a failing mode set aborts before session/prompt", async () => {
   const h = await drive([{ say: "never" }], { failConfig: true });
   expect(h.outcome.stopReason).toBe("error");

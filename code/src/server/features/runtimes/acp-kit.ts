@@ -35,6 +35,7 @@ export interface Opts {
   mcp?: RunContext["mcp"];
   abortWhen?: (e: NewEvent) => boolean;
   onSpawn?: (pid: number) => void;
+  onProgress?: (p: { contextTokens: number }) => void;
 }
 
 function decider(opts: Opts, asks: PermissionAsk[]): RunContext["decide"] {
@@ -86,6 +87,7 @@ export async function drive(script: unknown[], opts: Opts = {}): Promise<Harness
       opts.onSpawn?.(pid);
     },
     onQuota: (q) => quotas.push(q),
+    ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
     signal: abort.signal,
     logError: (_message, err) => faults.push(err),
     idleTimeoutMs: opts.idleTimeoutMs ?? 10_000,
