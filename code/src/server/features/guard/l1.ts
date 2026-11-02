@@ -166,6 +166,9 @@ export function evaluateL1(action: ActionRequest, scope: Scope): L1Result {
     case "fetch":
       return ask("fetch.any", "network fetch needs approval", "network");
     default:
+      // Claude loads the harness MCP tool schemas through ToolSearch; it only reads tool
+      // definitions, and asking would stop every unattended agent before its first board call.
+      if (action.toolName === "ToolSearch") return allow(null, "tool schema lookup", "other");
       return ask("other.any", "unclassified action", "other");
   }
 }

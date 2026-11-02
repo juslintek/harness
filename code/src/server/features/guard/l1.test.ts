@@ -40,6 +40,7 @@ test("non-shell actions", () => {
   expect(run({ kind: "read", paths: ["/etc/hosts"] }).verdict).toBe("ask");
   expect(run({ kind: "fetch", paths: [] }).verdict).toBe("ask");
   expect(run({ kind: "other", paths: [] }).verdict).toBe("ask");
+  expect(run({ kind: "other", paths: [], toolName: "ToolSearch" }).verdict).toBe("allow");
 });
 
 test("result carries rule and category", () => {
