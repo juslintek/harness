@@ -52,6 +52,13 @@ export function inProcessLaunch(repo: string): Launch {
   };
 }
 
+// A linked worktree's `.git` file reads `gitdir: <common>/worktrees/<name>`.
+async function worktreeAdminDir(worktree: string): Promise<string> {
+  const pointer = (await Bun.file(join(worktree, ".git")).text()).trim();
+  if (!pointer.startsWith("gitdir: ")) throw new Error(`unexpected .git file in ${worktree}`);
+  return pointer.slice("gitdir: ".length);
+}
+
 export async function createLaunch(
   db: Database,
   deps: RunDeps,
@@ -68,6 +75,9 @@ export async function createLaunch(
     runDir,
     worktree: tree.path,
     gitCommonDir: tree.gitCommonDir,
+    gitWorktreeDir: await worktreeAdminDir(tree.path),
+    branch: tree.branch,
+    agentId: spec.id,
     harnessHome: deps.home,
     agentStateWrite: spec.stateWrite,
     agentEgress: spec.egress,
@@ -113,6 +123,7 @@ export async function createProbeLaunch(
     runDir: dir,
     worktree: cwd,
     gitCommonDir: null,
+    agentId: spec.id,
     harnessHome: deps.home,
     agentStateWrite: spec.stateWrite,
     agentEgress: spec.egress,

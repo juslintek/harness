@@ -25,6 +25,8 @@ test("non-shell actions", () => {
   expect(run({ kind: "edit", paths: ["/work/wt/src/a.ts"] }).verdict).toBe("allow");
   expect(run({ kind: "edit", paths: ["src/a.ts", "/etc/hosts"] }).verdict).toBe("deny");
   expect(run({ kind: "edit", paths: ["/work/wt/.git/hooks/pre-commit"] }).verdict).toBe("deny");
+  expect(run({ kind: "edit", paths: ["/work/wt/.git"] }).verdict).toBe("deny");
+  expect(run({ kind: "edit", paths: ["/work/wt/.gitignore"] }).verdict).toBe("allow");
   expect(run({ kind: "delete", paths: ["/work/wt/a"] })).toMatchObject({
     verdict: "allow",
     category: "delete",

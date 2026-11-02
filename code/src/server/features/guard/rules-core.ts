@@ -40,7 +40,7 @@ const HOME_PREFIX = /^(~|\$HOME|\$\{HOME\})(?=\/|$)/;
 // Shell expands these before the program sees them, so the literal text says nothing about the target.
 const UNKNOWN_WORD = /[$`]|^<\(|<stdin>|^~[^/]|\{[^}]*(,|\.\.)[^}]*\}/;
 
-export const GIT_INTERNALS: RegExp = /(^|\/)\.git\/(hooks|config)(\/|$)/;
+export const GIT_INTERNALS: RegExp = /(^|\/)\.git(\/(hooks|config)(\/|$)|$)/;
 
 export type Ctx = Scope & { cwd?: string | null };
 

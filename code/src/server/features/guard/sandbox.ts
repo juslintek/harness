@@ -8,6 +8,10 @@ export interface SandboxInput {
   runDir: string;
   worktree: string;
   gitCommonDir: string | null;
+  // Required with gitCommonDir: the worktree's admin dir (<common>/worktrees/<name>) and its run branch.
+  gitWorktreeDir?: string | null;
+  branch?: string | null;
+  agentId?: string | null;
   harnessHome: string;
   agentStateWrite: string[];
   agentEgress: string[];
@@ -48,12 +52,92 @@ const DENY_READ_HOME = [
   "~/.kube",
 ];
 
+// Everything here is read by an agent CLI as code or config on its next start, possibly outside srt.
+const underHome = (dir: string, names: string[]): string[] => names.map((n) => `${dir}/${n}`);
+
 const DENY_WRITE_HOME = [
-  "~/.claude/settings.json",
-  "~/.claude/hooks",
-  "~/.codex/config.toml",
-  "~/.codex/rules",
+  ...underHome("~/.claude", [
+    "settings.json",
+    "settings.local.json",
+    "hooks",
+    "plugins",
+    "agents",
+    "commands",
+    "skills",
+    "output-styles",
+    "CLAUDE.md",
+    "rules",
+  ]),
+  "~/.claude.json",
+  ...underHome("~/.gemini", [
+    "settings.json",
+    "GEMINI.md",
+    "skills",
+    "extensions",
+    "hooks",
+    "config",
+    "trustedFolders.json",
+    ".env",
+    "bin",
+    "antigravity/mcp_config.json",
+    "antigravity/bin",
+    "antigravity/builtin",
+    "antigravity-cli/settings.json",
+    "antigravity-cli/mcp",
+    "antigravity-cli/bin",
+    "antigravity-cli/builtin",
+    "antigravity-cli/plugin_data",
+    "antigravity-acp/settings.json",
+  ]),
+  ...underHome("~/.copilot", [
+    "mcp-config.json",
+    "mcp.json",
+    "extensions",
+    "installed-plugins",
+    "agents",
+  ]),
+  ...underHome("~/.cursor", ["mcp.json", "hooks.json", "extensions", "rules", "commands"]),
+  "~/.junie/mcp",
+  ...underHome("~/.codex", ["config.toml", "rules", "hooks.json"]),
 ];
+
+// A run may read its own agent's credentials and no other agent's. gemini and agy share ~/.gemini.
+const GEMINI_CREDENTIALS = underHome("~/.gemini", [
+  "oauth_creds.json",
+  "google_accounts.json",
+  "jetski-standalone-oauth-token",
+  "antigravity-cli/antigravity-oauth-token",
+]);
+const AGENT_CREDENTIALS: Record<string, string[]> = {
+  claude: ["~/.claude/.credentials.json"],
+  codex: ["~/.codex/auth.json"],
+  gemini: GEMINI_CREDENTIALS,
+  agy: GEMINI_CREDENTIALS,
+};
+
+function otherAgentCredentials(agentId: string | null | undefined): string[] {
+  const own = new Set(agentId ? (AGENT_CREDENTIALS[agentId] ?? []) : []);
+  return Object.values(AGENT_CREDENTIALS)
+    .flat()
+    .filter((p) => !own.has(p));
+}
+
+// The worktree's .git file points at the admin dir; rewriting it makes git read attacker-chosen config.
+// Commit on the run branch needs only these: objects, the worktree's own admin dir, the branch ref, its lock and reflog.
+function gitWritable(input: SandboxInput): string[] {
+  const common = input.gitCommonDir;
+  if (!common) return [];
+  const { gitWorktreeDir, branch } = input;
+  if (!gitWorktreeDir || !branch)
+    throw new Error("sandbox git access needs the worktree dir and the run branch");
+  return [
+    join(common, "objects"),
+    gitWorktreeDir,
+    join(common, "refs/heads", branch),
+    join(common, "refs/heads", `${branch}.lock`),
+    join(common, "logs/refs/heads", branch),
+  ];
+}
 
 const SCRUB_KEEP = /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|TERM|TMPDIR|LC_.*)$/;
 
@@ -104,7 +188,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
   const codex = input.codexHome;
   const allowWrite = unique([
     input.worktree,
-    ...(git ? [git] : []),
+    ...gitWritable(input),
     ...(codex ? [codex] : []),
     ...input.agentStateWrite.map(expand),
     runTmpDir(input.runDir),
@@ -121,10 +205,22 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
         ...DENY_READ_HOME.map(expand),
         join(input.harnessHome, "harness.db*"),
         join(input.harnessHome, "secret"),
+        join(input.harnessHome, "runs"),
+        join(input.harnessHome, "worktrees"),
+        ...otherAgentCredentials(input.agentId).map(expand),
       ]),
+      allowRead: [input.runDir, input.worktree],
       allowWrite,
       denyWrite: unique([
-        ...(git ? [join(git, "hooks"), join(git, "config")] : []),
+        ...(git
+          ? [
+              join(git, "hooks"),
+              join(git, "config"),
+              join(git, "modules"),
+              join(input.gitWorktreeDir ?? git, "config.worktree"),
+              join(input.worktree, ".git"),
+            ]
+          : []),
         ...(codex ? [join(codex, "rules"), join(codex, "config.toml")] : []),
         join(input.worktree, ".claude"),
         join(input.worktree, ".codex"),

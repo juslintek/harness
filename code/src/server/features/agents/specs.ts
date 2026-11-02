@@ -38,12 +38,7 @@ export const agentSpecs: readonly AgentSpec[] = [
     loginArgs: ["claude", "auth", "login"],
     modeOption: { configId: "mode", value: "default" },
     egress: ["api.anthropic.com"],
-    stateWrite: [
-      "~/.claude",
-      "~/.claude.json",
-      "/private/tmp/claude-<uid>",
-      "/private/tmp/claude-*-cwd",
-    ],
+    stateWrite: ["~/.claude", "/private/tmp/claude-<uid>", "/private/tmp/claude-*-cwd"],
     weakerNetworkIsolation: false,
     claudeMeta: true,
   },

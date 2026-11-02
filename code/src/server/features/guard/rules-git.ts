@@ -10,6 +10,7 @@ import {
 
 interface GitCall {
   cfg: string[];
+  redirected: boolean;
   dir: string | null;
   sub: string;
   rest: string[];
@@ -22,6 +23,7 @@ const VALUE_FLAGS = ["--git-dir", "--work-tree", "--namespace", "--exec-path"];
 // Global option before the subcommand; returns the index of the last token consumed.
 function globalOption(argv: string[], i: number, g: GitCall): number {
   const a = argv[i] as string;
+  if (/^--(git-dir|work-tree)\b/.test(a)) g.redirected = true;
   if (a === "-c" || a === "--config-env") g.cfg.push(argv[i + 1] ?? "");
   else if (a.startsWith("--config-env=")) g.cfg.push(a.slice("--config-env=".length));
   else if (a === "-C") g.dir = argv[i + 1] ?? null;
@@ -30,7 +32,7 @@ function globalOption(argv: string[], i: number, g: GitCall): number {
 }
 
 function parseGit(argv: string[]): GitCall {
-  const g: GitCall = { cfg: [], dir: null, sub: "", rest: [] };
+  const g: GitCall = { cfg: [], redirected: false, dir: null, sub: "", rest: [] };
   let i = 1;
   while (i < argv.length && (argv[i] as string).startsWith("-")) i = globalOption(argv, i, g) + 1;
   g.sub = argv[i] ?? "";
@@ -168,7 +170,7 @@ const HANDLERS: Record<string, Handler> = {
 const RISKY_KEY =
   /^(core\.(hookspath|sshcommand|fsmonitor|pager|editor|gitproxy)|include\.path|includeif\..+|credential(\..+)?\.helper|filter\..+|diff\.external|uploadpack\.packobjectshook)$/i;
 const GIT_ENV =
-  /^(GIT_CONFIG_(?:PARAMETERS|GLOBAL|SYSTEM)|GIT_EXEC_PATH|GIT_SSH(?:_COMMAND)?|GIT_EXTERNAL_DIFF|GIT_PAGER|GIT_ASKPASS|GIT_PROXY_COMMAND|GIT_TEMPLATE_DIR|GIT_CONFIG_KEY_\d+)=(.*)$/s;
+  /^(GIT_(?:DIR|WORK_TREE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES)|GIT_CONFIG_(?:PARAMETERS|GLOBAL|SYSTEM)|GIT_EXEC_PATH|GIT_SSH(?:_COMMAND)?|GIT_EXTERNAL_DIFF|GIT_PAGER|GIT_ASKPASS|GIT_PROXY_COMMAND|GIT_TEMPLATE_DIR|GIT_CONFIG_KEY_\d+)=(.*)$/s;
 
 function riskyConfig(key: string, value: string | undefined): boolean {
   const k = key.split("=")[0] as string;
@@ -197,6 +199,12 @@ export function gitEnvironment(assigns: string[], argv: string[], name: string):
 
 export function gitRule(argv: string[], scope: Scope): L1Result | null {
   const g = parseGit(argv);
+  if (g.redirected) {
+    return deny(
+      "git.dir-override",
+      "--git-dir and --work-tree point git at a repo the guard cannot vouch for",
+    );
+  }
   const bad = g.cfg.find((c) => riskyConfig(c, undefined));
   if (bad) return configDeny(bad);
   return Object.hasOwn(HANDLERS, g.sub) ? (HANDLERS[g.sub]?.(g, scope) ?? null) : null;
