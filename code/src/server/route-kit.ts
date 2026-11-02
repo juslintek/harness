@@ -25,6 +25,9 @@ export function defined<T extends object>(value: T): Defined<T> {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Defined<T>;
 }
 
+// Base for expected refusals that carry a message meant for the caller; routeError answers 400.
+export class DomainError extends Error {}
+
 function sqliteCode(err: Error): string {
   return err.name === "SQLiteError" ? String((err as Error & { code?: string }).code) : "";
 }
@@ -38,9 +41,10 @@ export function routeError(err: Error, c: Context): Response {
     return c.json({ error: "conflict" }, 409);
   }
   if (code.startsWith("SQLITE_CONSTRAINT")) return c.json({ error: "invalid" }, 400);
-  if (err instanceof ZodError || err.constructor === Error) {
-    return c.json({ error: err.constructor === Error ? err.message : "invalid" }, 400);
+  if (err instanceof DomainError || err.constructor === Error) {
+    return c.json({ error: err.message }, 400);
   }
+  if (err instanceof ZodError) return c.json({ error: "invalid" }, 400);
   console.error("request failed", err);
   return c.json({ error: "internal" }, 500);
 }

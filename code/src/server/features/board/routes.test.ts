@@ -85,3 +85,19 @@ test("the project dependency list gives edges for the board counts", async () =>
   k.org(stranger, "beta");
   expect((await k.call(stranger, "GET", `/api/projects/${project.id}/deps`)).status).toBe(404);
 });
+
+test("an assignee must be able to write, and a domain refusal is a 400 with its message", async () => {
+  const { k, owner, a, base } = await setup();
+  const reader = await k.user();
+  const viewerMember = k.join(a.id, reader, "viewer", "vee");
+  const made = await (await k.call(owner, "POST", base, { title: "t" })).json();
+  const patch = await k.call(owner, "PATCH", `/api/tasks/${made.id}`, {
+    assigneeId: viewerMember.id,
+  });
+  expect(patch.status).toBe(400);
+  const create = await k.call(owner, "POST", base, { title: "n", assigneeId: viewerMember.id });
+  expect(create.status).toBe(400);
+  const bad = await k.call(owner, "POST", base, { title: "n", parentId: "missing" });
+  expect(bad.status).toBe(400);
+  expect(await bad.json()).toEqual({ error: "parent must be in the project" });
+});

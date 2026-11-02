@@ -1,10 +1,11 @@
 import type { Database } from "bun:sqlite";
 import type { CommentView, Status, TaskDetail, TaskView } from "../../../shared/board";
+import { DomainError } from "../../route-kit";
 
 type Raw = Record<string, string | number | null>;
 
 // Expected refusals (bad reference, cycle, wrong project) as opposed to database faults.
-export class BoardError extends Error {}
+export class BoardError extends DomainError {}
 
 export interface TaskChange {
   kind: "created" | "updated" | "moved" | "assigned" | "commented" | "checked_out" | "released";
@@ -171,7 +172,8 @@ export function updateTask(db: Database, id: string, patch: TaskPatch, by: strin
     id,
   );
   const task = getTask(db, id) as TaskView;
-  emit({ kind: patch.assigneeId === undefined ? "updated" : "assigned", task, by });
+  const reassigned = patch.assigneeId !== undefined && patch.assigneeId !== cur.assigneeId;
+  emit({ kind: reassigned ? "assigned" : "updated", task, by });
   return task;
 }
 

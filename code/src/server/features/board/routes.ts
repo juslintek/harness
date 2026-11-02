@@ -55,9 +55,12 @@ function taskScope(
   return found instanceof Response ? found : { ...found, task };
 }
 
-// An assignee must be someone who can work on the project, whichever org they sit in.
+// An assignee must be someone who can change the project, whichever org they sit in; a reader
+// would be woken for work they cannot do.
 function assignable(db: Database, projectId: string, memberId: string | null | undefined): boolean {
-  return !memberId || projectAccess(db, { memberId }, projectId) !== "none";
+  if (!memberId) return true;
+  const access = projectAccess(db, { memberId }, projectId);
+  return access === "write" || access === "admin";
 }
 
 function projectTaskRoutes(db: Database, app: Hono<AuthEnv>): void {

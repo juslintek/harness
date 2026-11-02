@@ -130,9 +130,8 @@ test("the 21st wake in an hour is skipped and logs one error event", async () =>
     );
   }
   boot(k);
-  const task = k.task("t");
-  updateTask(k.db, task.id, { assigneeId: b.id }, k.human.id);
-  updateTask(k.db, task.id, { assigneeId: b.id }, k.human.id);
+  for (const title of ["t", "u"])
+    updateTask(k.db, k.task(title).id, { assigneeId: b.id }, k.human.id);
   await until(() => wakes(k.db, b.id).filter((w) => w.status === "skipped").length === 2);
   expect(wakes(k.db, b.id).filter((w) => w.status === "skipped")[0]?.detail).toContain("hourly");
   expect(k.seen).toHaveLength(0);

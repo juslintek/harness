@@ -97,6 +97,19 @@ test("parent must be in the same project", () => {
   expect(() => mk(s, s.project("p2"), "child", { parentId: parent.id })).toThrow();
 });
 
+test("saving a task with the assignee it already has is an update, not a new assignment", () => {
+  const s = setup();
+  const [a, b] = [s.agent("aa"), s.agent("bb")] as [string, string];
+  const t = mk(s, s.project("p1"), "t");
+  const seen: TaskChange[] = [];
+  const off = onTaskChange((c) => seen.push(c));
+  updateTask(s.db, t.id, { assigneeId: b }, a);
+  updateTask(s.db, t.id, { assigneeId: b, title: "t2" }, a);
+  updateTask(s.db, t.id, { assigneeId: null }, a);
+  off();
+  expect(seen.map((x) => x.kind)).toEqual(["assigned", "updated", "assigned"]);
+});
+
 test("onTaskChange fires once per mutation with the right kind, never on a failed move", () => {
   const s = setup();
   const [a, b] = [s.agent("aa"), s.agent("bb")] as [string, string];
