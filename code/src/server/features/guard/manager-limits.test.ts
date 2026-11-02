@@ -16,11 +16,14 @@ const base: DecideContext = {
   command: "bun test",
   paths: [],
   harnessHome: "/Users/x/.harness",
+  exfiltration: 0,
 };
 
 test("manager-limits refuses what a manager agent may never decide", () => {
   const refused: Partial<DecideContext>[] = [
     { requesterMemberId: null },
+    { exfiltration: 0.9 },
+    { exfiltration: 0.97 },
     { requesterMemberId: "m" },
     { inSubtree: false },
     { category: "network" },
@@ -69,6 +72,7 @@ test("manager-limits refuses what a manager agent may never decide", () => {
   expect(managerMayDecide({ ...base, command: "$(x)" })).toBe(
     "command uses shell indirection; a human must decide",
   );
+  expect(managerMayDecide({ ...base, exfiltration: 0.89 })).toBeNull();
   expect(managerMayDecide(base)).toBeNull();
   expect(managerMayDecide({ ...base, category: "git_push", rule: "git.push" })).toBeNull();
 });
@@ -103,7 +107,12 @@ function setup() {
   return { db, boss, dev, peer };
 }
 
-function ask(db: ReturnType<typeof openDb>, memberId: string | null, command: string) {
+function ask(
+  db: ReturnType<typeof openDb>,
+  memberId: string | null,
+  command: string,
+  l2: string | null = null,
+) {
   const runId = Bun.randomUUIDv7();
   db.run(
     "INSERT INTO runs (id, member_id, agent_id, repo, prompt, state, created_at) VALUES (?, ?, 'a', '/r', 'p', 'running', 1)",
@@ -113,7 +122,7 @@ function ask(db: ReturnType<typeof openDb>, memberId: string | null, command: st
     runId,
     action: JSON.stringify({ kind: "execute", command, paths: [] }),
     l1: JSON.stringify({ verdict: "ask", rule: "r", reason: "x", category: "shell" }),
-    l2: null,
+    l2,
     timeoutMs: 60_000,
   });
   return { runId, id, waiting: awaitApproval(db, id, expiresAt) };
@@ -166,4 +175,18 @@ test("managerDecide refuses a run without a member and an unknown approval", () 
   };
   expect(managerDecide(db, { ...input, approvalId: a.id }).ok).toBe(false);
   expect(managerDecide(db, { ...input, approvalId: "nope" }).ok).toBe(false);
+});
+
+test("an approval Laya flagged for exfiltration is left to a human", () => {
+  const { db, boss, dev } = setup();
+  const l2 = (exfiltration: number) =>
+    JSON.stringify({ verdict: "ask", reason: "x", source: "laya", probs: { exfiltration } });
+  const flagged = ask(db, dev, "npm publish", l2(0.93));
+  const calm = ask(db, dev, "npm test", l2(0.2));
+  expect(decidableApprovals(db, boss, HOME).map((x) => x.id)).toEqual([calm.id]);
+  const input = { harnessHome: HOME, managerMemberId: boss, decision: "approve" as const };
+  expect(managerDecide(db, { ...input, approvalId: flagged.id, reason: "ok" })).toEqual({
+    ok: false,
+    reason: "laya flagged possible exfiltration",
+  });
 });

@@ -1,3 +1,4 @@
+import { HARNESS_TOOL_NAMES } from "../../../shared/harness-tools";
 import { ShellParseError } from "./lexer";
 import { RULES } from "./rules";
 import {
@@ -56,8 +57,27 @@ function rank(r: L1Result): number {
   return RANK[r.verdict] + (r.verdict === "allow" && r.rule ? 1 : 0);
 }
 
-function defaultCategory(names: string[]): Category {
+// Flags that make an otherwise read-only command run another program. GNU getopt accepts any
+// unambiguous prefix of a long option, so `sort --comp=x` counts too.
+const RUNS_PROGRAM: Record<string, string[]> = {
+  rg: ["--pre", "--hostname-bin"],
+  sort: ["--compress-program"],
+  find: ["-exec", "-execdir", "-ok", "-okdir"],
+};
+
+function runsProgram(argv: string[]): boolean {
+  const flags = RUNS_PROGRAM[base(argv[0])] ?? [];
+  const isSort = base(argv[0]) === "sort";
+  return argv.slice(1).some((arg) => {
+    const flag = arg.split("=")[0] ?? "";
+    return flags.some((f) => flag === f || (isSort && flag.length >= 4 && f.startsWith(flag)));
+  });
+}
+
+function defaultCategory(cmds: Cmd[]): Category {
+  const names = cmds.map((c) => base(c.argv[0])).filter(Boolean);
   if (names.some((n) => NETWORK.has(n))) return "network";
+  if (cmds.some((c) => runsProgram(c.argv))) return "shell";
   return names.length > 0 && names.every((n) => READ_ONLY.has(n)) ? "read" : "shell";
 }
 
@@ -119,8 +139,7 @@ function evaluateShell(command: string | undefined, scope: Scope): L1Result {
       return ask("shell.unparseable", `cannot parse command: ${e.message}`);
     throw e;
   }
-  const names = cmds.map((c) => base(c.argv[0])).filter(Boolean);
-  return strictest(cmds, scope) ?? allow(null, "no rule matched", defaultCategory(names));
+  return strictest(cmds, scope) ?? allow(null, "no rule matched", defaultCategory(cmds));
 }
 
 function evaluatePaths(action: ActionRequest, scope: Scope): L1Result {
@@ -155,7 +174,28 @@ export function splitCommands(cmd: string): string[][] {
     .filter((argv) => argv.length > 0);
 }
 
+// Claude names its MCP tools mcp__harness__x and Codex mcp.harness.x; Codex files them under kind
+// execute with no command, which L1 would otherwise ask about. ACP tool names are display titles
+// that can carry model-chosen text, so the whole name must be a registered tool, and the action
+// must name no path and no command.
+const HARNESS_TOOLS = new Set(
+  HARNESS_TOOL_NAMES.flatMap((n) => [`mcp__harness__${n}`, `mcp.harness.${n}`]),
+);
+
+function isHarnessTool(action: ActionRequest): boolean {
+  return (
+    action.command === undefined &&
+    action.paths.length === 0 &&
+    (action.kind === "other" || action.kind === "execute") &&
+    action.toolName !== undefined &&
+    HARNESS_TOOLS.has(action.toolName)
+  );
+}
+
 export function evaluateL1(action: ActionRequest, scope: Scope): L1Result {
+  if (isHarnessTool(action)) {
+    return allow(null, "harness tool, scoped by the run token", "other");
+  }
   switch (action.kind) {
     case "execute":
       return evaluateShell(action.command, scope);
@@ -166,6 +206,10 @@ export function evaluateL1(action: ActionRequest, scope: Scope): L1Result {
     case "fetch":
       return ask("fetch.any", "network fetch needs approval", "network");
     default:
+      // Claude loads the harness MCP tool schemas through ToolSearch, which only reads tool
+      // definitions. The harness's own tools are already limited by the run token's scopes.
+      // Asking for either would stop every unattended agent before its first board call.
+      if (action.toolName === "ToolSearch") return allow(null, "tool schema lookup", "other");
       return ask("other.any", "unclassified action", "other");
   }
 }

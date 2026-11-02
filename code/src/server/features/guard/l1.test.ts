@@ -40,6 +40,15 @@ test("non-shell actions", () => {
   expect(run({ kind: "read", paths: ["/etc/hosts"] }).verdict).toBe("ask");
   expect(run({ kind: "fetch", paths: [] }).verdict).toBe("ask");
   expect(run({ kind: "other", paths: [] }).verdict).toBe("ask");
+  expect(run({ kind: "other", paths: [], toolName: "ToolSearch" }).verdict).toBe("allow");
+  expect(run({ kind: "other", paths: [], toolName: "mcp__harness__task_move" }).verdict).toBe(
+    "allow",
+  );
+  expect(run({ kind: "execute", paths: [], toolName: "mcp.harness.task_get" }).verdict).toBe(
+    "allow",
+  );
+  expect(run({ kind: "other", paths: [], toolName: "mcp__other__task_move" }).verdict).toBe("ask");
+  expect(run({ kind: "execute", paths: [], toolName: "mcp.other.task_get" }).verdict).toBe("ask");
 });
 
 test("result carries rule and category", () => {
@@ -77,4 +86,36 @@ test("secrets.json under a custom HARNESS_HOME is a credential location", () => 
   );
   expect(at("cat /data/h/harness.db").rule).not.toBe("secret.path");
   expect(exec("cat /data/h/secrets.json").rule).not.toBe("secret.path");
+});
+
+test("harness tool allow needs a registered full name, no paths and a tool-like kind", () => {
+  const tool = (extra: Partial<ActionRequest>) =>
+    run({ kind: "other", paths: [], toolName: "mcp__harness__task_get", ...extra }).verdict;
+  expect(tool({})).toBe("allow");
+  expect(tool({ toolName: "mcp.harness.approvals_decide" })).toBe("allow");
+  expect(tool({ kind: "delete", paths: ["/"], toolName: "mcp.harness.evil anything" })).toBe(
+    "deny",
+  );
+  expect(tool({ kind: "edit", paths: ["~/.ssh/authorized_keys"] })).toBe("deny");
+  expect(tool({ toolName: "mcp__harness__task_get anything" })).toBe("ask");
+  expect(tool({ toolName: "mcp__harness__nope" })).toBe("ask");
+  expect(tool({ paths: ["/work/wt/a"] })).toBe("ask");
+  expect(tool({ kind: "fetch" })).toBe("ask");
+});
+
+test("read-only commands that can run a program are shell, not read", () => {
+  for (const line of [
+    "rg --pre ./x.sh foo .",
+    "rg --pre=./x.sh foo .",
+    "rg --pre-glob '*.md' --pre ./x.sh foo .",
+    "rg --hostname-bin ./x.sh foo",
+    "sort --compress-program ./x a",
+    "sort --compress-program=./x a",
+    "sort --comp=./x a",
+    "find . -execdir ./x.sh {} +",
+  ]) {
+    expect(exec(line).category).toBe("shell");
+  }
+  expect(exec("rg --pre-glob '*.md' foo .").category).toBe("read");
+  expect(exec("sort -u a").category).toBe("read");
 });

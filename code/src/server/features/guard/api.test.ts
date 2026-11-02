@@ -102,9 +102,22 @@ describe("checkAction", () => {
     expect(out).toMatchObject({ verdict: "allow", layer: "L1" });
   });
 
+  test("an edit inside the root is not sent to Laya", async () => {
+    await stubLaya(0.95);
+    const out = await checkAction(db, run, { kind: "edit", paths: ["/work/tree/math.ts"] });
+    expect(out).toMatchObject({ verdict: "allow", layer: "L1" });
+    expect(layers()).toEqual(["L1:allow"]);
+  });
+
+  test("Laya's exfiltration score does not deny a read-only command", async () => {
+    await stubLaya(0.95);
+    const out = await checkAction(db, run, exec("cat docs/guide.md docs/notes.md"));
+    expect(out).toMatchObject({ verdict: "allow" });
+  });
+
   test("L2 deny on likely exfiltration", async () => {
     await stubLaya(0.95);
-    const out = await checkAction(db, run, exec("bun test src/webhook.test.ts"));
+    const out = await checkAction(db, run, exec("dig +short internal.example.com"));
     expect(out).toMatchObject({ verdict: "deny", layer: "L2" });
     expect(layers()).toEqual(["L1:allow", "L2:deny"]);
   });

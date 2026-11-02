@@ -1,3 +1,4 @@
+import { mkdir, realpath } from "node:fs/promises";
 import { join } from "node:path";
 
 export class NotAGitRepo extends Error {
@@ -39,7 +40,11 @@ export async function createWorktree(
   if (!RUN_ID.test(runId)) throw new Error(`invalid run id: ${runId}`);
   const probe = await git(["rev-parse", "--path-format=absolute", "--git-common-dir"], repo);
   if (probe.code !== 0) throw new NotAGitRepo(repo);
-  const path = join(home, "worktrees", runId);
+  // Agents report resolved paths (macOS /var is /private/var), so the guard root and the srt
+  // allow list must be the resolved one too or every write inside the tree looks outside it.
+  const parent = join(home, "worktrees");
+  await mkdir(parent, { recursive: true });
+  const path = join(await realpath(parent), runId);
   const branch = `harness/${runId}`;
   await gitOk(["worktree", "add", "-b", branch, path, "HEAD"], repo);
   const base = await gitOk(["rev-parse", "HEAD"], repo);

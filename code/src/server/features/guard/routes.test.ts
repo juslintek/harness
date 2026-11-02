@@ -99,3 +99,23 @@ test("a run in a granted project is decided by the project's org, not the agent'
   expect((await call(agentOrgOwner)).status).toBe(403);
   expect((await call(projectOwner)).status).toBe(200);
 });
+
+test("an org admin may not approve what Laya flagged for exfiltration", async () => {
+  const { k, approvalId } = await setup("npm publish");
+  const l2 = JSON.stringify({
+    verdict: "ask",
+    reason: "x",
+    source: "laya",
+    probs: { exfiltration: 0.95 },
+  });
+  k.db.run("UPDATE approvals SET l2 = ? WHERE id = ?", [l2, approvalId]);
+  const org = k.db.query<{ id: string }, []>("SELECT id FROM orgs").get();
+  const admin = await k.user({ stepUp: true });
+  k.join(org?.id as string, admin, "admin", "adm");
+  const res = await k.call(admin, "POST", `/api/approvals/${approvalId}`, { decision: "approve" });
+  expect(res.status).toBe(403);
+  expect(await res.json()).toEqual({
+    error: "instance_admin_required",
+    reason: "laya flagged possible exfiltration",
+  });
+});
