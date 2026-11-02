@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
 import type { Context } from "hono";
 import { type WsMessage, wsTopicSchema } from "../shared/realtime";
-import { type AuthEnv, onSessionRevoked } from "./features/auth/api";
+import { type AuthEnv, onSessionRevoked, sessionExpiresAt } from "./features/auth/api";
 import { onTaskChange } from "./features/board/api";
 import { onMessage } from "./features/chat/api";
 import { onApprovalChange } from "./features/guard/api";
@@ -14,6 +14,7 @@ export interface WsData {
   topic: string;
   sessionId: string;
   userId: string;
+  expiresAt: number;
 }
 
 // Access is checked once at the upgrade, so sockets are tracked to be closed when it ends.
@@ -21,6 +22,20 @@ const sockets = new Set<ServerWebSocket<WsData>>();
 
 function closeWhere(match: (data: WsData) => boolean): void {
   for (const ws of sockets) if (match(ws.data)) ws.close(4401, "access ended");
+}
+
+const SWEEP_MS = 60_000;
+
+// Sessions slide forward on other requests, so a socket past the expiry it saw is re-checked
+// against the db before it is closed.
+function sweepExpired(db: Database): void {
+  const now = Date.now();
+  for (const ws of sockets) {
+    if (ws.data.expiresAt > now) continue;
+    const current = sessionExpiresAt(db, ws.data.sessionId);
+    if (current === null) ws.close(4401, "session expired");
+    else ws.data.expiresAt = current;
+  }
 }
 
 export const websocket: WebSocketHandler<WsData> = {
@@ -48,7 +63,9 @@ export function wsUpgrade(db: Database): (c: Context<AuthEnv>) => Response {
     const allowed = orgId ? orgAccess(db, actor.userId, orgId) !== null : actor.instanceAdmin;
     if (!allowed) return c.json({ error: "forbidden" }, 403);
     const env = c.env as { server?: Server<WsData> } | undefined;
-    const data = { topic: topic.data, sessionId: actor.id, userId: actor.userId };
+    const expiresAt = sessionExpiresAt(db, actor.id);
+    if (expiresAt === null) return c.json({ error: "session expired" }, 401);
+    const data = { topic: topic.data, sessionId: actor.id, userId: actor.userId, expiresAt };
     if (!env?.server?.upgrade(c.req.raw, { data })) {
       return c.json({ error: "upgrade failed" }, 426);
     }
@@ -63,7 +80,11 @@ function projectTopics(db: Database, projectId: string): string[] {
   return [project.orgId, ...listGrantOrgIds(db, projectId)].map((id) => `org:${id}`);
 }
 
-export function wireRealtime(db: Database, server: Server<WsData>): () => void {
+export function wireRealtime(
+  db: Database,
+  server: Server<WsData>,
+  sweepMs: number = SWEEP_MS,
+): () => void {
   const send = (topic: string, message: WsMessage): void => {
     server.publish(topic, JSON.stringify(message));
   };
@@ -105,7 +126,10 @@ export function wireRealtime(db: Database, server: Server<WsData>): () => void {
   const offMember = onMemberRemoved((_db, member) =>
     closeWhere((d) => d.userId === member.userId && d.topic === `org:${member.orgId}`),
   );
+  const sweeper = setInterval(() => sweepExpired(db), sweepMs);
+  sweeper.unref();
   return () => {
+    clearInterval(sweeper);
     offSession();
     offMember();
     offRun();

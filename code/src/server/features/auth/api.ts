@@ -34,6 +34,7 @@ import {
   listSessions,
   onSessionRevoked,
   revokeSession,
+  sessionExpiresAt,
   sessionFromToken,
 } from "./sessions";
 import { countUsers, createUser, findUserByEmail, getUser } from "./users";
@@ -71,6 +72,7 @@ export {
   requireInstanceAdmin,
   requireStepUp,
   revokeSession,
+  sessionExpiresAt,
   sessionFromToken,
   sessionMiddleware,
   stepUpOptions,

@@ -20,7 +20,7 @@ afterEach(() => {
   for (const stop of stops.splice(0)) stop();
 });
 
-async function boot() {
+async function boot(sweepMs?: number) {
   const db = openDb(":memory:");
   migrate(db, migrations);
   wireChat(db);
@@ -36,7 +36,7 @@ async function boot() {
       version: "1",
     }),
   );
-  stops.push(wireRealtime(db, server), () => void server.stop(true));
+  stops.push(wireRealtime(db, server, sweepMs), () => void server.stop(true));
   const user = async (admin = false) => sessionHeaders(db, { admin, origin });
   const org = (slug: string, who: { userId: string }) =>
     createOrg(db, {
@@ -180,4 +180,25 @@ test("removing a member closes its socket on that org only", async () => {
   await until(() => onA.closed);
   await Bun.sleep(50);
   expect(onB.closed).toBe(false);
+});
+
+test("a socket closes once its session expires, unless the session slid forward meanwhile", async () => {
+  const k = await boot(30);
+  const expiring = await k.user(true);
+  const sliding = await k.user(true);
+  const soon = () => Date.now() + 400;
+  k.db.run("UPDATE sessions SET expires_at = ? WHERE user_id IN (?, ?)", [
+    soon(),
+    expiring.userId,
+    sliding.userId,
+  ]);
+  const gone = await k.watch(expiring, "runs");
+  const kept = await k.watch(sliding, "runs");
+  k.db.run("UPDATE sessions SET expires_at = ? WHERE user_id = ?", [
+    Date.now() + 60_000,
+    sliding.userId,
+  ]);
+  await until(() => gone.closed);
+  await Bun.sleep(100);
+  expect(kept.closed).toBe(false);
 });

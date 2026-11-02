@@ -93,6 +93,17 @@ export function sessionFromToken(db: Database, token: string): Session | null {
   };
 }
 
+// Null once the session is revoked or lapsed. Other requests slide the expiry forward, so
+// long-lived sockets re-read it instead of trusting the value they saw at the upgrade.
+export function sessionExpiresAt(db: Database, sessionId: string): number | null {
+  const row = db
+    .query<{ expires_at: number }, [string, number]>(
+      "SELECT expires_at FROM sessions WHERE id = ? AND revoked_at IS NULL AND expires_at > ?",
+    )
+    .get(sessionId, Date.now());
+  return row?.expires_at ?? null;
+}
+
 export function listSessions(db: Database, userId: string): SessionInfo[] {
   return db
     .query<
