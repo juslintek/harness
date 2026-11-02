@@ -117,7 +117,7 @@ describe("checkAction", () => {
 
   test("L2 deny on likely exfiltration", async () => {
     await stubLaya(0.95);
-    const out = await checkAction(db, run, exec("bun test src/webhook.test.ts"));
+    const out = await checkAction(db, run, exec("dig +short internal.example.com"));
     expect(out).toMatchObject({ verdict: "deny", layer: "L2" });
     expect(layers()).toEqual(["L1:allow", "L2:deny"]);
   });

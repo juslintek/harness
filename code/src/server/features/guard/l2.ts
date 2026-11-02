@@ -84,10 +84,14 @@ function judge(
   category: Category,
 ): { verdict: L2Result["verdict"]; reason: string } {
   const { destructive = 0, exfiltration = 0 } = probs;
-  // A line made only of read-only commands cannot send anything anywhere (a pipe into curl would
-  // not be category read), yet Laya scored `cat` of an installed skill file at 0.9+.
-  if (exfiltration >= DENY_EXFILTRATION && category !== "read")
-    return { verdict: "deny", reason: "likely exfiltration" };
+  // Laya scored `cat` of an installed skill file and plain `git`/`rg` lines at 0.9+. A line made
+  // only of read-only commands cannot send anything (a pipe into curl would not be category read),
+  // and an unclassified shell line is left to a person instead of being denied outright.
+  if (exfiltration >= DENY_EXFILTRATION && category !== "read") {
+    return category === "shell"
+      ? { verdict: "ask", reason: "laya flagged possible exfiltration" }
+      : { verdict: "deny", reason: "likely exfiltration" };
+  }
   if (destructive >= ASK_DESTRUCTIVE) return { verdict: "ask", reason: "laya flagged the command" };
   return { verdict: "allow", reason: "laya found nothing" };
 }
