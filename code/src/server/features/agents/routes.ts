@@ -70,7 +70,7 @@ export function agentRoutes(db: Database, models: ModelSources = noAcp): Hono<Au
       throw err;
     }
   });
-  app.post("/:id/login", (c) => {
+  app.post("/:id/login", requireStepUp, (c) => {
     const id = c.req.param("id");
     if (!getSpec(id)?.loginArgs) return c.json({ error: "no login command" }, 404);
     try {

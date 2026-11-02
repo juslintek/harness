@@ -50,6 +50,13 @@ test("link toggles and key saves need a fresh step-up", async () => {
   expect((await post(app, "/keys/openai", { key: "a".repeat(30) })).status).toBe(403);
 });
 
+test("starting a host-side login needs a fresh step-up", async () => {
+  const app = withActor(agentRoutes(db), { stepUpAt: null });
+  const res = await post(app, "/codex/login", {});
+  expect(res.status).toBe(403);
+  expect(await res.json()).toEqual({ error: "step_up_required" });
+});
+
 test("keys are validated before anything is stored", async () => {
   const app = withActor(agentRoutes(db));
   expect((await post(app, "/keys/openai", { key: "short" })).status).toBe(400);
