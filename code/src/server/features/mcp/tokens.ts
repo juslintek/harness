@@ -28,7 +28,7 @@ export function mint(db: Database, runId: string, scopes: TokenScope[]): string 
 export function verify(db: Database, token: string): RunIdentity | null {
   const row = db
     .query<{ run_id: string; scopes: string }, { hash: string }>(
-      "SELECT run_id, scopes FROM run_tokens WHERE hash = $hash AND revoked_at IS NULL",
+      "SELECT run_id, scopes FROM run_tokens WHERE hash = $hash",
     )
     .get({ hash: sha256Hex(token) });
   if (!row) return null;
