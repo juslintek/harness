@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { startStub, stopStubs } from "../../test-support/stub-server";
+import { resetLayaCircuit } from "../laya/api";
 import { listRunEvents } from "../logs/api";
 import {
   type ActionRequest,
@@ -20,7 +21,6 @@ import {
   wrapCommand,
   writeSrtSettings,
 } from "./api";
-import { resetLayaCircuit } from "./laya";
 
 let dir: string;
 let db: Database;

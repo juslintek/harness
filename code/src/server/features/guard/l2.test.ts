@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { startStub, stopStubs } from "../../test-support/stub-server";
+import { resetLayaCircuit } from "../laya/api";
 import type { L1Result } from "./l1";
 import { ASK_DESTRUCTIVE, DENY_EXFILTRATION, escalateL2 } from "./l2";
-import { resetLayaCircuit } from "./laya";
 
 let hits = { n: 0 };
 

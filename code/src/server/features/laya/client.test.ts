@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { startStub, stopStubs } from "../../test-support/stub-server";
-import { decide, layaHealth, resetLayaCircuit } from "./laya";
+import { decide, layaHealth, resetLayaCircuit } from "./client";
 
 let hits = { n: 0 };
 
