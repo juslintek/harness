@@ -5,7 +5,16 @@ import { z } from "zod";
 import { type Health, healthSchema } from "../shared/health";
 import { searchQuerySchema, usageQuerySchema } from "../shared/query";
 import { agentRoutes } from "./features/agents/routes";
-import { adminMiddleware, hostGuard, loginHandler, originGuard } from "./features/auth/api";
+import {
+  hostGuard,
+  mutationOriginGuard,
+  originGuard,
+  type Rp,
+  requireInstanceAdmin,
+  sessionMiddleware,
+} from "./features/auth/api";
+import { publicAuthRoutes } from "./features/auth/routes";
+import { accountRoutes } from "./features/auth/routes-account";
 import { approvalRoutes } from "./features/guard/routes";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { mcpHandler, verifyRunToken } from "./features/mcp/api";
@@ -21,7 +30,8 @@ export interface AppDeps {
   db: Database;
   home: string;
   port: number;
-  secret: string;
+  rp: Rp;
+  deliverEmailCode?: (email: string, code: string) => void | Promise<void>;
   instanceId: string;
   version: string;
   runDeps?: RunDeps;
@@ -66,6 +76,9 @@ function adminRoutes(deps: AppDeps): Hono {
   const { db } = deps;
   const runDeps = deps.runDeps ?? { home: deps.home, port: deps.port };
   const app = new Hono();
+  for (const path of ["/runs", "/approvals", "/halt", "/agents", "/search", "/usage", "/quota"]) {
+    app.use(`${path}/*`, requireInstanceAdmin);
+  }
   app.route("/runs", runRoutes(db, runDeps));
   app.route("/approvals", approvalRoutes(db));
   app.route("/halt", haltRoutes(db));
@@ -88,8 +101,11 @@ export function createApp(deps: AppDeps): Hono {
   const { db } = deps;
   const app = new Hono();
   app.use(secureHeaders());
-  app.use(hostGuard(deps.port));
-  app.get("/login", loginHandler(deps.secret));
+  // The browser entry on the loopback IP cannot sign in (WebAuthn refuses IP RP IDs), so send it on.
+  app.get("/", (c, next) =>
+    c.req.header("host") === `127.0.0.1:${deps.port}` ? c.redirect(deps.rp.origin) : next(),
+  );
+  app.use(hostGuard(deps.rp.origin, deps.port));
   app.get("/api/health", (c) => {
     const body: Health = healthSchema.parse({
       ok: true,
@@ -105,9 +121,20 @@ export function createApp(deps: AppDeps): Hono {
   );
   app.all("/mcp", (c) => mcp(c.req.raw));
   app.route("/api/guard/hook", guardHook(db));
-  app.use("/api/*", adminMiddleware(deps.secret, deps.port));
+  app.use("/api/*", mutationOriginGuard(deps.rp.origin));
+  app.route(
+    "/api/auth",
+    publicAuthRoutes({
+      db,
+      rp: deps.rp,
+      deliverEmailCode:
+        deps.deliverEmailCode ?? ((email, code) => console.log(`email code for ${email}: ${code}`)),
+    }),
+  );
+  app.use("/api/*", sessionMiddleware(db));
+  app.route("/api/auth", accountRoutes(db, deps.rp));
   app.route("/api", adminRoutes(deps));
-  app.use("/ws", adminMiddleware(deps.secret, deps.port), originGuard(deps.port));
+  app.use("/ws", sessionMiddleware(db), requireInstanceAdmin, originGuard(deps.rp.origin));
   app.get("/ws", wsUpgrade);
   return app;
 }

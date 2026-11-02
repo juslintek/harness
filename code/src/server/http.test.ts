@@ -5,10 +5,11 @@ import { migrate, openDb } from "./db/db";
 import { migrations } from "./db/migrations";
 import { mintRunToken } from "./features/mcp/api";
 import { createApp } from "./http";
+import { sessionHeaders } from "./test-support/app-kit";
 
 const PORT = 4100;
-const SECRET = "s".repeat(64);
-const ORIGIN = `http://127.0.0.1:${PORT}`;
+const ORIGIN = `http://localhost:${PORT}`;
+const LOOPBACK = { host: `127.0.0.1:${PORT}` };
 let db: Database;
 let app: ReturnType<typeof createApp>;
 
@@ -19,7 +20,7 @@ beforeEach(() => {
     db,
     home: "/unused",
     port: PORT,
-    secret: SECRET,
+    rp: { id: "localhost", name: "Harness", origin: ORIGIN },
     instanceId: "abc",
     version: "1.2.3",
   });
@@ -30,11 +31,11 @@ const send = (
   init: RequestInit = {},
   headers: Record<string, string> = {},
 ): Response | Promise<Response> =>
-  app.request(path, { ...init, headers: { host: `127.0.0.1:${PORT}`, ...headers } });
+  app.request(path, { ...init, headers: { host: `localhost:${PORT}`, ...headers } });
 
 async function loginCookie(): Promise<string> {
-  const res = await send(`/login?k=${SECRET}`);
-  return (res.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+  const { headers } = await sessionHeaders(db, { admin: true, stepUp: true });
+  return headers.cookie ?? "";
 }
 
 const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
@@ -55,27 +56,17 @@ test("/api/agents without cookie is 401, with a run bearer token still 401", asy
   expect((await send("/api/usage", {}, bearer)).status).toBe(401);
 });
 
-test("login: wrong k is 401, right k sets an httpOnly strict cookie and redirects", async () => {
-  expect((await send("/login?k=nope")).status).toBe(401);
-  expect((await send("/login")).status).toBe(401);
-  expect((await send("/login?k=")).status).toBe(401);
-  const res = await send(`/login?k=${SECRET}`);
-  expect(res.status).toBe(302);
-  expect(res.headers.get("location")).toBe("/");
-  const cookie = res.headers.get("set-cookie") ?? "";
-  expect(cookie).toContain("harness_admin=");
-  expect(cookie).toContain("HttpOnly");
-  expect(cookie).toContain("SameSite=Strict");
-  expect(cookie).not.toContain(SECRET);
+test("the old secret login is gone", async () => {
+  expect((await send("/login?k=anything")).status).toBe(404);
 });
 
 test("cookie opens the api, a forged cookie does not", async () => {
   const cookie = await loginCookie();
   expect((await send("/api/agents/ollaya", {}, { cookie })).status).toBe(200);
-  expect((await send("/api/agents", {}, { cookie: "harness_admin=forged" })).status).toBe(401);
+  expect((await send("/api/agents", {}, { cookie: "harness_session=forged" })).status).toBe(401);
 });
 
-test("mutating requests need a local Origin", async () => {
+test("mutating requests need the configured Origin", async () => {
   const cookie = await loginCookie();
   const init = post({ enabled: true });
   const url = "/api/agents/claude/link";
@@ -83,22 +74,29 @@ test("mutating requests need a local Origin", async () => {
   expect((await send(url, init, { ...base, origin: "http://evil.test" })).status).toBe(403);
   expect((await send(url, init, base)).status).toBe(403);
   expect((await send(url, init, { ...base, origin: ORIGIN })).status).toBe(200);
-  expect((await send(url, init, { ...base, origin: `http://localhost:${PORT}` })).status).toBe(200);
+  expect((await send(url, init, { ...base, origin: `http://127.0.0.1:${PORT}` })).status).toBe(403);
 });
 
-test("foreign Host is 403 everywhere, including health and login", async () => {
-  const evil = { host: "evil.test" };
-  for (const path of ["/api/health", `/login?k=${SECRET}`, "/api/agents"]) {
-    expect((await app.request(path, { headers: evil })).status).toBe(403);
+test("foreign Host is 403 everywhere, including health and the auth endpoints", async () => {
+  for (const host of ["evil.test", `127.0.0.1:${PORT}`]) {
+    for (const path of ["/api/health", "/api/auth/me", "/api/agents"]) {
+      expect((await app.request(path, { headers: { host } })).status).toBe(403);
+    }
   }
+});
+
+test("GET / on the loopback IP redirects to the configured origin", async () => {
+  const res = await send("/", {}, LOOPBACK);
+  expect(res.status).toBe(302);
+  expect(res.headers.get("location")).toBe(ORIGIN);
 });
 
 test("guard hook accepts only a matching guard_hook run token and logs a guard event", async () => {
   const body = { runId: "r1", verdict: "deny", rule: "rm-rf", command: "rm -rf /" };
   const url = "/api/guard/hook";
-  expect((await send(url, post(body), JSON_HEADER)).status).toBe(401);
+  expect((await send(url, post(body), { ...JSON_HEADER, ...LOOPBACK })).status).toBe(401);
   const call = (token: string, payload: unknown): Response | Promise<Response> =>
-    send(url, post(payload), { ...JSON_HEADER, authorization: `Bearer ${token}` });
+    send(url, post(payload), { ...JSON_HEADER, ...LOOPBACK, authorization: `Bearer ${token}` });
   expect((await call(mintRunToken(db, "r1", ["report"]), body)).status).toBe(403);
   const hook = mintRunToken(db, "r1", ["guard_hook"]);
   expect((await call(hook, { ...body, runId: "r2" })).status).toBe(403);
@@ -126,7 +124,7 @@ test("a run token opens nothing next to the hook path", async () => {
 });
 
 test("/mcp without token is 401 through the app, a report token logs a message", async () => {
-  expect((await send("/mcp", { method: "POST", body: "{}" })).status).toBe(401);
+  expect((await send("/mcp", { method: "POST", body: "{}" }, LOOPBACK)).status).toBe(401);
   const token = mintRunToken(db, "r9", ["report"]);
   const rpc = {
     jsonrpc: "2.0",
@@ -135,6 +133,7 @@ test("/mcp without token is 401 through the app, a report token logs a message",
     params: { name: "report", arguments: { text: "halfway" } },
   };
   const res = await send("/mcp", post(rpc), {
+    ...LOOPBACK,
     authorization: `Bearer ${token}`,
     "content-type": "application/json",
     accept: "application/json, text/event-stream",

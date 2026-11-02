@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
 import { z } from "zod";
+import { type AuthEnv, requireStepUp } from "../auth/api";
 import { appendEvent } from "../logs/api";
 import type { AgentSpec } from "./api";
 import {
@@ -29,8 +30,8 @@ const noAcp: ModelSources = {
   listAcp: () => Promise.reject(new Error("ACP model listing is not wired")),
 };
 
-export function agentRoutes(db: Database, models: ModelSources = noAcp): Hono {
-  const app = new Hono();
+export function agentRoutes(db: Database, models: ModelSources = noAcp): Hono<AuthEnv> {
+  const app = new Hono<AuthEnv>();
   app.get("/", async (c) => c.json(await listAgents(db)));
   app.get("/keys", async (c) =>
     c.json(
@@ -44,7 +45,7 @@ export function agentRoutes(db: Database, models: ModelSources = noAcp): Hono {
     ),
   );
   app.get("/ollaya", async (c) => c.json(await ollayaStatus()));
-  app.post("/keys/:provider", async (c) => {
+  app.post("/keys/:provider", requireStepUp, async (c) => {
     const provider = c.req.param("provider");
     if (!(providers as readonly string[]).includes(provider))
       return c.json({ error: "unknown provider" }, 404);
@@ -53,7 +54,7 @@ export function agentRoutes(db: Database, models: ModelSources = noAcp): Hono {
     await storeKey(provider as Provider, body.data.key);
     return c.json({ ok: true });
   });
-  app.post("/:id/link", async (c) => {
+  app.post("/:id/link", requireStepUp, async (c) => {
     const id = c.req.param("id");
     if (!getSpec(id)) return c.json({ error: "unknown agent" }, 404);
     const body = linkBody.safeParse(await c.req.json().catch(() => null));

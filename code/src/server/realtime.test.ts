@@ -12,11 +12,9 @@ import {
 } from "./features/runtimes/manager-kit";
 import { createApp } from "./http";
 import { wireRealtime } from "./realtime";
-import { adminHeaders, listenDeferred, openSocket, until } from "./test-support/app-kit";
+import { listenDeferred, openSocket, sessionHeaders, until } from "./test-support/app-kit";
 
 afterAll(cleanup);
-
-const SECRET = "r".repeat(64);
 
 function collect(ws: WebSocket): WsMessage[] {
   const seen: WsMessage[] = [];
@@ -36,14 +34,18 @@ async function boot(x: Fixture): Promise<{
     db: x.db,
     home: x.home,
     port,
-    secret: SECRET,
+    rp: { id: "localhost", name: "Harness", origin: `http://localhost:${port}` },
     instanceId: "i",
     version: "1",
     runDeps: deps,
   });
   attach(app);
   const off = wireRealtime(x.db, server);
-  const headers = await adminHeaders(app, port, SECRET);
+  const { headers } = await sessionHeaders(x.db, {
+    admin: true,
+    stepUp: true,
+    origin: `http://localhost:${port}`,
+  });
   return {
     port,
     deps,

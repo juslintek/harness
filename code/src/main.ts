@@ -3,13 +3,14 @@ import { join } from "node:path";
 import { loadConfig } from "./server/config";
 import { ensureInstance, migrate, openDb } from "./server/db/db";
 import { migrations } from "./server/db/migrations";
-import { ensureAdminSecret } from "./server/features/auth/api";
+import { countUsers, createEnrollment } from "./server/features/auth/api";
 import { recoverRuns, shutdownRuns } from "./server/features/runtimes/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
 import { type WsData, websocket, wireRealtime } from "./server/realtime";
 import indexHtml from "./web/index.html";
 
+const ENROLLMENT_TTL_MS = 24 * 60 * 60 * 1000;
 const config = loadConfig();
 mkdirSync(config.home, { recursive: true });
 
@@ -18,12 +19,11 @@ migrate(db, migrations);
 const instanceId = ensureInstance(db);
 
 recoverRuns(db);
-const secret = ensureAdminSecret(config.home);
 const app = createApp({
   db,
   home: config.home,
   port: config.port,
-  secret,
+  rp: config.rp,
   instanceId,
   version: "0.0.0",
 });
@@ -32,8 +32,15 @@ startTailers(db, 60000, defaultTailSources(join(config.home, "worktrees")));
 const server = Bun.serve<WsData>({
   hostname: config.host,
   port: config.port,
-  routes: { "/": indexHtml },
-  fetch: (req, srv) => app.fetch(req, { server: srv }),
+  // The bundle lives on its own path so "/" can still reach the app and redirect the loopback IP.
+  routes: { "/_app": indexHtml },
+  fetch: (req, srv) => {
+    const entry = new URL(req.url).pathname === "/";
+    if (entry && req.headers.get("host") !== `127.0.0.1:${config.port}`) {
+      return fetch(new URL("/_app", srv.url));
+    }
+    return app.fetch(req, { server: srv });
+  },
   websocket,
   maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
   development: process.env.NODE_ENV !== "production",
@@ -42,7 +49,11 @@ const server = Bun.serve<WsData>({
 wireRealtime(db, server);
 
 console.log(`harness listening on ${server.url}`);
-console.log(`admin login: http://127.0.0.1:${config.port}/login?k=${secret}`);
+
+if (countUsers(db) === 0) {
+  const code = createEnrollment(db, { ttlMs: ENROLLMENT_TTL_MS });
+  console.log(`first-run enrollment: ${config.rp.origin}/#/enroll/${code}`);
+}
 
 // Agent groups are detached, so the terminal's Ctrl-C does not reach them.
 let stopping = false;
