@@ -35,8 +35,8 @@ export function verify(db: Database, token: string): RunIdentity | null {
   return { runId: row.run_id, scopes: JSON.parse(row.scopes) as TokenScope[] };
 }
 
+// Deleted rather than flagged: a finished run's token has no further use and the audit trail
+// lives in the event log. verify() finds nothing for a deleted hash, same as for a revoked one.
 export function revoke(db: Database, runId: string): void {
-  db.query(
-    "UPDATE run_tokens SET revoked_at = $now WHERE run_id = $runId AND revoked_at IS NULL",
-  ).run({ now: Date.now(), runId });
+  db.query("DELETE FROM run_tokens WHERE run_id = $runId").run({ runId });
 }

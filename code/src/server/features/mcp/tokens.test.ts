@@ -18,6 +18,16 @@ test("minted token verifies, revoked does not, random string does not", () => {
   expect(verifyRunToken(db, token)).toBeNull();
 });
 
+test("revoking deletes the rows of that run only", () => {
+  const db = freshDb();
+  mintRunToken(db, "run-3", ["report"]);
+  mintRunToken(db, "run-3", ["guard_hook"]);
+  const other = mintRunToken(db, "run-4", ["report"]);
+  revokeRunTokens(db, "run-3");
+  expect(db.query("SELECT run_id FROM run_tokens").all()).toEqual([{ run_id: "run-4" }]);
+  expect(verifyRunToken(db, other)).not.toBeNull();
+});
+
 test("db holds only the hash", () => {
   const db = freshDb();
   const token = mintRunToken(db, "run-2", ["report", "guard_hook"]);

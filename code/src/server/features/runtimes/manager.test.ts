@@ -57,7 +57,7 @@ test("a say script completes inside srt, keeps the branch and revokes the token"
       "SELECT count(*) FILTER (WHERE revoked_at IS NULL) AS live, count(*) AS total FROM run_tokens WHERE run_id = ?",
     )
     .get(id);
-  expect(tokens).toEqual({ live: 0, total: 1 });
+  expect(tokens).toEqual({ live: 0, total: 0 });
   expect(gone(agentPid(x, id))).toBe(true);
   expect(listRuns(x.db).map((r) => r.id)).toContain(id);
 });
