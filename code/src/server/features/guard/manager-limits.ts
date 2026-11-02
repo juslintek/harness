@@ -3,6 +3,7 @@ import { basename, posix, resolve } from "node:path";
 import { appendEvent } from "../logs/api";
 import { getMember, managerPositionsOf, reportsTransitivelyTo } from "../orgs/api";
 import { type ApprovalRow, decideApproval, getApproval, listApprovals } from "./approvals";
+import { DENY_EXFILTRATION } from "./l2";
 
 export interface DecideContext {
   requesterMemberId: string | null;
@@ -14,6 +15,7 @@ export interface DecideContext {
   command: string;
   paths: string[];
   harnessHome: string;
+  exfiltration: number;
 }
 
 // Text that points at the harness itself, its sandbox or its agent config: a manager agent must
@@ -56,6 +58,7 @@ export function managerMayDecide(ctx: DecideContext): string | null {
   if (ctx.category === "network" || ctx.category === "secret" || ctx.kind === "fetch") {
     return "network and secret actions need a human";
   }
+  if (ctx.exfiltration >= DENY_EXFILTRATION) return "laya flagged possible exfiltration";
   if (ctx.rule !== null && (ctx.rule.endsWith(".outside-root") || BLIND_RULES.includes(ctx.rule))) {
     return `the guard rule ${ctx.rule} needs a human`;
   }
@@ -84,6 +87,15 @@ function field(json: string | null, key: string): unknown {
 
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 
+function exfiltrationOf(l2: string | null): number {
+  const probs = field(l2, "probs");
+  const score =
+    typeof probs === "object" && probs !== null
+      ? (probs as Record<string, unknown>).exfiltration
+      : 0;
+  return typeof score === "number" ? score : 0;
+}
+
 function contextFor(
   db: Database,
   approval: ApprovalRow,
@@ -111,6 +123,7 @@ function contextFor(
     command: str(field(approval.action, "command")),
     paths: Array.isArray(paths) ? paths.map(str) : [],
     harnessHome,
+    exfiltration: exfiltrationOf(approval.l2),
   };
 }
 

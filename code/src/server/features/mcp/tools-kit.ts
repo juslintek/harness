@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
+import type { HarnessToolName } from "../../../shared/harness-tools";
 import { BoardError } from "../board/api";
 import { ChatError } from "../chat/api";
 import { getMember } from "../orgs/api";
@@ -38,7 +39,7 @@ const reply = (text: string, isError?: true): Reply => ({
 export function defineTool<S extends z.ZodRawShape>(
   server: McpServer,
   env: ToolEnv,
-  spec: { name: string; scope: TokenScope; description: string; shape: S },
+  spec: { name: HarnessToolName; scope: TokenScope; description: string; shape: S },
   run: (ctx: ToolCtx, args: z.infer<z.ZodObject<S>>) => unknown,
 ): void {
   const { identity, db, harnessHome } = env;
