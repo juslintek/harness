@@ -108,19 +108,8 @@ export function createEnrollment(
   return code;
 }
 
-// An invited user who has no passkey yet (new, or added earlier without finishing setup) gets one
-// live code, which replaces older unused ones; a user who already has a passkey needs none.
-export function inviteEnrollment(
-  db: Database,
-  opts: { userId: string; email: string; ttlMs: number },
-): string | null {
-  return db.transaction((): string | null => {
-    if (db.query("SELECT 1 FROM passkeys WHERE user_id = ?").get(opts.userId)) return null;
-    db.query(
-      "UPDATE enrollments SET expires_at = ? WHERE user_id = ? AND used_at IS NULL AND expires_at > ?",
-    ).run(Date.now(), opts.userId, Date.now());
-    return createEnrollment(db, opts);
-  })();
+export function hasPasskey(db: Database, userId: string): boolean {
+  return db.query("SELECT 1 FROM passkeys WHERE user_id = ?").get(userId) !== null;
 }
 
 interface EnrollmentRow {

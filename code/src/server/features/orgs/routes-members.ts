@@ -10,7 +10,13 @@ import {
 } from "../../../shared/orgs";
 import { defined, forbidden, notFound, parseBody } from "../../route-kit";
 import { getSpec } from "../agents/api";
-import { type AuthEnv, createUser, findUserByEmail, inviteEnrollment } from "../auth/api";
+import {
+  type AuthEnv,
+  createEnrollment,
+  createUser,
+  findUserByEmail,
+  hasPasskey,
+} from "../auth/api";
 import {
   addAgentMember,
   addHumanMember,
@@ -69,14 +75,15 @@ function orgMember(db: Database, ctx: OrgCtx, id: string | undefined): MemberRow
   return member?.orgId === ctx.org.id ? member : null;
 }
 
-// A new address, or a known user without a passkey, gets an enrollment link bound to that user; one
-// with a passkey is just added.
+// Only a brand-new address gets an enrollment link back: handing one out for an existing user would
+// let any org admin take over that account. An existing user is just added; reissuing their link
+// is the instance admin's CLI (scripts/enroll.ts).
 function inviteHuman(
   db: Database,
   origin: string,
   org: OrgView,
   body: AddHumanBody,
-): { member: MemberRow; enrollmentLink: string | null } {
+): { member: MemberRow; enrollmentLink: string | null; pendingEnrollment?: true } {
   return db.transaction(() => {
     const existing = findUserByEmail(db, body.email);
     const name = existing?.name ?? body.name ?? body.email.split("@")[0] ?? body.email;
@@ -84,8 +91,15 @@ function inviteHuman(
       existing?.id ?? createUser(db, { email: body.email, name, instanceAdmin: false });
     const handle = body.handle ?? handleFromEmail(body.email);
     const member = addHumanMember(db, org.id, userId, handle, name, body.role);
-    const code = inviteEnrollment(db, { userId, email: body.email, ttlMs: ENROLLMENT_TTL_MS });
-    return { member, enrollmentLink: code === null ? null : `${origin}/#/enroll/${code}` };
+    if (existing) {
+      return {
+        member,
+        enrollmentLink: null,
+        ...(hasPasskey(db, userId) ? {} : { pendingEnrollment: true as const }),
+      };
+    }
+    const code = createEnrollment(db, { userId, email: body.email, ttlMs: ENROLLMENT_TTL_MS });
+    return { member, enrollmentLink: `${origin}/#/enroll/${code}` };
   })();
 }
 

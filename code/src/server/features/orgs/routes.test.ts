@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bootApi } from "../../test-support/api-kit";
-import { createEnrollment, enrollmentUser, redeemEnrollment } from "../auth/api";
+import { createEnrollment, redeemEnrollment } from "../auth/api";
 import { createProject, grantProject } from "./api";
 
 test("creating an org makes the caller its owner and strangers get 404", async () => {
@@ -85,7 +85,7 @@ test("inviting a new address returns an enrollment link, a known user is added d
   expect((await invite(`${known.userId}@example.test`)).status).toBe(409);
 });
 
-test("inviting a known user without a passkey issues a fresh enrollment and expires the old one", async () => {
+test("inviting a known user without a passkey returns no link and keeps their enrollment codes", async () => {
   const k = bootApi();
   const owner = await k.user({ stepUp: true });
   const pending = await k.user();
@@ -95,11 +95,8 @@ test("inviting a known user without a passkey issues a fresh enrollment and expi
   const res = await (
     await k.call(owner, "POST", "/api/orgs/acme/members/humans", { email, role: "member" })
   ).json();
-  const code = res.enrollmentLink.split("/").pop() as string;
-  expect(enrollmentUser(k.db, code)).toBeNull();
-  const profile = { email, name: "p" };
-  expect(redeemEnrollment(k.db, old, profile)).toBeNull();
-  expect(redeemEnrollment(k.db, code, profile)).toBe(pending.userId);
+  expect(res).toMatchObject({ enrollmentLink: null, pendingEnrollment: true });
+  expect(redeemEnrollment(k.db, old, { email, name: "p" })).toBe(pending.userId);
 });
 
 test("an admin cannot invite an owner", async () => {
