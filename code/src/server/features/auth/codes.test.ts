@@ -128,6 +128,7 @@ test("enrollment: bootstrap creates instance admin, reuse null", () => {
   completeEnrollment(empty, code);
   expect(redeemEnrollment(empty, code, { email: "o2@example.com", name: "Owner" })).toBeNull();
   expect(countUsers(empty)).toBe(1);
+  createUser(db, { email: "adm@example.com", name: "Adm", instanceAdmin: true });
   const late = createEnrollment(db, { ttlMs: MIN });
   expect(redeemEnrollment(db, late, { email: "x@example.com", name: "X" })).toBeNull();
 });
@@ -167,5 +168,37 @@ test("first run: one live bootstrap link, and a bootstrap that never got a passk
     "INSERT INTO passkeys (id, user_id, public_key, counter, name, created_at) VALUES ('p', ?, x'00', 0, 'k', 1)",
     [userId],
   );
+  expect(firstRunEnrollment(db, MIN)).toBeNull();
+});
+
+const addPasskey = (db: ReturnType<typeof openDb>, userId: string): void => {
+  db.run(
+    "INSERT INTO passkeys (id, user_id, public_key, counter, name, created_at) VALUES (?, ?, x'00', 0, 'k', 1)",
+    [Bun.randomUUIDv7(), userId],
+  );
+};
+
+test("a regular user with a passkey does not close first run; the link makes a new admin", () => {
+  const { db, userId } = setup();
+  addPasskey(db, userId);
+  const code = firstRunEnrollment(db, MIN);
+  expect(code).not.toBeNull();
+  const adminId = redeemEnrollment(db, code ?? "", { email: "boss@example.com", name: "Boss" });
+  expect(adminId).not.toBeNull();
+  expect(adminId).not.toBe(userId);
+  const flags = db
+    .query<{ id: string; instance_admin: number }, []>("SELECT id, instance_admin FROM users")
+    .all();
+  expect(flags.find((u) => u.id === userId)?.instance_admin).toBe(0);
+  expect(flags.find((u) => u.id === adminId)?.instance_admin).toBe(1);
+});
+
+test("an admin without a passkey gets a link for their own account, one with a passkey gets none", () => {
+  const { db, userId } = setup();
+  addPasskey(db, userId);
+  const adminId = createUser(db, { email: "boss@example.com", name: "Boss", instanceAdmin: true });
+  const code = firstRunEnrollment(db, MIN) ?? "";
+  expect(redeemEnrollment(db, code, { email: "x@example.com", name: "X" })).toBe(adminId);
+  addPasskey(db, adminId);
   expect(firstRunEnrollment(db, MIN)).toBeNull();
 });

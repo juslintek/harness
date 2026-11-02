@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { randomInt } from "node:crypto";
 import { safeEqual } from "./admin";
 import { sha256Hex } from "./sessions";
-import { countUsers, createUser, findUserByEmail } from "./users";
+import { createUser, findUserByEmail } from "./users";
 
 const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
 const MINUTE_MS = 60 * 1000;
@@ -121,7 +121,7 @@ function userForEnrollment(
 ): string | null {
   if (row.user_id) return row.user_id;
   const bootstrap = row.email === null;
-  if (bootstrap && countUsers(db) > 0) return null;
+  if (bootstrap && db.query("SELECT 1 FROM users WHERE instance_admin = 1").get()) return null;
   if (row.email !== null && row.email.toLowerCase() !== profile.email.toLowerCase()) return null;
   if (findUserByEmail(db, profile.email)) return null;
   return createUser(db, { ...profile, instanceAdmin: bootstrap });
@@ -187,19 +187,26 @@ export function completeEnrollment(db: Database, code: string): void {
   );
 }
 
-// First run is an empty instance, or one whose bootstrap never got as far as a passkey. Older
-// unused bootstrap links die first so only one first-run link is ever live.
+// First run is an instance with no admin who holds a passkey. A regular user with a passkey does
+// not count, and is never promoted: with no admin at all the link creates a new admin user. An
+// admin who has no passkey yet gets the link for their own account. Older unused bootstrap links
+// die first so only one first-run link is ever live.
 export function firstRunEnrollment(db: Database, ttlMs: number): string | null {
-  const passkeys = db.query<{ n: number }, []>("SELECT count(*) AS n FROM passkeys").get()?.n ?? 0;
-  if (countUsers(db) > 0 && passkeys > 0) return null;
-  const owner = db
+  const enrolled = db
+    .query(
+      `SELECT 1 FROM users u WHERE u.instance_admin = 1
+         AND EXISTS (SELECT 1 FROM passkeys p WHERE p.user_id = u.id)`,
+    )
+    .get();
+  if (enrolled) return null;
+  const admin = db
     .query<{ id: string }, []>(
-      "SELECT id FROM users ORDER BY instance_admin DESC, created_at LIMIT 1",
+      "SELECT id FROM users WHERE instance_admin = 1 ORDER BY created_at, id LIMIT 1",
     )
     .get();
   db.query(
     `UPDATE enrollments SET used_at = ?
       WHERE used_at IS NULL AND ((user_id IS NULL AND email IS NULL) OR user_id = ?)`,
-  ).run(Date.now(), owner?.id ?? null);
-  return createEnrollment(db, owner ? { userId: owner.id, ttlMs } : { ttlMs });
+  ).run(Date.now(), admin?.id ?? null);
+  return createEnrollment(db, admin ? { userId: admin.id, ttlMs } : { ttlMs });
 }
