@@ -81,18 +81,41 @@ export function release(db: Database, taskId: string, memberId: string): MoveRes
   return { ok: true, task };
 }
 
+// Ranks are midpoints, so repeated inserts into one gap eventually stop yielding a value strictly
+// between the neighbours. Renumbering the lane 1..n keeps the order and restores the room.
+function renormalizeLane(db: Database, projectId: string, status: Status): void {
+  db.query(
+    `UPDATE tasks SET rank = r.n FROM (
+       SELECT id, ROW_NUMBER() OVER (ORDER BY rank, number) AS n FROM tasks
+       WHERE project_id = ?1 AND status = ?2) r
+     WHERE tasks.id = r.id`,
+  ).run(projectId, status);
+}
+
+function gapBefore(
+  db: Database,
+  task: TaskView,
+  before: TaskView,
+): { lo: number | null; rank: number } {
+  const prev = db
+    .query<{ m: number | null }, [string, string, number, string]>(
+      "SELECT MAX(rank) AS m FROM tasks WHERE project_id = ? AND status = ? AND rank < ? AND id <> ?",
+    )
+    .get(task.projectId, before.status, before.rank, task.id);
+  const lo = prev?.m ?? null;
+  return { lo, rank: lo === null ? before.rank - 1 : (lo + before.rank) / 2 };
+}
+
 function rankFor(db: Database, task: TaskView, to: Status, beforeId?: string): number {
   const before = beforeId === undefined ? null : getTask(db, beforeId);
   // A neighbour in another status or project would put the task in the wrong lane's rank range.
   if (!before || before.projectId !== task.projectId || before.status !== to) {
     return nextRank(db, task.projectId, to);
   }
-  const prev = db
-    .query<{ m: number | null }, [string, string, number, string]>(
-      "SELECT MAX(rank) AS m FROM tasks WHERE project_id = ? AND status = ? AND rank < ? AND id <> ?",
-    )
-    .get(task.projectId, before.status, before.rank, task.id);
-  return prev?.m == null ? before.rank - 1 : (prev.m + before.rank) / 2;
+  const gap = gapBefore(db, task, before);
+  if (gap.lo === null || (gap.rank > gap.lo && gap.rank < before.rank)) return gap.rank;
+  renormalizeLane(db, task.projectId, to);
+  return gapBefore(db, task, getTask(db, before.id) as TaskView).rank;
 }
 
 function applyMove(db: Database, taskId: string, to: Status, rank: number): void {

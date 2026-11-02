@@ -89,3 +89,21 @@ test("a beforeId in another status is ignored and the task goes to the end of th
     "moving",
   ]);
 });
+
+test("sixty inserts into one gap keep a strict order by renumbering the lane when the gap runs out", () => {
+  const { db, member, mk } = setup();
+  const first = mk("first");
+  const last = mk("last");
+  for (const t of [first, last]) moveTask(db, t.id, "todo", member);
+  const titles = ["first"];
+  for (let i = 0; i < 60; i++) {
+    const task = mk(`x${i}`);
+    expect(moveTask(db, task.id, "todo", member, { beforeId: last.id }).ok).toBe(true);
+    titles.push(`x${i}`);
+  }
+  const lane = listTasks(db, first.projectId, { status: "todo" });
+  expect(lane.map((t) => t.title)).toEqual([...titles, "last"]);
+  const ranks = lane.map((t) => t.rank);
+  expect(new Set(ranks).size).toBe(ranks.length);
+  expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
+});
