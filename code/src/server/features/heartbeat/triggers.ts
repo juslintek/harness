@@ -1,10 +1,10 @@
 import type { Database } from "bun:sqlite";
 import type { WakeReason } from "../../../shared/heartbeat";
 import { getComment, getTask, type TaskChange } from "../board/api";
-import { type ChatEvent, channelAccess, getChannel } from "../chat/api";
+import { type ChatEvent, channelAccess, channelMembers, getChannel } from "../chat/api";
 import type { triageWake } from "../laya/api";
 import { appendEvent } from "../logs/api";
-import { getMember, listMembers, type MemberRow, projectAccess } from "../orgs/api";
+import { getMember, type MemberRow, projectAccess } from "../orgs/api";
 import { insertWake, scheduleCandidates, startedRunsSince } from "./repo";
 
 const HOURLY_CAP = 20;
@@ -133,7 +133,8 @@ export async function onChat(
   const result = await triage(message.body);
   if (result.specialty === null) return;
   const specialty = result.specialty;
-  for (const m of listMembers(db, channel.orgId)) {
+  // A project channel is open to grantee orgs, so their agents are candidates too.
+  for (const m of channelMembers(db, channel)) {
     if (m.kind !== "agent" || !m.specialties.includes(specialty)) continue;
     if (channelAccess(db, m.id, channel.id) !== "write") continue;
     recordWake(db, {

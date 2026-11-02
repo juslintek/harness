@@ -1,6 +1,6 @@
 import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { addComment, createTask, updateTask } from "../board/api";
-import { postMessage } from "../chat/api";
+import { ensureProjectChannel, postMessage } from "../chat/api";
 import type { triageWake } from "../laya/api";
 import { addAgentMember, createOrg, grantProject, listMembers, revokeGrant } from "../orgs/api";
 import { holdRuns, type Kit, setup, until, wakes } from "./kit";
@@ -235,6 +235,36 @@ test("a grantee agent needs write access to be woken, and a revoked grant stops 
   addComment(k.db, task.id, k.human.id, "secret plans");
   await Bun.sleep(100);
   expect(wakes(k.db, guest.id)).toHaveLength(1);
+});
+
+test("a Laya wake in a project channel reaches a grantee org's agent with write access only", async () => {
+  const k = setup();
+  const beta = createOrg(k.db, {
+    name: "B",
+    slug: "beta",
+    ownerUserId: "u2",
+    ownerName: "B",
+    ownerHandle: "bee",
+  });
+  const guest = addAgentMember(k.db, beta.id, {
+    agentId: "fake",
+    handle: "guestdba",
+    displayName: "g",
+    specialties: ["database"],
+  });
+  const channel = ensureProjectChannel(k.db, k.projectId);
+  grantProject(k.db, k.projectId, beta.id, "read", k.human.id);
+  boot(k, database);
+  const post = (): void => {
+    postMessage(k.db, { channelId: channel.id, authorId: k.human.id, body: "index the orders" });
+  };
+  post();
+  await Bun.sleep(100);
+  expect(wakes(k.db, guest.id)).toHaveLength(0);
+  grantProject(k.db, k.projectId, beta.id, "write", k.human.id);
+  post();
+  await until(() => wakes(k.db, guest.id)[0]?.status === "done");
+  expect(wakes(k.db, guest.id).map((w) => w.reason)).toEqual(["laya_mention"]);
 });
 
 test("a wake that points at a task which no longer exists is not allowed", () => {
