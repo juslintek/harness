@@ -131,6 +131,8 @@ test("a response with exit 0 is end_turn whatever result.status says", async () 
     "say ok",
     "--output-format",
     "stream-json",
+    "--settings",
+    '{"permissions":{"allow":[]}}',
     "--model",
     "gemini-4-argon-low",
   ]);
@@ -211,4 +213,25 @@ test("an onSpawn that throws ends the run as error and the process is gone", asy
   expect(outcome.stopReason).toBe("error");
   expect(outcome.error).toContain("pid write failed");
   expect(() => process.kill(spawned, 0)).toThrow();
+});
+
+test("a run that got some actions denied still succeeds but tells the user which", async () => {
+  const { outcome, events } = await run([
+    result({
+      response: "done",
+      denied_actions: [{ action: "command", display_name: "RunCommand" }],
+    }),
+  ]);
+  expect(outcome).toMatchObject({ stopReason: "end_turn", error: null });
+  expect(events.at(-1)).toMatchObject({
+    kind: "message",
+    body: expect.stringContaining("command"),
+  });
+});
+
+test("argv never opens a permission mode or skips permissions", async () => {
+  const { argv } = await run([result({ response: "ok" })]);
+  expect(argv).not.toContain("--mode");
+  expect(argv).not.toContain("--dangerously-skip-permissions");
+  expect(argv[argv.indexOf("--settings") + 1]).toBe('{"permissions":{"allow":[]}}');
 });

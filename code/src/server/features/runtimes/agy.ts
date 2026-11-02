@@ -186,8 +186,23 @@ async function finish(
   return outcome("error", failure(seen.result, code, stderr()), text);
 }
 
+// agy -p cannot ask anyone: a tool outside its no-permission set is auto-denied, unless the user's
+// own settings.json allow list (or a mode flag) opens it. --settings replaces that list (checked
+// live on 1.4.12), so harness runs get none. There is no --mode value for the default
+// (request-review), so the flag is left out; auto, accept-edits and
+// --dangerously-skip-permissions must never be added here.
+const NO_ALLOW_SETTINGS = JSON.stringify({ permissions: { allow: [] } });
+
 export const runAgy: Adapter = async (ctx) => {
-  const argv = [...ctx.argv, "-p", ctx.prompt, "--output-format", "stream-json"];
+  const argv = [
+    ...ctx.argv,
+    "-p",
+    ctx.prompt,
+    "--output-format",
+    "stream-json",
+    "--settings",
+    NO_ALLOW_SETTINGS,
+  ];
   if (ctx.model) argv.push("--model", ctx.model);
   const proc = Bun.spawn(argv, {
     cwd: ctx.cwd,
@@ -211,6 +226,14 @@ export const runAgy: Adapter = async (ctx) => {
     const outcome = await finish(proc, ctx, seen, () => stderr, errors);
     if (outcome.error !== null) {
       ctx.emit({ kind: "error", ...base(ctx), body: outcome.error });
+    } else if (seen.result && seen.result.denied_actions.length > 0) {
+      // A partly denied run still ends as a success; the user needs to see what agy wanted to do.
+      const names = seen.result.denied_actions.map((d) => d.action).join(", ");
+      ctx.emit({
+        kind: "message",
+        ...base(ctx),
+        body: `agy denied actions in headless mode: ${names}`,
+      });
     }
     return outcome;
   } catch (err) {
