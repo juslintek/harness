@@ -23,3 +23,12 @@ test("a script Codex re-quotes in the permission request is read as the announce
 test("a different quoted command is left as it was asked", () => {
   expect(ask('"rm -rf /"')).toBe('"rm -rf /"');
 });
+
+test("a script with single quotes inside is re-quoted by Codex and still matches", () => {
+  const withQuotes = "git status && rg --files -g '! .git' -g 'AGENTS.md' && ls -la";
+  const sink = new UpdateSink(ctx);
+  sink.handle({ sessionUpdate: "tool_call", toolCallId: "t2", rawInput: { command: withQuotes } });
+  const requoted = `"git status && rg --files -g '"'! .git'"' -g 'AGENTS.md' && ls -la"`;
+  const ask = sink.describe({ toolCallId: "t2", rawInput: { command: requoted } });
+  expect(ask.command).toBe(withQuotes);
+});
