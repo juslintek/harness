@@ -84,3 +84,11 @@ test("run now needs a fresh step-up even for an admin", async () => {
   expect(res.status).toBe(403);
   expect((await res.json()).error).toBe("step_up_required");
 });
+
+test("run now on a viewer agent is refused with a 409", async () => {
+  const { k, owner, agent } = await setup();
+  k.db.run("UPDATE members SET role = 'viewer' WHERE id = ?", [agent.id]);
+  const res = await k.call(owner, "POST", `/api/members/${agent.id}/wake`);
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({ error: "viewer" });
+});

@@ -95,10 +95,19 @@ function recordWake(db: Database, input: WakeInput): string | null {
   return store(db, member, input);
 }
 
+export class ViewerError extends Error {
+  constructor() {
+    super("viewer");
+    this.name = "ViewerError";
+  }
+}
+
 export function runNow(db: Database, memberId: string, causedBy: string): string {
   const member = getMember(db, memberId);
   if (member?.kind !== "agent") throw new Error("not an agent member");
   if (member.paused) throw new Error("member is paused");
+  // A viewer agent is not scheduled either, because a run would act with write scopes.
+  if (member.role === "viewer") throw new ViewerError();
   if (overCap(db, memberId)) {
     logCap(db, member, Date.now());
     throw new WakeCapError();

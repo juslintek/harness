@@ -12,7 +12,7 @@ import {
   roleAtLeast,
 } from "../orgs/api";
 import { listWakeups, wakeNow } from "./api";
-import { WakeCapError } from "./triggers";
+import { ViewerError, WakeCapError } from "./triggers";
 
 // A wake starts a host agent run, so an admin on an email-code session is not enough.
 function wakeTarget(db: Database, c: Context<AuthEnv>): MemberRow | Response {
@@ -32,6 +32,7 @@ export function wakeRoutes(db: Database): Hono<AuthEnv> {
       return c.json({ id: wakeNow(db, target.id, `user:${c.get("actor").userId}`) }, 202);
     } catch (err) {
       if (err instanceof WakeCapError) return c.json({ error: "wake_cap" }, 429);
+      if (err instanceof ViewerError) return c.json({ error: "viewer" }, 409);
       return c.json({ error: err instanceof Error ? err.message : "invalid" }, 400);
     }
   });
