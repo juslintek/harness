@@ -9,6 +9,7 @@ import {
   type Role,
 } from "../../../shared/orgs";
 import { defined, forbidden, notFound, parseBody } from "../../route-kit";
+import { getSpec } from "../agents/api";
 import { type AuthEnv, createEnrollment, createUser, findUserByEmail } from "../auth/api";
 import {
   addAgentMember,
@@ -119,6 +120,7 @@ function addAgentRoutes(db: Database, app: Hono<AuthEnv>): void {
     if (!c.get("actor").instanceAdmin) return forbidden(c);
     const body = await parseBody(c, addAgentBody);
     if (body instanceof Response) return body;
+    if (!getSpec(body.agentId)) return c.json({ error: "unknown agent" }, 400);
     const input = { ...defined(body), specialties: body.specialties ?? [] };
     return c.json(addAgentMember(db, ctx.org.id, input), 201);
   });

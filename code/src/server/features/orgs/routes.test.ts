@@ -177,4 +177,11 @@ test("only the instance admin adds agent members, even to an org someone else ow
   expect(denied.status).toBe(403);
   const ok = await k.call(admin, "POST", "/api/orgs/acme/members/agents", body);
   expect(ok.status).toBe(201);
+  const unknown = await k.call(admin, "POST", "/api/orgs/acme/members/agents", {
+    ...body,
+    handle: "ghost",
+    agentId: "no-such-agent",
+  });
+  expect(unknown.status).toBe(400);
+  expect((await unknown.json()).error).toBe("unknown agent");
 });
