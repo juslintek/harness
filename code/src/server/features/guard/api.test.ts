@@ -109,6 +109,12 @@ describe("checkAction", () => {
     expect(layers()).toEqual(["L1:allow"]);
   });
 
+  test("Laya's exfiltration score does not deny a read-only command", async () => {
+    await stubLaya(0.95);
+    const out = await checkAction(db, run, exec("cat docs/guide.md docs/notes.md"));
+    expect(out).toMatchObject({ verdict: "allow" });
+  });
+
   test("L2 deny on likely exfiltration", async () => {
     await stubLaya(0.95);
     const out = await checkAction(db, run, exec("bun test src/webhook.test.ts"));

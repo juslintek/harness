@@ -14,7 +14,13 @@ import {
 } from "./approvals";
 import { claudeSettings as buildClaudeSettings, type ClaudeSettings } from "./claude-settings";
 import { codexRules as buildCodexRules } from "./codex-rules";
-import { type ActionRequest, type L1Result, evaluateL1 as l1Evaluate, type Scope } from "./l1";
+import {
+  type ActionRequest,
+  type L1Result,
+  evaluateL1 as l1Evaluate,
+  splitCommands as l1Split,
+  type Scope,
+} from "./l1";
 import { escalateL2, type L2Result } from "./l2";
 import {
   decidableApprovals as decidable,
@@ -128,6 +134,10 @@ export function codexRules(): string {
 
 export function evaluateL1(action: ActionRequest, scope: Scope): L1Result {
   return l1Evaluate(action, scope);
+}
+
+export function splitCommands(command: string): string[][] {
+  return l1Split(command);
 }
 
 export function writeSrtSettings(input: SandboxInput): Promise<string> {

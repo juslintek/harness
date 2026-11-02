@@ -79,9 +79,15 @@ function fallback(category: Category, why: string): L2Result {
   };
 }
 
-function judge(probs: Record<string, number>): { verdict: L2Result["verdict"]; reason: string } {
+function judge(
+  probs: Record<string, number>,
+  category: Category,
+): { verdict: L2Result["verdict"]; reason: string } {
   const { destructive = 0, exfiltration = 0 } = probs;
-  if (exfiltration >= DENY_EXFILTRATION) return { verdict: "deny", reason: "likely exfiltration" };
+  // A line made only of read-only commands cannot send anything anywhere (a pipe into curl would
+  // not be category read), yet Laya scored `cat` of an installed skill file at 0.9+.
+  if (exfiltration >= DENY_EXFILTRATION && category !== "read")
+    return { verdict: "deny", reason: "likely exfiltration" };
   if (destructive >= ASK_DESTRUCTIVE) return { verdict: "ask", reason: "laya flagged the command" };
   return { verdict: "allow", reason: "laya found nothing" };
 }
@@ -113,5 +119,5 @@ export async function escalateL2(
     return fallback(l1.category, "bad_body");
   }
   const probs = { destructive, exfiltration, out_of_scope: outOfScope, risk };
-  return { ...judge(probs), source: "laya", probs };
+  return { ...judge(probs, l1.category), source: "laya", probs };
 }
