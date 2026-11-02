@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { startStub, stopStubs } from "../../test-support/stub-server";
 import { decide, layaHealth, resetLayaCircuit } from "./laya";
 
@@ -56,13 +56,48 @@ describe("decide", () => {
     process.env.OLLAYA_URL = "http://127.0.0.1:1";
     expect(await decide({}, questions, 1000)).toEqual({ ok: false, reason: "down" });
   });
+});
 
+describe("circuit breaker", () => {
   test("opens the circuit after 3 failures and skips the fetch", async () => {
     await stub(() => new Response("nope", { status: 500 }));
     for (let i = 0; i < 3; i++) await decide({}, questions, 1000);
     expect(hits.n).toBe(3);
     expect(await decide({}, questions, 1000)).toEqual({ ok: false, reason: "circuit_open" });
     expect(hits.n).toBe(3);
+  });
+
+  test("the circuit closes again once the open window has passed", async () => {
+    let fail = true;
+    await stub(() => (fail ? new Response("x", { status: 500 }) : Response.json(okBody)));
+    const opened = Date.now();
+    for (let i = 0; i < 3; i++) await decide({}, questions, 1000);
+    const clock = spyOn(Date, "now");
+    try {
+      clock.mockReturnValue(opened + 29_000);
+      expect(await decide({}, questions, 1000)).toEqual({ ok: false, reason: "circuit_open" });
+      clock.mockReturnValue(opened + 31_000);
+      fail = false;
+      expect((await decide({}, questions, 1000)).ok).toBe(true);
+      expect(hits.n).toBe(4);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("a failed probe after the window opens the circuit again", async () => {
+    await stub(() => new Response("x", { status: 500 }));
+    const opened = Date.now();
+    for (let i = 0; i < 3; i++) await decide({}, questions, 1000);
+    const clock = spyOn(Date, "now");
+    try {
+      clock.mockReturnValue(opened + 31_000);
+      expect(await decide({}, questions, 1000)).toEqual({ ok: false, reason: "http" });
+      expect(await decide({}, questions, 1000)).toEqual({ ok: false, reason: "circuit_open" });
+      expect(hits.n).toBe(4);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   test("a success resets the failure count", async () => {
