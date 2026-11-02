@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { listRunEvents } from "../logs/api";
 import { probeQuota } from "../usage/api";
@@ -46,7 +46,7 @@ test("a say script completes inside srt, keeps the branch and revokes the token"
   off();
   expect(row.state).toBe("completed");
   expect(row.branch).toBe(`harness/${id}`);
-  expect(row.worktree).toBe(`${x.home}/worktrees/${id}`);
+  expect(row.worktree).toBe(`${realpathSync(x.home)}/worktrees/${id}`);
   const branch = Bun.spawnSync(["git", "rev-parse", "--verify", `harness/${id}`], { cwd: x.repo });
   expect(branch.exitCode).toBe(0);
   expect(transcript(x, id)).toBe("hello");
