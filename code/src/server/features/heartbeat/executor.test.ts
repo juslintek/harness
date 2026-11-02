@@ -14,6 +14,7 @@ import {
 import { setHalted } from "../runtimes/api";
 import { wakeNow } from "./api";
 import { setup, until, wakes } from "./kit";
+import { scheduleCandidates } from "./repo";
 
 setDefaultTimeout(30_000);
 
@@ -109,6 +110,18 @@ test("the schedule tick wakes an agent whose last wake is older than its heartbe
   await Bun.sleep(100);
   expect(wakes(k.db, b.id).map((w) => w.reason)).toEqual(["schedule"]);
   expect(wakes(k.db, idle.id)).toHaveLength(0);
+});
+
+test("the schedule tick skips an agent whose role is viewer", async () => {
+  const k = setup();
+  const viewer = k.agent("view");
+  k.db.run(
+    "UPDATE members SET heartbeat_minutes = 60, role = 'viewer', created_at = ? WHERE id = ?",
+    [Date.now() - 2 * 3_600_000, viewer.id],
+  );
+  expect(scheduleCandidates(k.db)).toEqual([]);
+  k.db.run("UPDATE members SET role = 'member' WHERE id = ?", [viewer.id]);
+  expect(scheduleCandidates(k.db).map((c) => c.id)).toEqual([viewer.id]);
 });
 
 test("a paused agent gets no wakes and run now is refused", () => {

@@ -165,7 +165,8 @@ export function scheduleCandidates(db: Database): ScheduleDue[] {
       `SELECT m.id AS id, m.heartbeat_minutes AS minutes,
          COALESCE((SELECT MAX(w.created_at) FROM wakeups w WHERE w.member_id = m.id), m.created_at) AS last
        FROM members m
-       WHERE m.heartbeat_minutes IS NOT NULL AND m.kind = 'agent' AND m.paused = 0`,
+       WHERE m.heartbeat_minutes IS NOT NULL AND m.kind = 'agent' AND m.paused = 0
+         AND m.role != 'viewer'`,
     )
     .all();
 }
