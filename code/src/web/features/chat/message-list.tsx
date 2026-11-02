@@ -83,7 +83,7 @@ export function MessageItem(props: {
   );
 }
 
-function LoadOlder({ onLoad }: { onLoad: () => Promise<void> }): preact.JSX.Element {
+export function LoadOlder({ onLoad }: { onLoad: () => Promise<void> }): preact.JSX.Element {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const click = async (): Promise<void> => {

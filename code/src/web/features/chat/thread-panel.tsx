@@ -1,8 +1,9 @@
 import type { ChatMember } from "../../../shared/chat";
 import { type MessageView, messageListSchema, messageViewSchema } from "../../../shared/chat";
 import { api, useLoad } from "../../api";
+import { PAGE_SIZE, useHistory } from "./chat-history";
 import { Composer } from "./composer";
-import { type MessageContext, MessageItem } from "./message-list";
+import { LoadOlder, type MessageContext, MessageItem } from "./message-list";
 
 export function ThreadPanel(props: {
   root: MessageView;
@@ -14,9 +15,14 @@ export function ThreadPanel(props: {
 }): preact.JSX.Element {
   const { root } = props;
   const replies = useLoad(
-    () => api(`/api/channels/${root.channelId}/messages?thread=${root.id}`, messageListSchema),
+    () =>
+      api(
+        `/api/channels/${root.channelId}/messages?thread=${root.id}&limit=${PAGE_SIZE}`,
+        messageListSchema,
+      ),
     [root.id, props.refresh],
   );
+  const history = useHistory(root.channelId, replies.data, root.id);
   const send = async (body: string): Promise<void> => {
     await api(`/api/channels/${root.channelId}/messages`, messageViewSchema, {
       method: "POST",
@@ -33,9 +39,10 @@ export function ThreadPanel(props: {
           Close
         </button>
       </div>
+      {history.hasOlder && <LoadOlder onLoad={history.loadOlder} />}
       <ul class="plain messages">
         <MessageItem message={root} ctx={props.ctx} />
-        {(replies.data ?? []).map((m) => (
+        {history.messages.map((m) => (
           <MessageItem key={m.id} message={m} ctx={props.ctx} />
         ))}
       </ul>

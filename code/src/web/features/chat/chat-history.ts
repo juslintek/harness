@@ -5,7 +5,7 @@ import { api } from "../../api";
 export const PAGE_SIZE = 50;
 
 interface Seen {
-  channelId: string;
+  key: string;
   items: MessageView[];
   exhausted: boolean;
 }
@@ -23,30 +23,37 @@ export interface History {
 
 // The latest page is refetched on every chat event, so what was shown before is kept here:
 // older pages the user asked for must stay, and so must messages a busy channel pushed out of
-// the latest window.
-export function useHistory(channelId: string | null, latest: MessageView[] | null): History {
+// the latest window. With a thread root the history is that thread's replies instead.
+export function useHistory(
+  channelId: string | null,
+  latest: MessageView[] | null,
+  threadRootId: string | null = null,
+): History {
   const [seen, setSeen] = useState<Seen | null>(null);
-  const current = latest?.filter((m) => m.channelId === channelId) ?? [];
-  const mine = seen !== null && seen.channelId === channelId ? seen : null;
+  const key = threadRootId ?? channelId;
+  const current =
+    latest?.filter((m) => m.channelId === channelId && m.threadRootId === threadRootId) ?? [];
+  const mine = seen !== null && seen.key === key ? seen : null;
   useEffect(() => {
-    if (channelId === null || current.length === 0) return;
+    if (key === null || current.length === 0) return;
     setSeen((s) =>
-      s?.channelId === channelId
+      s?.key === key
         ? { ...s, items: merge(s.items, current) }
-        : { channelId, items: current, exhausted: current.length < PAGE_SIZE },
+        : { key, items: current, exhausted: current.length < PAGE_SIZE },
     );
-  }, [channelId, latest]);
+  }, [key, latest]);
   const messages = merge(mine?.items ?? [], current);
   const oldest = messages[0];
   const loadOlder = async (): Promise<void> => {
     if (channelId === null || !oldest) return;
     const cursor = `${oldest.createdAt}:${oldest.id}`;
+    const thread = threadRootId === null ? "" : `&thread=${threadRootId}`;
     const page = await api(
-      `/api/channels/${channelId}/messages?before=${cursor}&limit=${PAGE_SIZE}`,
+      `/api/channels/${channelId}/messages?before=${cursor}&limit=${PAGE_SIZE}${thread}`,
       messageListSchema,
     );
     setSeen((s) =>
-      s?.channelId === channelId
+      s?.key === key
         ? { ...s, items: merge(s.items, page), exhausted: page.length < PAGE_SIZE }
         : s,
     );
