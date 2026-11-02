@@ -95,16 +95,24 @@ export function verifyEmailCode(db: Database, email: string, code: string): stri
   return findUserByEmail(db, email)?.id ?? null;
 }
 
-// No user and no email marks the first-owner bootstrap code.
+// No user and no email marks the first-owner bootstrap code. A new code for a user ends their
+// older unused ones, so a link that was re-issued because it leaked or got lost stops working.
 export function createEnrollment(
   db: Database,
   opts: { userId?: string; email?: string; ttlMs: number },
 ): string {
   const code = randomCode(4);
   const now = Date.now();
-  db.query(
-    "INSERT INTO enrollments (code_hash, user_id, email, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-  ).run(sha256Hex(code), opts.userId ?? null, opts.email ?? null, now, now + opts.ttlMs);
+  db.transaction(() => {
+    if (opts.userId) {
+      db.query(
+        "UPDATE enrollments SET expires_at = ? WHERE user_id = ? AND used_at IS NULL AND expires_at > ?",
+      ).run(now, opts.userId, now);
+    }
+    db.query(
+      "INSERT INTO enrollments (code_hash, user_id, email, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(sha256Hex(code), opts.userId ?? null, opts.email ?? null, now, now + opts.ttlMs);
+  })();
   return code;
 }
 
