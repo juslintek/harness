@@ -13,6 +13,7 @@ import {
   grantProject,
   listGrantOrgIds,
   listProjects,
+  onGrantChanged,
   revokeGrant,
 } from "./projects";
 import {
@@ -68,6 +69,7 @@ export {
   listTeams,
   managerPositionsOf,
   memberForUser,
+  onGrantChanged,
   onMemberRemoved,
   onOrgCreated,
   orgAccess,

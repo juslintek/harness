@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { type AgentSpec, getSpec } from "../agents/api";
 import { expireApprovals } from "../guard/api";
 import type { NewEvent } from "../logs/api";
-import { onMemberRemoved } from "../orgs/api";
+import { onGrantChanged, onMemberRemoved } from "../orgs/api";
 import { listAcpModels } from "./acp-models";
 import { createProbeLaunch, type RunDeps, type RunMember } from "./launch";
 import {
@@ -67,6 +67,17 @@ function endRunsOf(db: Database, memberId: string): void {
   for (const { id } of ids) kill(db, id, "member_removed");
 }
 
+// A grantee org's agents must stop working in a project once their org lost write access to it.
+function endRunsOnGrant(db: Database, projectId: string, orgId: string): void {
+  const ids = db
+    .query<{ id: string }, [string, string]>(
+      `SELECT r.id FROM runs r JOIN members m ON m.id = r.member_id
+       WHERE r.project_id = ? AND m.org_id = ? AND r.ended_at IS NULL`,
+    )
+    .all(projectId, orgId);
+  for (const { id } of ids) kill(db, id, "grant_changed");
+}
+
 let wired = false;
 
 // The listener gets the db from the event, so one subscription serves every database.
@@ -74,6 +85,9 @@ export function wireRuntimes(): void {
   if (wired) return;
   wired = true;
   onMemberRemoved((db, member) => endRunsOf(db, member.id));
+  onGrantChanged((db, change) => {
+    if (change.permission !== "write") endRunsOnGrant(db, change.projectId, change.orgId);
+  });
 }
 
 export function setHalted(db: Database, value: boolean): void {

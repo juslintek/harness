@@ -82,6 +82,19 @@ export function listProjects(db: Database, orgId: string): ProjectRow[] {
     .map(projectRow);
 }
 
+interface GrantChange {
+  projectId: string;
+  orgId: string;
+  // The access the grantee org has left; null once the grant is gone.
+  permission: GrantRow["permission"] | null;
+}
+const grantChanged = new Set<(db: Database, change: GrantChange) => void>();
+
+export function onGrantChanged(fn: (db: Database, change: GrantChange) => void): () => void {
+  grantChanged.add(fn);
+  return () => grantChanged.delete(fn);
+}
+
 export function grantProject(
   db: Database,
   projectId: string,
@@ -93,9 +106,11 @@ export function grantProject(
     `INSERT INTO grants (id, project_id, org_id, permission, granted_by, created_at) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT (project_id, org_id) DO UPDATE SET permission = excluded.permission, granted_by = excluded.granted_by`,
   ).run(Bun.randomUUIDv7(), projectId, granteeOrgId, permission, grantedBy, Date.now());
+  for (const fn of grantChanged) fn(db, { projectId, orgId: granteeOrgId, permission });
 }
 export function revokeGrant(db: Database, projectId: string, granteeOrgId: string): void {
   db.query("DELETE FROM grants WHERE project_id = ? AND org_id = ?").run(projectId, granteeOrgId);
+  for (const fn of grantChanged) fn(db, { projectId, orgId: granteeOrgId, permission: null });
 }
 
 export function listGrantOrgIds(db: Database, projectId: string): string[] {
