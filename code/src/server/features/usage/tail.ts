@@ -89,31 +89,94 @@ function applyLine(db: Database, parsed: ParsedLine): number {
   return parsed.event && appendEvent(db, parsed.event) ? 1 : 0;
 }
 
+const CHUNK_BYTES = 1024 * 1024;
+const BATCH_LINES = 500;
+const DAY_MS = 86_400_000;
+
+function backfillCutoff(): number {
+  const days = Number(process.env.HARNESS_TAIL_BACKFILL_DAYS ?? 30);
+  return Date.now() - (Number.isFinite(days) && days >= 0 ? days : 30) * DAY_MS;
+}
+
+interface PendingLine {
+  text: string;
+  offset: number;
+}
+
+// Splits on the newline byte before decoding so a multi-byte character cut by a chunk border stays intact.
+function completeLines(buf: Buffer, bufStart: number): { lines: PendingLine[]; consumed: number } {
+  const lines: PendingLine[] = [];
+  let pos = 0;
+  for (let end = buf.indexOf(0x0a, pos); end !== -1; end = buf.indexOf(0x0a, pos)) {
+    lines.push({ text: buf.toString("utf8", pos, end), offset: bufStart + pos });
+    pos = end + 1;
+  }
+  return { lines, consumed: pos };
+}
+
+function applyBatches(db: Database, lines: PendingLine[], parse: Parser, ctx: LineContext): number {
+  let added = 0;
+  for (let i = 0; i < lines.length; i += BATCH_LINES) {
+    const batch = lines.slice(i, i + BATCH_LINES);
+    added += db.transaction((): number => {
+      let n = 0;
+      for (const { text, offset } of batch)
+        if (text.trim()) n += applyLine(db, parse(text, offset, ctx));
+      return n;
+    })();
+  }
+  return added;
+}
+
 async function tailFile(db: Database, source: TailSource, path: string): Promise<number> {
   const stat = statSync(path);
   const mtime = Math.floor(stat.mtimeMs);
   const saved = storedOffset(db, path);
+  if (!saved && mtime < backfillCutoff()) {
+    saveOffset(db, path, stat.size, mtime);
+    return 0;
+  }
   // A shrunk file was rewritten; dedupe keys make the rescan safe.
   const start = saved && saved.offset <= stat.size ? saved.offset : 0;
   if (saved && start === stat.size && saved.mtime === mtime) return 0;
-  const bytes = Buffer.from(await Bun.file(path).slice(start, stat.size).arrayBuffer());
-  const complete = bytes.lastIndexOf(0x0a) + 1;
   const sessionId = sessionIdOf(path);
-  const skip = loggedViaAcp(db, sessionId) || inHarnessWorktree(path, source.excludeCwdUnder);
-  const ctx: LineContext = { file: path, sessionId };
-  let added = 0;
-  let pos = 0;
-  while (!skip && pos < complete) {
-    const end = bytes.indexOf(0x0a, pos);
-    const line = bytes.toString("utf8", pos, end);
-    if (line.trim()) added += applyLine(db, PARSERS[source.name](line, start + pos, ctx));
-    pos = end + 1;
+  if (loggedViaAcp(db, sessionId) || inHarnessWorktree(path, source.excludeCwdUnder)) {
+    saveOffset(db, path, stat.size, mtime);
+    return 0;
   }
-  saveOffset(db, path, start + complete, mtime);
+  const ctx: LineContext = { file: path, sessionId };
+  const file = Bun.file(path);
+  let added = 0;
+  let readPos = start;
+  let carry: Buffer = Buffer.alloc(0);
+  while (readPos < stat.size) {
+    const end = Math.min(readPos + CHUNK_BYTES, stat.size);
+    const chunk = Buffer.from(await file.slice(readPos, end).arrayBuffer());
+    readPos = end;
+    const buf = carry.length > 0 ? Buffer.concat([carry, chunk]) : chunk;
+    const { lines, consumed } = completeLines(buf, readPos - buf.length);
+    added += applyBatches(db, lines, PARSERS[source.name], ctx);
+    carry = buf.subarray(consumed);
+    saveOffset(db, path, readPos - carry.length, mtime);
+    // Lets the HTTP server run between chunks of a large backfill.
+    await Bun.sleep(0);
+  }
   return added;
 }
 
+const sweeping = new WeakSet<Database>();
+
 export async function tailSources(db: Database, sources: TailSource[]): Promise<number> {
+  if (sweeping.has(db)) return 0;
+  sweeping.add(db);
+  try {
+    return await sweep(db, sources);
+  } finally {
+    sweeping.delete(db);
+  }
+}
+
+async function sweep(db: Database, sources: TailSource[]): Promise<number> {
   let added = 0;
   for (const source of sources) {
     if (!existsSync(source.root)) continue;

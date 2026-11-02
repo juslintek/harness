@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   rmSync,
   truncateSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -250,4 +251,37 @@ test("claude sessions whose cwd is under the harness worktrees dir are skipped",
   const scoped = sources.map((s) => ({ ...s, excludeCwdUnder: worktrees }));
   expect(await tailOnce(db, scoped)).toBe(1);
   expect(usageEvents()).toBe(1);
+});
+
+test("a file larger than the chunk size is read in full, lines cut by a chunk border included", async () => {
+  const total = 6000;
+  let text = "";
+  for (let i = 0; i < total; i++) text += claudeLine(`msg_${i}_${"é".repeat(i % 7)}`);
+  writeFileSync(claudeFile, text);
+  expect(Buffer.byteLength(text)).toBeGreaterThan(1024 * 1024);
+  expect(await tailOnce(db, sources)).toBe(total);
+  expect(usageEvents()).toBe(total);
+  expect(await tailOnce(db, sources)).toBe(0);
+});
+
+test("first sight of a file older than the backfill window stores its size and reads nothing", async () => {
+  writeFileSync(claudeFile, claudeLine("msg_old"));
+  const old = new Date(Date.now() - 40 * 86_400_000);
+  utimesSync(claudeFile, old, old);
+  expect(await tailOnce(db, sources)).toBe(0);
+  const saved = db
+    .query<{ offset: number }, [string]>("SELECT offset FROM tail_offsets WHERE path = ?")
+    .get(claudeFile);
+  expect(saved?.offset).toBe(Buffer.byteLength(claudeLine("msg_old")));
+  appendFileSync(claudeFile, claudeLine("msg_new"));
+  utimesSync(claudeFile, old, old);
+  expect(await tailOnce(db, sources)).toBe(1);
+});
+
+test("an overlapping sweep is skipped instead of running concurrently", async () => {
+  writeFileSync(claudeFile, claudeLine("msg_1") + claudeLine("msg_2"));
+  const [first, second] = await Promise.all([tailOnce(db, sources), tailOnce(db, sources)]);
+  expect(first).toBe(2);
+  expect(second).toBe(0);
+  expect(usageEvents()).toBe(2);
 });

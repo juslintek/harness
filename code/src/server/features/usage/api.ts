@@ -96,15 +96,9 @@ export function startTailers(
   intervalMs = 60000,
   sources: TailSource[] = defaultTailSources(),
 ): () => void {
-  let running = false;
+  // tailSources ignores a tick while the previous sweep is still running.
   const timer = setInterval(() => {
-    if (running) return;
-    running = true;
-    tailOnce(db, sources)
-      .catch((err: unknown) => console.error("usage tail failed", err))
-      .finally(() => {
-        running = false;
-      });
+    tailOnce(db, sources).catch((err: unknown) => console.error("usage tail failed", err));
   }, intervalMs);
   return () => clearInterval(timer);
 }
