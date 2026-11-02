@@ -7,7 +7,6 @@
     "@commitlint/cli",
     "typescript7",
     "@agentclientprotocol/claude-agent-acp",
-    "@agentclientprotocol/codex-acp",
-    "@simplewebauthn/server"
+    "@agentclientprotocol/codex-acp"
   ]
 }
