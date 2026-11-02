@@ -95,7 +95,12 @@ function messageRoutes(db: Database, app: Hono<AuthEnv>): void {
     const [ts, beforeId] = before?.split(":") ?? [];
     const cursor = ts === undefined ? {} : { before: Number(ts), beforeId };
     return c.json(
-      listMessages(db, found.channel.id, defined({ ...rest, ...cursor, threadRootId: thread })),
+      listMessages(
+        db,
+        found.channel.id,
+        found.member.id,
+        defined({ ...rest, ...cursor, threadRootId: thread }),
+      ),
     );
   });
   app.post("/channels/:id/messages", async (c) => {

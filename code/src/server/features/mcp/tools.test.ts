@@ -131,7 +131,7 @@ test("chat_post stores the mention and chat_read marks the channel read", async 
   expect(posted.isError).toBe(false);
   const general = listChannels(db, y.id).find((c) => c.name === "general");
   expect(general?.unread).toBe(1);
-  const messages = listMessages(db, general?.id ?? "", {});
+  const messages = listMessages(db, general?.id ?? "", y.id, {});
   expect(messages[0]?.mentions).toEqual([y.id]);
 
   const read = JSON.parse(

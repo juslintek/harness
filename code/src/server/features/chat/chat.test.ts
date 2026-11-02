@@ -169,17 +169,19 @@ test("listMessages returns top level with replyCount, thread replies and pages b
   postMessage(db, { channelId: ch.id, authorId: owner.id, body: "r1", threadRootId: first.id });
   postMessage(db, { channelId: ch.id, authorId: owner.id, body: "r2", threadRootId: first.id });
   const second = postMessage(db, { channelId: ch.id, authorId: owner.id, body: "two" });
-  const top = listMessages(db, ch.id, {});
+  const top = listMessages(db, ch.id, owner.id, {});
   expect(top.map((m) => [m.body, m.replyCount])).toEqual([
     ["one", 2],
     ["two", 0],
   ]);
-  expect(listMessages(db, ch.id, { threadRootId: first.id }).map((m) => m.body)).toEqual([
+  expect(listMessages(db, ch.id, owner.id, { threadRootId: first.id }).map((m) => m.body)).toEqual([
     "r1",
     "r2",
   ]);
-  expect(listMessages(db, ch.id, { limit: 1 }).map((m) => m.id)).toEqual([second.id]);
-  expect(listMessages(db, ch.id, { before: second.createdAt, limit: 5 }).length).toBeLessThan(2);
+  expect(listMessages(db, ch.id, owner.id, { limit: 1 }).map((m) => m.id)).toEqual([second.id]);
+  expect(
+    listMessages(db, ch.id, owner.id, { before: second.createdAt, limit: 5 }).length,
+  ).toBeLessThan(2);
 });
 
 test("body length is enforced", () => {
@@ -249,7 +251,7 @@ test("task numbers link to tasks of the channel's org through the real board tab
   });
   const m = postMessage(db, { channelId: ch.id, authorId: owner.id, body: "see #1 and #9" });
   expect(m.taskIds).toEqual([mine.id]);
-  expect(listMessages(db, ch.id, {}).at(-1)?.taskIds).toEqual([mine.id]);
+  expect(listMessages(db, ch.id, owner.id, {}).at(-1)?.taskIds).toEqual([mine.id]);
 });
 
 test("a throwing listener does not fail a committed message or starve later listeners", () => {
@@ -271,7 +273,7 @@ test("a throwing listener does not fail a committed message or starve later list
   quiet.mockRestore();
   for (const stop of off) stop();
   expect(seen).toEqual(["hi"]);
-  expect(listMessages(db, posted.channelId, {})).toHaveLength(1);
+  expect(listMessages(db, posted.channelId, owner.id, {})).toHaveLength(1);
 });
 
 test("ensureTeamChannel is idempotent and named after the team", () => {

@@ -49,7 +49,7 @@ function registerReads(server: McpServer, env: ToolEnv): void {
     },
     (ctx, a) => {
       const c = channel(ctx, a.channel);
-      const messages = listMessages(ctx.db, c.id, {
+      const messages = listMessages(ctx.db, c.id, ctx.memberId, {
         ...(a.thread === undefined ? {} : { threadRootId: a.thread }),
         ...(a.limit === undefined ? {} : { limit: a.limit }),
       });

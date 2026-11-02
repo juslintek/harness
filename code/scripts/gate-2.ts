@@ -88,7 +88,7 @@ function state(db: Db, s: Scene): Record<string, boolean> {
   const tasks = listTasks(db, s.projectId);
   const parent = tasks.find((t) => t.id === s.taskId);
   const sub = tasks.find((t) => t.parentId === s.taskId);
-  const msgs = listMessages(db, s.channelId, { limit: 200 });
+  const msgs = listMessages(db, s.channelId, s.owner.id, { limit: 200 });
   const from = (m: MemberRow): typeof msgs => msgs.filter((x) => x.authorId === m.id);
   return {
     subtaskForDev: sub?.assigneeId === s.dev.id,

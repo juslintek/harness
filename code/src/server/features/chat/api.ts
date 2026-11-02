@@ -190,8 +190,8 @@ export interface PostInput {
   threadRootId?: string;
 }
 
-function checkThreadRoot(db: Database, channelId: string, rootId: string): void {
-  const root = getMessage(db, rootId);
+function checkThreadRoot(db: Database, channelId: string, rootId: string, readerId: string): void {
+  const root = getMessage(db, rootId, readerId);
   if (!root || root.channelId !== channelId) throw new ChatError("invalid", "bad thread root");
   if (root.threadRootId !== null) throw new ChatError("invalid", "cannot reply to a reply");
 }
@@ -205,7 +205,8 @@ export function postMessage(db: Database, input: PostInput): MessageView {
   if (channelAccess(db, input.authorId, channel.id) !== "write") {
     throw new ChatError("forbidden", "no write access");
   }
-  if (input.threadRootId !== undefined) checkThreadRoot(db, channel.id, input.threadRootId);
+  if (input.threadRootId !== undefined)
+    checkThreadRoot(db, channel.id, input.threadRootId, input.authorId);
   const parsed = parseMessage(input.body);
   const mentions = parsed.handles.flatMap((handle) => {
     // A project channel is open to grantee-org members, so the same handle can match two people.
@@ -220,7 +221,7 @@ export function postMessage(db: Database, input: PostInput): MessageView {
     body: input.body,
     threadRootId: input.threadRootId ?? null,
     mentions,
-    taskIds: resolveTaskIds(db, channel.orgId, parsed.taskNumbers),
+    taskIds: resolveTaskIds(db, channel, parsed.taskNumbers),
   });
   for (const fn of listeners) {
     try {
@@ -232,8 +233,13 @@ export function postMessage(db: Database, input: PostInput): MessageView {
   return message;
 }
 
-export function listMessages(db: Database, channelId: string, opts: MessageQuery): MessageView[] {
-  return queryMessages(db, channelId, opts);
+export function listMessages(
+  db: Database,
+  channelId: string,
+  readerId: string,
+  opts: MessageQuery,
+): MessageView[] {
+  return queryMessages(db, channelId, readerId, opts);
 }
 
 export function markRead(db: Database, channelId: string, memberId: string): void {
