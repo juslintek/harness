@@ -202,3 +202,25 @@ test("a socket closes once its session expires, unless the session slid forward 
   await Bun.sleep(100);
   expect(kept.closed).toBe(false);
 });
+
+test("a dm nudge reaches only the two participants, not other org members", async () => {
+  const k = await boot();
+  const [alice, bob, carol] = [await k.user(), await k.user(), await k.user()] as [
+    Awaited<ReturnType<typeof k.user>>,
+    Awaited<ReturnType<typeof k.user>>,
+    Awaited<ReturnType<typeof k.user>>,
+  ];
+  const a = k.org("acme", alice);
+  const bobMember = addHumanMember(k.db, a.id, bob.userId, "bob", "bob", "member");
+  addHumanMember(k.db, a.id, carol.userId, "carol", "carol", "member");
+  const dm = await (await k.post(alice, "/api/orgs/acme/dms", { memberId: bobMember.id })).json();
+  const [mine, theirs, outsider] = [
+    await k.listen(alice, `org:${a.id}`),
+    await k.listen(bob, `org:${a.id}`),
+    await k.listen(carol, `org:${a.id}`),
+  ];
+  await k.post(alice, `/api/channels/${dm.id}/messages`, { body: "psst" });
+  await until(() => mine.length === 1 && theirs.length === 1);
+  await Bun.sleep(100);
+  expect(outsider).toEqual([]);
+});

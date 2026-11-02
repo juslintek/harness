@@ -4,7 +4,7 @@ import type { Context } from "hono";
 import { type WsMessage, wsTopicSchema } from "../shared/realtime";
 import { type AuthEnv, onSessionRevoked, sessionExpiresAt } from "./features/auth/api";
 import { onTaskChange } from "./features/board/api";
-import { onMessage } from "./features/chat/api";
+import { channelMembers, onMessage } from "./features/chat/api";
 import { onApprovalChange } from "./features/guard/api";
 import { getProject, listGrantOrgIds, onMemberRemoved, orgAccess } from "./features/orgs/api";
 import { getRun, onRunEvent } from "./features/runtimes/api";
@@ -117,6 +117,15 @@ export function wireRealtime(
       messageId: message.id,
       threadRootId: message.threadRootId,
     };
+    if (channel.kind === "group" || channel.kind === "dm") {
+      // An org topic reaches every member, so a private conversation is sent socket by socket.
+      const userIds = new Set(channelMembers(db, channel).map((m) => m.userId));
+      const text = JSON.stringify(nudge);
+      for (const ws of sockets) {
+        if (ws.data.topic.startsWith("org:") && userIds.has(ws.data.userId)) ws.send(text);
+      }
+      return;
+    }
     const topics = channel.projectId
       ? projectTopics(db, channel.projectId)
       : [`org:${channel.orgId}`];
