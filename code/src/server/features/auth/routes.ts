@@ -1,7 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import { type Context, Hono } from "hono";
-import { setCookie } from "hono/cookie";
 import type { z } from "zod";
 import {
   assertionBody,
@@ -30,7 +29,7 @@ import {
   useRecoveryCode,
   verifyEmailCode,
 } from "./api";
-import { SESSION_COOKIE } from "./middleware";
+import { setSessionCookie } from "./middleware";
 import { rateLimit } from "./rate-limit";
 
 export interface AuthDeps {
@@ -40,7 +39,6 @@ export interface AuthDeps {
   deliverEmailCode: (email: string, code: string) => void | Promise<void>;
 }
 
-const THIRTY_DAYS_S = 30 * 24 * 60 * 60;
 const ATTEMPTS_PER_MINUTE = 10;
 
 export async function parseBody<T>(c: Context, schema: z.ZodType<T>): Promise<T | null> {
@@ -49,16 +47,6 @@ export async function parseBody<T>(c: Context, schema: z.ZodType<T>): Promise<T 
 }
 
 export const invalidBody = (c: Context): Response => c.json({ error: "invalid body" }, 400);
-
-function setSessionCookie(c: Context, rp: Rp, token: string): void {
-  setCookie(c, SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "Strict",
-    path: "/",
-    secure: rp.origin.startsWith("https:"),
-    maxAge: THIRTY_DAYS_S,
-  });
-}
 
 // Every way in ends here, so the personal org exists whichever method the user used first.
 function signIn(
@@ -73,7 +61,7 @@ function signIn(
   const agent = c.req.header("user-agent")?.slice(0, 200) ?? null;
   const { token } = createSession(deps.db, user.id, method, agent);
   ensurePersonalOrg(deps.db, user);
-  setSessionCookie(c, deps.rp, token);
+  setSessionCookie(c, deps.rp.origin, token);
   return c.json({ user, ...extra });
 }
 

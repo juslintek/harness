@@ -1,5 +1,7 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { bootKit, cookieOf } from "./routes-kit";
+
+afterEach(() => setSystemTime());
 
 test("two sessions are listed, revoking the other one needs step-up and kills its cookie", async () => {
   const kit = bootKit();
@@ -73,4 +75,15 @@ test("a recovery code logs in once and regenerating replaces the set", async () 
     (await kit.call("POST", "/api/auth/recovery", { email: "owner@example.com", code: spare }))
       .status,
   ).toBe(401);
+});
+
+test("a request that slides the session expiry re-sets the cookie, later ones in the hour do not", async () => {
+  const kit = bootKit();
+  const cookie = cookieOf(await kit.enroll());
+  const me = (): Promise<Response> => kit.call("GET", "/api/auth/me", undefined, { cookie });
+  expect((await me()).headers.get("set-cookie")).toBeNull();
+  setSystemTime(Date.now() + 2 * 60 * 60 * 1000);
+  const slid = await me();
+  expect(slid.headers.get("set-cookie")).toContain(`${cookie}; Max-Age=2592000`);
+  expect((await me()).headers.get("set-cookie")).toBeNull();
 });

@@ -1,9 +1,21 @@
 import type { Database } from "bun:sqlite";
 import type { Context, MiddlewareHandler } from "hono";
-import { getCookie } from "hono/cookie";
+import { getCookie, setCookie } from "hono/cookie";
 import { hasFreshStepUp, type Session, sessionFromToken } from "./sessions";
 
 export const SESSION_COOKIE = "harness_session";
+
+const THIRTY_DAYS_S = 30 * 24 * 60 * 60;
+
+export function setSessionCookie(c: Context, origin: string, token: string): void {
+  setCookie(c, SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "Strict",
+    path: "/",
+    secure: origin.startsWith("https:"),
+    maxAge: THIRTY_DAYS_S,
+  });
+}
 
 export interface AuthEnv {
   Variables: { actor: Session };
@@ -43,13 +55,16 @@ export function originGuard(origin: string): MiddlewareHandler {
   };
 }
 
-// Only the session cookie opens /api/*; an Authorization header is never looked at here.
-export function sessionMiddleware(db: Database): MiddlewareHandler<AuthEnv> {
+// Only the session cookie opens /api/*; an Authorization header is never looked at here. With an
+// origin, a request that slid the stored expiry also re-sets the cookie, whose Max-Age would
+// otherwise run out 30 days after login however active the user is.
+export function sessionMiddleware(db: Database, origin?: string): MiddlewareHandler<AuthEnv> {
   return async (c, next) => {
     const token = getCookie(c, SESSION_COOKIE);
     const session = token ? sessionFromToken(db, token) : null;
     if (!session) return c.json({ error: "unauthorized" }, 401);
     c.set("actor", session);
+    if (session.slid && token && origin) setSessionCookie(c, origin, token);
     await next();
   };
 }

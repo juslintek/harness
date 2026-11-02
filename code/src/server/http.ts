@@ -141,7 +141,7 @@ export function createApp(deps: AppDeps): Hono {
         deps.deliverEmailCode ?? ((email, code) => console.log(`email code for ${email}: ${code}`)),
     }),
   );
-  app.use("/api/*", sessionMiddleware(db));
+  app.use("/api/*", sessionMiddleware(db, deps.rp.origin));
   app.route("/api/auth", accountRoutes(db, deps.rp));
   app.route("/api", orgRoutes({ db, origin: deps.rp.origin }));
   app.route("/api", boardRoutes(db));

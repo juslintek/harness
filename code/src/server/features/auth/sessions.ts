@@ -8,6 +8,8 @@ export interface Session {
   method: SessionMethod;
   stepUpAt: number | null;
   instanceAdmin: boolean;
+  // Set only on the lookup that moved expires_at, so the cookie can follow it.
+  slid?: true;
 }
 
 export interface SessionInfo {
@@ -77,7 +79,8 @@ export function sessionFromToken(db: Database, token: string): Session | null {
     )
     .get(sha256Hex(token), now);
   if (!row) return null;
-  if (now - row.last_seen_at >= SLIDE_EVERY_MS) {
+  const slid = now - row.last_seen_at >= SLIDE_EVERY_MS;
+  if (slid) {
     db.query("UPDATE sessions SET last_seen_at = ?, expires_at = ? WHERE id = ?").run(
       now,
       now + SESSION_TTL_MS,
@@ -90,6 +93,7 @@ export function sessionFromToken(db: Database, token: string): Session | null {
     method: row.method,
     stepUpAt: row.step_up_at,
     instanceAdmin: row.instance_admin === 1,
+    ...(slid ? { slid: true as const } : {}),
   };
 }
 
