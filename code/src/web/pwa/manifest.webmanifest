@@ -1,0 +1,14 @@
+{
+  "name": "Harness",
+  "short_name": "Harness",
+  "description": "Work platform for people and agents",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#fafafa",
+  "background_color": "#fafafa",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
