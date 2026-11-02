@@ -14,6 +14,7 @@ const CLAUDE_DENY = [
 
 export interface ClaudeSettings {
   permissions: { deny: string[] };
+  attribution: { commit: string; pr: string; sessionUrl: boolean };
   hooks: {
     PreToolUse: Array<{ matcher: string; hooks: Array<{ type: "command"; command: string }> }>;
   };
@@ -32,6 +33,8 @@ export function claudeSettings(bin: string, script: string): ClaudeSettings {
   const hookCmd = hookCommand(bin, script);
   return {
     permissions: { deny: [...CLAUDE_DENY] },
+    // Empty strings hide the Co-Authored-By trailer and the PR footer (claude 2.1.x).
+    attribution: { commit: "", pr: "", sessionUrl: false },
     hooks: { PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: hookCmd }] }] },
   };
 }

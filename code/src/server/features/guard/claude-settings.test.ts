@@ -20,6 +20,7 @@ test("claudeSettings carries the fixed deny list and the hook", () => {
         "Bash(security find-*)",
       ],
     },
+    attribution: { commit: "", pr: "", sessionUrl: false },
     hooks: {
       PreToolUse: [
         {
