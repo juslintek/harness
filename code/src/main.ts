@@ -6,6 +6,7 @@ import { migrations } from "./server/db/migrations";
 import { firstRunEnrollment } from "./server/features/auth/api";
 import { wireBoard } from "./server/features/board/api";
 import { wireChat } from "./server/features/chat/api";
+import { startHeartbeat } from "./server/features/heartbeat/api";
 import { recoverRuns, shutdownRuns } from "./server/features/runtimes/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
@@ -55,6 +56,10 @@ const server = Bun.serve<WsData>({
 });
 
 wireRealtime(db, server);
+const stopHeartbeat = startHeartbeat(db, {
+  runDeps: { home: config.home, port: config.port },
+  home: config.home,
+});
 
 console.log(`harness listening on ${server.url}`);
 
@@ -67,6 +72,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     if (stopping) return;
     stopping = true;
+    stopHeartbeat();
     shutdownRuns(db)
       .catch((err: unknown) => console.error("shutdown failed", err))
       .finally(() => {

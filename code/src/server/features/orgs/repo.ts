@@ -94,6 +94,11 @@ export function getOrgBySlug(db: Database, slug: string): OrgView | null {
   return r ? orgView(r) : null;
 }
 
+export function getOrg(db: Database, id: string): OrgView | null {
+  const r = db.query<Raw, [string]>("SELECT * FROM orgs WHERE id = ?").get(id);
+  return r ? orgView(r) : null;
+}
+
 export function getMember(db: Database, id: string): MemberRow | null {
   const r = db.query<Raw, [string]>("SELECT * FROM members WHERE id = ?").get(id);
   return r ? memberRow(r) : null;

@@ -44,6 +44,10 @@ function normalizeText(text: string): string {
   return [flat, ...words.map((w) => posix.normalize(w))].join("\n");
 }
 
+// Quoting, escapes, globs, expansions and `cd` change what actually runs after the guard looked
+// at the text, so a human must read those commands.
+const SHELL_INDIRECTION = /['"\\*?[\]{}$`]|(^|[\s;&|(])cd\s/;
+
 export function managerMayDecide(ctx: DecideContext): string | null {
   if (ctx.requesterMemberId === null) return "the run has no member";
   if (ctx.requesterMemberId === ctx.managerMemberId)
@@ -54,6 +58,9 @@ export function managerMayDecide(ctx: DecideContext): string | null {
   }
   if (ctx.rule !== null && (ctx.rule.endsWith(".outside-root") || BLIND_RULES.includes(ctx.rule))) {
     return `the guard rule ${ctx.rule} needs a human`;
+  }
+  if (SHELL_INDIRECTION.test(ctx.command)) {
+    return "command uses shell indirection; a human must decide";
   }
   const text = normalizeText([ctx.command, ...ctx.paths.map((p) => resolve(p))].join("\n"));
   const home = resolve(ctx.harnessHome).toLowerCase();
