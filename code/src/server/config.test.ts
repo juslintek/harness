@@ -33,6 +33,14 @@ test("HARNESS_ORIGIN sets the relying party and drops any path", () => {
   expect(() => loadConfig({ HARNESS_ORIGIN: "ftp://harness.example.com" })).toThrow();
 });
 
+test("HARNESS_ORIGIN allows http only on localhost", () => {
+  expect(loadConfig({ HARNESS_ORIGIN: "http://localhost:4100" }).rp.origin).toBe(
+    "http://localhost:4100",
+  );
+  expect(() => loadConfig({ HARNESS_ORIGIN: "http://harness.example.com" })).toThrow();
+  expect(() => loadConfig({ HARNESS_ORIGIN: "http://127.0.0.1:4100" })).toThrow();
+});
+
 test("bad port throws", () => {
   expect(() => loadConfig({ HARNESS_PORT: "nope" })).toThrow();
 });

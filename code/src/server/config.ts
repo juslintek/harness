@@ -14,7 +14,14 @@ const envSchema = z.object({
   HARNESS_HOME: z.string().min(1).default("~/.harness"),
   HARNESS_PORT: z.coerce.number().int().min(1).max(65535).default(4100),
   HARNESS_HOST: z.string().min(1).default("127.0.0.1"),
-  HARNESS_ORIGIN: z.url({ protocol: /^https?$/ }).optional(),
+  // Cookies and passkeys ride on this origin, so plain http is only acceptable on localhost.
+  HARNESS_ORIGIN: z
+    .url({ protocol: /^https?$/ })
+    .refine((value) => {
+      const url = new URL(value);
+      return url.protocol === "https:" || url.hostname === "localhost";
+    }, "HARNESS_ORIGIN must be https unless the host is localhost")
+    .optional(),
 });
 
 function expandHome(path: string): string {
