@@ -105,7 +105,7 @@ export async function createLaunch(
     env,
     mcp: { url: `${base}/mcp`, token },
     claudeSettings: claudeSettings(process.execPath, HOOK_SCRIPT),
-    scope: { root: tree.path, home: homedir(), defaultBranch: branch },
+    scope: { root: tree.path, home: homedir(), harnessHome: deps.home, defaultBranch: branch },
   };
 }
 

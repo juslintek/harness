@@ -14,6 +14,8 @@ export type Category =
 export interface Scope {
   root: string;
   home: string;
+  // HARNESS_HOME when it is not ~/.harness; its secrets.json is a credential location too.
+  harnessHome?: string;
   defaultBranch: string;
 }
 

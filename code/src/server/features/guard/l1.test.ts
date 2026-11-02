@@ -60,3 +60,21 @@ test("splitCommands unwraps wrappers and substitutions", () => {
   expect(splitCommands("echo $(whoami)")).toContainEqual(["whoami"]);
   expect(splitCommands("FOO=1 ls 'a b'")).toEqual([["ls", "a b"]]);
 });
+
+test("secrets.json under a custom HARNESS_HOME is a credential location", () => {
+  const custom: Scope = { ...scope, harnessHome: "/data/h" };
+  const at = (command: string) => evaluateL1({ kind: "execute", command, paths: [] }, custom);
+  for (const command of [
+    "cat /data/h/secrets.json",
+    "cp /data/h/secrets.json /tmp/k",
+    "cat /data/h/secrets*",
+    "rg token /data",
+  ])
+    expect(at(command).verdict).not.toBe("allow");
+  expect(at("cat /data/h/secrets.json")).toMatchObject({ verdict: "deny", category: "secret" });
+  expect(evaluateL1({ kind: "read", paths: ["/data/h/secrets.json"] }, custom).verdict).toBe(
+    "deny",
+  );
+  expect(at("cat /data/h/harness.db").rule).not.toBe("secret.path");
+  expect(exec("cat /data/h/secrets.json").rule).not.toBe("secret.path");
+});

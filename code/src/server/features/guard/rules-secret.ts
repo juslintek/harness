@@ -29,6 +29,13 @@ const SECRET_PATHS = [
   ".codex/auth.json",
   ".harness/secrets.json",
 ];
+
+function secretLocations(scope: Scope): string[] {
+  const home = resolve(scope.home);
+  const locations = SECRET_PATHS.map((p) => join(home, p));
+  if (scope.harnessHome) locations.push(join(resolve(scope.harnessHome), "secrets.json"));
+  return locations;
+}
 // A word we cannot resolve but that still names a credential location is not safe to pass.
 const SECRET_WORD = /\.ssh|\.aws|\.gnupg|\.netrc|\.config\/gh|Keychains|\.git-credentials/i;
 const SENSITIVE_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i;
@@ -70,8 +77,7 @@ function isSecretCandidate(candidate: string, scope: Scope): boolean {
   if (/\/proc\/[^/]+\/environ$/.test(candidate)) return true;
   const abs = resolvePath(candidate, scope);
   if (abs === null) return SECRET_WORD.test(candidate);
-  const home = resolve(scope.home);
-  if (SECRET_PATHS.some((p) => underSecret(abs, join(home, p)))) return true;
+  if (secretLocations(scope).some((secret) => underSecret(abs, secret))) return true;
   return /^\.env/i.test(basename(abs)) && !isInside(abs, scope);
 }
 
@@ -108,12 +114,8 @@ const EXFIL = /^(curl|wget|nc|ncat|netcat|socat|ssh|scp|sftp)$/;
 const FIND_EXEC = ["-exec", "-execdir", "-ok", "-okdir"];
 
 function coversSecret(abs: string, scope: Scope): boolean {
-  const home = resolve(scope.home);
   const prefix = abs === "/" ? "/" : `${abs}/`;
-  return SECRET_PATHS.some((p) => {
-    const secret = join(home, p);
-    return secret === abs || secret.startsWith(prefix);
-  });
+  return secretLocations(scope).some((secret) => secret === abs || secret.startsWith(prefix));
 }
 
 function recursiveRead(name: string, cmd: Cmd, o: ReturnType<typeof parseOpts>): boolean {
