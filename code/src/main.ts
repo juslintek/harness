@@ -4,6 +4,7 @@ import { loadConfig } from "./server/config";
 import { ensureInstance, migrate, openDb } from "./server/db/db";
 import { migrations } from "./server/db/migrations";
 import { ensureAdminSecret } from "./server/features/auth/api";
+import { wireBoard } from "./server/features/board/api";
 import { recoverRuns, shutdownRuns } from "./server/features/runtimes/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
@@ -16,6 +17,7 @@ mkdirSync(config.home, { recursive: true });
 const db = openDb(join(config.home, "harness.db"));
 migrate(db, migrations);
 const instanceId = ensureInstance(db);
+wireBoard(db);
 
 recoverRuns(db);
 const secret = ensureAdminSecret(config.home);
