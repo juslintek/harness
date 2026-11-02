@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { type PersonRef, personRefSchema } from "./people";
 
 export type Status =
   | "backlog"
@@ -31,6 +32,8 @@ export interface TaskView {
   rank: number;
   assigneeId: string | null;
   holderId: string | null;
+  assignee: PersonRef | null;
+  holder: PersonRef | null;
   checkedOutAt: number | null;
   estimateMinutes: number | null;
   createdBy: string;
@@ -42,6 +45,7 @@ export interface CommentView {
   id: string;
   taskId: string;
   authorId: string | null;
+  author: PersonRef | null;
   body: string;
   createdAt: number;
 }
@@ -65,6 +69,8 @@ export const taskViewSchema: z.ZodType<TaskView> = z.object({
   rank: z.number(),
   assigneeId: z.string().nullable(),
   holderId: z.string().nullable(),
+  assignee: personRefSchema.nullable(),
+  holder: personRefSchema.nullable(),
   checkedOutAt: z.number().nullable(),
   estimateMinutes: z.number().nullable(),
   createdBy: z.string(),
@@ -81,6 +87,7 @@ export const taskDetailSchema: z.ZodType<TaskDetail> = z.object({
       id: z.string(),
       taskId: z.string(),
       authorId: z.string().nullable(),
+      author: personRefSchema.nullable(),
       body: z.string(),
       createdAt: z.number(),
     }),

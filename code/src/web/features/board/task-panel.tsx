@@ -129,8 +129,10 @@ function TaskActions({
 }): preact.JSX.Element {
   const [message, setMessage] = useState<string | null>(null);
   const handleOf = (id: string): string =>
-    detail.members.find((m) => m.id === id)?.handle ?? "unknown";
-  const assignee = detail.members.find((m) => m.id === task.assigneeId);
+    (task.holderId === id ? task.holder?.handle : undefined) ??
+    detail.members.find((m) => m.id === id)?.handle ??
+    "unknown";
+  const assignee = task.assignee;
   const act = async (verb: "checkout" | "release"): Promise<void> => {
     const r = await postTaskAction(`/api/tasks/${task.id}/${verb}`, {}, handleOf);
     setMessage(r.ok ? null : r.message);
@@ -138,7 +140,7 @@ function TaskActions({
   };
   const wake = async (): Promise<void> => {
     try {
-      await api(`/api/members/${assignee?.id}/wake`, z.unknown(), { method: "POST", body: {} });
+      await api(`/api/members/${task.assigneeId}/wake`, z.unknown(), { method: "POST", body: {} });
       setMessage(`Asked @${assignee?.handle} to run now`);
     } catch (err) {
       setMessage(errorText(err));
@@ -191,7 +193,7 @@ export function TaskPanel({
       {loaded.data && (
         <>
           <TaskLinks detail={loaded.data} tasks={tasks} org={detail} onChange={reload} />
-          <TaskComments detail={loaded.data} org={detail} onChange={reload} />
+          <TaskComments detail={loaded.data} onChange={reload} />
         </>
       )}
     </aside>

@@ -6,7 +6,6 @@ export const TASK_MIME = "application/x-harness-task";
 
 export interface BoardCtx {
   slug: string;
-  handleOf: (memberId: string | null) => string;
   subtasks: Map<string, number>;
   deps: Map<string, number>;
   notice: { taskId: string; text: string } | null;
@@ -42,9 +41,9 @@ export function TaskCard({ task, ctx }: { task: TaskView; ctx: BoardCtx }): prea
         <span class="muted">#{task.number}</span> {task.title}
       </a>
       <p class="task-meta">
-        {task.assigneeId && <span>@{ctx.handleOf(task.assigneeId)}</span>}
+        {task.assignee && <span>@{task.assignee.handle}</span>}
         {task.estimateMinutes !== null && <span>{fmtEstimate(task.estimateMinutes)}</span>}
-        {task.holderId && <span class="badge">held by @{ctx.handleOf(task.holderId)}</span>}
+        {task.holder && <span class="badge">held by @{task.holder.handle}</span>}
         {deps > 0 && <span>{deps} dep</span>}
         {subtasks > 0 && <span>{subtasks} sub</span>}
       </p>

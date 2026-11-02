@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { CommentView, Status, TaskDetail, TaskView } from "../../../shared/board";
 import { DomainError } from "../../route-kit";
+import { personOf } from "../orgs/api";
 
 type Raw = Record<string, string | number | null>;
 
@@ -30,7 +31,7 @@ export function emit(change: TaskChange): void {
   }
 }
 
-const taskView = (r: Raw): TaskView => ({
+const taskView = (db: Database, r: Raw): TaskView => ({
   id: r.id as string,
   orgId: r.org_id as string,
   projectId: r.project_id as string,
@@ -42,29 +43,32 @@ const taskView = (r: Raw): TaskView => ({
   rank: r.rank as number,
   assigneeId: r.assignee_id as string | null,
   holderId: r.holder_id as string | null,
+  assignee: personOf(db, r.assignee_id as string | null),
+  holder: personOf(db, r.holder_id as string | null),
   checkedOutAt: r.checked_out_at as number | null,
   estimateMinutes: r.estimate_minutes as number | null,
   createdBy: r.created_by as string,
   createdAt: r.created_at as number,
   updatedAt: r.updated_at as number,
 });
-const commentView = (r: Raw): CommentView => ({
+const commentView = (db: Database, r: Raw): CommentView => ({
   id: r.id as string,
   taskId: r.task_id as string,
   authorId: r.author_id as string | null,
+  author: personOf(db, r.author_id as string | null),
   body: r.body as string,
   createdAt: r.created_at as number,
 });
 
 export function getTask(db: Database, id: string): TaskView | null {
   const r = db.query<Raw, [string]>("SELECT * FROM tasks WHERE id = ?").get(id);
-  return r ? taskView(r) : null;
+  return r ? taskView(db, r) : null;
 }
 export function getTaskByNumber(db: Database, orgId: string, number: number): TaskView | null {
   const r = db
     .query<Raw, [string, number]>("SELECT * FROM tasks WHERE org_id = ? AND number = ?")
     .get(orgId, number);
-  return r ? taskView(r) : null;
+  return r ? taskView(db, r) : null;
 }
 export function listTasks(
   db: Database,
@@ -77,7 +81,7 @@ export function listTasks(
        AND (?3 IS NULL OR assignee_id = ?3) ORDER BY status, rank, number`,
     )
     .all(projectId, filter.status ?? null, filter.assigneeId ?? null)
-    .map(taskView);
+    .map((r) => taskView(db, r));
 }
 
 export function listDeps(db: Database, projectId: string): { taskId: string; dependsOn: string }[] {
@@ -213,18 +217,22 @@ export function addComment(
   ).run(id, taskId, authorId, body, Date.now());
   const row = db.query<Raw, [string]>("SELECT * FROM comments WHERE id = ?").get(id) as Raw;
   emit({ kind: "commented", task, by: authorId, commentId: id });
-  return commentView(row);
+  return commentView(db, row);
 }
 
 export function getComment(db: Database, id: string): CommentView | null {
   const r = db.query<Raw, [string]>("SELECT * FROM comments WHERE id = ?").get(id);
-  return r ? commentView(r) : null;
+  return r ? commentView(db, r) : null;
 }
 
 export function taskDetail(db: Database, id: string): TaskDetail {
   const task = getTask(db, id);
   if (!task) throw new BoardError(`unknown task: ${id}`);
-  const tasks = (sql: string): TaskView[] => db.query<Raw, [string]>(sql).all(id).map(taskView);
+  const tasks = (sql: string): TaskView[] =>
+    db
+      .query<Raw, [string]>(sql)
+      .all(id)
+      .map((r) => taskView(db, r));
   return {
     task,
     deps: tasks(
@@ -234,6 +242,6 @@ export function taskDetail(db: Database, id: string): TaskDetail {
     comments: db
       .query<Raw, [string]>("SELECT * FROM comments WHERE task_id = ? ORDER BY created_at, id")
       .all(id)
-      .map(commentView),
+      .map((r) => commentView(db, r)),
   };
 }

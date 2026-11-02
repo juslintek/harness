@@ -101,3 +101,18 @@ test("an assignee must be able to write, and a domain refusal is a 400 with its 
   expect(bad.status).toBe(400);
   expect(await bad.json()).toEqual({ error: "parent must be in the project" });
 });
+
+test("a grantee sees the handle of an assignee from the owning org", async () => {
+  const { k, owner, a, project, base } = await setup();
+  const guest = await k.user();
+  const betaOrg = k.org(guest, "beta");
+  grantProject(k.db, project.id, betaOrg.id, "write", a.owner.id);
+  const made = await (await k.call(owner, "POST", base, { title: "t" })).json();
+  await k.call(owner, "PATCH", `/api/tasks/${made.id}`, { assigneeId: a.owner.id });
+  const seen = await (await k.call(guest, "GET", `/api/tasks/${made.id}`)).json();
+  expect(seen.task.assignee).toMatchObject({ kind: "human" });
+  expect(seen.task.assignee.handle).toBe("own-acme");
+  await k.call(owner, "POST", `/api/tasks/${made.id}/comments`, { body: "hello" });
+  const again = await (await k.call(guest, "GET", `/api/tasks/${made.id}`)).json();
+  expect(again.comments[0].author.handle).toBe("own-acme");
+});

@@ -112,13 +112,18 @@ function BoardView({
   taskNumber: number | null;
 }): preact.JSX.Element {
   const board = useBoard(detail.org.id, projectId);
-  const handleOf = (id: string | null): string =>
-    detail.members.find((m) => m.id === id)?.handle ?? "unknown";
-  const { notice, move } = useMoves(board, handleOf);
   const tasks: TaskView[] = board.data?.tasks ?? [];
+  const names = new Map(
+    tasks.flatMap((t) => [
+      [t.assigneeId, t.assignee?.handle],
+      [t.holderId, t.holder?.handle],
+    ]),
+  );
+  const handleOf = (id: string | null): string =>
+    names.get(id) ?? detail.members.find((m) => m.id === id)?.handle ?? "unknown";
+  const { notice, move } = useMoves(board, handleOf);
   const ctx: BoardCtx = {
     slug: detail.org.slug,
-    handleOf,
     subtasks: countBy(tasks, (t) => t.parentId),
     deps: countBy(board.data?.edges ?? [], (e) => e.taskId),
     notice,

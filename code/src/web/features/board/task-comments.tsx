@@ -1,7 +1,6 @@
 import { useState } from "preact/hooks";
 import { z } from "zod";
 import type { TaskDetail } from "../../../shared/board";
-import type { OrgDetail } from "../../../shared/orgs";
 import { api } from "../../api";
 import { fmtTime } from "../../format";
 import { ErrorLine } from "../auth/error-line";
@@ -9,11 +8,9 @@ import { useAction } from "../auth/use-action";
 
 export function TaskComments({
   detail,
-  org,
   onChange,
 }: {
   detail: TaskDetail;
-  org: OrgDetail;
   onChange: () => void;
 }): preact.JSX.Element {
   const [body, setBody] = useState("");
@@ -38,8 +35,7 @@ export function TaskComments({
         {detail.comments.map((c) => (
           <li key={c.id} class="card">
             <p class="muted">
-              @{org.members.find((m) => m.id === c.authorId)?.handle ?? "system"}{" "}
-              {fmtTime(c.createdAt)}
+              @{c.author?.handle ?? "system"} {fmtTime(c.createdAt)}
             </p>
             <p class="comment-body">{c.body}</p>
           </li>
