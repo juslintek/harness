@@ -49,10 +49,26 @@ test("manager-limits refuses what a manager agent may never decide", () => {
     { command: "srt --settings x sh" },
     { command: "echo hi > .claude/settings.json" },
     { command: "cat ~/.codex/config.toml" },
+    { command: "git push origin 'main'" },
+    { command: 'git push origin "main"' },
+    { command: "git push origin ma\\in" },
+    { command: "git push origin *" },
+    { command: "git push origin ma?n" },
+    { command: "git push origin [m]ain" },
+    { command: "git push origin {main,dev}" },
+    { command: "git push origin $BRANCH" },
+    { command: "git push origin `echo main`" },
+    { command: "cd /tmp && git push origin main" },
+    { command: "git status; cd .. ; git push" },
   ];
   for (const change of refused) {
     expect(managerMayDecide({ ...base, ...change })).toEqual(expect.any(String));
   }
+  expect(managerMayDecide({ ...base, command: "git push origin main" })).toBeNull();
+  expect(managerMayDecide({ ...base, command: "abcd e" })).toBeNull();
+  expect(managerMayDecide({ ...base, command: "$(x)" })).toBe(
+    "command uses shell indirection; a human must decide",
+  );
   expect(managerMayDecide(base)).toBeNull();
   expect(managerMayDecide({ ...base, category: "git_push", rule: "git.push" })).toBeNull();
 });

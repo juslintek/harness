@@ -18,6 +18,7 @@ import { accountRoutes } from "./features/auth/routes-account";
 import { boardRoutes } from "./features/board/routes";
 import { chatRoutes } from "./features/chat/routes";
 import { approvalRoutes } from "./features/guard/routes";
+import { wakeRoutes } from "./features/heartbeat/routes";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { mcpHandler, verifyRunToken } from "./features/mcp/api";
 import { orgRoutes } from "./features/orgs/routes";
@@ -79,7 +80,7 @@ function adminRoutes(deps: AppDeps): Hono {
   const { db } = deps;
   const runDeps = deps.runDeps ?? { home: deps.home, port: deps.port };
   const app = new Hono();
-  for (const path of ["/runs", "/approvals", "/halt", "/agents", "/search", "/usage", "/quota"]) {
+  for (const path of ["/runs", "/halt", "/agents", "/search", "/usage", "/quota"]) {
     app.use(`${path}/*`, requireInstanceAdmin);
   }
   app.route("/runs", runRoutes(db, runDeps));
@@ -143,6 +144,7 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api", orgRoutes({ db, origin: deps.rp.origin }));
   app.route("/api", boardRoutes(db));
   app.route("/api", chatRoutes(db));
+  app.route("/api", wakeRoutes(db));
   app.route("/api", adminRoutes(deps));
   app.use("/ws", sessionMiddleware(db), originGuard(deps.rp.origin));
   app.get("/ws", wsUpgrade(db));

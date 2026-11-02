@@ -1,0 +1,116 @@
+import type { Database } from "bun:sqlite";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { getTask } from "../board/api";
+import { getChannel } from "../chat/api";
+import { appendEvent } from "../logs/api";
+import type { TokenScope } from "../mcp/api";
+import { getMember, getProject, type MemberRow, managerPositionsOf } from "../orgs/api";
+import { getRun, HaltedError, isHalted, type RunDeps, startRun } from "../runtimes/api";
+import { buildPrompt } from "./prompt";
+import {
+  hasLiveWake,
+  membersWithPending,
+  pendingWakes,
+  setStatus,
+  type WakeRow,
+  wakesOfRun,
+} from "./repo";
+
+export interface ExecDeps {
+  runDeps: RunDeps;
+  home: string;
+}
+
+function git(args: string[], cwd: string): void {
+  const res = Bun.spawnSync(
+    ["git", "-c", "user.name=harness", "-c", "user.email=harness@localhost", ...args],
+    { cwd },
+  );
+  if (res.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${res.stderr.toString()}`);
+}
+
+// A worktree needs a commit to branch from, so the shared scratch repo starts with an empty one.
+function scratchRepo(home: string, orgId: string): string {
+  const dir = join(home, "scratch", orgId);
+  if (!existsSync(join(dir, ".git"))) {
+    mkdirSync(dir, { recursive: true });
+    git(["init", "-q", "-b", "main"], dir);
+    git(["commit", "-q", "--allow-empty", "-m", "init"], dir);
+  }
+  return dir;
+}
+
+function wakeRepo(db: Database, wake: WakeRow): string | null {
+  const task = wake.taskId === null ? null : getTask(db, wake.taskId);
+  const channel = wake.channelId === null ? null : getChannel(db, wake.channelId);
+  const projectId = task?.projectId ?? channel?.projectId ?? null;
+  return projectId === null ? null : (getProject(db, projectId)?.repo ?? null);
+}
+
+function scopesFor(db: Database, member: MemberRow): TokenScope[] {
+  const scopes: TokenScope[] = ["report", "guard_hook", "board", "chat"];
+  if (managerPositionsOf(db, member.id).length > 0) scopes.push("approvals_decide");
+  return scopes;
+}
+
+function fail(db: Database, ids: string[], err: unknown): void {
+  const message = err instanceof Error ? err.message : String(err);
+  setStatus(db, ids, "failed", { detail: { error: message } });
+  appendEvent(db, { kind: "error", source: "heartbeat", body: `wake run failed: ${message}` });
+}
+
+// The run can end before startRun's caller has recorded the run id, so the state is read here
+// as well as on the run event.
+export function settleRun(db: Database, runId: string): void {
+  const run = getRun(db, runId);
+  if (!run || run.endedAt === null) return;
+  const ids = wakesOfRun(db, runId);
+  const detail = { state: run.state, reason: run.reason };
+  setStatus(db, ids, run.state === "completed" ? "done" : "failed", { detail });
+}
+
+async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<boolean> {
+  const member = getMember(db, memberId);
+  const wakes = pendingWakes(db, memberId);
+  const ids = wakes.map((w) => w.id);
+  if (!member || member.agentId === null || member.paused) {
+    setStatus(db, ids, "skipped", { detail: { reason: "member cannot run" } });
+    return false;
+  }
+  setStatus(db, ids, "started");
+  const repo = wakes.map((w) => wakeRepo(db, w)).find((r) => r !== null);
+  const taskId = wakes.find((w) => w.taskId !== null && getTask(db, w.taskId))?.taskId;
+  try {
+    const runId = await startRun(db, deps.runDeps, {
+      agentId: member.agentId,
+      ...(member.model === null ? {} : { model: member.model }),
+      repo: repo ?? scratchRepo(deps.home, member.orgId),
+      prompt: buildPrompt(db, member, wakes),
+      ...(taskId == null ? {} : { taskId }),
+      member: { memberId, orgId: member.orgId, scopes: scopesFor(db, member) },
+    });
+    setStatus(db, ids, "started", { runId });
+    settleRun(db, runId);
+    return false;
+  } catch (err) {
+    if (err instanceof HaltedError) {
+      setStatus(db, ids, "pending");
+      return true;
+    }
+    fail(db, ids, err);
+    return false;
+  }
+}
+
+// Every member with pending wakes and no live run gets one run for the whole batch.
+// Returns true when something had to wait for the harness to be un-halted.
+export async function runPending(db: Database, deps: ExecDeps): Promise<boolean> {
+  let deferred = false;
+  for (const memberId of membersWithPending(db)) {
+    if (hasLiveWake(db, memberId)) continue;
+    if (isHalted(db)) return true;
+    deferred = (await launch(db, deps, memberId)) || deferred;
+  }
+  return deferred;
+}
