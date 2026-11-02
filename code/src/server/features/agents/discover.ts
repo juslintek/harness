@@ -55,9 +55,13 @@ async function probeLogin(
 ): Promise<Pick<DiscoveredAgent, "loggedIn" | "error">> {
   if (!spec.loginProbe) return { loggedIn: null, error: null };
   try {
-    const { code, stdout } = await run(spec.loginProbe.args, TIMEOUT_MS);
+    const { code, stdout, stderr } = await run(spec.loginProbe.args, TIMEOUT_MS);
     const rule = spec.loginProbe.loggedInWhen;
-    const loggedIn = code === 0 && (rule === "exit0" || stdout.includes(rule.stdoutIncludes));
+    const loggedIn =
+      code === 0 &&
+      (rule === "exit0" ||
+        stdout.includes(rule.stdoutIncludes) ||
+        stderr.includes(rule.stdoutIncludes));
     return { loggedIn, error: null };
   } catch (err) {
     return { loggedIn: null, error: errorText(err) };

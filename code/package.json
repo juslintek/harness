@@ -12,6 +12,7 @@
     "deps": "depcruise src",
     "dup": "jscpd",
     "size": "bun scripts/check-file-size.ts",
+    "smoke": "bun scripts/smoke.ts",
     "check": "bun run lint && bun run typecheck && bun run test && bun run knip && bun run deps && bun run dup && bun run size"
   },
   "dependencies": {

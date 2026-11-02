@@ -73,6 +73,17 @@ test("a probe that succeeds without the expected output means logged out", async
   expect(agent?.loggedIn).toBe(false);
 });
 
+test("codex prints its login status on stderr and still counts as logged in", async () => {
+  const agent = await find(
+    {
+      "codex --version": { stdout: "0.165.0" },
+      "codex login status": { stderr: "Logged in using ChatGPT" },
+    },
+    "codex",
+  );
+  expect(agent?.loggedIn).toBe(true);
+});
+
 test("a probe that throws gives unknown login state and the error", async () => {
   const agent = await find(
     {
