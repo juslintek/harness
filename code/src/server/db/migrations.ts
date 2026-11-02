@@ -6,6 +6,7 @@ import mcp from "./migrations/004_mcp.sql" with { type: "text" };
 import usage from "./migrations/005_usage.sql" with { type: "text" };
 import runs from "./migrations/006_runs.sql" with { type: "text" };
 import runPid from "./migrations/007_run_pid.sql" with { type: "text" };
+import runPidIdentity from "./migrations/008_run_pid_identity.sql" with { type: "text" };
 
 export const migrations: readonly Migration[] = [
   { version: 1, sql: instance },
@@ -15,4 +16,5 @@ export const migrations: readonly Migration[] = [
   { version: 5, sql: usage },
   { version: 6, sql: runs },
   { version: 7, sql: runPid },
+  { version: 8, sql: runPidIdentity },
 ];

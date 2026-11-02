@@ -102,14 +102,16 @@ export function markEnded(db: Database, id: string, state: RunState, reason: str
   ]);
 }
 
-export function setPid(db: Database, id: string, pid: number): void {
-  db.run("UPDATE runs SET pid = ? WHERE id = ?", [pid, id]);
+export function setPid(db: Database, id: string, pid: number, identity: string | null): void {
+  db.run("UPDATE runs SET pid = ?, pid_identity = ? WHERE id = ?", [pid, identity, id]);
 }
 
-export function listUnendedRuns(db: Database): Array<{ id: string; pid: number | null }> {
+export function listUnendedRuns(
+  db: Database,
+): Array<{ id: string; pid: number | null; identity: string | null }> {
   return db
-    .query<{ id: string; pid: number | null }, []>(
-      "SELECT id, pid FROM runs WHERE state IN ('queued', 'starting', 'running')",
+    .query<{ id: string; pid: number | null; identity: string | null }, []>(
+      "SELECT id, pid, pid_identity AS identity FROM runs WHERE state IN ('queued', 'starting', 'running')",
     )
     .all();
 }

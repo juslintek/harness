@@ -3,6 +3,7 @@ import { listRunEvents, readBody } from "../logs/api";
 import { mintRunToken, verifyRunToken } from "../mcp/api";
 import { getRun, recoverRuns, shutdownRuns, startRun, waitForRun } from "./api";
 import { agentPid, cleanup, fakeDeps, fixture, gone, transcript } from "./manager-kit";
+import { pidIdentity } from "./orphans";
 import { insertRun, markRunning, setPid } from "./runs-repo";
 
 afterAll(cleanup);
@@ -37,12 +38,10 @@ test("shutdownRuns kills the agent group, ends the run killed and revokes its to
   );
   expect(ends).toHaveLength(1);
   expect(gone(agentPid(x, id))).toBe(true);
-  const live = x.db
-    .query<{ n: number }, [string]>(
-      "SELECT count(*) AS n FROM run_tokens WHERE run_id = ? AND revoked_at IS NULL",
-    )
+  const tokens = x.db
+    .query<{ n: number }, [string]>("SELECT count(*) AS n FROM run_tokens WHERE run_id = ?")
     .get(id);
-  expect(live?.n).toBe(0);
+  expect(tokens?.n).toBe(0);
 });
 
 function orphan(x: ReturnType<typeof fixture>, label: string): { id: string; pid: number } {
@@ -51,7 +50,7 @@ function orphan(x: ReturnType<typeof fixture>, label: string): { id: string; pid
   const id = Bun.randomUUIDv7();
   insertRun(x.db, { id, taskId: null, agentId: "fake", model: null, repo: x.repo, prompt: "p" });
   markRunning(x.db, id);
-  setPid(x.db, id, proc.pid);
+  setPid(x.db, id, proc.pid, pidIdentity(proc.pid));
   return { id, pid: proc.pid };
 }
 

@@ -10,6 +10,7 @@ import { runAgy } from "./agy";
 import { runApi } from "./api-lane";
 import { createBreaker, defaultLimits } from "./breaker";
 import { createLaunch, inProcessLaunch, type Launch, type RunDeps } from "./launch";
+import { pidIdentity } from "./orphans";
 import {
   getFlag,
   getRun,
@@ -195,7 +196,7 @@ function buildContext(
     },
     onSpawn: (pid) => {
       run.pid = pid;
-      setPid(db, input.id, pid);
+      setPid(db, input.id, pid, pidIdentity(pid));
     },
     signal: run.abort.signal,
     idleTimeoutMs: deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,

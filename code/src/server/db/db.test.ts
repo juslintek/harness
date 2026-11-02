@@ -56,6 +56,16 @@ test("a db at version 6 gains runs.pid at version 7", () => {
   migrate(db, migrations.slice(0, 6));
   expect(pidColumns(db)).toBe(0);
   migrate(db, migrations);
-  expect(userVersion(db)).toBe(7);
+  expect(userVersion(db)).toBe(migrations.length);
   expect(pidColumns(db)).toBe(1);
+});
+
+test("a db at version 7 gains runs.pid_identity at version 8", () => {
+  const columns = (db: ReturnType<typeof openDb>): number =>
+    db.query("SELECT name FROM pragma_table_info('runs') WHERE name = 'pid_identity'").all().length;
+  const db = openDb(join(dir, "t.db"));
+  migrate(db, migrations.slice(0, 7));
+  expect(columns(db)).toBe(0);
+  migrate(db, migrations);
+  expect(columns(db)).toBe(1);
 });
