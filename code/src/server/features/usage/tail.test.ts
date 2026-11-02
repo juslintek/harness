@@ -240,3 +240,14 @@ test("a tail line is skipped for a conversation recorded through recordUsage", a
   writeFileSync(claudeFile, claudeLine("msg_1"));
   expect(await tailOnce(db, sources)).toBe(0);
 });
+
+test("claude sessions whose cwd is under the harness worktrees dir are skipped", async () => {
+  const worktrees = join(dir, "home", "worktrees");
+  const inside = JSON.stringify({ cwd: join(worktrees, "run1"), sessionId: SESSION });
+  writeFileSync(claudeFile, `${inside}\n${claudeLine("m1")}`);
+  const other = join(dir, "claude", "proj", "99999999-2222-4333-8444-555555555555.jsonl");
+  writeFileSync(other, `${JSON.stringify({ cwd: join(dir, "elsewhere") })}\n${claudeLine("m2")}`);
+  const scoped = sources.map((s) => ({ ...s, excludeCwdUnder: worktrees }));
+  expect(await tailOnce(db, scoped)).toBe(1);
+  expect(usageEvents()).toBe(1);
+});

@@ -114,8 +114,8 @@ export async function createLaunch(
 export async function createProbeLaunch(
   deps: RunDeps,
   spec: AgentSpec,
-): Promise<{ argv: string[]; env: Record<string, string>; cwd: string; dir: string }> {
-  const dir = join(deps.home, "model-probes", Bun.randomUUIDv7());
+  dir: string,
+): Promise<{ argv: string[]; env: Record<string, string>; cwd: string }> {
   const cwd = join(dir, "cwd");
   await mkdir(cwd, { recursive: true });
   const codexHome = spec.id === "codex" ? await prepareCodexHome(dir, codexRules()) : null;
@@ -138,5 +138,5 @@ export async function createProbeLaunch(
     CLAUDE_CODE_TMPDIR: tmp,
     ...(codexHome === null ? {} : { CODEX_HOME: codexHome }),
   });
-  return { argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]), env, cwd, dir };
+  return { argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]), env, cwd };
 }

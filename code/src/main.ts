@@ -4,8 +4,8 @@ import { loadConfig } from "./server/config";
 import { ensureInstance, migrate, openDb } from "./server/db/db";
 import { migrations } from "./server/db/migrations";
 import { ensureAdminSecret } from "./server/features/auth/api";
-import { recoverRuns } from "./server/features/runtimes/api";
-import { startTailers } from "./server/features/usage/api";
+import { recoverRuns, shutdownRuns } from "./server/features/runtimes/api";
+import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp } from "./server/http";
 import { type WsData, websocket, wireRealtime } from "./server/realtime";
 import indexHtml from "./web/index.html";
@@ -27,7 +27,7 @@ const app = createApp({
   instanceId,
   version: "0.0.0",
 });
-startTailers(db);
+startTailers(db, 60000, defaultTailSources(join(config.home, "worktrees")));
 
 const server = Bun.serve<WsData>({
   hostname: config.host,
@@ -43,3 +43,18 @@ wireRealtime(db, server);
 
 console.log(`harness listening on ${server.url}`);
 console.log(`admin login: http://127.0.0.1:${config.port}/login?k=${secret}`);
+
+// Agent groups are detached, so the terminal's Ctrl-C does not reach them.
+let stopping = false;
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    if (stopping) return;
+    stopping = true;
+    shutdownRuns(db)
+      .catch((err: unknown) => console.error("shutdown failed", err))
+      .finally(() => {
+        server.stop(true);
+        process.exit(0);
+      });
+  });
+}

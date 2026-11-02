@@ -20,15 +20,11 @@ import {
   type RunRow,
   type RunState,
   setFlag,
+  setPid,
   setStarting,
 } from "./runs-repo";
+import { type Live, stopAll } from "./shutdown";
 import { NotAGitRepo } from "./worktree";
-
-interface Live {
-  abort: AbortController;
-  killReason: string | null;
-  denied: boolean;
-}
 
 export interface StartInput {
   agentId: string;
@@ -62,6 +58,13 @@ export function killRun(db: Database, runId: string, reason = "killed_by_user"):
 export function setHalted(db: Database, halted: boolean): void {
   setFlag(db, "halted", halted ? "1" : "0");
   if (halted) for (const id of [...live.keys()]) killRun(db, id, "halted");
+}
+
+export function shutdownRuns(db: Database, graceMs = 5000): Promise<void> {
+  const finish = (id: string, run: Live): void => {
+    finalize(db, id, run.agent, "killed", run.killReason ?? "harness_shutdown");
+  };
+  return stopAll(live, waits, finish, graceMs);
 }
 
 export function onRunEvent(listener: (runId: string, e: NewEvent) => void): () => void {
@@ -182,16 +185,13 @@ function buildContext(
         return "deny";
       }
     },
-    onQuota: (q) =>
-      recordQuota(db, {
-        provider: q.provider,
-        window: q.window,
-        usedPercent: q.usedPercent,
-        resetsAt: q.resetsAt,
-        source: "acp",
-      }),
+    onQuota: (q) => recordQuota(db, { ...q, source: "acp" }),
     onProgress: (p) => {
       if (breaker.addTokens(p.contextTokens) === "trip") killRun(db, input.id, "circuit_breaker");
+    },
+    onSpawn: (pid) => {
+      run.pid = pid;
+      setPid(db, input.id, pid);
     },
     signal: run.abort.signal,
     idleTimeoutMs: deps.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS,
@@ -262,7 +262,13 @@ export async function startRun(
     repo: input.repo,
     prompt: input.prompt,
   });
-  const run: Live = { abort: new AbortController(), killReason: null, denied: false };
+  const run: Live = {
+    abort: new AbortController(),
+    killReason: null,
+    denied: false,
+    agent: spec.id,
+    pid: null,
+  };
   live.set(full.id, run);
   const launch = await prepare(db, deps, spec, full);
   if ("failed" in launch) {

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync, realpathSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { appendEvent } from "../logs/api";
 import { type LineContext, type ParsedLine, parseClaudeLine } from "./claude-tail";
@@ -10,6 +10,8 @@ export interface TailSource {
   name: "claude" | "codex";
   glob: string;
   root: string;
+  // Sessions whose cwd is under this dir belong to harness runs, which record their own usage.
+  excludeCwdUnder?: string;
 }
 
 type Parser = (line: string, offset: number, ctx: LineContext) => ParsedLine;
@@ -33,6 +35,36 @@ function loggedViaAcp(db: Database, sessionId: string): boolean {
       )
       .get(sessionId) !== null
   );
+}
+
+function firstCwd(path: string): string | null {
+  const buf = Buffer.alloc(65536);
+  const fd = openSync(path, "r");
+  try {
+    const n = readSync(fd, buf, 0, buf.length, 0);
+    for (const line of buf.toString("utf8", 0, n).split("\n")) {
+      const m = line.match(/"cwd":"((?:[^"\\]|\\.)*)"/);
+      if (m?.[1]) return JSON.parse(`"${m[1]}"`) as string;
+    }
+  } finally {
+    closeSync(fd);
+  }
+  return null;
+}
+
+function realOrSelf(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+
+function inHarnessWorktree(path: string, dir: string | undefined): boolean {
+  if (dir === undefined) return false;
+  const cwd = firstCwd(path);
+  if (cwd === null) return false;
+  return [dir, realOrSelf(dir)].some((d) => cwd === d || cwd.startsWith(`${d}/`));
 }
 
 interface Offset {
@@ -67,7 +99,7 @@ async function tailFile(db: Database, source: TailSource, path: string): Promise
   const bytes = Buffer.from(await Bun.file(path).slice(start, stat.size).arrayBuffer());
   const complete = bytes.lastIndexOf(0x0a) + 1;
   const sessionId = sessionIdOf(path);
-  const skip = loggedViaAcp(db, sessionId);
+  const skip = loggedViaAcp(db, sessionId) || inHarnessWorktree(path, source.excludeCwdUnder);
   const ctx: LineContext = { file: path, sessionId };
   let added = 0;
   let pos = 0;

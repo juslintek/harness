@@ -125,6 +125,7 @@ async function verdictFor(ctx: RunContext, ask: PermissionAsk): Promise<"allow" 
       runId: ctx.runId,
       agent: ctx.spec.id,
       guardVerdict: "deny",
+      guardLayer: "L3",
       guardRule: "decide_timeout",
       body: "decide timeout",
     });
@@ -219,6 +220,7 @@ export const runAcp: Adapter = async (ctx) => {
     stderr: "pipe",
     detached: true,
   });
+  ctx.onSpawn?.(proc.pid);
   const { shared, faulted } = newShared();
   const safe: RunContext = {
     ...ctx,

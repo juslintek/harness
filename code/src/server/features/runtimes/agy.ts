@@ -197,6 +197,7 @@ export const runAgy: Adapter = async (ctx) => {
     stderr: "pipe",
     detached: true,
   });
+  ctx.onSpawn?.(proc.pid);
   // terminate() wants a piped stdin; agy -p reads none, so close it right away.
   void proc.stdin.end();
   const seen: Seen = { sessionId: null, result: null, pending: "" };

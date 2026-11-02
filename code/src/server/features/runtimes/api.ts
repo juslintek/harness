@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { type AgentSpec, getSpec } from "../agents/api";
 import { expireApprovals } from "../guard/api";
 import type { NewEvent } from "../logs/api";
@@ -10,10 +11,12 @@ import {
   isHalted as halted,
   killRun as kill,
   onRunEvent as onEvent,
+  shutdownRuns as shutdown,
   startRun as start,
   waitForRun as wait,
 } from "./manager";
-import { failLiveRuns, getRun as get, listRuns as list, type RunRow } from "./runs-repo";
+import { reapRuns } from "./orphans";
+import { getRun as get, listRuns as list, type RunRow } from "./runs-repo";
 
 export type { RunDeps } from "./launch";
 export type { RunRow } from "./runs-repo";
@@ -71,9 +74,12 @@ export function onRunEvent(listener: (runId: string, e: NewEvent) => void): () =
   return onEvent(listener);
 }
 
-// Live runs and in-process approval waiters do not survive a restart.
+export function shutdownRuns(db: Database, graceMs?: number): Promise<void> {
+  return shutdown(db, graceMs);
+}
+
 export function recoverRuns(db: Database): void {
-  failLiveRuns(db, "harness_restart");
+  reapRuns(db);
   expireApprovals(db, Number.MAX_SAFE_INTEGER);
 }
 
@@ -81,10 +87,11 @@ export async function refreshAcpModels(
   deps: RunDeps,
   spec: AgentSpec,
 ): Promise<Array<{ id: string; name: string }>> {
-  const probe = await createProbeLaunch(deps, spec);
+  const dir = join(deps.home, "model-probes", Bun.randomUUIDv7());
   try {
+    const probe = await createProbeLaunch(deps, spec, dir);
     return await listAcpModels(spec, probe.argv, probe.env, probe.cwd);
   } finally {
-    await rm(probe.dir, { recursive: true, force: true });
+    await rm(dir, { recursive: true, force: true });
   }
 }

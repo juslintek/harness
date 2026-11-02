@@ -33,6 +33,8 @@ export interface RunContext {
   onQuota(q: QuotaReading): void;
   // Context fill reported by the agent on every usage_update, before any turn-end usage exists.
   onProgress?(p: { contextTokens: number }): void;
+  // The agent is spawned detached, so its pid is also its process group id.
+  onSpawn?(pid: number): void;
   signal: AbortSignal;
   idleTimeoutMs: number;
   // Upper bound for one decide() call; must exceed the approval timeout T8 enforces itself.

@@ -114,7 +114,7 @@ export async function within(promise: Promise<unknown>, ms: number): Promise<voi
 }
 
 // macOS answers EPERM, not ESRCH, when the group's leader already exited and nothing is left.
-function killGroup(pid: number, signal: "SIGTERM" | "SIGKILL"): void {
+export function killGroup(pid: number, signal: "SIGTERM" | "SIGKILL"): void {
   try {
     process.kill(-pid, signal);
   } catch (err) {

@@ -72,9 +72,14 @@ export function recordQuota(db: Database, s: QuotaInput): void {
   insertSnapshot(db, s);
 }
 
-function defaultTailSources(): TailSource[] {
+export function defaultTailSources(harnessWorktrees?: string): TailSource[] {
   return [
-    { name: "claude", glob: "*/*.jsonl", root: join(homedir(), ".claude", "projects") },
+    {
+      name: "claude",
+      glob: "*/*.jsonl",
+      root: join(homedir(), ".claude", "projects"),
+      ...(harnessWorktrees === undefined ? {} : { excludeCwdUnder: harnessWorktrees }),
+    },
     { name: "codex", glob: "**/rollout-*.jsonl", root: join(homedir(), ".codex", "sessions") },
   ];
 }
