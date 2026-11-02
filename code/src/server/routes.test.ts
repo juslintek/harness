@@ -83,6 +83,26 @@ test("POST /api/runs: bad body 400, relative repo 400, unknown agent 404, halted
   expect((await call("/api/halt", "POST", { halted: "yes" })).status).toBe(400);
 });
 
+test("starting or killing a run needs a fresh step-up", async () => {
+  const { headers } = await sessionHeaders(db, {
+    admin: true,
+    stepUp: false,
+    origin: `http://localhost:${port}`,
+  });
+  const good = { agentId: "nope", repo: "/tmp/r", prompt: "go" };
+  for (const [path, body] of [
+    ["/api/runs", good],
+    ["/api/runs/nope/kill", {}],
+  ] as const) {
+    const res = await app.request(path, { method: "POST", headers, body: JSON.stringify(body) });
+    expect([path, res.status, await res.json()]).toEqual([
+      path,
+      403,
+      { error: "step_up_required" },
+    ]);
+  }
+});
+
 test("kill of an unknown run is 404", async () => {
   expect((await call("/api/runs/nope/kill", "POST")).status).toBe(404);
 });

@@ -67,8 +67,8 @@ function detail(db: Database, row: RunRow, after: number): RunDetail {
   return { run: viewRun(db, row), events };
 }
 
-export function runRoutes(db: Database, deps: RunDeps): Hono {
-  const app = new Hono();
+export function runRoutes(db: Database, deps: RunDeps): Hono<AuthEnv> {
+  const app = new Hono<AuthEnv>();
   app.get("/", (c) => {
     const totals = new Map(usageSummary(db, "run", 0).map((u) => [u.key, u]));
     return c.json(
@@ -80,7 +80,7 @@ export function runRoutes(db: Database, deps: RunDeps): Hono {
       ),
     );
   });
-  app.post("/", async (c) => {
+  app.post("/", requireStepUp, async (c) => {
     const body = startRunBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid body" }, 400);
     const { model, ...rest } = body.data;
@@ -100,7 +100,7 @@ export function runRoutes(db: Database, deps: RunDeps): Hono {
     if (!row) return c.json({ error: "unknown run" }, 404);
     return c.json(detail(db, row, after.data));
   });
-  app.post("/:id/kill", (c) =>
+  app.post("/:id/kill", requireStepUp, (c) =>
     killRun(db, c.req.param("id")) ? c.json({ ok: true }) : c.json({ error: "no live run" }, 404),
   );
   return app;
