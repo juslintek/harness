@@ -1,5 +1,5 @@
 import type { Rec } from "./acp-rpc";
-import { Connection, rec, terminate, within } from "./acp-rpc";
+import { abortion, type Clock, Connection, idleClock, rec, terminate, within } from "./acp-rpc";
 import { pickOption, UpdateSink, usageRecords } from "./acp-updates";
 import type { Adapter, PermissionAsk, RunContext, RunOutcome } from "./adapter";
 
@@ -180,35 +180,6 @@ async function answerPermission(
   });
 }
 
-interface Clock {
-  expired: Promise<"timeout">;
-  touch(): void;
-  stop(): void;
-}
-
-// Restarts on every message from the agent; stays quiet while a decision is pending, because a
-// human approval can take longer than the idle limit.
-function idleClock(ms: number, shared: Shared): Clock {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let fire: (v: "timeout") => void = () => {};
-  const expired = new Promise<"timeout">((resolve) => {
-    fire = resolve;
-  });
-  const touch = (): void => {
-    clearTimeout(timer);
-    timer = setTimeout(() => (shared.deciding > 0 ? touch() : fire("timeout")), ms);
-  };
-  touch();
-  return { expired, touch, stop: () => clearTimeout(timer) };
-}
-
-function abortion(signal: AbortSignal): Promise<"aborted"> {
-  return new Promise((resolve) => {
-    if (signal.aborted) resolve("aborted");
-    else signal.addEventListener("abort", () => resolve("aborted"), { once: true });
-  });
-}
-
 async function settle(
   conn: Connection,
   ctx: RunContext,
@@ -260,7 +231,7 @@ export const runAcp: Adapter = async (ctx) => {
     },
   };
   const sink = new UpdateSink(safe);
-  const clock = idleClock(ctx.idleTimeoutMs, shared);
+  const clock = idleClock(ctx.idleTimeoutMs, () => shared.deciding > 0);
   const conn: Connection = new Connection(proc, (msg) => {
     try {
       clock.touch();

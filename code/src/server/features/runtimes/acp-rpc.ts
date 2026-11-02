@@ -131,3 +131,32 @@ export async function terminate(proc: Proc): Promise<void> {
   await proc.exited;
   killGroup(proc.pid, "SIGKILL");
 }
+
+export interface Clock {
+  expired: Promise<"timeout">;
+  touch(): void;
+  stop(): void;
+}
+
+// Restarts on every touch. While `paused()` is true the limit does not fire, because a human
+// approval can take longer than the idle limit.
+export function idleClock(ms: number, paused: () => boolean = () => false): Clock {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let fire: (v: "timeout") => void = () => {};
+  const expired = new Promise<"timeout">((resolve) => {
+    fire = resolve;
+  });
+  const touch = (): void => {
+    clearTimeout(timer);
+    timer = setTimeout(() => (paused() ? touch() : fire("timeout")), ms);
+  };
+  touch();
+  return { expired, touch, stop: () => clearTimeout(timer) };
+}
+
+export function abortion(signal: AbortSignal): Promise<"aborted"> {
+  return new Promise((resolve) => {
+    if (signal.aborted) resolve("aborted");
+    else signal.addEventListener("abort", () => resolve("aborted"), { once: true });
+  });
+}

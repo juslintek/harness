@@ -1,8 +1,14 @@
 import type { Database } from "bun:sqlite";
 import { type DiscoveredAgent, discoverAgents, type Runner } from "./discover";
+import { getKey, type Provider } from "./keys";
 import { type AgentSpec, agentSpecs } from "./specs";
 
+export type { Provider } from "./keys";
 export type { AgentSpec } from "./specs";
+
+export function getApiKey(provider: Provider): Promise<string | null> {
+  return getKey(provider);
+}
 
 export interface AgentView {
   id: string;
