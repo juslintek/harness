@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { haltBody } from "../shared/runs";
 import { api } from "./api";
-import { me } from "./features/auth/me";
+import { canDecideApprovals, me } from "./features/auth/me";
 import { OrgSwitcher, selectedSlug } from "./features/orgs/org-switcher";
 import { errorText } from "./format";
 
@@ -76,6 +76,7 @@ export function Header(): preact.JSX.Element {
                 <a href="#/search">Search</a>
               </>
             )}
+            {canDecideApprovals(me.value) && <a href="#/approvals">Approvals</a>}
             <a href="#/account">Account</a>
           </nav>
           {user.instanceAdmin && <HaltSwitch />}

@@ -3,7 +3,7 @@ import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simp
 import { Hono } from "hono";
 import { deleteCookie } from "hono/cookie";
 import { assertionBody, passkeyBody } from "../../../shared/auth";
-import { listOrgsForUser } from "../orgs/api";
+import { listOrgsForUser, orgAccess } from "../orgs/api";
 import {
   type AuthEnv,
   finishRegistration,
@@ -108,7 +108,10 @@ export function accountRoutes(db: Database, rp: Rp): Hono<AuthEnv> {
         stepUpAt: actor.stepUpAt,
         stepUpFresh: hasFreshStepUp(actor),
       },
-      orgs: listOrgsForUser(db, actor.userId),
+      orgs: listOrgsForUser(db, actor.userId).map((org) => ({
+        ...org,
+        role: orgAccess(db, actor.userId, org.id),
+      })),
     });
   });
   passkeyRoutes(app, db, rp);

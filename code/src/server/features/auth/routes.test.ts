@@ -25,7 +25,9 @@ test("bootstrap enroll registers a passkey, returns recovery codes, sets the coo
   expect(kit.db.query("SELECT count(*) AS n FROM passkeys").get()).toEqual({ n: 1 });
   expect(kit.db.query("SELECT name FROM orgs").all()).toEqual([{ name: "Personal" }]);
   const me = await kit.call("GET", "/api/auth/me", undefined, { cookie: cookieOf(res) });
-  expect((await me.json()).orgs).toHaveLength(1);
+  const { orgs } = await me.json();
+  expect(orgs).toHaveLength(1);
+  expect(orgs[0].role).toBe("owner");
 });
 
 test("an https origin makes the cookie Secure, and an enrollment code works once", async () => {

@@ -1,10 +1,11 @@
 import { render } from "preact";
 import { useEffect } from "preact/hooks";
 import { AgentsPage } from "./features/agents/agents-page";
+import { PendingApprovals } from "./features/approvals/approvals";
 import { AccountPage } from "./features/auth/account-page";
 import { EnrollPage } from "./features/auth/enroll-page";
 import { LoginPage } from "./features/auth/login-page";
-import { me, refreshMe } from "./features/auth/me";
+import { canDecideApprovals, me, refreshMe } from "./features/auth/me";
 import { BoardPage } from "./features/board/board-page";
 import { ChatPage } from "./features/chat/chat-page";
 import { OrgPage } from "./features/orgs/org-page";
@@ -34,6 +35,7 @@ function Page(): preact.JSX.Element {
   const admin = me.value?.user.instanceAdmin === true;
   if (parts[0] === "o" && parts[1]) return <OrgRoute parts={parts} />;
   if (parts[0] === "account") return <AccountPage />;
+  if (parts[0] === "approvals" && canDecideApprovals(me.value)) return <PendingApprovals />;
   if (admin && parts[0] === "agents") return <AgentsPage />;
   if (admin && parts[0] === "search") return <SearchPage />;
   if (admin && parts[0] === "runs" && parts[1]) return <RunPage id={parts[1]} key={parts[1]} />;
