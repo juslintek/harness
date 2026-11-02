@@ -186,6 +186,27 @@ test("a failed passkey prompt can retry the same code, and a finished code is de
   expect((await options()).status).toBe(400);
 });
 
+test("two concurrent verifies on one code register exactly one passkey", async () => {
+  const kit = bootKit();
+  const code = createEnrollment(kit.db, { ttlMs: 60_000 });
+  const who = { email: "owner@example.com", name: "Owner" };
+  const options = (): Promise<Response> =>
+    kit.call("POST", `/api/auth/enroll/${code}/options`, who);
+  const first = await (await options()).json();
+  const second = await (await options()).json();
+  const verify = async (opts: typeof first): Promise<Response> =>
+    kit.call("POST", `/api/auth/enroll/${code}/verify`, {
+      ...opts,
+      response: await kit.authn.create(opts),
+      name: "Laptop",
+    });
+  const statuses = (await Promise.all([verify(first), verify(second)]))
+    .map((res) => res.status)
+    .sort();
+  expect(statuses).toEqual([200, 409]);
+  expect(kit.db.query("SELECT count(*) AS n FROM passkeys").get()).toEqual({ n: 1 });
+});
+
 test("enroll verify refuses codes that are not live for that user", async () => {
   const kit = bootKit();
   const done = createEnrollment(kit.db, { ttlMs: 60_000 });

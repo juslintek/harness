@@ -12,6 +12,7 @@ import {
 } from "../../../shared/auth";
 import { ensurePersonalOrg } from "../orgs/api";
 import {
+  claimEnrollment,
   completeEnrollment,
   createSession,
   enrollmentUser,
@@ -23,6 +24,7 @@ import {
   type Rp,
   redeemEnrollment,
   registrationOptions,
+  releaseEnrollment,
   requestEmailCode,
   type Session,
   useRecoveryCode,
@@ -135,6 +137,8 @@ function enrollRoutes(app: Hono, deps: AuthDeps): void {
     if (enrollmentUser(db, c.req.param("code")) !== body.userId) {
       return c.json({ error: "enrollment code is not valid" }, 400);
     }
+    const code = c.req.param("code");
+    if (!claimEnrollment(db, code)) return c.json({ error: "enrollment already in progress" }, 409);
     const result = await finishRegistration(
       db,
       rp,
@@ -143,8 +147,11 @@ function enrollRoutes(app: Hono, deps: AuthDeps): void {
       body.response as RegistrationResponseJSON,
       body.name,
     );
-    if (!result.ok) return c.json({ error: result.reason }, 400);
-    completeEnrollment(db, c.req.param("code"));
+    if (!result.ok) {
+      releaseEnrollment(db, code);
+      return c.json({ error: result.reason }, 400);
+    }
+    completeEnrollment(db, code);
     return signIn(c, deps, body.userId, "enroll", {
       recoveryCodes: newRecoveryCodes(db, body.userId),
     });

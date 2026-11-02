@@ -157,6 +157,29 @@ export function enrollmentUser(db: Database, code: string): string | null {
   );
 }
 
+const CLAIM_TTL_MS = 60_000;
+
+// Two concurrent verifies for one code would both pass the live check while the first is still
+// awaiting the passkey check; only one wins the claim. A claim left by a crashed request expires.
+export function claimEnrollment(db: Database, code: string): boolean {
+  const now = Date.now();
+  return (
+    db
+      .query(
+        `UPDATE enrollments SET claimed_at = ?
+          WHERE code_hash = ? AND used_at IS NULL AND expires_at > ?
+            AND (claimed_at IS NULL OR claimed_at < ?)`,
+      )
+      .run(now, sha256Hex(normalizeCode(code)), now, now - CLAIM_TTL_MS).changes > 0
+  );
+}
+
+export function releaseEnrollment(db: Database, code: string): void {
+  db.query("UPDATE enrollments SET claimed_at = NULL WHERE code_hash = ? AND used_at IS NULL").run(
+    sha256Hex(normalizeCode(code)),
+  );
+}
+
 export function completeEnrollment(db: Database, code: string): void {
   db.query("UPDATE enrollments SET used_at = ? WHERE code_hash = ? AND used_at IS NULL").run(
     Date.now(),

@@ -68,5 +68,6 @@ CREATE TABLE enrollments (
   redeemed_user_id TEXT REFERENCES users ON DELETE CASCADE,
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL,
-  used_at INTEGER
+  used_at INTEGER,
+  claimed_at INTEGER
 ) STRICT;

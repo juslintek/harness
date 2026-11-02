@@ -1,10 +1,12 @@
 import {
+  claimEnrollment,
   completeEnrollment,
   createEnrollment,
   enrollmentUser,
   firstRunEnrollment,
   newRecoveryCodes,
   redeemEnrollment,
+  releaseEnrollment,
   requestEmailCode,
   useRecoveryCode,
   verifyEmailCode,
@@ -41,6 +43,7 @@ export type { Rp } from "./passkeys";
 export type { Session, SessionInfo } from "./sessions";
 export type { User } from "./users";
 export {
+  claimEnrollment,
   completeEnrollment,
   countUsers,
   createEnrollment,
@@ -63,6 +66,7 @@ export {
   originGuard,
   redeemEnrollment,
   registrationOptions,
+  releaseEnrollment,
   requestEmailCode,
   requireInstanceAdmin,
   requireStepUp,
