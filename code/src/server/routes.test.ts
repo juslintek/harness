@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { approvalViewSchema, runDetailSchema, wsMessageSchema } from "../shared/runs";
+import { wsMessageSchema } from "../shared/realtime";
+import { approvalViewSchema, runDetailSchema } from "../shared/runs";
 import { migrate, openDb } from "./db/db";
 import { migrations } from "./db/migrations";
 import { appendEvent } from "./features/logs/api";

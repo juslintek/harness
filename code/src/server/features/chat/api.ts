@@ -27,7 +27,7 @@ import {
 } from "./repo";
 
 export type { ChannelView, MessageView } from "../../../shared/chat";
-export { channelMemberIds, parseMessage };
+export { channelMemberIds, getChannel, parseMessage };
 
 export class ChatError extends Error {
   readonly code: "not_found" | "forbidden" | "invalid";
@@ -205,7 +205,13 @@ export function postMessage(db: Database, input: PostInput): MessageView {
     mentions,
     taskIds: resolveTaskIds(db, channel.orgId, parsed.taskNumbers),
   });
-  for (const fn of listeners) fn({ message, mentions, channel });
+  for (const fn of listeners) {
+    try {
+      fn({ message, mentions, channel });
+    } catch (err) {
+      console.error("chat listener failed", err);
+    }
+  }
   return message;
 }
 

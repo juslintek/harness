@@ -1,9 +1,10 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { createTask } from "../board/api";
 import {
   addAgentMember,
   addHumanMember,
@@ -222,21 +223,55 @@ test("unread counts ignore own messages and reset on markRead", () => {
   expect(general(db, bob.id).unread).toBe(0);
 });
 
-test("task numbers link to tasks of the channel's org when the board table exists", () => {
+test("task numbers link to tasks of the channel's org through the real board table", () => {
   const { db, org, owner } = setup();
   const ch = general(db, owner.id);
-  expect(postMessage(db, { channelId: ch.id, authorId: owner.id, body: "see #7" }).taskIds).toEqual(
+  expect(postMessage(db, { channelId: ch.id, authorId: owner.id, body: "see #1" }).taskIds).toEqual(
     [],
   );
-  // Stand-in for the board slice's table, whatever its full shape is.
-  db.run("PRAGMA foreign_keys = OFF");
-  db.run("DROP TABLE IF EXISTS tasks");
-  db.run("CREATE TABLE tasks (id TEXT PRIMARY KEY, org_id TEXT NOT NULL, number INTEGER NOT NULL)");
-  db.run("INSERT INTO tasks VALUES ('t7', ?, 7)", [org]);
-  db.run("INSERT INTO tasks VALUES ('t8', 'other-org', 8)");
-  const m = postMessage(db, { channelId: ch.id, authorId: owner.id, body: "see #7 and #8" });
-  expect(m.taskIds).toEqual(["t7"]);
-  expect(listMessages(db, ch.id, {}).at(-1)?.taskIds).toEqual(["t7"]);
+  const mine = createTask(db, {
+    projectId: createProject(db, { orgId: org, key: "web", name: "Web" }).id,
+    title: "mine",
+    createdBy: owner.id,
+  });
+  const other = createOrg(db, {
+    name: "Other",
+    slug: "other",
+    ownerUserId: "u2",
+    ownerName: "Other",
+    ownerHandle: "other",
+  });
+  // Task numbers restart in every org, so #1 exists in both and only ours may be linked.
+  createTask(db, {
+    projectId: createProject(db, { orgId: other.id, key: "o", name: "O" }).id,
+    title: "theirs",
+    createdBy: "x",
+  });
+  const m = postMessage(db, { channelId: ch.id, authorId: owner.id, body: "see #1 and #9" });
+  expect(m.taskIds).toEqual([mine.id]);
+  expect(listMessages(db, ch.id, {}).at(-1)?.taskIds).toEqual([mine.id]);
+});
+
+test("a throwing listener does not fail a committed message or starve later listeners", () => {
+  const { db, owner } = setup();
+  const seen: string[] = [];
+  const off = [
+    onMessage(() => {
+      throw new Error("boom");
+    }),
+    onMessage((e) => seen.push(e.message.body)),
+  ];
+  const quiet = spyOn(console, "error").mockImplementation(() => {});
+  const posted = postMessage(db, {
+    channelId: general(db, owner.id).id,
+    authorId: owner.id,
+    body: "hi",
+  });
+  expect(quiet).toHaveBeenCalled();
+  quiet.mockRestore();
+  for (const stop of off) stop();
+  expect(seen).toEqual(["hi"]);
+  expect(listMessages(db, posted.channelId, {})).toHaveLength(1);
 });
 
 test("ensureTeamChannel is idempotent and named after the team", () => {

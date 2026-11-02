@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { type WsMessage, wsMessageSchema } from "../shared/runs";
+import { type WsMessage, wsMessageSchema } from "../shared/realtime";
 import { checkAction, decideApproval, listApprovals } from "./features/guard/api";
 import { killRun, startRun, waitForRun } from "./features/runtimes/api";
 import {

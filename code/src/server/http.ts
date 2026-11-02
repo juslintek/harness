@@ -15,9 +15,12 @@ import {
 } from "./features/auth/api";
 import { publicAuthRoutes } from "./features/auth/routes";
 import { accountRoutes } from "./features/auth/routes-account";
+import { boardRoutes } from "./features/board/routes";
+import { chatRoutes } from "./features/chat/routes";
 import { approvalRoutes } from "./features/guard/routes";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { mcpHandler, verifyRunToken } from "./features/mcp/api";
+import { orgRoutes } from "./features/orgs/routes";
 import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
 import { haltRoutes, runRoutes } from "./features/runtimes/routes";
 import { probeQuota, usageSummary } from "./features/usage/api";
@@ -137,8 +140,11 @@ export function createApp(deps: AppDeps): Hono {
   );
   app.use("/api/*", sessionMiddleware(db));
   app.route("/api/auth", accountRoutes(db, deps.rp));
+  app.route("/api", orgRoutes({ db, origin: deps.rp.origin }));
+  app.route("/api", boardRoutes(db));
+  app.route("/api", chatRoutes(db));
   app.route("/api", adminRoutes(deps));
-  app.use("/ws", sessionMiddleware(db), requireInstanceAdmin, originGuard(deps.rp.origin));
-  app.get("/ws", wsUpgrade);
+  app.use("/ws", sessionMiddleware(db), originGuard(deps.rp.origin));
+  app.get("/ws", wsUpgrade(db));
   return app;
 }

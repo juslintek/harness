@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { Role } from "../../../shared/orgs";
 import { getProject } from "./projects";
+import { getMember, type MemberRow } from "./repo";
 
 export type Access = "none" | "read" | "write" | "admin";
 
@@ -70,6 +71,25 @@ export function projectAccess(
       if (grant) access = minAccess(grant.permission, byRole[role]);
     }
     if (accessRank[access] > accessRank[best]) best = access;
+  }
+  return best;
+}
+
+// A person can sit in several orgs; the one with the most access to the project acts for them.
+export function projectMember(
+  db: Database,
+  userId: string,
+  projectId: string,
+): { member: MemberRow; access: Access } | null {
+  let best: { member: MemberRow; access: Access } | null = null;
+  const rows = db
+    .query<{ id: string }, [string]>("SELECT id FROM members WHERE user_id = ?")
+    .all(userId);
+  for (const { id } of rows) {
+    const access = projectAccess(db, { memberId: id }, projectId);
+    const member = getMember(db, id);
+    if (member && accessRank[access] > accessRank[best?.access ?? "none"])
+      best = { member, access };
   }
   return best;
 }

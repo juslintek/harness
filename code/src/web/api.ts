@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
-import { type WsMessage, wsMessageSchema } from "../shared/runs";
+import { type WsMessage, wsMessageSchema } from "../shared/realtime";
 import { stepUp } from "./features/auth/webauthn";
 
 const RECONNECT_MIN_MS = 1000;
