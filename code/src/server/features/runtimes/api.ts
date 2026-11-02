@@ -5,7 +5,7 @@ import { type AgentSpec, getSpec } from "../agents/api";
 import { expireApprovals } from "../guard/api";
 import type { NewEvent } from "../logs/api";
 import { listAcpModels } from "./acp-models";
-import { createProbeLaunch, type RunDeps } from "./launch";
+import { createProbeLaunch, type RunDeps, type RunMember } from "./launch";
 import {
   setHalted as halt,
   isHalted as halted,
@@ -38,7 +38,14 @@ export class UnknownAgent extends Error {
 export async function startRun(
   db: Database,
   deps: RunDeps,
-  input: { agentId: string; repo: string; prompt: string; model?: string; taskId?: string },
+  input: {
+    agentId: string;
+    repo: string;
+    prompt: string;
+    model?: string;
+    taskId?: string;
+    member?: RunMember;
+  },
 ): Promise<string> {
   if (halted(db)) throw new HaltedError();
   const spec = (deps.resolveSpec ?? getSpec)(input.agentId);

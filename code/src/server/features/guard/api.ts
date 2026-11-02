@@ -17,6 +17,10 @@ import { codexRules as buildCodexRules } from "./codex-rules";
 import { type ActionRequest, type L1Result, evaluateL1 as l1Evaluate, type Scope } from "./l1";
 import { escalateL2, type L2Result } from "./l2";
 import {
+  decidableApprovals as decidable,
+  managerDecide as decideAsManager,
+} from "./manager-limits";
+import {
   type SandboxInput,
   runTmpDir as sandboxRunTmpDir,
   scrubEnv as sandboxScrubEnv,
@@ -83,6 +87,23 @@ export function decideApproval(
   by: string,
 ): boolean {
   return decide(db, id, decision, by);
+}
+
+export function managerDecide(
+  db: Database,
+  input: Parameters<typeof decideAsManager>[1],
+): ReturnType<typeof decideAsManager> {
+  const result = decideAsManager(db, input);
+  if (result.ok) notifyApproval(db, input.approvalId);
+  return result;
+}
+
+export function decidableApprovals(
+  db: Database,
+  managerMemberId: string,
+  harnessHome: string,
+): ApprovalRow[] {
+  return decidable(db, managerMemberId, harnessHome);
 }
 
 export function listApprovals(db: Database, status?: string): ApprovalRow[] {

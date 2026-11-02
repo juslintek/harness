@@ -12,7 +12,7 @@ import {
   wrapCommand,
   writeSrtSettings,
 } from "../guard/api";
-import { mintRunToken } from "../mcp/api";
+import { mintRunToken, type TokenScope } from "../mcp/api";
 import type { Adapter } from "./adapter";
 import { prepareCodexHome } from "./codex-home";
 import { createWorktree, defaultBranch } from "./worktree";
@@ -28,6 +28,12 @@ export interface RunDeps {
   agentEnv?: (runDir: string) => Record<string, string>;
   // Test hook: replaces the lane adapter so a test controls when and how the lane returns.
   lane?: Adapter;
+}
+
+export interface RunMember {
+  memberId: string;
+  orgId: string;
+  scopes: TokenScope[];
 }
 
 export interface Launch {
@@ -68,11 +74,14 @@ export async function createLaunch(
   spec: AgentSpec,
   runId: string,
   repo: string,
+  member?: RunMember,
 ): Promise<Launch> {
   const tree = await createWorktree(repo, runId, deps.home);
   const branch = await defaultBranch(repo);
   const runDir = join(deps.home, "runs", runId);
-  const token = mintRunToken(db, runId, ["report", "guard_hook"]);
+  const token = member
+    ? mintRunToken(db, runId, member.scopes, member)
+    : mintRunToken(db, runId, ["report", "guard_hook"]);
   const codexHome = spec.id === "codex" ? await prepareCodexHome(runDir, codexRules()) : null;
   const settingsPath = await writeSrtSettings({
     runDir,

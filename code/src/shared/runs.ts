@@ -41,6 +41,7 @@ export const haltBody: z.ZodType<HaltBody> = z.object({ halted: z.boolean() });
 
 export interface RunView {
   id: string;
+  memberId: string | null;
   agentId: string;
   model: string | null;
   repo: string;
@@ -56,6 +57,7 @@ export interface RunView {
 }
 export const runViewSchema: z.ZodType<RunView> = z.object({
   id: z.string(),
+  memberId: z.string().nullable(),
   agentId: z.string(),
   model: z.string().nullable(),
   repo: z.string(),

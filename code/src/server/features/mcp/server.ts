@@ -2,18 +2,47 @@ import type { Database } from "bun:sqlite";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
+import { getMember, listPositions } from "../orgs/api";
 import { type RunIdentity, verify } from "./tokens";
+import { registerApprovalTools } from "./tools-approvals";
+import { registerBoardTools } from "./tools-board";
+import { registerChatTools } from "./tools-chat";
 
 const MAX_REPORT_CHARS = 4000;
 
-function buildServer(
-  identity: RunIdentity,
-  onReport: (runId: string, text: string) => void,
-): McpServer {
+export interface McpDeps {
+  onReport: (runId: string, text: string) => void;
+  harnessHome: string;
+}
+
+function whoami(db: Database, identity: RunIdentity): unknown {
+  const member = identity.memberId === null ? null : getMember(db, identity.memberId);
+  if (!member) return { runId: identity.runId, scopes: identity.scopes };
+  return {
+    runId: identity.runId,
+    scopes: identity.scopes,
+    member: {
+      id: member.id,
+      handle: member.handle,
+      orgId: member.orgId,
+      role: member.role,
+      positions: listPositions(db, member.orgId)
+        .filter((p) => p.memberId === member.id)
+        .map((p) => ({ title: p.title, isManager: p.isManager })),
+    },
+  };
+}
+
+function buildServer(db: Database, identity: RunIdentity, deps: McpDeps): McpServer {
   const server = new McpServer({ name: "harness", version: "1.0.0" });
-  server.registerTool("whoami", { description: "Identify the run this token belongs to" }, () => ({
-    content: [{ type: "text", text: JSON.stringify(identity) }],
-  }));
+  const env = { db, identity, harnessHome: deps.harnessHome };
+  server.registerTool(
+    "whoami",
+    { description: "Identify the run and member this token belongs to" },
+    () => ({
+      content: [{ type: "text", text: JSON.stringify(whoami(db, identity)) }],
+    }),
+  );
   server.registerTool(
     "report",
     {
@@ -24,10 +53,13 @@ function buildServer(
       if (!identity.scopes.includes("report")) {
         return { isError: true, content: [{ type: "text", text: "token lacks report scope" }] };
       }
-      onReport(identity.runId, text);
+      deps.onReport(identity.runId, text);
       return { content: [{ type: "text", text: "ok" }] };
     },
   );
+  registerBoardTools(server, env);
+  registerChatTools(server, env);
+  registerApprovalTools(server, env);
   return server;
 }
 
@@ -38,7 +70,7 @@ function bearer(req: Request): string | null {
 
 export function createHandler(
   db: Database,
-  onReport: (runId: string, text: string) => void,
+  deps: McpDeps,
   port: number,
 ): (req: Request) => Promise<Response> {
   const allowedHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
@@ -59,7 +91,7 @@ export function createHandler(
     }
     // No sessionIdGenerator means stateless: one fresh server and transport per request.
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
-    const server = buildServer(identity, onReport);
+    const server = buildServer(db, identity, deps);
     await server.connect(transport);
     try {
       return await transport.handleRequest(req);
