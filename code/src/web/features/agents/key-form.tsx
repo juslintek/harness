@@ -28,7 +28,9 @@ function KeyItem({ item, reload }: { item: KeyStatus; reload: () => void }): pre
   return (
     <form class="card" onSubmit={save}>
       <h4>{item.provider}</h4>
-      <p class="muted">Source: {item.source ?? "none"}</p>
+      <p class="muted">
+        Source: {item.source === "file" ? "harness secrets file" : (item.source ?? "none")}
+      </p>
       {item.legacyLeft && <p class="error">Key also left in login keychain</p>}
       <label>
         {item.provider} API key

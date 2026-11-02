@@ -38,7 +38,7 @@ export function agentRoutes(db: Database, models: ModelSources = noAcp): Hono {
         appendEvent(db, {
           kind: "error",
           source: "keys",
-          body: `${provider} key is also left in the login keychain: the delete failed`,
+          body: `${provider} an old key is still in the login keychain: delete it by hand`,
         }),
       ),
     ),

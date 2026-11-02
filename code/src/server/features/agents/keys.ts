@@ -82,8 +82,26 @@ async function readStore(home: string): Promise<Record<string, string>> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
     throw error;
   }
-  return storeSchema.parse(JSON.parse(text));
+  // The parse errors quote the offending token, which can be a hand-typed key, so none of it is passed on.
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error(`${storePath(home)} is not valid JSON`);
+  }
+  const checked = storeSchema.safeParse(parsed);
+  if (!checked.success) throw new Error(`${storePath(home)} has an unexpected shape`);
+  return checked.data;
 }
+
+// Time Machine would copy the plaintext file to a backup disk. The exclusion is a per-file xattr that
+// needs no admin rights; a failure is logged and never blocks the write.
+export const backup = {
+  exclude: async (file: string): Promise<void> => {
+    const { code } = await spawnBounded(["tmutil", "addexclusion", file]);
+    if (code !== 0) throw new Error(`tmutil exited with ${code}`);
+  },
+};
 
 async function syncDir(dir: string): Promise<void> {
   const handle = await open(dir, "r");
@@ -117,14 +135,28 @@ async function writeStore(home: string, next: Record<string, string>): Promise<v
     throw error;
   }
   await syncDir(home);
+  await backup.exclude(storePath(home)).catch((error) => {
+    console.error("could not exclude secrets.json from backups", error);
+  });
 }
 
 // Read-modify-write, so writes are serialized to keep two stores from dropping each other's key.
 let writing: Promise<unknown> = Promise.resolve();
 
-function updateStore(home: string, provider: Provider, key: string): Promise<void> {
-  const run = async (): Promise<void> =>
-    writeStore(home, { ...(await readStore(home)), [provider]: key });
+// With onlyIfMissing the check and the write share one queue slot, so a key saved meanwhile is not
+// overwritten. Resolves to whether the key was written.
+function updateStore(
+  home: string,
+  provider: Provider,
+  key: string,
+  onlyIfMissing = false,
+): Promise<boolean> {
+  const run = async (): Promise<boolean> => {
+    const current = await readStore(home);
+    if (onlyIfMissing && current[provider]) return false;
+    await writeStore(home, { ...current, [provider]: key });
+    return true;
+  };
   const result = writing.then(run, run);
   writing = result.catch(() => undefined);
   return result;
@@ -145,8 +177,8 @@ async function readLegacy(provider: Provider, spawn: SecuritySpawn): Promise<str
 
 // Copy if the store lacks the key and check the copy reads back; the login Keychain item is deleted
 // only while the store holds the same value, so a failed delete is retried on the next start and a
-// different value in the store leaves the old item alone. A failure before the delete never deletes.
-// Returns the providers whose old item is still in the Keychain after a delete that failed.
+// different value in the store leaves the old item alone (it may be a user's valid key). A failure
+// before the delete never deletes. Returns the providers whose old item is still in the Keychain.
 export async function migrateLegacy(
   home: string,
   spawn: SecuritySpawn,
@@ -156,12 +188,13 @@ export async function migrateLegacy(
   for (const provider of providers) {
     const legacy = await readLegacy(provider, spawn);
     if (!legacy) continue;
-    if (!(await readStore(home))[provider]) {
-      await write(home, provider, legacy);
-      if ((await readStore(home))[provider] !== legacy)
-        throw new Error(`could not migrate the ${provider} key`);
+    const written = await write(home, provider, legacy, true);
+    const stored = (await readStore(home))[provider];
+    if (written && stored !== legacy) throw new Error(`could not migrate the ${provider} key`);
+    if (stored !== legacy) {
+      left.push(provider);
+      continue;
     }
-    if ((await readStore(home))[provider] !== legacy) continue;
     const deleted = await spawn([
       "security",
       "delete-generic-password",
@@ -199,26 +232,26 @@ async function fromStore(
 
 const warned = new Set<string>();
 
-// The source stays "keychain" for the UI contract in shared/runs.ts. `warn` is called once per
-// process for each key whose old Keychain item could not be deleted; it never gets the value.
+// `warn` is called once per process for each key whose old Keychain item is still there; it never
+// gets the value.
 export async function keyStatus(
   spawn: SecuritySpawn = spawnBounded,
   env: Env = process.env,
   home: string = loadConfig().home,
   warn: (provider: Provider) => void = () => undefined,
-): Promise<Array<{ provider: Provider; source: "env" | "keychain" | null; legacyLeft: boolean }>> {
+): Promise<Array<{ provider: Provider; source: "env" | "file" | null; legacyLeft: boolean }>> {
   const left = await ready(home, spawn);
   for (const provider of left) {
     if (warned.has(`${home}:${provider}`)) continue;
-    warned.add(`${home}:${provider}`);
     warn(provider);
+    warned.add(`${home}:${provider}`);
   }
   return Promise.all(
     providers.map(async (provider) => {
       const legacyLeft = left.includes(provider);
       if (fromEnv(provider, env)) return { provider, source: "env" as const, legacyLeft };
       const stored = await fromStore(provider, spawn, home);
-      return { provider, source: stored ? ("keychain" as const) : null, legacyLeft };
+      return { provider, source: stored ? ("file" as const) : null, legacyLeft };
     }),
   );
 }
