@@ -118,6 +118,8 @@ function addAgentRoutes(db: Database, app: Hono<AuthEnv>): void {
     // An agent member runs on this host with the instance's agent logins, so only the instance
     // admin may create one; org admins then manage its schedule and wakes.
     if (!c.get("actor").instanceAdmin) return forbidden(c);
+    const stepUp = needStepUp(c);
+    if (stepUp) return stepUp;
     const body = await parseBody(c, addAgentBody);
     if (body instanceof Response) return body;
     if (!getSpec(body.agentId)) return c.json({ error: "unknown agent" }, 400);

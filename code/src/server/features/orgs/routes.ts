@@ -102,8 +102,12 @@ function projectRoutes(db: Database, app: Hono<AuthEnv>): void {
     if (ctx instanceof Response) return ctx;
     const body = await parseBody(c, projectBody);
     if (body instanceof Response) return body;
-    // A repo path makes runs cut worktrees from that directory, so only the instance admin may set it.
-    if (body.repo !== undefined && !c.get("actor").instanceAdmin) return forbidden(c);
+    // A repo path makes runs cut worktrees from that directory, so only the instance admin may set it, and only with a fresh step-up.
+    if (body.repo !== undefined) {
+      if (!c.get("actor").instanceAdmin) return forbidden(c);
+      const stepUp = needStepUp(c);
+      if (stepUp) return stepUp;
+    }
     if (body.teamId !== undefined && !listTeams(db, ctx.org.id).some((t) => t.id === body.teamId)) {
       return c.json({ error: "team not in org" }, 400);
     }

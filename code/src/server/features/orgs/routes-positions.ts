@@ -32,7 +32,9 @@ export function positionRoutes(db: Database, app: Hono<AuthEnv>): void {
     const body = await parseBody(c, positionBody);
     if (body instanceof Response) return body;
     if (foreignRef(db, ctx, body)) return c.json({ error: "team or member not in org" }, 400);
-    const stepUp = body.isManager ? needStepUp(c) : null;
+    // A new reporting edge widens a manager's authority just like the flag does.
+    const authority = body.isManager || (body.memberId && body.reportsTo);
+    const stepUp = authority ? needStepUp(c) : null;
     return stepUp ?? c.json(createPosition(db, { ...defined(body), orgId: ctx.org.id }), 201);
   });
   app.patch("/orgs/:org/positions/:id", async (c) => {

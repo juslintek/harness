@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { bootApi } from "../../test-support/api-kit";
 
 test("creating an org makes the caller its owner and strangers get 404", async () => {
@@ -169,7 +172,7 @@ test("reassigning a manager position or removing an admin needs step-up", async 
 test("only the instance admin adds agent members, even to an org someone else owns", async () => {
   const k = bootApi();
   const owner = await k.user({ stepUp: true });
-  const admin = await k.user({ admin: true });
+  const admin = await k.user({ admin: true, stepUp: true });
   const o = k.org(owner, "acme");
   k.join(o.id, admin, "admin", "boss");
   const body = { agentId: "claude", handle: "bot", displayName: "Bot" };
@@ -184,4 +187,44 @@ test("only the instance admin adds agent members, even to an org someone else ow
   });
   expect(unknown.status).toBe(400);
   expect((await unknown.json()).error).toBe("unknown agent");
+});
+
+test("an instance admin on an email-code session cannot add an agent or set a repo", async () => {
+  const k = bootApi();
+  const code = await k.user({ admin: true });
+  const passkey = await k.user({ admin: true, stepUp: true });
+  const o = k.org(code, "acme");
+  k.join(o.id, passkey, "admin", "pk");
+  const agent = { agentId: "claude", handle: "bot", displayName: "Bot" };
+  const addAgent = (who: typeof code) =>
+    k.call(who, "POST", "/api/orgs/acme/members/agents", agent);
+  const denied = await addAgent(code);
+  expect(denied.status).toBe(403);
+  expect((await denied.json()).error).toBe("step_up_required");
+  expect((await addAgent(passkey)).status).toBe(201);
+  const repo = mkdtempSync(join(tmpdir(), "routes-repo-"));
+  Bun.spawnSync(["git", "init", "-q", repo]);
+  const project = (who: typeof code, key: string, extra: object) =>
+    k.call(who, "POST", "/api/orgs/acme/projects", { key, name: key, ...extra });
+  expect((await (await project(code, "aa", { repo })).json()).error).toBe("step_up_required");
+  expect((await project(code, "bb", {})).status).toBe(201);
+  expect((await project(passkey, "cc", { repo })).status).toBe(201);
+});
+
+test("a position with a holder and a reporting line needs step-up like a manager flag", async () => {
+  const k = bootApi();
+  const owner = await k.user();
+  const stepped = await k.user({ stepUp: true });
+  const a = k.org(owner, "acme");
+  k.join(a.id, stepped, "admin", "adm");
+  const boss = await (
+    await k.call(stepped, "POST", "/api/orgs/acme/positions", { title: "Boss" })
+  ).json();
+  const post = (who: typeof owner, body: object) =>
+    k.call(who, "POST", "/api/orgs/acme/positions", body);
+  const edge = { title: "Dev", memberId: a.owner.id, reportsTo: boss.id };
+  expect((await post(owner, edge)).status).toBe(403);
+  expect((await post(owner, { title: "Dev", reportsTo: boss.id })).status).toBe(201);
+  expect((await post(owner, { title: "Dev2", memberId: a.owner.id })).status).toBe(201);
+  expect((await post(stepped, edge)).status).toBe(201);
 });

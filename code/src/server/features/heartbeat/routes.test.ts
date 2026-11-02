@@ -5,7 +5,7 @@ import { addAgentMember } from "../orgs/api";
 
 async function setup() {
   const k = bootApi();
-  const owner = await k.user();
+  const owner = await k.user({ stepUp: true });
   const a = k.org(owner, "acme");
   const agent = addAgentMember(k.db, a.id, {
     agentId: "fake",
@@ -74,4 +74,13 @@ test("run now over the hourly cap is a 429", async () => {
   const res = await k.call(owner, "POST", `/api/members/${agent.id}/wake`);
   expect(res.status).toBe(429);
   expect(await res.json()).toEqual({ error: "wake_cap" });
+});
+
+test("run now needs a fresh step-up even for an admin", async () => {
+  const { k, a, agent } = await setup();
+  const code = await k.user();
+  k.join(a.id, code, "admin", "adm");
+  const res = await k.call(code, "POST", `/api/members/${agent.id}/wake`);
+  expect(res.status).toBe(403);
+  expect((await res.json()).error).toBe("step_up_required");
 });

@@ -1,19 +1,33 @@
 import type { Database } from "bun:sqlite";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { wakeupsQuery } from "../../../shared/heartbeat";
 import { forbidden, notFound, parseQuery } from "../../route-kit";
-import type { AuthEnv } from "../auth/api";
-import { getMember, getOrgBySlug, memberForUser, orgAccess, roleAtLeast } from "../orgs/api";
+import { type AuthEnv, hasFreshStepUp, stepUpRequired } from "../auth/api";
+import {
+  getMember,
+  getOrgBySlug,
+  type MemberRow,
+  memberForUser,
+  orgAccess,
+  roleAtLeast,
+} from "../orgs/api";
 import { listWakeups, wakeNow } from "./api";
 import { WakeCapError } from "./triggers";
+
+// A wake starts a host agent run, so an admin on an email-code session is not enough.
+function wakeTarget(db: Database, c: Context<AuthEnv>): MemberRow | Response {
+  const target = getMember(db, c.req.param("id") ?? "");
+  const role = target ? orgAccess(db, c.get("actor").userId, target.orgId) : null;
+  if (!target || role === null) return notFound(c);
+  if (!roleAtLeast(role, "admin")) return forbidden(c);
+  return hasFreshStepUp(c.get("actor")) ? target : stepUpRequired(c);
+}
 
 export function wakeRoutes(db: Database): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
   app.post("/members/:id/wake", (c) => {
-    const target = getMember(db, c.req.param("id"));
-    const role = target ? orgAccess(db, c.get("actor").userId, target.orgId) : null;
-    if (!target || role === null) return notFound(c);
-    if (!roleAtLeast(role, "admin")) return forbidden(c);
+    const target = wakeTarget(db, c);
+    if (target instanceof Response) return target;
     try {
       return c.json({ id: wakeNow(db, target.id, `user:${c.get("actor").userId}`) }, 202);
     } catch (err) {
