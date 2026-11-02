@@ -1,22 +1,35 @@
 import type { Database } from "bun:sqlite";
-import type { Server, WebSocketHandler } from "bun";
+import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
 import type { Context } from "hono";
 import { type WsMessage, wsTopicSchema } from "../shared/realtime";
-import type { AuthEnv } from "./features/auth/api";
+import { type AuthEnv, onSessionRevoked } from "./features/auth/api";
 import { onTaskChange } from "./features/board/api";
 import { onMessage } from "./features/chat/api";
 import { onApprovalChange } from "./features/guard/api";
-import { getProject, listGrantOrgIds, orgAccess } from "./features/orgs/api";
+import { getProject, listGrantOrgIds, onMemberRemoved, orgAccess } from "./features/orgs/api";
 import { getRun, onRunEvent } from "./features/runtimes/api";
 import { viewRun } from "./features/runtimes/routes";
 
 export interface WsData {
   topic: string;
+  sessionId: string;
+  userId: string;
+}
+
+// Access is checked once at the upgrade, so sockets are tracked to be closed when it ends.
+const sockets = new Set<ServerWebSocket<WsData>>();
+
+function closeWhere(match: (data: WsData) => boolean): void {
+  for (const ws of sockets) if (match(ws.data)) ws.close(4401, "access ended");
 }
 
 export const websocket: WebSocketHandler<WsData> = {
   open(ws) {
+    sockets.add(ws);
     ws.subscribe(ws.data.topic);
+  },
+  close(ws) {
+    sockets.delete(ws);
   },
   // Clients only listen; anything they send is ignored and the frame size is capped.
   message() {},
@@ -35,7 +48,8 @@ export function wsUpgrade(db: Database): (c: Context<AuthEnv>) => Response {
     const allowed = orgId ? orgAccess(db, actor.userId, orgId) !== null : actor.instanceAdmin;
     if (!allowed) return c.json({ error: "forbidden" }, 403);
     const env = c.env as { server?: Server<WsData> } | undefined;
-    if (!env?.server?.upgrade(c.req.raw, { data: { topic: topic.data } })) {
+    const data = { topic: topic.data, sessionId: actor.id, userId: actor.userId };
+    if (!env?.server?.upgrade(c.req.raw, { data })) {
       return c.json({ error: "upgrade failed" }, 426);
     }
     return new Response(null);
@@ -87,7 +101,13 @@ export function wireRealtime(db: Database, server: Server<WsData>): () => void {
       : [`org:${channel.orgId}`];
     for (const topic of topics) send(topic, nudge);
   });
+  const offSession = onSessionRevoked((sessionId) => closeWhere((d) => d.sessionId === sessionId));
+  const offMember = onMemberRemoved((_db, member) =>
+    closeWhere((d) => d.userId === member.userId && d.topic === `org:${member.orgId}`),
+  );
   return () => {
+    offSession();
+    offMember();
     offRun();
     offApproval();
     offTask();

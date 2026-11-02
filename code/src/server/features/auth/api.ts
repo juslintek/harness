@@ -30,6 +30,7 @@ import {
   createSession,
   hasFreshStepUp,
   listSessions,
+  onSessionRevoked,
   revokeSession,
   sessionFromToken,
 } from "./sessions";
@@ -58,6 +59,7 @@ export {
   loginOptions,
   mutationOriginGuard,
   newRecoveryCodes,
+  onSessionRevoked,
   originGuard,
   redeemEnrollment,
   registrationOptions,
