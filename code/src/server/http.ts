@@ -14,6 +14,9 @@ import { haltRoutes, runRoutes } from "./features/runtimes/routes";
 import { probeQuota, usageSummary } from "./features/usage/api";
 import { wsUpgrade } from "./realtime";
 
+// Applied by Bun.serve before any handler runs, so it also covers /mcp and the guard hook.
+export const MAX_REQUEST_BODY_BYTES: number = 1024 * 1024;
+
 export interface AppDeps {
   db: Database;
   home: string;

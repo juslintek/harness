@@ -6,7 +6,7 @@ import { migrations } from "./server/db/migrations";
 import { ensureAdminSecret } from "./server/features/auth/api";
 import { recoverRuns, shutdownRuns } from "./server/features/runtimes/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
-import { createApp } from "./server/http";
+import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
 import { type WsData, websocket, wireRealtime } from "./server/realtime";
 import indexHtml from "./web/index.html";
 
@@ -35,7 +35,7 @@ const server = Bun.serve<WsData>({
   routes: { "/": indexHtml },
   fetch: (req, srv) => app.fetch(req, { server: srv }),
   websocket,
-  maxRequestBodySize: 1024 * 1024,
+  maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
   development: process.env.NODE_ENV !== "production",
 });
 

@@ -4,7 +4,7 @@ import { approvalViewSchema, runDetailSchema, wsMessageSchema } from "../shared/
 import { migrate, openDb } from "./db/db";
 import { migrations } from "./db/migrations";
 import { appendEvent } from "./features/logs/api";
-import { createApp } from "./http";
+import { createApp, MAX_REQUEST_BODY_BYTES } from "./http";
 import { wireRealtime } from "./realtime";
 import { adminHeaders, listenDeferred, openSocket } from "./test-support/app-kit";
 
@@ -172,5 +172,13 @@ test("real socket: bad cookie rejected, admin cookie receives approval and run m
     ws.close();
   } finally {
     off();
+  }
+});
+
+test("a body over the limit is rejected on /mcp and the guard hook before any handler runs", async () => {
+  const body = "x".repeat(MAX_REQUEST_BODY_BYTES + 1);
+  for (const path of ["/mcp", "/api/guard/hook"]) {
+    const res = await fetch(`http://127.0.0.1:${port}${path}`, { method: "POST", body });
+    expect(res.status).toBe(413);
   }
 });

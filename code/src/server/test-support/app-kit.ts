@@ -1,4 +1,4 @@
-import type { createApp } from "../http";
+import { type createApp, MAX_REQUEST_BODY_BYTES } from "../http";
 import { websocket } from "../realtime";
 
 // The listener is bound first and the app is attached once the port is known. Probing for a free
@@ -12,6 +12,7 @@ export function listenDeferred(): {
   const server = Bun.serve({
     port: 0,
     hostname: "127.0.0.1",
+    maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
     fetch: (req, srv) =>
       current ? current.fetch(req, { server: srv }) : new Response("not ready", { status: 503 }),
     websocket,
