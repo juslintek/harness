@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { corpus } from "./corpus";
 import { type ActionRequest, type Category, evaluateL1, type Scope, splitCommands } from "./l1";
 
@@ -38,7 +41,6 @@ test("non-shell actions", () => {
     category: "secret",
   });
   expect(run({ kind: "read", paths: ["/etc/hosts"] }).verdict).toBe("ask");
-  expect(run({ kind: "read", paths: ["~/.agents/skills/x/SKILL.md"] }).verdict).toBe("allow");
   expect(run({ kind: "read", paths: ["~/.agents/skills/../../.ssh/id_rsa"] }).verdict).not.toBe(
     "allow",
   );
@@ -124,4 +126,17 @@ test("read-only commands that can run a program are shell, not read", () => {
   }
   expect(exec("rg --pre-glob '*.md' foo .").category).toBe("read");
   expect(exec("sort -u a").category).toBe("read");
+});
+
+test("reads of installed skills follow symlinks before being allowed", () => {
+  const home = mkdtempSync(join(tmpdir(), "l1-home-"));
+  mkdirSync(join(home, ".agents/skills/x"), { recursive: true });
+  writeFileSync(join(home, ".agents/skills/x/SKILL.md"), "ok");
+  writeFileSync(join(home, "outside.txt"), "no");
+  symlinkSync(join(home, "outside.txt"), join(home, ".agents/skills/x/link"));
+  const read = (path: string) =>
+    evaluateL1({ kind: "read", paths: [path] }, { ...scope, home }).verdict;
+  expect(read("~/.agents/skills/x/SKILL.md")).toBe("allow");
+  expect(read("~/.agents/skills/x/link")).toBe("ask");
+  expect(read("~/.agents/skills/x/missing.md")).toBe("ask");
 });
