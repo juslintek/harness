@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { gitEnv } from "../../git-env";
+import { gitOutput } from "../../git-env";
 import { getTask } from "../board/api";
 import { listRunEvents } from "../logs/api";
 import type { RunRow } from "../runtimes/api";
@@ -7,26 +7,6 @@ import type { RunRow } from "../runtimes/api";
 const MAX_CHARS = 4000;
 const COMMAND_LINES = 20;
 const COMMAND_CHARS = 200;
-
-const GIT_TIMEOUT_MS = 10_000;
-
-// Runs on the failover path inside the server, so a stuck git must not block it: the call is async
-// and killed after the timeout, and whatever goes wrong only drops that section of the summary.
-async function git(worktree: string, args: string[]): Promise<string> {
-  try {
-    const proc = Bun.spawn(["git", "-C", worktree, ...args], {
-      env: gitEnv(),
-      stdout: "pipe",
-      stderr: "ignore",
-      timeout: GIT_TIMEOUT_MS,
-      killSignal: "SIGKILL",
-    });
-    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-    return code === 0 ? out.trim() : "";
-  } catch {
-    return "";
-  }
-}
 
 function section(title: string, body: string): string[] {
   return body === "" ? [] : [`${title}:`, body];
@@ -42,8 +22,8 @@ export async function handoffSummary(db: Database, run: RunRow): Promise<string>
     `Previous attempt on ${run.agentId}/${run.model ?? "default"} stopped: ${run.state} ${run.reason ?? ""}`.trim();
   const [status, diff] = run.worktree
     ? await Promise.all([
-        git(run.worktree, ["status", "--short"]),
-        git(run.worktree, ["diff", "--stat", "HEAD"]),
+        gitOutput(run.worktree, ["status", "--short"]).then((out) => out?.trim() ?? ""),
+        gitOutput(run.worktree, ["diff", "--stat", "HEAD"]).then((out) => out?.trim() ?? ""),
       ])
     : ["", ""];
   const lines = [
