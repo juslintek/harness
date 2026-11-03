@@ -6,6 +6,7 @@ import { gitEnv } from "../src/server/git-env";
 
 type Db = ReturnType<typeof openDb>;
 
+import { setLinked } from "../src/server/features/agents/api";
 import { createUser } from "../src/server/features/auth/api";
 import { ensureProjectChannel } from "../src/server/features/chat/api";
 import {
@@ -58,6 +59,8 @@ export function build(db: Db, root: string): Scene {
     ownerName: "Gate",
     ownerHandle: "gate",
   });
+  // The router only runs agents a person has linked, as the one-click link in the UI would.
+  for (const id of ["claude", "codex"]) setLinked(db, id, true);
   const core = listTeams(db, org.id).find((t) => t.name === "Core");
   if (!core) throw new Error("no Core team");
   const agent = (agentId: string, handle: string, title: string): MemberRow =>

@@ -2,7 +2,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { openDb } from "../src/server/db/db";
-import { listAgents } from "../src/server/features/agents/api";
+import { listAgents, setLinked } from "../src/server/features/agents/api";
 import { createSession, createUser } from "../src/server/features/auth/api";
 import { ensureProjectChannel } from "../src/server/features/chat/api";
 import {
@@ -60,6 +60,8 @@ function addPair(
   orgId: string,
   leadModel: string | null,
 ): { lead: MemberRow; dev: MemberRow } {
+  // The router only runs agents a person has linked, as the one-click link in the UI would.
+  for (const id of ["claude", "codex"]) setLinked(db, id, true);
   const lead = addAgentMember(db, orgId, {
     agentId: "claude",
     handle: "lead",
