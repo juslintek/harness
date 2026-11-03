@@ -73,12 +73,21 @@ function watchTimeline(s: Scene): () => void {
   };
 }
 
-function branchesWithAdd(s: Scene): string[] {
-  const out = git(["branch", "--list", "harness/*", "--format=%(refname:short)"], s.repo);
-  return out
-    .split("\n")
-    .filter(Boolean)
+// Only the dev's own run branches count: the lead wrote the code itself in an earlier attempt.
+function branchesWithAdd(db: Db, s: Scene): string[] {
+  const own = db
+    .query<{ branch: string }, [string]>(
+      "SELECT DISTINCT branch FROM runs WHERE member_id = ? AND branch IS NOT NULL",
+    )
+    .all(s.dev.id);
+  return own
+    .map((r) => r.branch)
     .filter((b) => {
+      if (
+        Bun.spawnSync(["git", "rev-parse", "--verify", "--quiet", b], { cwd: s.repo }).exitCode !==
+        0
+      )
+        return false;
       const ahead = git(["rev-list", "--count", `main..${b}`], s.repo) !== "0";
       return ahead && git(["show", `${b}:math.ts`], s.repo).includes("add");
     });
@@ -93,7 +102,7 @@ function state(db: Db, s: Scene): Record<string, boolean> {
   return {
     subtaskForDev: sub?.assigneeId === s.dev.id,
     devCheckout: tasks.some((t) => t.holderId === s.dev.id) || devCheckedOut,
-    devBranchWithAdd: branchesWithAdd(s).length > 0,
+    devBranchWithAdd: branchesWithAdd(db, s).length > 0,
     leadMessage: from(s.lead).length > 0,
     devMessage: from(s.dev).length > 0,
     mention: msgs.some(
