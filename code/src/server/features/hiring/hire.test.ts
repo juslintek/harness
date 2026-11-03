@@ -62,6 +62,8 @@ test("auto policy hires the best candidate under the manager and wakes the new m
   expect(profileOfMember(w.db, member?.id as string)?.id).toBe(
     done?.candidates[0]?.profile.id as string,
   );
+  expect(profileOfMember(w.db, member?.id as string)?.scope.readOnly).toBe(false);
+  expect(done?.candidates[1]?.profile.scope.readOnly).toBe(true);
   const positions = listPositions(w.db, w.orgId);
   const lead = positions.find((p) => p.memberId === w.boss.id);
   expect(positions.find((p) => p.memberId === member?.id)?.reportsTo).toBe(lead?.id as string);

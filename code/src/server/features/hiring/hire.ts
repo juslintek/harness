@@ -15,7 +15,7 @@ import {
   roleAtLeast,
 } from "../orgs/api";
 import { effective } from "../policies/api";
-import { attachProfile, createProfile, getProfile } from "../profiles/api";
+import { attachProfile, createProfile, getProfile, updateProfile } from "../profiles/api";
 import { CARD_QUESTION, insertQuestion } from "./interview-repo";
 import { onboardingPack } from "./onboarding";
 import {
@@ -195,6 +195,8 @@ function createHired(db: Database, head: HireHead, profileId: string): string {
     specialties: [...new Set([spec.specialty, ...(profile.card?.specialties ?? [])])],
   });
   attachProfile(db, member.id, profileId);
+  // Candidates are read-only while they interview; a hire has to be able to work.
+  updateProfile(db, profileId, { scope: { readOnly: false } });
   addToTeam(db, head.teamId, member.id);
   const manager =
     managerPositionsOf(db, head.requestedBy).find((p) => p.teamId === head.teamId) ??

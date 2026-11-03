@@ -4,6 +4,7 @@ import { getChannel } from "../chat/api";
 import { appendEvent } from "../logs/api";
 import type { TokenScope } from "../mcp/api";
 import { directReportsOf, type MemberRow, managerPositionsOf } from "../orgs/api";
+import { profileOfMember } from "../profiles/api";
 import type { RouteDeps } from "../router/api";
 import type { RunDeps, RunMember } from "../runtimes/api";
 import { setStatus, type WakeRow } from "./repo";
@@ -35,12 +36,20 @@ function scopesFor(db: Database, member: MemberRow): TokenScope[] {
   return scopes;
 }
 
+// A manager reviews and delegates, and an admin can pin any other member to read-only on its profile.
+function isReadOnly(db: Database, member: MemberRow): boolean {
+  return (
+    directReportsOf(db, member.id).length > 0 ||
+    profileOfMember(db, member.id)?.scope.readOnly === true
+  );
+}
+
 export function runMember(db: Database, member: MemberRow, projectId: string | null): RunMember {
   return {
     memberId: member.id,
     orgId: member.orgId,
     scopes: scopesFor(db, member),
-    ...(directReportsOf(db, member.id).length > 0 ? { readOnly: true } : {}),
+    ...(isReadOnly(db, member) ? { readOnly: true } : {}),
     ...(projectId === null ? {} : { projectId }),
   };
 }

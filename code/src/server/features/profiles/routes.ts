@@ -3,7 +3,7 @@ import { type Context, Hono } from "hono";
 import { profileInputSchema } from "../../../shared/profiles";
 import { forbidden, notFound, parseBody, routeError } from "../../route-kit";
 import { getSpec } from "../agents/api";
-import type { AuthEnv } from "../auth/api";
+import { type AuthEnv, requireStepUp } from "../auth/api";
 import { getMember, getOrgBySlug, memberForUser, roleAtLeast } from "../orgs/api";
 import { ensureProfile, profileOfMember, submitCard, updateProfile } from "./api";
 
@@ -32,7 +32,7 @@ export function profilesRoutes(db: Database): Hono<AuthEnv> {
     return profile ? c.json(profile) : notFound(c);
   });
 
-  app.put(path, async (c) => {
+  app.put(path, requireStepUp, async (c) => {
     const memberId = targetMember(db, c, "admin");
     if (memberId instanceof Response) return memberId;
     const body = await parseBody(c, profileInputSchema);

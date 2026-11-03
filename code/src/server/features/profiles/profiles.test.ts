@@ -107,7 +107,7 @@ test("PUT profile as a member role gives 403, as admin 200, and the card route a
   const k = bootApi();
   const owner = await k.user();
   const o = k.org(owner, "acme");
-  const admin = await k.user();
+  const admin = await k.user({ stepUp: true });
   k.join(o.id, admin, "admin", "adm");
   const bot = addAgentMember(k.db, o.id, {
     agentId: "claude",
@@ -140,6 +140,22 @@ test("PUT profile as a member role gives 403, as admin 200, and the card route a
   expect(human.status).toBe(400);
   expect((await human.json()).error).toBe("not an agent member");
   expect((await k.call(admin, "PUT", `${humanUrl}/card`, validCard)).status).toBe(400);
+});
+
+test("PUT profile needs a fresh step-up, since scope.readOnly gates what a run may write", async () => {
+  const k = bootApi();
+  const owner = await k.user();
+  const o = k.org(owner, "acme");
+  const admin = await k.user({ stepUp: false });
+  k.join(o.id, admin, "admin", "adm");
+  const bot = addAgentMember(k.db, o.id, {
+    agentId: "claude",
+    handle: "bot",
+    displayName: "Bot",
+    specialties: [],
+  });
+  const res = await k.call(admin, "PUT", `/api/orgs/acme/members/${bot.id}/profile`, emptyInput);
+  expect([res.status, await res.json()]).toEqual([403, { error: "step_up_required" }]);
 });
 
 test("deleting the org deletes its profiles", () => {
