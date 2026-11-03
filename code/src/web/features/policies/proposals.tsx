@@ -1,11 +1,12 @@
 import { useState } from "preact/hooks";
 import type { OrgDetail } from "../../../shared/orgs";
+import { type PolicyProposal, proposalListSchema } from "../../../shared/policies";
 import { api, useLoad } from "../../api";
 import { fmtTime } from "../../format";
 import { ErrorLine } from "../auth/error-line";
 import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
-import { handleOf, type Proposal, proposalListSchema, show } from "./policies-data";
+import { handleOf, show } from "./policies-data";
 
 type Filter = "open" | "all";
 
@@ -14,7 +15,7 @@ function Decide({
   slug,
   onDone,
 }: {
-  proposal: Proposal;
+  proposal: PolicyProposal;
   slug: string;
   onDone: () => void;
 }): preact.JSX.Element {
@@ -30,25 +31,30 @@ function Decide({
       .catch((err: unknown) => console.error(err));
   };
   return (
-    <form
-      class="row"
-      onSubmit={(e) => {
-        e.preventDefault();
-        decide("approve");
-      }}
-    >
+    <div class="row">
       <label>
         Reason for {proposal.key} decision (optional)
         <input value={reason} onInput={(e) => setReason(e.currentTarget.value)} />
       </label>
-      <button type="submit" disabled={action.busy}>
+      <button
+        type="button"
+        aria-label={`Approve ${proposal.key} proposal`}
+        disabled={action.busy}
+        onClick={() => decide("approve")}
+      >
         Approve
       </button>
-      <button type="button" class="danger" disabled={action.busy} onClick={() => decide("reject")}>
+      <button
+        type="button"
+        class="danger"
+        aria-label={`Reject ${proposal.key} proposal`}
+        disabled={action.busy}
+        onClick={() => decide("reject")}
+      >
         Reject
       </button>
       <ErrorLine message={action.error} />
-    </form>
+    </div>
   );
 }
 
@@ -57,7 +63,7 @@ function ProposalCard({
   detail,
   onDone,
 }: {
-  proposal: Proposal;
+  proposal: PolicyProposal;
   detail: OrgDetail;
   onDone: () => void;
 }): preact.JSX.Element {

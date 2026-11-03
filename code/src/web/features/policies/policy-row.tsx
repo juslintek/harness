@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import type { EffectivePolicy, PolicyKey } from "../../../shared/policies";
 import { api } from "../../api";
 import { ErrorLine } from "../auth/error-line";
 import { ignored } from "../auth/me";
-import { useAction } from "../auth/use-action";
-import { type EffectivePolicy, fields, parseValue, show, toText } from "./policies-data";
+import { type Action, useAction } from "../auth/use-action";
+import { fields, parseValue, show, toText } from "./policies-data";
 import type { Scope } from "./scope-picker";
 
 function Control({
@@ -66,6 +67,114 @@ function Chain({ item }: { item: EffectivePolicy }): preact.JSX.Element {
   );
 }
 
+function EditForm({
+  item,
+  scope,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  item: EffectivePolicy;
+  scope: Scope;
+  busy: boolean;
+  onSave: (value: unknown) => void;
+  onCancel: () => void;
+}): preact.JSX.Element {
+  const field = fields[item.key];
+  const [text, setText] = useState(
+    field.kind === "choice" ? String(item.value) : toText(item.value),
+  );
+  const [invalid, setInvalid] = useState<string | null>(null);
+  const submit = (): void => {
+    const parsed = parseValue(item.key, text);
+    if (parsed.ok) onSave(parsed.value);
+    else setInvalid(parsed.message);
+  };
+  return (
+    <form
+      class="row"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      <Control item={item} text={text} onText={setText} />
+      <button type="submit" disabled={busy}>
+        Save at {scope.layer} layer
+      </button>
+      <button type="button" onClick={onCancel}>
+        Cancel
+      </button>
+      <ErrorLine message={invalid} />
+    </form>
+  );
+}
+
+function Actions({
+  item,
+  scope,
+  busy,
+  onEdit,
+  onClear,
+}: {
+  item: EffectivePolicy;
+  scope: Scope;
+  busy: boolean;
+  onEdit: () => void;
+  onClear: () => void;
+}): preact.JSX.Element {
+  const here = item.chain.some((c) => c.layer === scope.layer && c.targetId === scope.targetId);
+  return (
+    <div class="row">
+      <button
+        type="button"
+        aria-label={`Edit ${item.key} at ${scope.layer} layer`}
+        onClick={onEdit}
+      >
+        Edit at {scope.layer} layer
+      </button>
+      {here && (
+        <button
+          type="button"
+          class="danger"
+          aria-label={`Clear ${item.key} at ${scope.layer} layer`}
+          disabled={busy}
+          onClick={onClear}
+        >
+          Clear at {scope.layer} layer
+        </button>
+      )}
+    </div>
+  );
+}
+
+function usePolicyWrites(
+  slug: string,
+  scope: Scope,
+  key: PolicyKey,
+  onDone: () => void,
+): { action: Action; save: (value: unknown) => void; clear: () => void } {
+  const action = useAction();
+  const base = `/api/orgs/${slug}/policies`;
+  const run = (call: () => Promise<unknown>): void => {
+    action
+      .run(async () => {
+        await call();
+        onDone();
+      })
+      .catch((err: unknown) => console.error(err));
+  };
+  const save = (value: unknown): void => {
+    const body = { layer: scope.layer, targetId: scope.targetId, key, value };
+    run(() => api(base, ignored, { method: "PUT", body }));
+  };
+  const clear = (): void => {
+    const q = `layer=${scope.layer}&targetId=${encodeURIComponent(scope.targetId)}&key=${key}`;
+    run(() => api(`${base}?${q}`, ignored, { method: "DELETE" }));
+  };
+  return { action, save, clear };
+}
+
 export function PolicyRow({
   item,
   scope,
@@ -78,33 +187,10 @@ export function PolicyRow({
   onChanged: () => void;
 }): preact.JSX.Element {
   const [editing, setEditing] = useState(false);
-  const [text, setText] = useState("");
-  const action = useAction();
-  const here = item.chain.some((c) => c.layer === scope.layer && c.targetId === scope.targetId);
-  const base = `/api/orgs/${slug}/policies`;
-  const start = (): void => {
-    const field = fields[item.key];
-    setText(field.kind === "choice" ? String(item.value) : toText(item.value));
-    setEditing(true);
-  };
-  const run = (call: () => Promise<unknown>): void => {
-    action
-      .run(async () => {
-        await call();
-        setEditing(false);
-        onChanged();
-      })
-      .catch((err: unknown) => console.error(err));
-  };
-  const save = (): void => {
-    const value = parseValue(item.key, text);
-    const body = { layer: scope.layer, targetId: scope.targetId, key: item.key, value };
-    run(() => api(base, ignored, { method: "PUT", body }));
-  };
-  const clear = (): void => {
-    const q = `layer=${scope.layer}&targetId=${encodeURIComponent(scope.targetId)}&key=${item.key}`;
-    run(() => api(`${base}?${q}`, ignored, { method: "DELETE" }));
-  };
+  const { action, save, clear } = usePolicyWrites(slug, scope, item.key, () => {
+    setEditing(false);
+    onChanged();
+  });
   return (
     <li class="card policy-row">
       <div class="policy-head">
@@ -113,32 +199,21 @@ export function PolicyRow({
         <span class="badge">from {item.layer}</span>
       </div>
       {editing ? (
-        <form
-          class="row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            save();
-          }}
-        >
-          <Control item={item} text={text} onText={setText} />
-          <button type="submit" disabled={action.busy}>
-            Save at {scope.layer} layer
-          </button>
-          <button type="button" onClick={() => setEditing(false)}>
-            Cancel
-          </button>
-        </form>
+        <EditForm
+          item={item}
+          scope={scope}
+          busy={action.busy}
+          onSave={save}
+          onCancel={() => setEditing(false)}
+        />
       ) : (
-        <div class="row">
-          <button type="button" onClick={start}>
-            Edit at {scope.layer} layer
-          </button>
-          {here && (
-            <button type="button" class="danger" disabled={action.busy} onClick={clear}>
-              Clear at {scope.layer} layer
-            </button>
-          )}
-        </div>
+        <Actions
+          item={item}
+          scope={scope}
+          busy={action.busy}
+          onEdit={() => setEditing(true)}
+          onClear={clear}
+        />
       )}
       <ErrorLine message={action.error} />
       <Chain item={item} />

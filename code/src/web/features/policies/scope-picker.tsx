@@ -40,7 +40,7 @@ function useScopeTarget(detail: OrgDetail, pick: Pick): { scope: Scope | null; n
     return { scope: memberId ? { layer, targetId: memberId, query } : null, note: "" };
   }
   if (!number) return { scope: null, note: "" };
-  const task = tasks.data?.find((t) => t.number === Number(number));
+  const task = tasks.data?.find((t) => t.projectId === projectId && t.number === Number(number));
   if (!task) {
     return { scope: null, note: tasks.data ? "No task with that number." : "Looking up..." };
   }
@@ -59,6 +59,72 @@ function Options({ items }: { items: { id: string; label: string }[] }): preact.
   );
 }
 
+function TaskPick({
+  detail,
+  pick,
+  onPick,
+}: {
+  detail: OrgDetail;
+  pick: Pick;
+  onPick: (patch: Partial<Pick>) => void;
+}): preact.JSX.Element {
+  return (
+    <>
+      <label>
+        Project
+        <select
+          value={pick.projectId}
+          onChange={(e) => onPick({ projectId: e.currentTarget.value })}
+        >
+          <Options items={detail.projects.map((p) => ({ id: p.id, label: p.key }))} />
+        </select>
+      </label>
+      <label>
+        Task number
+        <input
+          type="number"
+          min="1"
+          value={pick.number}
+          onInput={(e) => onPick({ number: e.currentTarget.value })}
+        />
+      </label>
+    </>
+  );
+}
+
+function TargetPick({
+  detail,
+  pick,
+  onPick,
+}: {
+  detail: OrgDetail;
+  pick: Pick;
+  onPick: (patch: Partial<Pick>) => void;
+}): preact.JSX.Element | null {
+  if (pick.layer === "team") {
+    return (
+      <label>
+        Team
+        <select value={pick.teamId} onChange={(e) => onPick({ teamId: e.currentTarget.value })}>
+          <Options items={detail.teams.map((t) => ({ id: t.id, label: t.name }))} />
+        </select>
+      </label>
+    );
+  }
+  if (pick.layer === "agent") {
+    return (
+      <label>
+        Member
+        <select value={pick.memberId} onChange={(e) => onPick({ memberId: e.currentTarget.value })}>
+          <Options items={detail.members.map((m) => ({ id: m.id, label: m.handle }))} />
+        </select>
+      </label>
+    );
+  }
+  if (pick.layer === "org") return null;
+  return <TaskPick detail={detail} pick={pick} onPick={onPick} />;
+}
+
 export function ScopePicker({
   detail,
   onScope,
@@ -66,59 +132,30 @@ export function ScopePicker({
   detail: OrgDetail;
   onScope: (scope: Scope | null) => void;
 }): preact.JSX.Element {
-  const [layer, setLayer] = useState<ScopeLayer>("org");
-  const [teamId, setTeamId] = useState(detail.teams[0]?.id ?? "");
-  const [memberId, setMemberId] = useState(detail.members[0]?.id ?? "");
-  const [projectId, setProjectId] = useState(detail.projects[0]?.id ?? "");
-  const [number, setNumber] = useState("");
-  const { scope, note } = useScopeTarget(detail, { layer, teamId, memberId, projectId, number });
+  const [pick, setPick] = useState<Pick>({
+    layer: "org",
+    teamId: detail.teams[0]?.id ?? "",
+    memberId: detail.members[0]?.id ?? "",
+    projectId: detail.projects[0]?.id ?? "",
+    number: "",
+  });
+  const { scope, note } = useScopeTarget(detail, pick);
   useEffect(() => onScope(scope), [scope?.layer, scope?.targetId]);
   return (
     <div class="row scope-picker">
       <label>
         Scope
-        <select value={layer} onChange={(e) => setLayer(e.currentTarget.value as ScopeLayer)}>
+        <select
+          value={pick.layer}
+          onChange={(e) => setPick({ ...pick, layer: e.currentTarget.value as ScopeLayer })}
+        >
           <option value="org">Whole org</option>
           <option value="team">Team</option>
           <option value="agent">Member</option>
           <option value="task">Task</option>
         </select>
       </label>
-      {layer === "team" && (
-        <label>
-          Team
-          <select value={teamId} onChange={(e) => setTeamId(e.currentTarget.value)}>
-            <Options items={detail.teams.map((t) => ({ id: t.id, label: t.name }))} />
-          </select>
-        </label>
-      )}
-      {layer === "agent" && (
-        <label>
-          Member
-          <select value={memberId} onChange={(e) => setMemberId(e.currentTarget.value)}>
-            <Options items={detail.members.map((m) => ({ id: m.id, label: m.handle }))} />
-          </select>
-        </label>
-      )}
-      {layer === "task" && (
-        <>
-          <label>
-            Project
-            <select value={projectId} onChange={(e) => setProjectId(e.currentTarget.value)}>
-              <Options items={detail.projects.map((p) => ({ id: p.id, label: p.key }))} />
-            </select>
-          </label>
-          <label>
-            Task number
-            <input
-              type="number"
-              min="1"
-              value={number}
-              onInput={(e) => setNumber(e.currentTarget.value)}
-            />
-          </label>
-        </>
-      )}
+      <TargetPick detail={detail} pick={pick} onPick={(patch) => setPick({ ...pick, ...patch })} />
       {note && <p class="muted scope-note">{note}</p>}
     </div>
   );

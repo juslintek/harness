@@ -1,24 +1,15 @@
 import { useState } from "preact/hooks";
-import { z } from "zod";
-import type { BudgetScopeKind, BudgetState, BudgetView } from "../../../shared/budgets";
+import {
+  type BudgetScopeKind,
+  type BudgetState,
+  type BudgetView,
+  budgetListSchema,
+} from "../../../shared/budgets";
 import type { OrgDetail } from "../../../shared/orgs";
 import { api, useLoad } from "../../api";
 import { ErrorLine } from "../auth/error-line";
 import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
-
-const budgetList: z.ZodType<BudgetView[]> = z.array(
-  z.object({
-    id: z.string(),
-    scopeKind: z.enum(["org", "team", "member"]),
-    scopeId: z.string(),
-    monthlyUsd: z.number(),
-    spentUsd: z.number(),
-    ratio: z.number(),
-    state: z.enum(["ok", "warn", "paused"]),
-    unpriced: z.number(),
-  }),
-);
 
 const STATE_TEXT: Record<BudgetState, string> = {
   ok: "ok",
@@ -36,6 +27,56 @@ function scopeName(b: BudgetView, detail: OrgDetail): string {
   return `${b.scopeKind === "team" ? "Team" : "Member"} ${name}`;
 }
 
+interface Target {
+  kind: BudgetScopeKind;
+  id: string;
+}
+
+function TargetFields({
+  detail,
+  target,
+  onTarget,
+}: {
+  detail: OrgDetail;
+  target: Target;
+  onTarget: (t: Target) => void;
+}): preact.JSX.Element {
+  const { kind, id } = target;
+  const options =
+    kind === "team"
+      ? detail.teams.map((t) => ({ id: t.id, label: t.name }))
+      : detail.members.map((m) => ({ id: m.id, label: m.handle }));
+  const pick = (next: BudgetScopeKind): void =>
+    onTarget({
+      kind: next,
+      id: (next === "team" ? detail.teams[0]?.id : detail.members[0]?.id) ?? "",
+    });
+  return (
+    <>
+      <label>
+        Budget scope
+        <select value={kind} onChange={(e) => pick(e.currentTarget.value as BudgetScopeKind)}>
+          <option value="org">Whole org</option>
+          <option value="team">Team</option>
+          <option value="member">Member</option>
+        </select>
+      </label>
+      {kind !== "org" && (
+        <label>
+          Budget target
+          <select value={id} onChange={(e) => onTarget({ kind, id: e.currentTarget.value })}>
+            {options.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+    </>
+  );
+}
+
 function BudgetForm({
   detail,
   initial,
@@ -45,20 +86,12 @@ function BudgetForm({
   initial: { kind: BudgetScopeKind; id: string; usd: string };
   onDone: () => void;
 }): preact.JSX.Element {
-  const [kind, setKind] = useState(initial.kind);
-  const [scopeId, setScopeId] = useState(initial.id);
+  const [target, setTarget] = useState<Target>({ kind: initial.kind, id: initial.id });
   const [usd, setUsd] = useState(initial.usd);
   const action = useAction();
-  const targets =
-    kind === "team"
-      ? detail.teams.map((t) => ({ id: t.id, label: t.name }))
-      : detail.members.map((m) => ({ id: m.id, label: m.handle }));
   const save = (): void => {
-    const body = {
-      scopeKind: kind,
-      scopeId: kind === "org" ? detail.org.id : scopeId,
-      monthlyUsd: Number(usd),
-    };
+    const scopeId = target.kind === "org" ? detail.org.id : target.id;
+    const body = { scopeKind: target.kind, scopeId, monthlyUsd: Number(usd) };
     action
       .run(async () => {
         await api(`/api/orgs/${detail.org.slug}/budgets`, ignored, { method: "PUT", body });
@@ -74,35 +107,7 @@ function BudgetForm({
         save();
       }}
     >
-      <label>
-        Budget scope
-        <select
-          value={kind}
-          onChange={(e) => {
-            const next = e.currentTarget.value as BudgetScopeKind;
-            setKind(next);
-            setScopeId(
-              next === "team" ? (detail.teams[0]?.id ?? "") : (detail.members[0]?.id ?? ""),
-            );
-          }}
-        >
-          <option value="org">Whole org</option>
-          <option value="team">Team</option>
-          <option value="member">Member</option>
-        </select>
-      </label>
-      {kind !== "org" && (
-        <label>
-          Budget target
-          <select value={scopeId} onChange={(e) => setScopeId(e.currentTarget.value)}>
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
+      <TargetFields detail={detail} target={target} onTarget={setTarget} />
       <label>
         Monthly limit (USD)
         <input
@@ -119,6 +124,15 @@ function BudgetForm({
       </button>
       <ErrorLine message={action.error} />
     </form>
+  );
+}
+
+function Meter({ budget }: { budget: BudgetView }): preact.JSX.Element {
+  const pct = Math.min(100, Math.round(budget.ratio * 100));
+  return (
+    <span class="bar" aria-hidden="true">
+      <span class={`bar-fill ${budget.state}`} style={{ width: `${pct}%` }} />
+    </span>
   );
 }
 
@@ -144,21 +158,25 @@ function BudgetItem({
       })
       .catch((err: unknown) => console.error(err));
   };
-  const pct = Math.min(100, Math.round(budget.ratio * 100));
+  const name = scopeName(budget, detail);
   return (
     <li class="card">
-      <strong>{scopeName(budget, detail)}</strong>: ${budget.spentUsd.toFixed(2)} of $
-      {budget.monthlyUsd.toFixed(2)} ({Math.round(budget.ratio * 100)}%), status{" "}
+      <strong>{name}</strong>: ${budget.spentUsd.toFixed(2)} of ${budget.monthlyUsd.toFixed(2)} (
+      {Math.round(budget.ratio * 100)}%), status{" "}
       <span class={`budget-state ${budget.state}`}>{STATE_TEXT[budget.state]}</span>
       {budget.unpriced > 0 && <small class="muted"> + {budget.unpriced} unpriced</small>}
-      <span class="bar" aria-hidden="true">
-        <span class={`bar-fill ${budget.state}`} style={{ width: `${pct}%` }} />
-      </span>
+      <Meter budget={budget} />
       <div class="row">
-        <button type="button" onClick={onEdit}>
+        <button type="button" aria-label={`Edit budget for ${name}`} onClick={onEdit}>
           Edit
         </button>
-        <button type="button" class="danger" disabled={action.busy} onClick={remove}>
+        <button
+          type="button"
+          class="danger"
+          aria-label={`Delete budget for ${name}`}
+          disabled={action.busy}
+          onClick={remove}
+        >
           Delete
         </button>
       </div>
@@ -169,7 +187,7 @@ function BudgetItem({
 
 export function Budgets({ detail }: { detail: OrgDetail }): preact.JSX.Element {
   const list = useLoad(
-    () => api(`/api/orgs/${detail.org.slug}/budgets`, budgetList),
+    () => api(`/api/orgs/${detail.org.slug}/budgets`, budgetListSchema),
     [detail.org.slug],
   );
   // Remounting the form on edit is the simplest way to reload its fields from the chosen budget.

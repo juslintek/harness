@@ -1,10 +1,10 @@
 import { useState } from "preact/hooks";
 import type { OrgDetail } from "../../../shared/orgs";
+import { effectiveListSchema } from "../../../shared/policies";
 import { api, useLoad, useTopic } from "../../api";
 import { ErrorLine } from "../auth/error-line";
 import { isAdmin, OrgGate, useOrg } from "../orgs/org-data";
 import { Budgets } from "./budgets";
-import { effectiveListSchema } from "./policies-data";
 import { PolicyRow } from "./policy-row";
 import { Proposals } from "./proposals";
 import { type Scope, ScopePicker } from "./scope-picker";
@@ -21,7 +21,13 @@ function Effective({ detail, scope }: { detail: OrgDetail; scope: Scope }): prea
       <ErrorLine message={list.error} />
       <ul class="plain">
         {list.data?.map((item) => (
-          <PolicyRow key={item.key} item={item} scope={scope} slug={slug} onChanged={list.reload} />
+          <PolicyRow
+            key={`${scope.layer}/${scope.targetId}/${item.key}`}
+            item={item}
+            scope={scope}
+            slug={slug}
+            onChanged={list.reload}
+          />
         ))}
       </ul>
     </>
@@ -39,7 +45,9 @@ function Policies({ detail }: { detail: OrgDetail }): preact.JSX.Element {
         down the layers.
       </p>
       <ScopePicker detail={detail} onScope={setScope} />
-      {scope && <Effective detail={detail} scope={scope} />}
+      {scope && (
+        <Effective key={`${scope.layer}/${scope.targetId}`} detail={detail} scope={scope} />
+      )}
       <Proposals detail={detail} />
       <Budgets detail={detail} />
     </section>
