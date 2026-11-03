@@ -30,9 +30,10 @@ export function registerProfilesTools(server: McpServer, env: ToolEnv): void {
         : getMember(ctx.db, ctx.memberId);
       if (target?.kind !== "agent") return fail("no agent with that handle");
       // Reading a teammate must not create their profile row.
-      const profile = a.handle
-        ? profileOfMember(ctx.db, target.id)
-        : ensureProfile(ctx.db, target.id);
+      const profile =
+        target.id === ctx.memberId
+          ? ensureProfile(ctx.db, target.id)
+          : profileOfMember(ctx.db, target.id);
       if (!profile) return fail("no profile");
       const { runtime, model, skills, card } = profile;
       return { handle: target.handle, runtime, model, skills, card };

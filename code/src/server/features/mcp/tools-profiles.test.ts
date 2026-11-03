@@ -66,3 +66,12 @@ test("a member submits its own card and reads a teammate's profile", async () =>
   expect(seen).toMatchObject({ handle: "mate", card: null });
   expect((await call(server, token, "profile_get", { handle: "nobody" })).isError).toBe(true);
 });
+
+test("profile_get with the caller's own handle behaves like no handle", async () => {
+  const dev = w.agent("dev");
+  const token = memberToken(dev.id);
+  const own = await call(server, token, "profile_get", { handle: "dev" });
+  expect(own.isError).toBe(false);
+  expect(JSON.parse(own.text)).toMatchObject({ handle: "dev", card: null });
+  expect(await call(server, token, "profile_get", { handle: "@dev" })).toEqual(own);
+});

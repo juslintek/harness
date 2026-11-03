@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { RoleSpec } from "../../../shared/hiring";
 import { hiringWorld } from "../../test-support/hiring-kit";
+import { createTeam } from "../orgs/api";
 import { fileRequest } from "./api";
 
 const refused = (promise: Promise<unknown>): Promise<string> =>
@@ -48,4 +49,29 @@ test("a requester whose budget is exhausted cannot file, a person without a memb
   expect(await refused(fileRequest(w.db, paused, { ...input, requestedBy: "user:u1" }))).toBe(
     "filed",
   );
+});
+
+test("two requests filed at the same moment for one team make exactly one request", async () => {
+  const w = hiringWorld();
+  const results = await Promise.all([refused(w.file()), refused(w.file())]);
+  expect(results.sort()).toEqual(["filed", "this team already has an open hire request"]);
+  expect(w.db.query("SELECT COUNT(*) AS n FROM hire_requests").get()).toEqual({ n: 1 });
+});
+
+test("parallel requests across teams still respect the org's daily limit", async () => {
+  const w = hiringWorld();
+  const teams = [w.teamId, ...[1, 2, 3].map((n) => createTeam(w.db, w.orgId, `t${n}`).id)];
+  const spec: RoleSpec = {
+    title: "Dev",
+    specialty: "backend",
+    summary: "x",
+    mustHave: [],
+    taskTypes: ["feature"],
+  };
+  const results = await Promise.all(
+    teams.map((teamId) =>
+      refused(fileRequest(w.db, w.deps, { orgId: w.orgId, teamId, requestedBy: "user:u1", spec })),
+    ),
+  );
+  expect(results.filter((r) => r === "filed")).toHaveLength(3);
 });
