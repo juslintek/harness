@@ -5,6 +5,7 @@ import {
   addHumanMember,
   createOrg,
   createPosition,
+  directReportsOf,
   listPositions,
   managerPositionsOf,
   type PositionPatch,
@@ -74,4 +75,15 @@ test("listPositions returns the org positions in creation order", () => {
   const patch: PositionPatch = { title: "a2" };
   updatePosition(db, a.id, patch);
   expect(listPositions(db, orgId).map((p) => p.title)).toEqual(["a2"]);
+});
+
+test("directReportsOf lists members in positions under the member's, skipping vacant ones", () => {
+  const { db, orgId, memberId } = setup();
+  const dev = addHumanMember(db, orgId, "u3", "dev", "Dev", "member");
+  const lead = createPosition(db, { orgId, title: "lead", memberId, isManager: true });
+  createPosition(db, { orgId, title: "dev", memberId: dev.id, reportsTo: lead.id });
+  createPosition(db, { orgId, title: "dev2", memberId: dev.id, reportsTo: lead.id });
+  createPosition(db, { orgId, title: "vacant", reportsTo: lead.id });
+  expect(directReportsOf(db, memberId)).toEqual([dev.id]);
+  expect(directReportsOf(db, dev.id)).toEqual([]);
 });

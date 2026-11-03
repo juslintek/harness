@@ -117,6 +117,18 @@ export function managerPositionsOf(db: Database, memberId: string): PositionRow[
     .map(row);
 }
 
+export function directReportsOf(db: Database, memberId: string): string[] {
+  return db
+    .query<{ member_id: string }, [string]>(
+      `SELECT DISTINCT sub.member_id FROM positions mine
+       JOIN positions sub ON sub.reports_to = mine.id
+       WHERE mine.member_id = ? AND sub.member_id IS NOT NULL
+       ORDER BY sub.created_at, sub.id`,
+    )
+    .all(memberId)
+    .map((r) => r.member_id);
+}
+
 export function reportsTransitivelyTo(
   db: Database,
   memberId: string,

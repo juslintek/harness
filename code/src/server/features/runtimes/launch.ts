@@ -34,6 +34,8 @@ export interface RunMember {
   memberId: string;
   orgId: string;
   scopes: TokenScope[];
+  // A manager reviews and delegates; its worktree is read-only in srt.
+  readOnly?: boolean | undefined;
   // The project whose repo the run works in; its org decides the run's approvals.
   projectId?: string | undefined;
 }
@@ -102,6 +104,7 @@ export async function createLaunch(
     preset: "dev",
     weakerNetworkIsolation: spec.weakerNetworkIsolation,
     codexHome,
+    readOnlyWorktree: member?.readOnly === true,
   });
   const tmp = runTmpDir(runDir);
   const base = `http://127.0.0.1:${deps.port}`;

@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { getTask } from "../board/api";
 import { getChannel } from "../chat/api";
-import { getOrg, listPositions, type MemberRow } from "../orgs/api";
+import { directReportsOf, getMember, getOrg, listPositions, type MemberRow } from "../orgs/api";
 import type { WakeRow } from "./repo";
 
 const MAX_WAKES = 10;
@@ -50,6 +50,15 @@ function describe(db: Database, wake: WakeRow): string {
   }
 }
 
+function managerNotice(db: Database, member: MemberRow): string {
+  const handles = directReportsOf(db, member.id).flatMap((id) => {
+    const report = getMember(db, id);
+    return report ? [`@${report.handle}`] : [];
+  });
+  if (handles.length === 0) return "";
+  return `\n\nYou manage ${handles.join(", ")}. You do not write or commit code: your worktree is read-only, and this overrides the instruction below to commit on your branch. For work on a task, create a subtask for one of your reports with \`task_create\` (pass \`parent\` = the task id and \`assignee\` = their handle), tell them in the project channel with an @mention, then wait. When they report back, review their branch with \`git log\` / \`git diff main..<branch>\`, comment, and move their subtask and your task to \`done\` when the work is right.`;
+}
+
 export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[]): string {
   const org = getOrg(db, member.orgId);
   const titles = listPositions(db, member.orgId)
@@ -60,5 +69,5 @@ export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[]): 
   }.`;
   const shown = wakes.slice(0, MAX_WAKES).map((w) => `- ${describe(db, w)}`);
   if (wakes.length > MAX_WAKES) shown.push(`- and ${wakes.length - MAX_WAKES} more`);
-  return `${who}\n\n${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}\n\n${INSTRUCTION}`;
+  return `${who}\n\n${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}${managerNotice(db, member)}\n\n${INSTRUCTION}`;
 }
