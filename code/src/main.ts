@@ -8,7 +8,7 @@ import { wireBoard } from "./server/features/board/api";
 import { startBudgets } from "./server/features/budgets/api";
 import { wireChat } from "./server/features/chat/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
-import { startHiring } from "./server/features/hiring/api";
+import { type HiringDeps, startHiring } from "./server/features/hiring/api";
 import { startRouter } from "./server/features/router/api";
 import { recoverRuns, shutdownRuns, wireRuntimes } from "./server/features/runtimes/api";
 import { startTracking } from "./server/features/tracking/api";
@@ -66,7 +66,17 @@ const stopHeartbeat = startHeartbeat(db, {
   runDeps: { home: config.home, port: config.port },
   home: config.home,
 });
-const stopLoops = [startRouter, startBudgets, startTracking, startHiring].map((start) => start(db));
+// Interviews and wakes get wired to real runs later; until then hiring only logs and cannot file requests.
+const hiringDeps: HiringDeps = {
+  pickEngines: () => [],
+  engineReady: () => false,
+  startInterview: (candidateId) => console.log("hiring: interview not wired", candidateId),
+  wake: (memberId, reason) => console.log("hiring: wake not wired", memberId, reason),
+};
+const stopLoops = [
+  ...[startRouter, startBudgets, startTracking].map((start) => start(db)),
+  startHiring(db, hiringDeps),
+];
 
 console.log(`harness listening on ${server.url}`);
 
