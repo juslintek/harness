@@ -64,6 +64,25 @@ function Decide({
   );
 }
 
+function Summary({ view }: { view: HireView }): preact.JSX.Element {
+  return (
+    <>
+      <h2>
+        {view.spec.title}{" "}
+        <span class="badge" data-state={view.status}>
+          {view.status}
+        </span>
+      </h2>
+      <p>{view.spec.summary}</p>
+      <p class="muted">
+        {view.spec.specialty}; task types: {view.spec.taskTypes.join(", ")}
+        {view.spec.mustHave.length > 0 && `; must have: ${view.spec.mustHave.join(", ")}`}
+      </p>
+      {view.decisionReason && <p>Decision: {view.decisionReason}</p>}
+    </>
+  );
+}
+
 export function HireDetail({ slug, id }: { slug: string; id: string }): preact.JSX.Element {
   const base = `/api/orgs/${slug}/hires/${id}`;
   const org = useOrg(slug);
@@ -80,18 +99,7 @@ export function HireDetail({ slug, id }: { slug: string; id: string }): preact.J
       <ErrorLine message={hire.error ?? org.error} />
       {view ? (
         <>
-          <h2>
-            {view.spec.title}{" "}
-            <span class="badge" data-state={view.status}>
-              {view.status}
-            </span>
-          </h2>
-          <p>{view.spec.summary}</p>
-          <p class="muted">
-            {view.spec.specialty}; task types: {view.spec.taskTypes.join(", ")}
-            {view.spec.mustHave.length > 0 && `; must have: ${view.spec.mustHave.join(", ")}`}
-          </p>
-          {view.decisionReason && <p>Decision: {view.decisionReason}</p>}
+          <Summary view={view} />
           <button type="button" onClick={hire.reload}>
             Refresh
           </button>

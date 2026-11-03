@@ -43,7 +43,7 @@ interface Basics {
   maxCandidates: number;
 }
 
-function BasicFields({
+function TeamTitleFields({
   value,
   teams,
   onChange,
@@ -53,7 +53,7 @@ function BasicFields({
   onChange: (next: Basics) => void;
 }): preact.JSX.Element {
   return (
-    <div class="row">
+    <>
       <label>
         Team
         <select
@@ -75,6 +75,19 @@ function BasicFields({
           onInput={(e) => onChange({ ...value, title: e.currentTarget.value })}
         />
       </label>
+    </>
+  );
+}
+
+function SpecialtyFields({
+  value,
+  onChange,
+}: {
+  value: Basics;
+  onChange: (next: Basics) => void;
+}): preact.JSX.Element {
+  return (
+    <>
       <label>
         Specialty
         <select
@@ -101,6 +114,23 @@ function BasicFields({
           ))}
         </select>
       </label>
+    </>
+  );
+}
+
+function BasicFields({
+  value,
+  teams,
+  onChange,
+}: {
+  value: Basics;
+  teams: OrgDetail["teams"];
+  onChange: (next: Basics) => void;
+}): preact.JSX.Element {
+  return (
+    <div class="row">
+      <TeamTitleFields value={value} teams={teams} onChange={onChange} />
+      <SpecialtyFields value={value} onChange={onChange} />
     </div>
   );
 }
@@ -116,6 +146,37 @@ function specOf(basics: Basics, summary: string, mustHave: string, types: TaskTy
       .filter(Boolean),
     taskTypes: types,
   };
+}
+
+function TextFields({
+  summary,
+  mustHave,
+  onSummary,
+  onMustHave,
+}: {
+  summary: string;
+  mustHave: string;
+  onSummary: (v: string) => void;
+  onMustHave: (v: string) => void;
+}): preact.JSX.Element {
+  return (
+    <>
+      <label>
+        Summary
+        <textarea
+          value={summary}
+          required
+          maxLength={500}
+          rows={3}
+          onInput={(e) => onSummary(e.currentTarget.value)}
+        />
+      </label>
+      <label>
+        Must-haves (one per line, up to 6)
+        <textarea value={mustHave} rows={3} onInput={(e) => onMustHave(e.currentTarget.value)} />
+      </label>
+    </>
+  );
 }
 
 export function NewHire({
@@ -156,20 +217,12 @@ export function NewHire({
     <form class="card new-hire" onSubmit={submit}>
       <h3>New hire</h3>
       <BasicFields value={basics} teams={detail.teams} onChange={setBasics} />
-      <label>
-        Summary
-        <textarea
-          value={summary}
-          required
-          maxLength={500}
-          rows={3}
-          onInput={(e) => setSummary(e.currentTarget.value)}
-        />
-      </label>
-      <label>
-        Must-haves (one per line, up to 6)
-        <textarea value={mustHave} rows={3} onInput={(e) => setMustHave(e.currentTarget.value)} />
-      </label>
+      <TextFields
+        summary={summary}
+        mustHave={mustHave}
+        onSummary={setSummary}
+        onMustHave={setMustHave}
+      />
       <TaskTypes value={types} onChange={setTypes} />
       <button type="submit" disabled={action.busy || types.length === 0 || !basics.teamId}>
         File request
