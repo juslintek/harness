@@ -19,6 +19,7 @@ import {
 } from "./manager";
 import { reapRuns } from "./orphans";
 import { getRun as get, listRuns as list, type RunRow } from "./runs-repo";
+import { scratchRepo as scratch } from "./scratch";
 
 export type { RunDeps } from "./launch";
 export type { RunRow } from "./runs-repo";
@@ -138,4 +139,8 @@ export async function refreshAcpModels(
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+export function scratchRepo(home: string, orgId: string): string {
+  return scratch(home, orgId);
 }

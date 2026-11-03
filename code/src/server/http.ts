@@ -16,14 +16,20 @@ import {
 import { publicAuthRoutes } from "./features/auth/routes";
 import { accountRoutes } from "./features/auth/routes-account";
 import { boardRoutes } from "./features/board/routes";
+import { budgetsRoutes } from "./features/budgets/routes";
 import { chatRoutes } from "./features/chat/routes";
 import { approvalRoutes } from "./features/guard/routes";
 import { wakeRoutes } from "./features/heartbeat/routes";
+import { hiringRoutes } from "./features/hiring/routes";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { mcpHandler, verifyRunToken } from "./features/mcp/api";
 import { orgRoutes } from "./features/orgs/routes";
+import { policiesRoutes } from "./features/policies/routes";
+import { profilesRoutes } from "./features/profiles/routes";
+import { routerRoutes } from "./features/router/routes";
 import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
 import { haltRoutes, runRoutes } from "./features/runtimes/routes";
+import { trackingRoutes } from "./features/tracking/routes";
 import { probeQuota, usageSummary } from "./features/usage/api";
 import { wsUpgrade } from "./realtime";
 
@@ -81,12 +87,13 @@ function adminRoutes(deps: AppDeps): Hono {
   const { db } = deps;
   const runDeps = deps.runDeps ?? { home: deps.home, port: deps.port };
   const app = new Hono();
-  for (const path of ["/runs", "/halt", "/agents", "/search", "/usage", "/quota"]) {
+  for (const path of ["/runs", "/halt", "/agents", "/search", "/usage", "/quota", "/router"]) {
     app.use(`${path}/*`, requireInstanceAdmin);
   }
   app.route("/runs", runRoutes(db, runDeps));
   app.route("/approvals", approvalRoutes(db, deps.home));
   app.route("/halt", haltRoutes(db));
+  app.route("/router", routerRoutes(db));
   app.route("/agents", agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }));
   app.get("/search", (c) => {
     const query = searchQuerySchema.safeParse(c.req.query());
@@ -147,6 +154,11 @@ export function createApp(deps: AppDeps): Hono {
   app.route("/api", boardRoutes(db));
   app.route("/api", chatRoutes(db));
   app.route("/api", wakeRoutes(db));
+  app.route("/api", profilesRoutes(db));
+  app.route("/api", policiesRoutes(db));
+  app.route("/api", hiringRoutes(db));
+  app.route("/api", budgetsRoutes(db));
+  app.route("/api", trackingRoutes(db));
   app.route("/api", adminRoutes(deps));
   app.use("/ws", sessionMiddleware(db), originGuard(deps.rp.origin));
   app.get("/ws", wsUpgrade(db));

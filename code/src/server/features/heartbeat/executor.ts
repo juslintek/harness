@@ -1,7 +1,4 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { gitEnv } from "../../git-env";
 import { getTask } from "../board/api";
 import { getChannel } from "../chat/api";
 import { appendEvent } from "../logs/api";
@@ -13,7 +10,14 @@ import {
   type MemberRow,
   managerPositionsOf,
 } from "../orgs/api";
-import { getRun, HaltedError, isHalted, type RunDeps, startRun } from "../runtimes/api";
+import {
+  getRun,
+  HaltedError,
+  isHalted,
+  type RunDeps,
+  scratchRepo,
+  startRun,
+} from "../runtimes/api";
 import { buildPrompt } from "./prompt";
 import {
   endedStartedRuns,
@@ -29,25 +33,6 @@ import { mayWork, overCap, staleAssignment } from "./triggers";
 export interface ExecDeps {
   runDeps: RunDeps;
   home: string;
-}
-
-function git(args: string[], cwd: string): void {
-  const res = Bun.spawnSync(
-    ["git", "-c", "user.name=harness", "-c", "user.email=harness@localhost", ...args],
-    { cwd, env: gitEnv() },
-  );
-  if (res.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${res.stderr.toString()}`);
-}
-
-// A worktree needs a commit to branch from, so the shared scratch repo starts with an empty one.
-function scratchRepo(home: string, orgId: string): string {
-  const dir = join(home, "scratch", orgId);
-  if (!existsSync(join(dir, ".git"))) {
-    mkdirSync(dir, { recursive: true });
-    git(["init", "-q", "-b", "main"], dir);
-    git(["commit", "-q", "--allow-empty", "-m", "init"], dir);
-  }
-  return dir;
 }
 
 function wakeProject(db: Database, wake: WakeRow): string | null {

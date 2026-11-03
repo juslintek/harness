@@ -8,6 +8,11 @@ import { type RunIdentity, verify } from "./tokens";
 import { registerApprovalTools } from "./tools-approvals";
 import { registerBoardTools } from "./tools-board";
 import { registerChatTools } from "./tools-chat";
+import { registerHiringTools } from "./tools-hiring";
+import { registerManagerTools } from "./tools-manager";
+import { registerPoliciesTools } from "./tools-policies";
+import { registerProfilesTools } from "./tools-profiles";
+import { registerTrackingTools } from "./tools-tracking";
 
 const MAX_REPORT_CHARS = 4000;
 
@@ -62,6 +67,11 @@ function buildServer(db: Database, identity: RunIdentity, deps: McpDeps): McpSer
   registerBoardTools(server, env);
   registerChatTools(server, env);
   registerApprovalTools(server, env);
+  registerProfilesTools(server, env);
+  registerHiringTools(server, env);
+  registerPoliciesTools(server, env);
+  registerTrackingTools(server, env);
+  registerManagerTools(server, env);
   return server;
 }
 

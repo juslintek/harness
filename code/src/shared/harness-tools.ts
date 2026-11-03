@@ -3,6 +3,7 @@
 // cannot drift apart.
 export const HARNESS_TOOL_NAMES = [
   "whoami",
+  "report",
   "chat_channels",
   "chat_read",
   "chat_post",
@@ -18,6 +19,22 @@ export const HARNESS_TOOL_NAMES = [
   "task_depend",
   "approvals_list",
   "approvals_decide",
+  "profile_get",
+  "profile_card_submit",
+  "team_roster",
+  "task_delegate",
+  "task_estimate",
+  "hire_request",
+  "hire_list",
+  "interview_answer",
+  "interview_ask",
+  "interview_pass",
+  "interview_score",
+  "hire_decide",
+  "policy_get",
+  "policy_propose",
+  "policy_review",
+  "policy_decide",
 ] as const;
 
 export type HarnessToolName = (typeof HARNESS_TOOL_NAMES)[number];

@@ -5,16 +5,16 @@ import { appendEvent, type NewEvent, sealSegments } from "../logs/api";
 import { revokeRunTokens } from "../mcp/api";
 import { recordQuota, recordUsage } from "../usage/api";
 import { runAcp } from "./acp";
-import type { Adapter, RunContext, RunOutcome } from "./adapter";
+import type { Adapter, RunContext } from "./adapter";
 import { runAgy } from "./agy";
 import { runApi } from "./api-lane";
 import { createBreaker, defaultLimits } from "./breaker";
 import { createLaunch, inProcessLaunch, type Launch, type RunDeps, type RunMember } from "./launch";
 import { pidIdentity } from "./orphans";
+import { endState } from "./outcome";
 import {
   getFlag,
   getRun,
-  hasExpiredApproval,
   insertRun,
   markEnded,
   markRunning,
@@ -84,27 +84,6 @@ function publish(db: Database, runId: string, e: NewEvent): void {
     } catch (err) {
       console.error("run event listener failed", err);
     }
-  }
-}
-
-function endState(
-  db: Database,
-  runId: string,
-  run: Live,
-  o: RunOutcome,
-): [RunState, string | null] {
-  if (run.killReason !== null) return ["killed", run.killReason];
-  if (hasExpiredApproval(db, runId)) return ["blocked", "approval_timeout"];
-  switch (o.stopReason) {
-    case "end_turn":
-      return ["completed", null];
-    case "cancelled":
-      return run.denied ? ["blocked", "guard_denied"] : ["cancelled", null];
-    case "refusal":
-    case "max_tokens":
-      return ["failed", o.stopReason];
-    default:
-      return ["failed", o.error ?? o.stopReason];
   }
 }
 

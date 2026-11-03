@@ -7,8 +7,8 @@ import {
 import type { WakeTriage } from "./wake";
 import { triageWake as triageWakeImpl } from "./wake";
 
+export type { Specialty } from "../../../shared/router";
 export type { LayaAnswer, LayaQuestion, LayaResult } from "./client";
-export type { Specialty } from "./wake";
 
 export function decide(
   state: unknown,

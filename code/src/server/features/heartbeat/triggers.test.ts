@@ -4,6 +4,8 @@ import { ensureProjectChannel, postMessage } from "../chat/api";
 import type { triageWake } from "../laya/api";
 import { addAgentMember, createOrg, grantProject, listMembers, revokeGrant } from "../orgs/api";
 import { holdRuns, type Kit, setup, until, wakes } from "./kit";
+import { buildPrompt } from "./prompt";
+import { insertWake, pendingWakes } from "./repo";
 import { mayWork } from "./triggers";
 
 // Each run cuts a real git worktree, which is slow when the whole suite runs at once.
@@ -272,4 +274,18 @@ test("a wake that points at a task which no longer exists is not allowed", () =>
   const task = k.task("t");
   expect(mayWork(k.db, k.human.id, { taskId: task.id })).toBe(true);
   expect(mayWork(k.db, k.human.id, { taskId: "gone" })).toBe(false);
+});
+
+test("a wake with reason onboarding can be stored and described", () => {
+  const k = setup();
+  const dev = k.agent("dev");
+  insertWake(k.db, {
+    memberId: dev.id,
+    reason: "onboarding",
+    causedBy: null,
+    detail: { excerpt: "read the handbook" },
+  });
+  const stored = pendingWakes(k.db, dev.id);
+  expect(stored.map((w) => w.reason)).toEqual(["onboarding"]);
+  expect(buildPrompt(k.db, dev, stored)).toContain("read the handbook");
 });

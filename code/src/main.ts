@@ -5,9 +5,13 @@ import { ensureInstance, migrate, openDb } from "./server/db/db";
 import { migrations } from "./server/db/migrations";
 import { firstRunEnrollment } from "./server/features/auth/api";
 import { wireBoard } from "./server/features/board/api";
+import { startBudgets } from "./server/features/budgets/api";
 import { wireChat } from "./server/features/chat/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
+import { startHiring } from "./server/features/hiring/api";
+import { startRouter } from "./server/features/router/api";
 import { recoverRuns, shutdownRuns, wireRuntimes } from "./server/features/runtimes/api";
+import { startTracking } from "./server/features/tracking/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
 import { pwaResponse } from "./server/pwa";
@@ -62,6 +66,7 @@ const stopHeartbeat = startHeartbeat(db, {
   runDeps: { home: config.home, port: config.port },
   home: config.home,
 });
+const stopLoops = [startRouter, startBudgets, startTracking, startHiring].map((start) => start(db));
 
 console.log(`harness listening on ${server.url}`);
 
@@ -75,6 +80,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     if (stopping) return;
     stopping = true;
     stopHeartbeat();
+    for (const stop of stopLoops) stop();
     shutdownRuns(db)
       .catch((err: unknown) => console.error("shutdown failed", err))
       .finally(() => {

@@ -49,6 +49,16 @@ function describe(db: Database, wake: WakeRow): string {
       return wake.taskId === null
         ? "A person asked you to run now."
         : `A person asked you to run now on ${taskLabel(db, wake.taskId)}.`;
+    case "hire_review":
+      return `You are asked to review a hire request: ${text}`;
+    case "hire_decision":
+      return `A hire request you made was decided: ${text}`;
+    case "onboarding":
+      return `You are new here: ${text}`;
+    case "approval_resolved":
+      return `An approval you were waiting on was resolved: ${text}`;
+    case "policy_review":
+      return `You are asked to review a policy change: ${text}`;
   }
 }
 
