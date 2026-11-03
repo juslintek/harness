@@ -75,13 +75,13 @@ export function mayWork(
   return getChannel(db, wake.channelId)?.projectId ? access === "write" : access !== "none";
 }
 
-// An assignment wake stored earlier must not start work that was since finished or handed on.
+// An assignment or subtask wake stored earlier must not start work that was since finished or handed on.
 export function staleAssignment(
   db: Database,
   memberId: string,
   wake: { reason: WakeReason; taskId?: string | null | undefined },
 ): boolean {
-  if (wake.reason !== "assignment" || !wake.taskId) return false;
+  if ((wake.reason !== "assignment" && wake.reason !== "subtask") || !wake.taskId) return false;
   const task = getTask(db, wake.taskId);
   if (!task) return true;
   return task.status === "done" || task.status === "cancelled" || task.assigneeId !== memberId;

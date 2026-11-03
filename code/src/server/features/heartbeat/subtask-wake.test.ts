@@ -1,5 +1,6 @@
 import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { createTask, moveTask, updateTask } from "../board/api";
+import { setHalted } from "../runtimes/api";
 import { type Kit, setup, until, wakes } from "./kit";
 
 setDefaultTimeout(30_000);
@@ -82,3 +83,29 @@ test("moving a subtask that is already done wakes nobody again", async () => {
   await Bun.sleep(150);
   expect(reasons(k, lead.id).filter((r) => r === "subtask")).toHaveLength(1);
 });
+
+test.each([
+  [
+    "reassigned",
+    (k: Kit, parentId: string, devId: string) =>
+      updateTask(k.db, parentId, { assigneeId: devId }, k.human.id),
+  ],
+  ["closed", (k: Kit, parentId: string) => moveTask(k.db, parentId, "done", k.human.id)],
+] as const)(
+  "a pending subtask wake is skipped as stale once the parent is %s",
+  async (_, change) => {
+    const k = setup();
+    const { lead, dev, parent, child } = split(k);
+    stops.push(k.start());
+    await until(() => wakes(k.db, lead.id).every((w) => w.status === "done"));
+    setHalted(k.db, true);
+    moveTask(k.db, child.id, "done", dev.id);
+    await until(() => reasons(k, lead.id).includes("subtask"));
+    change(k, parent.id, dev.id);
+    setHalted(k.db, false);
+    await until(() => wakes(k.db, lead.id).every((w) => w.status !== "pending"));
+    const subtask = wakes(k.db, lead.id).find((w) => w.reason === "subtask");
+    expect(subtask?.status).toBe("skipped");
+    expect(JSON.parse(subtask?.detail ?? "{}")).toMatchObject({ reason: "stale" });
+  },
+);
