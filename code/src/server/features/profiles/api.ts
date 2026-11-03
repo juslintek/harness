@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { type ProfileView, type SelfCard, selfCardSchema } from "../../../shared/profiles";
+import { DomainError } from "../../route-kit";
 import {
   agentOf,
   attachProfile,
@@ -30,7 +31,7 @@ export function submitCard(db: Database, profileId: string, raw: unknown): CardR
 // Agents created before profiles existed only have agent_id and model on the member row.
 export function ensureProfile(db: Database, memberId: string): ProfileView {
   const agent = agentOf(db, memberId);
-  if (!agent) throw new Error("not an agent member");
+  if (!agent) throw new DomainError("not an agent member");
   const existing = agent.profileId ? getProfile(db, agent.profileId) : null;
   if (existing) return existing;
   const profile = createProfile(db, agent.orgId, {

@@ -87,6 +87,14 @@ test("submitCard with an unknown specialty, 9 strengths or extra key gives issue
   expect(getProfile(db, id)?.card).toBeNull();
 });
 
+test("submitCard with no specialties keeps the ones set by hand", () => {
+  const { db, agentId } = setup();
+  db.query("UPDATE members SET specialties = '[\"mobile\"]' WHERE id = ?").run(agentId);
+  const { id } = ensureProfile(db, agentId);
+  expect(submitCard(db, id, { ...validCard, specialties: [] }).ok).toBe(true);
+  expect(getMember(db, agentId)?.specialties).toEqual(["mobile"]);
+});
+
 test("attachProfile copies runtime and model to the member", () => {
   const { db, orgId, agentId } = setup();
   const profile = createProfile(db, orgId, emptyInput);
@@ -111,7 +119,7 @@ test("PUT profile as a member role gives 403, as admin 200, and the card route a
   const body = { ...emptyInput, fallbacks: [{ runtime: "claude", model: null }] };
 
   const memberWho = await k.user();
-  k.join(o.id, memberWho, "member", "mem2");
+  const memberRow = k.join(o.id, memberWho, "member", "mem2");
   expect((await k.call(memberWho, "PUT", url, body)).status).toBe(403);
   expect((await k.call(memberWho, "GET", url)).status).toBe(404);
 
@@ -126,6 +134,12 @@ test("PUT profile as a member role gives 403, as admin 200, and the card route a
   expect(bad.status).toBe(400);
   expect((await bad.json()).issues).toHaveLength(1);
   expect((await k.call(admin, "PUT", `${url}/card`, validCard)).status).toBe(200);
+
+  const humanUrl = `/api/orgs/acme/members/${memberRow.id}/profile`;
+  const human = await k.call(admin, "PUT", humanUrl, body);
+  expect(human.status).toBe(400);
+  expect((await human.json()).error).toBe("not an agent member");
+  expect((await k.call(admin, "PUT", `${humanUrl}/card`, validCard)).status).toBe(400);
 });
 
 test("deleting the org deletes its profiles", () => {

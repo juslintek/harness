@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { type Context, Hono } from "hono";
 import { profileInputSchema } from "../../../shared/profiles";
-import { forbidden, notFound, parseBody } from "../../route-kit";
+import { forbidden, notFound, parseBody, routeError } from "../../route-kit";
 import { getSpec } from "../agents/api";
 import type { AuthEnv } from "../auth/api";
 import { getMember, getOrgBySlug, memberForUser, roleAtLeast } from "../orgs/api";
@@ -52,5 +52,6 @@ export function profilesRoutes(db: Database): Hono<AuthEnv> {
       : c.json({ error: "invalid card", issues: result.issues }, 400);
   });
 
+  app.onError(routeError);
   return app;
 }

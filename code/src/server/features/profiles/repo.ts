@@ -125,10 +125,13 @@ export function storeCard(db: Database, profileId: string, card: SelfCard): void
       now,
       profileId,
     );
-    db.query("UPDATE members SET specialties = ? WHERE profile_id = ?").run(
-      JSON.stringify(card.specialties),
-      profileId,
-    );
+    // An empty list means the agent claimed no specialty, so hand-set ones stay.
+    if (card.specialties.length > 0) {
+      db.query("UPDATE members SET specialties = ? WHERE profile_id = ?").run(
+        JSON.stringify(card.specialties),
+        profileId,
+      );
+    }
   })();
 }
 
