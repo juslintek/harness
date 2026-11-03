@@ -135,7 +135,9 @@ export function build(db: Db, root: string, leadModel: string | null): Scene {
     layer: "org",
     targetId: org.id,
     key: "hiring.decision",
-    value: "manager",
+    // @lead files the hire and has nobody above it, and a requester never decides its own
+    // request, so the scorecard decides.
+    value: "auto",
     setBy: owner,
   });
   if (!set.ok) throw new Error(`policy refused: ${set.reason}`);
