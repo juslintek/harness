@@ -20,6 +20,7 @@ import {
 import { reapRuns } from "./orphans";
 import { getRun as get, listRuns as list, type RunRow } from "./runs-repo";
 import { scratchRepo as scratch } from "./scratch";
+import { defaultBranch as defaultBranchOf } from "./worktree";
 
 export type { RunDeps } from "./launch";
 export type { RunRow } from "./runs-repo";
@@ -105,6 +106,10 @@ export function isHalted(db: Database): boolean {
 
 export function listRuns(db: Database, limit?: number): RunRow[] {
   return list(db, limit);
+}
+
+export function defaultBranch(repo: string): Promise<string> {
+  return defaultBranchOf(repo);
 }
 
 export function getRun(db: Database, id: string): RunRow | null {

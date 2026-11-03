@@ -1,8 +1,8 @@
 import type { Database } from "bun:sqlite";
 import { estimateCostUsd, priceOf, refreshRegistry, registryStale } from "./registry";
-import { startTriage, triageOf } from "./triage";
+import { onTriaged, startTriage, triageOf } from "./triage";
 
-export { estimateCostUsd, priceOf, refreshRegistry, triageOf };
+export { estimateCostUsd, onTriaged, priceOf, refreshRegistry, triageOf };
 
 const REFRESH_EVERY_MS = 24 * 60 * 60 * 1000;
 

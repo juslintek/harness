@@ -14,6 +14,14 @@ export interface TaskTriageView {
   createdAt: number;
 }
 
+type TriageListener = (taskId: string, triage: TaskTriage) => void;
+const listeners = new Set<TriageListener>();
+
+export function onTriaged(listener: TriageListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 function store(db: Database, taskId: string, t: TaskTriage): void {
   db.query(
     `INSERT OR REPLACE INTO task_triage (task_id, difficulty, task_type, specialty, size, source, detail, created_at)
@@ -37,7 +45,10 @@ export function startTriage(db: Database): () => void {
     if (change.kind !== "created") return;
     const { id, title, description } = change.task;
     triageTask(`${title}\n${description}`)
-      .then((t) => store(db, id, t))
+      .then((t) => {
+        store(db, id, t);
+        for (const listener of listeners) listener(id, t);
+      })
       .catch((err) =>
         console.error("task triage failed", id, err instanceof Error ? err.message : err),
       );
