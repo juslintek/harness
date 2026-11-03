@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { OrgView } from "../../../shared/orgs";
 import {
   createPosition,
+  directReportsOf,
   listPositions,
   managerPositionsOf,
   reportsTransitivelyTo,
@@ -55,6 +56,7 @@ export {
   createPosition,
   createProject,
   createTeam,
+  directReportsOf,
   findMemberByHandle,
   findMembersByHandle,
   getMember,

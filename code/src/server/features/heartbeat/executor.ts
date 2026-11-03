@@ -6,7 +6,13 @@ import { getTask } from "../board/api";
 import { getChannel } from "../chat/api";
 import { appendEvent } from "../logs/api";
 import type { TokenScope } from "../mcp/api";
-import { getMember, getProject, type MemberRow, managerPositionsOf } from "../orgs/api";
+import {
+  directReportsOf,
+  getMember,
+  getProject,
+  type MemberRow,
+  managerPositionsOf,
+} from "../orgs/api";
 import { getRun, HaltedError, isHalted, type RunDeps, startRun } from "../runtimes/api";
 import { buildPrompt } from "./prompt";
 import {
@@ -138,6 +144,7 @@ async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<b
         memberId,
         orgId: member.orgId,
         scopes: scopesFor(db, member),
+        ...(directReportsOf(db, memberId).length > 0 ? { readOnly: true } : {}),
         ...(projectId === null ? {} : { projectId }),
       },
     });

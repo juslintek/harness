@@ -18,6 +18,8 @@ export interface SandboxInput {
   preset: "dev" | "offline" | "open-web";
   weakerNetworkIsolation: boolean;
   codexHome: string | null;
+  // A manager reviews and delegates; it must not change code, so the worktree and git refs stay read-only.
+  readOnlyWorktree?: boolean;
 }
 
 export type SrtSettings = SandboxRuntimeConfig &
@@ -132,7 +134,7 @@ function otherAgentCredentials(agentId: string | null | undefined): string[] {
 }
 
 // The worktree's .git file points at the admin dir; rewriting it makes git read attacker-chosen config.
-// Commit on the run branch needs only these: objects, the worktree's own admin dir, the branch ref, its lock and reflog.
+// Commit on the run branch needs only these: objects, the worktree's own admin dir, the branch ref, its lock, the packed-refs lock and reflog.
 function gitWritable(input: SandboxInput): string[] {
   const common = input.gitCommonDir;
   if (!common) return [];
@@ -145,6 +147,8 @@ function gitWritable(input: SandboxInput): string[] {
     join(common, "refs/heads", branch),
     join(common, "refs/heads", `${branch}.lock`),
     join(common, "logs/refs/heads", branch),
+    // Git locks packed-refs during a ref update; the file itself stays denied, so the lock cannot be renamed over it.
+    join(common, "packed-refs.lock"),
   ];
 }
 
@@ -200,8 +204,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
   const git = input.gitCommonDir;
   const codex = input.codexHome;
   const allowWrite = unique([
-    input.worktree,
-    ...gitWritable(input),
+    ...(input.readOnlyWorktree ? [] : [input.worktree, ...gitWritable(input)]),
     ...(codex ? [codex] : []),
     ...input.agentStateWrite.map(expand),
     runTmpDir(input.runDir),

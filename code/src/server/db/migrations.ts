@@ -13,6 +13,7 @@ import board from "./migrations/011_board.sql" with { type: "text" };
 import chat from "./migrations/012_chat.sql" with { type: "text" };
 import wake from "./migrations/013_wake.sql" with { type: "text" };
 import identity from "./migrations/014_identity.sql" with { type: "text" };
+import wakeSubtask from "./migrations/015_wake_subtask.sql" with { type: "text" };
 
 export const migrations: readonly Migration[] = [
   { version: 1, sql: instance },
@@ -29,4 +30,5 @@ export const migrations: readonly Migration[] = [
   { version: 12, sql: chat },
   { version: 13, sql: wake },
   { version: 14, sql: identity },
+  { version: 15, sql: wakeSubtask },
 ];

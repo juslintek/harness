@@ -2,6 +2,7 @@
 // name is one of these, and the mcp slice types its tool names with this list, so the two
 // cannot drift apart.
 export const HARNESS_TOOL_NAMES = [
+  "whoami",
   "chat_channels",
   "chat_read",
   "chat_post",

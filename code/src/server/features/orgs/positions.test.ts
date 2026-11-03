@@ -2,14 +2,17 @@ import { expect, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import {
+  addAgentMember,
   addHumanMember,
   createOrg,
   createPosition,
+  directReportsOf,
   listPositions,
   managerPositionsOf,
   type PositionPatch,
   type PositionRow,
   reportsTransitivelyTo,
+  updateMember,
   updatePosition,
 } from "./api";
 
@@ -74,4 +77,40 @@ test("listPositions returns the org positions in creation order", () => {
   const patch: PositionPatch = { title: "a2" };
   updatePosition(db, a.id, patch);
   expect(listPositions(db, orgId).map((p) => p.title)).toEqual(["a2"]);
+});
+
+test("directReportsOf lists members in positions under the member's, skipping vacant ones", () => {
+  const { db, orgId, memberId } = setup();
+  const dev = addHumanMember(db, orgId, "u3", "dev", "Dev", "member");
+  const lead = createPosition(db, { orgId, title: "lead", memberId, isManager: true });
+  createPosition(db, { orgId, title: "dev", memberId: dev.id, reportsTo: lead.id });
+  createPosition(db, { orgId, title: "dev2", memberId: dev.id, reportsTo: lead.id });
+  createPosition(db, { orgId, title: "vacant", reportsTo: lead.id });
+  expect(directReportsOf(db, memberId)).toEqual([dev.id]);
+  expect(directReportsOf(db, dev.id)).toEqual([]);
+});
+
+test("directReportsOf does not count a member as their own direct report", () => {
+  const { db, orgId, memberId } = setup();
+  const lead = createPosition(db, { orgId, title: "lead", memberId, isManager: true });
+  createPosition(db, { orgId, title: "also", memberId, reportsTo: lead.id });
+  expect(directReportsOf(db, memberId)).toEqual([]);
+});
+
+test("directReportsOf skips viewers and paused agents but keeps active members", () => {
+  const { db, orgId, memberId } = setup();
+  const lead = createPosition(db, { orgId, title: "lead", memberId, isManager: true });
+  const viewer = addHumanMember(db, orgId, "u4", "view", "View", "viewer");
+  const active = addHumanMember(db, orgId, "u5", "act", "Act", "member");
+  const bot = addAgentMember(db, orgId, {
+    agentId: "a1",
+    handle: "bot",
+    displayName: "Bot",
+    specialties: [],
+  });
+  updateMember(db, bot.id, { paused: true });
+  for (const m of [viewer, active, bot]) {
+    createPosition(db, { orgId, title: m.handle, memberId: m.id, reportsTo: lead.id });
+  }
+  expect(directReportsOf(db, memberId)).toEqual([active.id]);
 });

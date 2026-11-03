@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
+import type { HarnessToolName } from "../../../shared/harness-tools";
 import { getMember, listPositions } from "../orgs/api";
 import { type RunIdentity, verify } from "./tokens";
 import { registerApprovalTools } from "./tools-approvals";
@@ -36,8 +37,9 @@ function whoami(db: Database, identity: RunIdentity): unknown {
 function buildServer(db: Database, identity: RunIdentity, deps: McpDeps): McpServer {
   const server = new McpServer({ name: "harness", version: "1.0.0" });
   const env = { db, identity, harnessHome: deps.harnessHome };
+  const whoamiName: HarnessToolName = "whoami";
   server.registerTool(
-    "whoami",
+    whoamiName,
     { description: "Identify the run and member this token belongs to" },
     () => ({
       content: [{ type: "text", text: JSON.stringify(whoami(db, identity)) }],

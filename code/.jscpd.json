@@ -2,7 +2,7 @@
   "path": ["src"],
   "minTokens": 50,
   "threshold": 0,
-  "ignore": ["**/*.test.ts"],
+  "ignore": ["**/*.test.ts", "**/migrations/*.sql"],
   "reporters": ["console"],
   "exitCode": 1,
   "gitignore": true

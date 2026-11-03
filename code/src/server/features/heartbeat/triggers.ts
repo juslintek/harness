@@ -75,13 +75,13 @@ export function mayWork(
   return getChannel(db, wake.channelId)?.projectId ? access === "write" : access !== "none";
 }
 
-// An assignment wake stored earlier must not start work that was since finished or handed on.
+// An assignment or subtask wake stored earlier must not start work that was since finished or handed on.
 export function staleAssignment(
   db: Database,
   memberId: string,
   wake: { reason: WakeReason; taskId?: string | null | undefined },
 ): boolean {
-  if (wake.reason !== "assignment" || !wake.taskId) return false;
+  if ((wake.reason !== "assignment" && wake.reason !== "subtask") || !wake.taskId) return false;
   const task = getTask(db, wake.taskId);
   if (!task) return true;
   return task.status === "done" || task.status === "cancelled" || task.assigneeId !== memberId;
@@ -117,6 +117,18 @@ export function runNow(db: Database, memberId: string, causedBy: string, taskId?
 
 const excerpt = (text: string): string => text.slice(0, EXCERPT_CHARS);
 
+// The parent's assignee is the one who closes the parent, and nobody tells them a subtask is done.
+function wakeParentAssignee(db: Database, change: TaskChange): void {
+  const { task } = change;
+  if (change.kind !== "moved" || change.from === task.status || task.parentId === null) return;
+  if (!["in_review", "done", "cancelled"].includes(task.status)) return;
+  const parent = getTask(db, task.parentId);
+  if (!parent || parent.assigneeId === null) return;
+  const detail = { excerpt: excerpt(`#${task.number} ${task.title} moved to ${task.status}`) };
+  const input = { taskId: parent.id, causedBy: change.by, detail };
+  recordWake(db, { ...input, memberId: parent.assigneeId, reason: "subtask" });
+}
+
 export function onTask(db: Database, change: TaskChange): void {
   const { task } = change;
   const base = { taskId: task.id, causedBy: change.by };
@@ -125,6 +137,7 @@ export function onTask(db: Database, change: TaskChange): void {
   if (assigns && task.assigneeId !== null && task.assigneeId !== change.by) {
     recordWake(db, { ...base, memberId: task.assigneeId, reason: "assignment" });
   }
+  wakeParentAssignee(db, change);
   if (change.kind !== "commented") return;
   const body = change.commentId === undefined ? undefined : getComment(db, change.commentId)?.body;
   const detail = body === undefined ? undefined : { excerpt: excerpt(body) };

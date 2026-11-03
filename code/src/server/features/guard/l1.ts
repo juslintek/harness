@@ -1,3 +1,5 @@
+import { realpathSync } from "node:fs";
+import { join } from "node:path";
 import { HARNESS_TOOL_NAMES } from "../../../shared/harness-tools";
 import { ShellParseError } from "./lexer";
 import { RULES } from "./rules";
@@ -142,6 +144,16 @@ function evaluateShell(command: string | undefined, scope: Scope): L1Result {
   return strictest(cmds, scope) ?? allow(null, "no rule matched", defaultCategory(cmds));
 }
 
+// A symlink inside the skills dir can point anywhere, so compare real paths, not the lexical ones.
+function inInstalledSkills(abs: string, scope: Scope): boolean {
+  try {
+    const skills = realpathSync(join(scope.home, ".agents/skills"));
+    return isInside(realpathSync(abs), { ...scope, root: skills });
+  } catch {
+    return false;
+  }
+}
+
 function evaluatePaths(action: ActionRequest, scope: Scope): L1Result {
   if (action.paths.length === 0) return ask("path.none", "request names no path", "other");
   const category: Category =
@@ -152,7 +164,10 @@ function evaluatePaths(action: ActionRequest, scope: Scope): L1Result {
   }
   const outside = action.paths.find((p) => {
     const abs = resolvePath(p, scope);
-    return abs === null || !isInside(abs, scope);
+    if (abs === null) return true;
+    // Codex reads its installed skills from here on every run; reading them is harmless, editing stays denied.
+    if (action.kind === "read" && inInstalledSkills(abs, scope)) return false;
+    return !isInside(abs, scope);
   });
   if (outside !== undefined) {
     return action.kind === "read"
