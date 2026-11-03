@@ -120,7 +120,7 @@ const excerpt = (text: string): string => text.slice(0, EXCERPT_CHARS);
 // The parent's assignee is the one who closes the parent, and nobody tells them a subtask is done.
 function wakeParentAssignee(db: Database, change: TaskChange): void {
   const { task } = change;
-  if (change.kind !== "moved" || task.parentId === null) return;
+  if (change.kind !== "moved" || change.from === task.status || task.parentId === null) return;
   if (task.status !== "in_review" && task.status !== "done") return;
   const parent = getTask(db, task.parentId);
   if (!parent || parent.assigneeId === null) return;

@@ -163,7 +163,16 @@ export function moveTask(
   by: string,
   opts: { beforeId?: string } = {},
 ): MoveResult {
-  const r: MoveResult = db.transaction(() => tryMove(db, taskId, to, by, opts.beforeId))();
-  if (r.ok) emit({ kind: "moved", task: r.task, by });
+  let from: Status | undefined;
+  const r: MoveResult = db.transaction(() => {
+    from = getTask(db, taskId)?.status;
+    return tryMove(db, taskId, to, by, opts.beforeId);
+  })();
+  if (r.ok)
+    emit(
+      from === undefined
+        ? { kind: "moved", task: r.task, by }
+        : { kind: "moved", task: r.task, by, from },
+    );
   return r;
 }

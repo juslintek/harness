@@ -13,6 +13,8 @@ export interface TaskChange {
   task: TaskView;
   by: string;
   commentId?: string;
+  // Status before a move; a same-status move is only a reorder.
+  from?: Status;
 }
 
 const listeners = new Set<(change: TaskChange) => void>();

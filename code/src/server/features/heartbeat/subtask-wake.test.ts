@@ -69,3 +69,16 @@ test("a top-level task moved to done wakes nobody for a subtask", async () => {
   await Bun.sleep(150);
   expect(reasons(k, lead.id)).not.toContain("subtask");
 });
+
+test("moving a subtask that is already done wakes nobody again", async () => {
+  const k = setup();
+  const { lead, dev, child } = split(k);
+  stops.push(k.start());
+  await until(() => wakes(k.db, lead.id).every((w) => w.status === "done"));
+  moveTask(k.db, child.id, "done", dev.id);
+  await until(() => reasons(k, lead.id).includes("subtask"));
+  await until(() => wakes(k.db, lead.id).every((w) => w.status === "done"));
+  moveTask(k.db, child.id, "done", dev.id);
+  await Bun.sleep(150);
+  expect(reasons(k, lead.id).filter((r) => r === "subtask")).toHaveLength(1);
+});
