@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { gitEnv } from "../../git-env";
 import { defaultBranch, type RunRow } from "../runtimes/api";
 
 const MANIFESTS: Record<string, string> = {
@@ -54,10 +55,23 @@ function storeStack(db: Database, runId: string, items: string[]): void {
   for (const item of items) insert.run(runId, item);
 }
 
+const GIT_TIMEOUT_MS = 10_000;
+
+// A stuck git must not outlive the run, and a failure here must never reach run finalize.
 async function gitLines(args: string[], cwd: string): Promise<string[]> {
-  const proc = Bun.spawn(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
-  const out = await new Response(proc.stdout).text();
-  return (await proc.exited) === 0 ? out.split("\n").filter(Boolean) : [];
+  try {
+    const proc = Bun.spawn(["git", "-C", cwd, ...args], {
+      env: gitEnv(),
+      stdout: "pipe",
+      stderr: "ignore",
+      timeout: GIT_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+    });
+    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    return code === 0 ? out.split("\n").filter(Boolean) : [];
+  } catch {
+    return [];
+  }
 }
 
 // Files the run touched: committed on its branch since the default branch, plus uncommitted ones.
