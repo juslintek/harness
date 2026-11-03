@@ -235,9 +235,10 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
         join(input.harnessHome, "secrets.*"),
         join(input.harnessHome, "runs"),
         join(input.harnessHome, "worktrees"),
+        join(input.harnessHome, "scratch-checkouts"),
         ...otherAgentCredentials(input.agentId).map(expand),
       ]),
-      allowRead: [input.runDir, input.worktree],
+      allowRead: [input.runDir, input.worktree, ...(input.scratch ? [input.scratch.path] : [])],
       allowWrite,
       denyWrite: unique([
         ...(git
