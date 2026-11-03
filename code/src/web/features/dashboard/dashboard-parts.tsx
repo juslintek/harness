@@ -58,7 +58,7 @@ function MemberRow({
           <Bar pct={share(m.wallMs, maxWall)} kind="time" />
         </span>
       </td>
-      <td data-label="Estimate vs actual">
+      <td data-label="Estimate vs actual (done tasks only)">
         planner {m.plannerMinutes} min, reviewer {m.reviewerMinutes} min, actual{" "}
         {minutes(m.activeMs)}
       </td>
@@ -83,7 +83,7 @@ export function MemberTable({ members }: { members: MemberReport[] }): preact.JS
           <th scope="col">Tokens in / out</th>
           <th scope="col">Cost</th>
           <th scope="col">Active / waiting / wall</th>
-          <th scope="col">Estimate vs actual</th>
+          <th scope="col">Estimate vs actual (done tasks only)</th>
           <th scope="col">Top tools</th>
           <th scope="col">Stack</th>
         </tr>

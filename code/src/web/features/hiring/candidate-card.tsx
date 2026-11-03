@@ -140,8 +140,8 @@ export function CandidateCard({
         </span>
       </h4>
       <p>
-        System score: {candidate.systemScore ?? "not scored"}. Total: {candidate.total ?? "not yet"}
-        .
+        System score: {candidate.systemScore?.toFixed(1) ?? "not scored"}. Total:{" "}
+        {candidate.total?.toFixed(1) ?? "not yet"}.
       </p>
       <h5>Answers</h5>
       <Answers hire={hire} candidate={candidate} />
