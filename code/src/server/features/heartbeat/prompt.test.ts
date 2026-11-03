@@ -24,10 +24,12 @@ test("a member with reports is told to delegate and not to code; the report is n
   expect(managerPrompt).toContain("worktree is read-only");
   expect(managerPrompt).toContain("`task_create`");
   expect(managerPrompt).toContain("move the parent to `done`");
+  expect(managerPrompt).toContain("ask them in the channel to release it");
   const devPrompt = buildPrompt(k.db, dev, []);
   expect(devPrompt).not.toContain("You manage");
   expect(devPrompt).toContain("`task_checkout`");
   expect(devPrompt).toContain("project channel with `chat_post`");
   expect(devPrompt).toContain("`$TMPDIR`");
   expect(devPrompt).toContain("do not post just to acknowledge");
+  expect(devPrompt).toContain("release it with `task_release`");
 });
