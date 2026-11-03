@@ -23,7 +23,7 @@ function OrgRoute({ parts }: { parts: string[] }): preact.JSX.Element {
   const slug = parts[1] ?? "";
   if (parts[2] === "chat") return <ChatPage slug={slug} />;
   if (parts[2] === "settings") return <OrgPage slug={slug} />;
-  if (parts[2] === "dashboard") return <DashboardPage />;
+  if (parts[2] === "dashboard") return <DashboardPage slug={slug} />;
   if (parts[2] === "hiring") return <HiringPage />;
   if (parts[2] === "policies") return <PoliciesPage />;
   const taskNumber = Number(parts[4]);
