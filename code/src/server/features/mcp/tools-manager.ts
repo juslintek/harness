@@ -80,24 +80,28 @@ function delegate(
   if (!target) fail(`@${handle} is not one of your reports`);
   const access = projectAccess(ctx.db, { memberId: target.id }, parent.projectId);
   if (access !== "write" && access !== "admin") fail(`@${handle} cannot work on this project`);
-  const created = createTask(ctx.db, {
-    projectId: parent.projectId,
-    title: a.title,
-    createdBy: ctx.memberId,
-    parentId: parent.id,
-    assigneeId: target.id,
-    ...(a.description === undefined ? {} : { description: a.description }),
-  });
-  recordPlannerEstimate(env, ctx, created.id, a.estimateMinutes);
+  // One transaction, so a failing estimate or parent move cannot leave a subtask behind that a retry would duplicate.
+  const { created, moved } = ctx.db.transaction(() => {
+    const created = createTask(ctx.db, {
+      projectId: parent.projectId,
+      title: a.title,
+      createdBy: ctx.memberId,
+      parentId: parent.id,
+      assigneeId: target.id,
+      ...(a.description === undefined ? {} : { description: a.description }),
+    });
+    recordPlannerEstimate(env, ctx, created.id, a.estimateMinutes);
+    const moved =
+      parent.status === "in_progress"
+        ? null
+        : moveTask(ctx.db, parent.id, "in_progress", ctx.memberId);
+    return { created, moved };
+  })();
   postMessage(ctx.db, {
     channelId: ensureProjectChannel(ctx.db, parent.projectId).id,
     authorId: ctx.memberId,
     body: `@${handle}: #${created.number} ${a.title}`,
   });
-  const moved =
-    parent.status === "in_progress"
-      ? null
-      : moveTask(ctx.db, parent.id, "in_progress", ctx.memberId);
   return moved && !moved.ok
     ? `#${created.number} (the parent stays ${parent.status}: ${moved.reason})`
     : `#${created.number}`;

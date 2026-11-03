@@ -72,6 +72,23 @@ test("task_delegate to a report creates subtask, assignment, estimate, channel p
   expect(getTask(db, parent.id)?.status).toBe("in_progress");
 });
 
+test("task_delegate leaves no subtask or estimate behind when the parent move fails", async () => {
+  const t = team();
+  const parent = createTask(db, { projectId: t.project.id, title: "Ship", createdBy: t.lead.id });
+  db.run(`CREATE TRIGGER no_parent_move BEFORE UPDATE ON tasks WHEN OLD.id = '${parent.id}'
+    BEGIN SELECT RAISE(ABORT, 'boom'); END`);
+  const res = await call(server, tokenFor(db, t.lead.id, t.a.id), "task_delegate", {
+    task: parent.number,
+    to: "dev",
+    title: "piece",
+    estimateMinutes: 30,
+  });
+  expect(res.isError).toBe(true);
+  const rows = (sql: string): number => db.query<{ n: number }, []>(sql).get()?.n as number;
+  expect(rows("SELECT count(*) AS n FROM tasks WHERE parent_id IS NOT NULL")).toBe(0);
+  expect(rows("SELECT count(*) AS n FROM task_estimates")).toBe(0);
+});
+
 test("a position without the manager flag but with a report can delegate and see a roster", async () => {
   const w = world(db);
   const lead = w.agent(w.a.id, "lead");
