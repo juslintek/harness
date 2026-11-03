@@ -25,7 +25,12 @@ function usageOf(
   sinceMs: number,
 ): Pick<
   MemberReport,
-  "inputTokens" | "outputTokens" | "cacheReadTokens" | "costUsd" | "unpricedEvents"
+  | "inputTokens"
+  | "outputTokens"
+  | "cacheReadTokens"
+  | "costUsd"
+  | "costEstimated"
+  | "unpricedEvents"
 > {
   const rows = db
     .query<UsageRow, [string, number]>(
@@ -42,6 +47,7 @@ function usageOf(
     outputTokens: 0,
     cacheReadTokens: 0,
     costUsd: 0,
+    costEstimated: false,
     unpricedEvents: 0,
   };
   for (const r of rows) {
@@ -59,6 +65,7 @@ function usageOf(
         : null);
     if (cost === null) total.unpricedEvents += 1;
     else total.costUsd += cost;
+    if (r.cost === null && cost !== null) total.costEstimated = true;
   }
   return total;
 }

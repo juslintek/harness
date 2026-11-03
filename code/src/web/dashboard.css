@@ -1,0 +1,52 @@
+.dashboard-table th[scope="row"] {
+  text-align: left;
+}
+
+.dashboard-table td span {
+  display: block;
+  text-align: right;
+}
+
+.bar {
+  display: block;
+  height: 0.4rem;
+  margin-top: 0.25rem;
+  min-width: 6rem;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.bar-fill.time {
+  background: var(--ok);
+}
+
+.bar-fill.warn,
+.bar-fill.paused {
+  background: var(--error);
+}
+
+.budget-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.budget-list li {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.budget-state {
+  font-weight: 600;
+}
+
+.budget-state.paused {
+  text-decoration: underline;
+}
