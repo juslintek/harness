@@ -88,7 +88,7 @@ test("handoffSummary contains the task number, the stop reason and git status li
   const id = await w.start(ends({ stopReason: "error", error: "rate limit" }));
   const run = await waitForRun(id);
   writeFileSync(join(run.worktree as string, "scratch.txt"), "half done");
-  const text = handoffSummary(w.db, run);
+  const text = await handoffSummary(w.db, run);
   expect(text).toContain("Task #1 Fix login");
   expect(text).toContain("Previous attempt on claude/opus stopped: failed rate_limited");
   expect(text).toContain("?? scratch.txt");

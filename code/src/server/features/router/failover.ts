@@ -51,7 +51,7 @@ export async function nextAttempt(
     deps,
   );
   if (!next) return null;
-  const summary = handoffSummary(db, run);
+  const summary = await handoffSummary(db, run);
   const handoffId = Bun.randomUUIDv7();
   const inserted = db.run(
     `INSERT INTO run_handoffs (id, batch_id, task_id, member_id, from_run_id, reason, summary, created_at)
