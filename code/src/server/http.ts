@@ -4,6 +4,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { z } from "zod";
 import { type Health, healthSchema } from "../shared/health";
 import { searchQuerySchema, usageQuerySchema } from "../shared/query";
+import { quotaBodySchema } from "../shared/router";
 import { agentRoutes } from "./features/agents/routes";
 import {
   hostGuard,
@@ -30,8 +31,9 @@ import { routerRoutes } from "./features/router/routes";
 import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
 import { haltRoutes, runRoutes } from "./features/runtimes/routes";
 import { trackingRoutes } from "./features/tracking/routes";
-import { probeQuota, usageSummary } from "./features/usage/api";
+import { probeQuota, recordQuota, usageSummary } from "./features/usage/api";
 import { wsUpgrade } from "./realtime";
+import { parseBody } from "./route-kit";
 
 // Applied by Bun.serve before any handler runs, so it also covers /mcp and the guard hook.
 export const MAX_REQUEST_BODY_BYTES: number = 1024 * 1024;
@@ -116,6 +118,12 @@ function adminRoutes(deps: AppDeps): Hono {
     return c.json(usageSummary(db, query.data.by, query.data.since));
   });
   app.get("/quota", async (c) => c.json(await probeQuota(db)));
+  app.post("/quota", async (c) => {
+    const body = await parseBody(c, quotaBodySchema);
+    if (body instanceof Response) return body;
+    recordQuota(db, { ...body, resetsAt: body.resetsAt ?? null, source: "manual" });
+    return c.json({ ok: true });
+  });
   return app;
 }
 

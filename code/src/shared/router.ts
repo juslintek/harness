@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export const specialties = [
   "frontend",
   "backend",
@@ -49,3 +51,26 @@ export const REGISTRY_PROVIDER: Readonly<Record<string, string>> = {
   agy: "google",
   copilot: "github-copilot",
 };
+
+// Quota provider per runtime, as written by the quota tailers; runtimes not listed have no known limits.
+export const QUOTA_PROVIDER: Readonly<Record<string, string>> = {
+  claude: "claude",
+  codex: "codex",
+  agy: "agy",
+};
+
+export interface QuotaBody {
+  provider: string;
+  window: string;
+  usedPercent: number;
+  resetsAt?: number | undefined;
+}
+
+export const quotaBodySchema: z.ZodType<QuotaBody> = z
+  .object({
+    provider: z.string().min(1).max(40),
+    window: z.string().min(1).max(40),
+    usedPercent: z.number().min(0).max(100),
+    resetsAt: z.number().int().positive().optional(),
+  })
+  .strict();

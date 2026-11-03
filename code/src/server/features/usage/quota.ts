@@ -38,6 +38,13 @@ function latest(db: Database, provider: string, window: string): SnapshotRow | n
     .get(provider, window);
 }
 
+const listeners = new Set<(q: QuotaInput) => void>();
+
+export function onQuotaRecorded(listener: (q: QuotaInput) => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 export function insertSnapshot(db: Database, s: QuotaInput): void {
   db.query(
     "INSERT INTO quota_snapshots (id, provider, window, used_percent, resets_at, source, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -50,6 +57,13 @@ export function insertSnapshot(db: Database, s: QuotaInput): void {
     s.source,
     s.ts ?? Date.now(),
   );
+  for (const listener of listeners) {
+    try {
+      listener(s);
+    } catch (err) {
+      console.error("quota listener failed", err);
+    }
+  }
 }
 
 // Tailers see the same limits on every turn; keep one row per change.

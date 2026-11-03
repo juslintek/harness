@@ -5,6 +5,7 @@ import { appendEvent, type NewEvent } from "../logs/api";
 import {
   insertSnapshot,
   latestQuota,
+  onQuotaRecorded,
   type QuotaInput,
   type QuotaView as QuotaViewRow,
 } from "./quota";
@@ -21,6 +22,8 @@ export interface UsageRecord {
   source: "acp" | "agy" | "api" | "tail";
 }
 
+export type { QuotaInput } from "./quota";
+export { onQuotaRecorded };
 export type TailSource = TailSourceRow;
 export type QuotaView = QuotaViewRow;
 

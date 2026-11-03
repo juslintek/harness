@@ -18,7 +18,7 @@ import {
   waitForRun as wait,
 } from "./manager";
 import { reapRuns } from "./orphans";
-import { getRun as get, listRuns as list, type RunRow } from "./runs-repo";
+import { getRun as get, listRuns as list, listLiveRuns, type RunRow } from "./runs-repo";
 import { scratchRepo as scratch } from "./scratch";
 import { defaultBranch as defaultBranchOf } from "./worktree";
 
@@ -49,6 +49,9 @@ export async function startRun(
     model?: string;
     taskId?: string;
     member?: RunMember;
+    reuseWorktreeOf?: string;
+    attempt?: number;
+    batchId?: string;
   },
 ): Promise<string> {
   if (halted(db)) throw new HaltedError();
@@ -114,6 +117,10 @@ export function defaultBranch(repo: string): Promise<string> {
 
 export function getRun(db: Database, id: string): RunRow | null {
   return get(db, id);
+}
+
+export function liveRuns(db: Database): RunRow[] {
+  return listLiveRuns(db);
 }
 
 export function waitForRun(runId: string): Promise<RunRow> {

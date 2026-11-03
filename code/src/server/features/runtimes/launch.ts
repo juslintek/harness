@@ -15,7 +15,7 @@ import {
 import { mintRunToken, type TokenScope } from "../mcp/api";
 import type { Adapter } from "./adapter";
 import { prepareCodexHome } from "./codex-home";
-import { createWorktree, defaultBranch } from "./worktree";
+import { createWorktree, defaultBranch, reuseWorktree } from "./worktree";
 
 export interface RunDeps {
   home: string;
@@ -79,12 +79,15 @@ export async function createLaunch(
   runId: string,
   repo: string,
   member?: RunMember,
+  reuse?: { worktree: string; branch: string },
 ): Promise<Launch> {
   // srt's sandbox profile matches resolved paths only, so a home behind a symlink (macOS /var)
   // would leave the run's own tmp dir read-only and break heredocs.
   await mkdir(deps.home, { recursive: true });
   const home = await realpath(deps.home);
-  const tree = await createWorktree(repo, runId, home);
+  const tree = reuse
+    ? await reuseWorktree(reuse.worktree, reuse.branch)
+    : await createWorktree(repo, runId, home);
   const branch = await defaultBranch(repo);
   const runDir = join(home, "runs", runId);
   const token = member
