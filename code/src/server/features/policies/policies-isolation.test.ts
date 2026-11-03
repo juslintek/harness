@@ -5,7 +5,7 @@ import { migrations } from "../../db/migrations";
 import { bootApi } from "../../test-support/api-kit";
 import { createTask } from "../board/api";
 import { addAgentMember, createOrg, createProject, listTeams } from "../orgs/api";
-import { decideProposal, propose, setPolicy } from "./api";
+import { decideProposal, getProposal, propose, review, setPolicy } from "./api";
 
 const policyRows = (db: Database): number =>
   db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM policies").get()?.n ?? 0;
@@ -115,4 +115,45 @@ test("the atomic claim refuses a decide whose pre-check saw the proposal still o
   expect(db.query("SELECT status FROM policy_proposals WHERE id = ?").get(p.id)).toEqual({
     status: "approved",
   });
+});
+
+test("review refuses a same-org member who was not invited and stores nothing", () => {
+  const db = openDb(":memory:");
+  migrate(db, migrations);
+  const org = createOrg(db, {
+    name: "A",
+    slug: "aa",
+    ownerUserId: "u1",
+    ownerName: "O",
+    ownerHandle: "owner",
+  });
+  const agent = (handle: string) =>
+    addAgentMember(db, org.id, { agentId: "claude", handle, displayName: handle, specialties: [] });
+  const [dev, invited, stranger] = [agent("dev"), agent("invited"), agent("stranger")];
+  const proposal = propose(db, {
+    orgId: org.id,
+    memberId: dev.id,
+    key: "router.failover",
+    value: false,
+    reason: "x",
+    reviewers: [invited.id],
+  });
+  expect(() =>
+    review(db, {
+      proposalId: proposal.id,
+      reviewerId: stranger.id,
+      verdict: "reject",
+      comment: "",
+    }),
+  ).toThrow("not invited to review this proposal");
+  expect(getProposal(db, proposal.id)?.reviews).toEqual([]);
+  review(db, {
+    proposalId: proposal.id,
+    reviewerId: invited.id,
+    verdict: "approve",
+    comment: "ok",
+  });
+  expect(getProposal(db, proposal.id)?.reviews).toEqual([
+    { reviewerId: invited.id, verdict: "approve", comment: "ok" },
+  ]);
 });

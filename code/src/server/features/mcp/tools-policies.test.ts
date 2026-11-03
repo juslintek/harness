@@ -114,6 +114,7 @@ test("the policy tools refuse a bad value, a self review, a peer decider and ano
         key: "autonomy",
         value: "strict",
         reason: "x",
+        reviewers: ["@boss"],
       })
     ).text,
   ) as { proposal: string };

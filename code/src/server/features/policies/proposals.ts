@@ -165,6 +165,10 @@ export function review(
   if (!proposal) throw new Error("proposal not found");
   if (proposal.status !== "open") throw new Error("already decided");
   assertReviewer(db, proposal.org_id, proposal.proposed_by, input.reviewerId);
+  const invited = db
+    .query("SELECT 1 FROM policy_review_requests WHERE proposal_id = ? AND reviewer_id = ?")
+    .get(input.proposalId, input.reviewerId);
+  if (!invited) throw new Error("not invited to review this proposal");
   db.query(
     `INSERT INTO policy_reviews (proposal_id, reviewer_id, verdict, comment, created_at)
      VALUES (?, ?, ?, ?, ?)
