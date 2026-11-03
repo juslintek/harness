@@ -117,12 +117,16 @@ export function managerPositionsOf(db: Database, memberId: string): PositionRow[
     .map(row);
 }
 
+// Only reports who can take delegated work: viewers and paused agents cannot, and a manager
+// whose reports are all such would be read-only with nobody to hand the work to.
 export function directReportsOf(db: Database, memberId: string): string[] {
   return db
     .query<{ member_id: string }, [string]>(
       `SELECT DISTINCT sub.member_id FROM positions mine
        JOIN positions sub ON sub.reports_to = mine.id
-       WHERE mine.member_id = ? AND sub.member_id IS NOT NULL AND sub.member_id != mine.member_id
+       JOIN members m ON m.id = sub.member_id
+       WHERE mine.member_id = ? AND sub.member_id != mine.member_id
+         AND m.role != 'viewer' AND NOT (m.kind = 'agent' AND m.paused = 1)
        ORDER BY sub.created_at, sub.id`,
     )
     .all(memberId)

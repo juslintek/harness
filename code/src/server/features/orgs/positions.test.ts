@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import {
+  addAgentMember,
   addHumanMember,
   createOrg,
   createPosition,
@@ -11,6 +12,7 @@ import {
   type PositionPatch,
   type PositionRow,
   reportsTransitivelyTo,
+  updateMember,
   updatePosition,
 } from "./api";
 
@@ -93,4 +95,22 @@ test("directReportsOf does not count a member as their own direct report", () =>
   const lead = createPosition(db, { orgId, title: "lead", memberId, isManager: true });
   createPosition(db, { orgId, title: "also", memberId, reportsTo: lead.id });
   expect(directReportsOf(db, memberId)).toEqual([]);
+});
+
+test("directReportsOf skips viewers and paused agents but keeps active members", () => {
+  const { db, orgId, memberId } = setup();
+  const lead = createPosition(db, { orgId, title: "lead", memberId, isManager: true });
+  const viewer = addHumanMember(db, orgId, "u4", "view", "View", "viewer");
+  const active = addHumanMember(db, orgId, "u5", "act", "Act", "member");
+  const bot = addAgentMember(db, orgId, {
+    agentId: "a1",
+    handle: "bot",
+    displayName: "Bot",
+    specialties: [],
+  });
+  updateMember(db, bot.id, { paused: true });
+  for (const m of [viewer, active, bot]) {
+    createPosition(db, { orgId, title: m.handle, memberId: m.id, reportsTo: lead.id });
+  }
+  expect(directReportsOf(db, memberId)).toEqual([active.id]);
 });
