@@ -87,3 +87,10 @@ test("directReportsOf lists members in positions under the member's, skipping va
   expect(directReportsOf(db, memberId)).toEqual([dev.id]);
   expect(directReportsOf(db, dev.id)).toEqual([]);
 });
+
+test("directReportsOf does not count a member as their own direct report", () => {
+  const { db, orgId, memberId } = setup();
+  const lead = createPosition(db, { orgId, title: "lead", memberId, isManager: true });
+  createPosition(db, { orgId, title: "also", memberId, reportsTo: lead.id });
+  expect(directReportsOf(db, memberId)).toEqual([]);
+});

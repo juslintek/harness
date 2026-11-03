@@ -122,7 +122,7 @@ export function directReportsOf(db: Database, memberId: string): string[] {
     .query<{ member_id: string }, [string]>(
       `SELECT DISTINCT sub.member_id FROM positions mine
        JOIN positions sub ON sub.reports_to = mine.id
-       WHERE mine.member_id = ? AND sub.member_id IS NOT NULL
+       WHERE mine.member_id = ? AND sub.member_id IS NOT NULL AND sub.member_id != mine.member_id
        ORDER BY sub.created_at, sub.id`,
     )
     .all(memberId)
