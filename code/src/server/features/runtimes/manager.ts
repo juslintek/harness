@@ -1,14 +1,15 @@
 import type { Database } from "bun:sqlite";
 import type { AgentSpec } from "../agents/api";
-import { checkAction, expireRunApprovals } from "../guard/api";
+import { expireRunApprovals } from "../guard/api";
 import { appendEvent, type NewEvent, sealSegments } from "../logs/api";
 import { revokeRunTokens } from "../mcp/api";
 import { recordQuota, recordUsage } from "../usage/api";
 import { runAcp } from "./acp";
-import type { Adapter, PermissionAsk, RunContext } from "./adapter";
+import type { Adapter, RunContext } from "./adapter";
 import { runAgy } from "./agy";
 import { runApi } from "./api-lane";
 import { createBreaker, defaultLimits } from "./breaker";
+import { decideAsk } from "./decide";
 import type { RunCandidate } from "./launch";
 import { createLaunch, inProcessLaunch, type Launch, type RunDeps, type RunMember } from "./launch";
 import { pidIdentity } from "./orphans";
@@ -132,40 +133,6 @@ function finalize(
   return row;
 }
 
-type EventBase = Pick<NewEvent, "runId" | "agent" | "taskId">;
-
-async function decideAsk(
-  db: Database,
-  deps: RunDeps,
-  input: StartInput & { id: string },
-  launch: Launch,
-  run: Live,
-  base: EventBase,
-  ask: PermissionAsk,
-): Promise<"allow" | "deny"> {
-  try {
-    const out = await checkAction(
-      db,
-      { id: input.id, prompt: input.prompt, scope: launch.scope },
-      ask,
-      {
-        ...(deps.approvalTimeoutMs === undefined
-          ? {}
-          : { approvalTimeoutMs: deps.approvalTimeoutMs }),
-        onApprovalPending: (approvalId) =>
-          publish(db, input.id, { ...base, kind: "approval", body: `pending ${approvalId}` }),
-      },
-    );
-    if (out.verdict === "deny") run.denied = true;
-    return out.verdict;
-  } catch (err) {
-    // A guard that cannot decide must not let the action through.
-    run.denied = true;
-    publish(db, input.id, { ...base, kind: "error", body: `guard failed: ${String(err)}` });
-    return "deny";
-  }
-}
-
 function buildContext(
   db: Database,
   deps: RunDeps,
@@ -195,7 +162,17 @@ function buildContext(
       publish(db, input.id, event);
       if (breaker.record(event) === "trip") killRun(db, input.id, "circuit_breaker");
     },
-    decide: (ask) => decideAsk(db, deps, input, launch, run, base, ask),
+    decide: (ask) =>
+      decideAsk({
+        db,
+        deps,
+        input,
+        scope: launch.scope,
+        run,
+        base,
+        ask,
+        emit: (e) => publish(db, input.id, e),
+      }),
     onQuota: (q) => {
       if (q.usedPercent >= 100) run.quotaFull = true;
       recordQuota(db, { ...q, source: "acp" });

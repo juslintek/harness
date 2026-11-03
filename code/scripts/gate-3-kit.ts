@@ -2,7 +2,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { openDb } from "../src/server/db/db";
-import { listAgents, setLinked } from "../src/server/features/agents/api";
+import { listAgents, refreshModels, setLinked } from "../src/server/features/agents/api";
 import { createSession, createUser } from "../src/server/features/auth/api";
 import { ensureProjectChannel } from "../src/server/features/chat/api";
 import {
@@ -16,6 +16,7 @@ import {
 } from "../src/server/features/orgs/api";
 import { setPolicy } from "../src/server/features/policies/api";
 import { ensureProfile, submitCard } from "../src/server/features/profiles/api";
+import { refreshAcpModels } from "../src/server/features/runtimes/api";
 import type { createApp } from "../src/server/http";
 import type { DashboardView } from "../src/shared/tracking";
 import { git } from "./gate-2-kit";
@@ -49,10 +50,22 @@ function scratchRepo(root: string): string {
 }
 
 // The cheapest listed Claude model is the one with "haiku" in its id or name; null leaves the default.
-export async function cheapestClaudeModel(db: Db): Promise<string | null> {
+async function cheapestClaudeModel(db: Db): Promise<string | null> {
   const claude = (await listAgents(db)).find((a) => a.id === "claude");
   const haiku = claude?.models.find((m) => /haiku/i.test(`${m.id} ${m.name}`));
   return haiku?.id ?? null;
+}
+
+export async function pickLeadModel(
+  db: Db,
+  runDeps: { home: string; port: number },
+): Promise<string | null> {
+  await refreshModels(db, "claude", { listAcp: (spec) => refreshAcpModels(runDeps, spec) }).catch(
+    (err: unknown) => console.error("claude model list unavailable, using the default", err),
+  );
+  const leadModel = await cheapestClaudeModel(db);
+  console.log(`@lead model: ${leadModel ?? "default (no haiku listed)"}`);
+  return leadModel;
 }
 
 function addPair(

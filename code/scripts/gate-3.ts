@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureInstance, migrate, openDb } from "../src/server/db/db";
 import { migrations } from "../src/server/db/migrations";
-import { listAgents, refreshModels } from "../src/server/features/agents/api";
+import { listAgents } from "../src/server/features/agents/api";
 import { createTask, listTasks, onTaskChange, wireBoard } from "../src/server/features/board/api";
 import { startBudgets } from "../src/server/features/budgets/api";
 import { onMessage, wireChat } from "../src/server/features/chat/api";
@@ -17,7 +17,6 @@ import { startRouter } from "../src/server/features/router/api";
 import {
   listRuns,
   onRunEvent,
-  refreshAcpModels,
   shutdownRuns,
   wireRuntimes,
 } from "../src/server/features/runtimes/api";
@@ -28,12 +27,12 @@ import { QUOTA_PROVIDER } from "../src/shared/router";
 import type { DashboardView } from "../src/shared/tracking";
 import {
   build,
-  cheapestClaudeModel,
   claudeSpendUsd,
   dashboard,
   handoffs,
   hiredMemberId,
   hireStatuses,
+  pickLeadModel,
   type Scene,
   writeTimeline,
 } from "./gate-3-kit";
@@ -234,18 +233,6 @@ async function settle(db: Db): Promise<void> {
   while (Date.now() < until && listRuns(db, 200).some((r) => r.endedAt === null)) {
     await Bun.sleep(2000);
   }
-}
-
-async function pickLeadModel(
-  db: Db,
-  runDeps: { home: string; port: number },
-): Promise<string | null> {
-  await refreshModels(db, "claude", { listAcp: (spec) => refreshAcpModels(runDeps, spec) }).catch(
-    (err: unknown) => console.error("claude model list unavailable, using the default", err),
-  );
-  const leadModel = await cheapestClaudeModel(db);
-  console.log(`@lead model: ${leadModel ?? "default (no haiku listed)"}`);
-  return leadModel;
 }
 
 function assignGateTask(db: Db, s: Scene): void {
