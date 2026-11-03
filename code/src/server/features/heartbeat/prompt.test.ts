@@ -27,4 +27,6 @@ test("a member with reports is told to delegate and not to code; the report is n
   const devPrompt = buildPrompt(k.db, dev, []);
   expect(devPrompt).not.toContain("You manage");
   expect(devPrompt).toContain("`task_checkout`");
+  expect(devPrompt).toContain("project channel with `chat_post`");
+  expect(devPrompt).toContain("`$TMPDIR`");
 });
