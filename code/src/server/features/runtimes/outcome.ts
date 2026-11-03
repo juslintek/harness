@@ -3,6 +3,8 @@ import type { RunOutcome } from "./adapter";
 import { hasExpiredApproval, type RunState } from "./runs-repo";
 import type { Live } from "./shutdown";
 
+const RATE_LIMIT_TEXT = /rate.?limit|\b429\b|quota|usage limit|overloaded/i;
+
 export function endState(
   db: Database,
   runId: string,
@@ -20,6 +22,9 @@ export function endState(
     case "max_tokens":
       return ["failed", o.stopReason];
     default:
+      if (run.quotaFull === true || RATE_LIMIT_TEXT.test(o.error ?? "")) {
+        return ["failed", "rate_limited"];
+      }
       return ["failed", o.error ?? o.stopReason];
   }
 }

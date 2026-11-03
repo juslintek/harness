@@ -23,6 +23,7 @@ import {
   setFlag,
   setPid,
   setStarting,
+  worktreeOf,
 } from "./runs-repo";
 import { type Live, stopAll } from "./shutdown";
 import { NotAGitRepo } from "./worktree";
@@ -34,6 +35,9 @@ export interface StartInput {
   model?: string;
   taskId?: string;
   member?: RunMember;
+  reuseWorktreeOf?: string;
+  attempt?: number;
+  batchId?: string;
 }
 const LANES: Record<AgentSpec["lane"], Adapter> = { acp: runAcp, agy: runAgy, api: runApi };
 const DEFAULT_IDLE_TIMEOUT_MS = 300_000;
@@ -168,7 +172,10 @@ function buildContext(
         return "deny";
       }
     },
-    onQuota: (q) => recordQuota(db, { ...q, source: "acp" }),
+    onQuota: (q) => {
+      if (q.usedPercent >= 100) run.quotaFull = true;
+      recordQuota(db, { ...q, source: "acp" });
+    },
     onProgress: (p) => {
       if (breaker.addTokens(p.contextTokens) === "trip") killRun(db, input.id, "circuit_breaker");
     },
@@ -215,10 +222,11 @@ async function prepare(
   input: StartInput & { id: string },
 ): Promise<Launch | { failed: string }> {
   try {
+    const reuse = input.reuseWorktreeOf ? worktreeOf(db, input.reuseWorktreeOf) : undefined;
     const launch =
       spec.lane === "api"
         ? inProcessLaunch(input.repo)
-        : await createLaunch(db, deps, spec, input.id, input.repo, input.member);
+        : await createLaunch(db, deps, spec, input.id, input.repo, input.member, reuse);
     setStarting(db, input.id, launch.worktree, launch.branch);
     return launch;
   } catch (err) {
@@ -247,6 +255,8 @@ export async function startRun(
     model: input.model ?? null,
     repo: input.repo,
     prompt: input.prompt,
+    attempt: input.attempt,
+    batchId: input.batchId,
   });
   const run: Live = {
     abort: new AbortController(),

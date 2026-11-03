@@ -18,7 +18,7 @@ import {
   waitForRun as wait,
 } from "./manager";
 import { reapRuns } from "./orphans";
-import { getRun as get, listRuns as list, type RunRow } from "./runs-repo";
+import { getRun as get, listRuns as list, listLiveRuns, type RunRow } from "./runs-repo";
 import { scratchRepo as scratch } from "./scratch";
 
 export type { RunDeps } from "./launch";
@@ -48,6 +48,9 @@ export async function startRun(
     model?: string;
     taskId?: string;
     member?: RunMember;
+    reuseWorktreeOf?: string;
+    attempt?: number;
+    batchId?: string;
   },
 ): Promise<string> {
   if (halted(db)) throw new HaltedError();
@@ -56,8 +59,8 @@ export async function startRun(
   return start(db, deps, spec, input);
 }
 
-export function killRun(db: Database, runId: string): boolean {
-  return kill(db, runId);
+export function killRun(db: Database, runId: string, reason?: string): boolean {
+  return kill(db, runId, reason);
 }
 
 // A removed or demoted agent must stop at once: killing the run makes finalize revoke its run token, which
@@ -109,6 +112,10 @@ export function listRuns(db: Database, limit?: number): RunRow[] {
 
 export function getRun(db: Database, id: string): RunRow | null {
   return get(db, id);
+}
+
+export function liveRuns(db: Database): RunRow[] {
+  return listLiveRuns(db);
 }
 
 export function waitForRun(runId: string): Promise<RunRow> {

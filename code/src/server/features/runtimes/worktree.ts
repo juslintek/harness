@@ -57,6 +57,20 @@ export async function createWorktree(
   return { path, branch, gitCommonDir: probe.out, base };
 }
 
+// A failover attempt continues in the tree the earlier attempt left, so a vanished one is an error
+// rather than a reason to start over from HEAD and lose the half-done work.
+export async function reuseWorktree(
+  path: string,
+  branch: string,
+): Promise<{ path: string; branch: string; gitCommonDir: string }> {
+  if (!(await Bun.file(join(path, ".git")).exists())) throw new Error(`worktree is gone: ${path}`);
+  const gitCommonDir = await gitOk(
+    ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    path,
+  );
+  return { path, branch, gitCommonDir };
+}
+
 export async function defaultBranch(repo: string): Promise<string> {
   const origin = await git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], repo);
   if (origin.code === 0) return origin.out.replace(/^origin\//, "");
