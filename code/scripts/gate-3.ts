@@ -272,10 +272,11 @@ async function main(): Promise<void> {
   } finally {
     leftovers.stop();
     hireRun.stop();
-    stopHeartbeat();
+    const drained = stopHeartbeat();
     for (const off of stops) off();
     stopTimeline();
     await shutdownRuns(db);
+    await drained;
   }
   const view = await dashboard(db, s, app, port);
   await stop();

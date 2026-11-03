@@ -11,6 +11,7 @@ import { createProbeLaunch, type RunCandidate, type RunDeps, type RunMember } fr
 import {
   setHalted as halt,
   isHalted as halted,
+  isShuttingDown,
   killRun as kill,
   onRunEvent as onEvent,
   shutdownRuns as shutdown,
@@ -30,6 +31,16 @@ export class HaltedError extends Error {
   constructor() {
     super("harness is halted");
     this.name = "HaltedError";
+  }
+}
+
+// A halted harness keeps its work for later, and so does one that is shutting down: callers that
+// already treat HaltedError as "retry later" need no new branch.
+export class ShuttingDownError extends HaltedError {
+  constructor() {
+    super();
+    this.message = "harness is shutting down";
+    this.name = "ShuttingDownError";
   }
 }
 
@@ -56,6 +67,7 @@ export async function startRun(
     batchId?: string;
   },
 ): Promise<string> {
+  if (isShuttingDown(db)) throw new ShuttingDownError();
   if (halted(db)) throw new HaltedError();
   const spec = (deps.resolveSpec ?? getSpec)(input.agentId);
   if (!spec) throw new UnknownAgent(input.agentId);

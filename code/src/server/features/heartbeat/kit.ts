@@ -71,7 +71,7 @@ export interface Kit {
   hold: { gate: Promise<void> | null; release: () => void };
   agent: (handle: string, specialties?: string[], agentId?: string) => MemberRow;
   task: (title: string) => ReturnType<typeof createTask>;
-  start: (extra?: Partial<HeartbeatDeps>) => () => void;
+  start: (extra?: Partial<HeartbeatDeps>) => () => Promise<void>;
 }
 
 export function setup(): Kit {

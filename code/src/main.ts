@@ -89,9 +89,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     if (stopping) return;
     stopping = true;
-    stopHeartbeat();
+    const drained = stopHeartbeat();
     for (const stop of stopLoops) stop();
     shutdownRuns(db)
+      .then(() => drained)
       .catch((err: unknown) => console.error("shutdown failed", err))
       .finally(() => {
         server.stop(true);

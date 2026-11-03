@@ -88,7 +88,7 @@ export function runRoutes(db: Database, deps: RunDeps): Hono<AuthEnv> {
       const id = await startRun(db, deps, { ...rest, ...(model === undefined ? {} : { model }) });
       return c.json({ id }, 201);
     } catch (err) {
-      if (err instanceof HaltedError) return c.json({ error: "harness is halted" }, 409);
+      if (err instanceof HaltedError) return c.json({ error: err.message }, 409);
       if (err instanceof UnknownAgent) return c.json({ error: "unknown agent" }, 404);
       throw err;
     }

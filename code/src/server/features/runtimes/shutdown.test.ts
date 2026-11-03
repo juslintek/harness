@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { listRunEvents, readBody } from "../logs/api";
 import { mintRunToken, verifyRunToken } from "../mcp/api";
-import { getRun, recoverRuns, shutdownRuns, startRun, waitForRun } from "./api";
+import { getRun, HaltedError, recoverRuns, shutdownRuns, startRun, waitForRun } from "./api";
 import { agentPid, cleanup, fakeDeps, fixture, gone, transcript } from "./manager-kit";
 import { pidIdentity } from "./orphans";
 import { insertRun, markRunning, setPid } from "./runs-repo";
@@ -74,4 +74,20 @@ test("recoverRuns leaves a pid alone when it no longer belongs to an srt process
   expect(gone(pid)).toBe(false);
   expect(verifyRunToken(x.db, token)).toBeNull();
   process.kill(-pid, "SIGKILL");
+});
+
+test("once shutdownRuns has begun, startRun is refused, and only for that harness", async () => {
+  const x = fixture();
+  await shutdownRuns(x.db, 100);
+  const refused = startRun(x.db, fakeDeps(x, []), { agentId: "fake", repo: x.repo, prompt: "go" });
+  await expect(refused).rejects.toThrow("harness is shutting down");
+  await expect(refused).rejects.toBeInstanceOf(HaltedError);
+
+  const other = fixture();
+  const id = await startRun(other.db, fakeDeps(other, [{ say: "ok" }]), {
+    agentId: "fake",
+    repo: other.repo,
+    prompt: "go",
+  });
+  expect((await waitForRun(id)).state).toBe("completed");
 });

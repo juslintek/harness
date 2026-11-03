@@ -22,7 +22,9 @@ export interface HeartbeatDeps extends ExecDeps {
 const DEFAULT_TICK_MS = 60_000;
 const kickers = new Set<() => void>();
 
-export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => void {
+// The returned stop ends the loop at once and resolves when the launch or settle it was in the
+// middle of has finished, so a caller can close the db behind it.
+export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => Promise<void> {
   const triage = deps.triage ?? triageWake;
   const report = (what: string, err: unknown): void => {
     console.error(`heartbeat ${what} failed`, err);
@@ -34,9 +36,12 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => void {
   let deferred = false;
   // Settling runs here, ahead of the next launch, so a member whose run just ended cannot start a
   // second run while a failover is still starting its replacement.
+  let stopped = false;
   const kick = (): void => {
+    if (stopped) return;
     chain = chain
       .then(async () => {
+        if (stopped) return;
         await sweepEnded(db, deps);
         deferred = await runPending(db, deps);
       })
@@ -74,9 +79,11 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => void {
   timer.unref();
   kick();
   return () => {
+    stopped = true;
     clearInterval(timer);
     kickers.delete(kick);
     for (const off of offs) off();
+    return chain;
   };
 }
 

@@ -202,9 +202,10 @@ async function main(): Promise<void> {
     }
   } finally {
     leftovers.stop();
-    stopHeartbeat();
+    const drained = stopHeartbeat();
     stopTimeline();
     await shutdownRuns(db);
+    await drained;
     await stop();
   }
   report(db, s, home);

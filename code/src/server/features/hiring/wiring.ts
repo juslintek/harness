@@ -1,7 +1,8 @@
 import type { Database } from "bun:sqlite";
+import { listAgents } from "../agents/api";
 import { budgetGate } from "../budgets/api";
 import { wakeFor } from "../heartbeat/api";
-import { rankEngines, readyRuntimes } from "../router/api";
+import { type RouteDeps, rankEngines, readyRuntimes } from "../router/api";
 import type { HiringDeps } from "./hire";
 import { type InterviewEnv, runInterview } from "./interview";
 
@@ -12,15 +13,29 @@ const READY_REFRESH_MS = 60_000;
 export function wireHiring(
   db: Database,
   env: InterviewEnv,
+  probe: RouteDeps = {},
 ): { deps: HiringDeps; stop: () => void } {
   // engineReady is read inside synchronous scoring, so it reads the last answer of an async probe.
   let ready = new Set<string>();
+  let stopped = false;
+  const stoppedMidProbe = new Error("hiring stopped");
+  // readyRuntimes reads the db once the agent list arrives, and a probe that was in flight at stop
+  // may land after the db is closed, so the list is where it is cut off.
+  const routeDeps: RouteDeps = {
+    agents: async () => {
+      const agents = await (probe.agents ?? (() => listAgents(db)))();
+      if (stopped) throw stoppedMidProbe;
+      return agents;
+    },
+  };
   const refresh = (): void => {
-    readyRuntimes(db).then(
+    readyRuntimes(db, routeDeps).then(
       (runtimes) => {
-        ready = runtimes;
+        if (!stopped) ready = runtimes;
       },
-      (err: unknown) => console.error("hiring: runtime probe failed", err),
+      (err: unknown) => {
+        if (err !== stoppedMidProbe) console.error("hiring: runtime probe failed", err);
+      },
     );
   };
   refresh();
@@ -41,5 +56,11 @@ export function wireHiring(
     },
     wake: (memberId, reason, detail, causedBy) => wakeFor(db, memberId, reason, detail, causedBy),
   };
-  return { deps, stop: () => clearInterval(timer) };
+  return {
+    deps,
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
 }

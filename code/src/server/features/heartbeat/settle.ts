@@ -3,7 +3,7 @@ import { budgetGate } from "../budgets/api";
 import { appendEvent } from "../logs/api";
 import { getMember } from "../orgs/api";
 import { linkHandoff, type NextAttempt, nextAttempt } from "../router/api";
-import { getRun, type RunRow, startRun } from "../runtimes/api";
+import { getRun, type RunRow, ShuttingDownError, startRun } from "../runtimes/api";
 import { nudgeUndelegated } from "./nudge";
 import { buildPrompt } from "./prompt";
 import { setStatus, startedWakesOf, type WakeRow } from "./repo";
@@ -72,7 +72,9 @@ export async function settleRun(db: Database, deps: ExecDeps, runId: string): Pr
     try {
       nextRunId = await startNext(db, deps, run, wakes, next);
     } catch (err) {
-      fail(db, ids, err);
+      // The wakes go back in the queue for the next boot; a refusal is not a failure of the work.
+      if (err instanceof ShuttingDownError) setStatus(db, ids, "pending");
+      else fail(db, ids, err);
       return;
     }
     // The new run is live whether or not the link is written, so a failure here only loses the audit row.

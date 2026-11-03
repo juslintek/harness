@@ -2,7 +2,13 @@ import type { Database } from "bun:sqlite";
 import { specialties, taskTypes } from "../../../shared/router";
 import { getMember, getOrg } from "../orgs/api";
 import { getProfile } from "../profiles/api";
-import { type RunDeps, scratchRepo, startRun, waitForRun } from "../runtimes/api";
+import {
+  type RunDeps,
+  ShuttingDownError,
+  scratchRepo,
+  startRun,
+  waitForRun,
+} from "../runtimes/api";
 import { candidateRunEnded } from "./flow";
 import type { HiringDeps } from "./hire";
 import { getCandidate, getHire } from "./repo";
@@ -75,6 +81,8 @@ export async function runInterview(
     });
     ok = (await waitForRun(runId)).state === "completed";
   } catch (err) {
+    // The db may be closing: leave the candidate as it is rather than writing to it.
+    if (err instanceof ShuttingDownError) return;
     console.error("interview run failed", candidateId, err);
   }
   candidateRunEnded(db, deps, candidateId, ok);

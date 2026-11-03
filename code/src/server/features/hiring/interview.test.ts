@@ -1,4 +1,4 @@
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,7 @@ import { type HiringWorld, hiringWorld } from "../../test-support/hiring-kit";
 import { budgetGate, startBudgets, upsertBudget } from "../budgets/api";
 import { wireChat } from "../chat/api";
 import { verifyRunToken } from "../mcp/api";
-import { getRun, type RunDeps } from "../runtimes/api";
+import { getRun, type RunDeps, shutdownRuns } from "../runtimes/api";
 import { recordUsage } from "../usage/api";
 import { getHire, recordAnswer } from "./api";
 import { runInterview } from "./interview";
@@ -125,6 +125,22 @@ test("a run that ends without answering fails its candidate and a launch failure
   expect(now?.candidates.map((c) => c.status)).toEqual(["failed", "failed"]);
   expect(now?.status).toBe("rejected");
   expect(now?.decisionReason).toBe("no candidate answered");
+});
+
+test("an interview that starts after shutdown began is dropped quietly, leaving the candidate alone", async () => {
+  const w = hiringWorld();
+  const hire = await w.file();
+  const { env, seen } = interviewEnv(w, () => {});
+  await shutdownRuns(w.db, 50);
+  const errors = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await runInterview(w.db, env, w.deps, hire.candidates[0]?.id as string, []);
+    expect(errors).not.toHaveBeenCalled();
+  } finally {
+    errors.mockRestore();
+  }
+  expect(seen).toHaveLength(0);
+  expect(getHire(w.db, hire.id)?.candidates[0]?.status).toBe("interviewing");
 });
 
 function usage(db: HiringWorld["db"], runId: string, usd: number): void {

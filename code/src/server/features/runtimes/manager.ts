@@ -49,6 +49,13 @@ const live = new Map<string, Live>();
 const waits = new Map<string, Promise<RunRow>>();
 const listeners = new Set<(runId: string, e: NewEvent) => void>();
 
+// Per db handle so an in-process test that shuts one harness down does not stop the next one.
+const shuttingDown = new WeakSet<Database>();
+
+export function isShuttingDown(db: Database): boolean {
+  return shuttingDown.has(db);
+}
+
 export function isHalted(db: Database): boolean {
   return getFlag(db, "halted") === "1";
 }
@@ -68,6 +75,7 @@ export function setHalted(db: Database, halted: boolean): void {
 }
 
 export function shutdownRuns(db: Database, graceMs = 5000): Promise<void> {
+  shuttingDown.add(db);
   const finish = (id: string, run: Live): void => {
     finalize(db, id, run.agent, "killed", run.killReason ?? "harness_shutdown");
   };
