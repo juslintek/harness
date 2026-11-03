@@ -82,7 +82,7 @@ function isReadCmd(cmd: Cmd, scope: Scope): boolean {
   if (!plainEnv(cmd)) return false;
   if (cmd.argv.length === 0) return true;
   const name = base(cmd.argv[0]);
-  return name === "git" ? isReadOnlyGit(cmd.argv, scope) : READ_ONLY.has(name);
+  return name === "git" ? isReadOnlyGit(cmd, scope) : READ_ONLY.has(name);
 }
 
 function defaultCategory(cmds: Cmd[], scope: Scope): Category {

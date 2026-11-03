@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, realpathSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { evaluateL1 } from "./api";
 import type { Scope } from "./l1";
 
@@ -12,14 +15,12 @@ const READ = [
   "cat ~/.agents/skills/x/SKILL.md && git status && rg foo src",
   "cat ~/.agents/skills/x/SKILL.md; pwd; rg --files | head; git status --short",
   "git log --oneline -5",
-  "git -C . diff --stat",
-  "git -C src log",
   "git branch --show-current",
-  "git branch --list 'feat*'",
+  "git branch --list",
   "git branch -a",
   "git branch --contains HEAD",
   "git --no-pager show HEAD:math.ts",
-  "git tag -l 'v*'",
+  "git tag -l",
   "git tag",
   "git remote -v",
   "git remote get-url origin",
@@ -88,4 +89,43 @@ test("safe git and skill reads are category read", () => {
 test("git forms that write, page, run programs or read config values are not read", () => {
   const leaks = NOT_READ.filter((c) => categoryOf(c) === "read");
   expect(leaks).toEqual([]);
+});
+
+const FIX_NOT_READ = [
+  "printf '%s\\0' --output=config | xargs -0 git -C . log -1",
+  "xargs git log",
+  "find . -exec git log {} +",
+  "parallel git log ::: HEAD",
+  "git log *",
+  "git -C .git log *",
+  "git log s?c",
+  "git log [a]",
+  "git log HEAD@{1}",
+  "git branch --list 'feat*'",
+  "git -C .git log",
+  "git -C sub log",
+  "git -C link log -p",
+  "cd sub && git status",
+  "pushd sub; git status",
+  "sudo git status",
+  "doas git log",
+  "busybox git log",
+  "exec git status",
+  "stdbuf -o0 git status",
+  "builtin git status",
+];
+
+test("xargs, globs, -C into other directories and privilege wrappers are not read", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "git-ro-")));
+  mkdirSync(join(root, "sub"));
+  mkdirSync(join(root, ".git"));
+  symlinkSync("/tmp", join(root, "link"));
+  const real: Scope = { root, home: "/home/u", defaultBranch: "main" };
+  const of = (command: string): string => {
+    const got = evaluateL1({ kind: "execute", command, paths: [] }, real);
+    return got.verdict === "allow" ? got.category : got.verdict;
+  };
+  expect(FIX_NOT_READ.filter((c) => of(c) === "read")).toEqual([]);
+  for (const c of ["git -C . log", `git -C ${root} log`, "command git status", "nice git status"])
+    expect(of(c)).toBe("read");
 });

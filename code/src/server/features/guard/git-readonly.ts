@@ -1,4 +1,5 @@
-import { isInside, resolvePath, type Scope } from "./rules-core";
+import { realpathSync } from "node:fs";
+import { resolvePath, type Scope } from "./rules-core";
 import type { Cmd } from "./shell";
 
 // Anything else in front of a command (GIT_PAGER, GIT_DIR, LD_PRELOAD, PATH, ...) can change what runs.
@@ -26,8 +27,11 @@ const UNSAFE_LONG = [
   "config-env",
   "paginate",
 ];
-const SHELL_SYNTAX = /[$`]/;
-const GLOB = /[*?[]/;
+// The lexer does not keep quotes, so a quoted glob is refused too. An expanded glob can turn a
+// file named --output=config into a flag, and <stdin> is where xargs puts words nobody read.
+const SHELL_SYNTAX = /[$`*?[{]|<stdin>/;
+// Wrappers that only adjust priority, time or lookup; anything else may change user or arguments.
+const INERT_WRAPPERS = new Set(["command", "nice", "timeout", "nohup", "time"]);
 
 function unsafeFlag(sub: string, arg: string): boolean {
   if (arg.startsWith("--")) {
@@ -43,8 +47,7 @@ function unsafeFlag(sub: string, arg: string): boolean {
 function safeArgs(sub: string, args: string[]): boolean {
   const end = args.indexOf("--");
   const flags = end < 0 ? args : args.slice(0, end);
-  if (args.some((a) => SHELL_SYNTAX.test(a))) return false;
-  return flags.every((a) => !a.startsWith("-") || (!GLOB.test(a) && !unsafeFlag(sub, a)));
+  return flags.every((a) => !a.startsWith("-") || !unsafeFlag(sub, a));
 }
 
 const BRANCH_FLAGS = new Set([
@@ -132,31 +135,45 @@ interface Parsed {
 }
 
 // `-c`, `--git-dir`, `--exec-path`, `-p` and every option not listed here make the line non-read.
+// Another directory may be an embedded repository whose config names programs git then runs, so
+// only the task root itself counts.
+function isRoot(dir: string, scope: Scope): boolean {
+  const abs = resolvePath(dir, scope);
+  if (abs === null) return false;
+  try {
+    return realpathSync(abs) === realpathSync(scope.root);
+  } catch {
+    return false;
+  }
+}
+
 function parseGlobals(argv: string[], scope: Scope): Parsed | null {
   let i = 1;
   for (; i < argv.length && (argv[i] as string).startsWith("-"); i++) {
     const a = argv[i] as string;
     if (a === "-C") {
-      const abs = resolvePath(argv[++i] ?? "", scope);
-      if (abs === null || !isInside(abs, scope)) return null;
+      if (!isRoot(argv[++i] ?? "", scope)) return null;
     } else if (!["--no-pager", "-P", "--no-optional-locks"].includes(a)) return null;
   }
   return { sub: argv[i] ?? "", rest: argv.slice(i + 1) };
 }
 
-export function isReadOnlyGit(argv: string[], scope: Scope): boolean {
-  if (argv[0] !== "git") return false;
+const SPECIAL: Record<string, (r: string[]) => boolean> = {
+  ...HEAD_ONLY,
+  branch,
+  tag,
+  remote,
+  config,
+};
+
+export function isReadOnlyGit(cmd: Cmd, scope: Scope): boolean {
+  const argv = cmd.argv;
+  if (argv[0] !== "git" || !cmd.wrappers.every((w) => INERT_WRAPPERS.has(w))) return false;
+  if (argv.some((a) => SHELL_SYNTAX.test(a))) return false;
   const parsed = parseGlobals(argv, scope);
   if (parsed === null) return false;
   const { sub, rest } = parsed;
   if (PLAIN.has(sub)) return safeArgs(sub, rest);
-  const special: Record<string, (r: string[]) => boolean> = {
-    ...HEAD_ONLY,
-    branch,
-    tag,
-    remote,
-    config,
-  };
-  const check = Object.hasOwn(special, sub) ? special[sub] : undefined;
-  return check !== undefined && rest.every((a) => !SHELL_SYNTAX.test(a)) && check(rest);
+  const check = Object.hasOwn(SPECIAL, sub) ? SPECIAL[sub] : undefined;
+  return check?.(rest) === true;
 }
