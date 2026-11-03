@@ -57,8 +57,8 @@ export async function startRun(
   return start(db, deps, spec, input);
 }
 
-export function killRun(db: Database, runId: string): boolean {
-  return kill(db, runId);
+export function killRun(db: Database, runId: string, reason?: string): boolean {
+  return kill(db, runId, reason);
 }
 
 // A removed or demoted agent must stop at once: killing the run makes finalize revoke its run token, which
