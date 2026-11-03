@@ -24,7 +24,7 @@ import { hiringRoutes } from "./features/hiring/routes";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { mcpHandler, verifyRunToken } from "./features/mcp/api";
 import { orgRoutes } from "./features/orgs/routes";
-import { policiesRoutes } from "./features/policies/routes";
+import { harnessPolicyRoutes, policiesRoutes } from "./features/policies/routes";
 import { profilesRoutes } from "./features/profiles/routes";
 import { routerRoutes } from "./features/router/routes";
 import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
@@ -87,13 +87,23 @@ function adminRoutes(deps: AppDeps): Hono {
   const { db } = deps;
   const runDeps = deps.runDeps ?? { home: deps.home, port: deps.port };
   const app = new Hono();
-  for (const path of ["/runs", "/halt", "/agents", "/search", "/usage", "/quota", "/router"]) {
+  for (const path of [
+    "/runs",
+    "/halt",
+    "/agents",
+    "/search",
+    "/usage",
+    "/quota",
+    "/router",
+    "/policies",
+  ]) {
     app.use(`${path}/*`, requireInstanceAdmin);
   }
   app.route("/runs", runRoutes(db, runDeps));
   app.route("/approvals", approvalRoutes(db, deps.home));
   app.route("/halt", haltRoutes(db));
   app.route("/router", routerRoutes(db));
+  app.route("/policies", harnessPolicyRoutes(db));
   app.route("/agents", agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }));
   app.get("/search", (c) => {
     const query = searchQuerySchema.safeParse(c.req.query());
