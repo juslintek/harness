@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { fakeAgents } from "../../test-support/agents-kit";
 import type { AgentSpec } from "../agents/api";
 import { createTask } from "../board/api";
 import type { ChannelView } from "../chat/api";
@@ -32,6 +33,8 @@ const spec: AgentSpec = {
   claudeMeta: false,
 };
 
+export const specFor = (id: string): AgentSpec => ({ ...spec, id });
+
 const done: RunOutcome = {
   stopReason: "end_turn",
   text: "",
@@ -39,6 +42,15 @@ const done: RunOutcome = {
   error: null,
   sessionId: null,
 };
+
+// Route discovery would spawn every installed agent CLI; the fake agent is the only engine here.
+export const routeDeps: NonNullable<HeartbeatDeps["routeDeps"]> = fakeAgents(
+  "fake",
+  "fake2",
+  "fake3",
+  "claude",
+  "codex",
+);
 
 interface Seen {
   memberId: string | null;
@@ -57,7 +69,7 @@ export interface Kit {
   seen: Seen[];
   // While set, every run waits for it, so a test decides when runs end.
   hold: { gate: Promise<void> | null; release: () => void };
-  agent: (handle: string, specialties?: string[]) => MemberRow;
+  agent: (handle: string, specialties?: string[], agentId?: string) => MemberRow;
   task: (title: string) => ReturnType<typeof createTask>;
   start: (extra?: Partial<HeartbeatDeps>) => () => void;
 }
@@ -101,10 +113,10 @@ export function setup(): Kit {
     runDeps,
     seen,
     hold,
-    agent: (handle, specialties = []) =>
-      addAgentMember(db, org.id, { agentId: "fake", handle, displayName: handle, specialties }),
+    agent: (handle, specialties = [], agentId = "fake") =>
+      addAgentMember(db, org.id, { agentId, handle, displayName: handle, specialties }),
     task: (title) => createTask(db, { projectId: project.id, title, createdBy: human.id }),
-    start: (extra = {}) => startHeartbeat(db, { runDeps, home, tickMs: 20, ...extra }),
+    start: (extra = {}) => startHeartbeat(db, { runDeps, home, tickMs: 20, routeDeps, ...extra }),
   };
 }
 

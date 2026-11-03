@@ -10,7 +10,10 @@ import {
   type MemberRow,
   type ProjectRow,
 } from "../orgs/api";
-import { mcpHandler, mintRunToken, type TokenScope } from "./api";
+import { addEstimate, taskTrackingFields } from "../tracking/api";
+import { type McpDeps, mcpHandler, mintRunToken, type TokenScope } from "./api";
+
+export const trackingPort: McpDeps["tracking"] = { addEstimate, taskFields: taskTrackingFields };
 
 export type Db = ReturnType<typeof openDb>;
 
@@ -23,7 +26,7 @@ export async function listen(database: Db): Promise<ReturnType<typeof Bun.serve>
       fetch: (req) =>
         mcpHandler(
           database,
-          { onReport: () => {}, harnessHome: "/Users/x/.harness" },
+          { onReport: () => {}, harnessHome: "/Users/x/.harness", tracking: trackingPort },
           own.port as number,
         )(req),
     });

@@ -5,9 +5,12 @@ import { channelAccess, getChannel, onMessage } from "../chat/api";
 import { triageWake } from "../laya/api";
 import { appendEvent } from "../logs/api";
 import { projectAccess } from "../orgs/api";
+import { onProposalChange } from "../policies/api";
 import { isHalted, onRunEvent, type RunDeps } from "../runtimes/api";
-import { type ExecDeps, runPending, settleRun, sweepEnded } from "./executor";
-import { failStartedWakes, listWakeups as list } from "./repo";
+import { runPending, sweepEnded } from "./executor";
+import { onPolicyChange } from "./policy-wakes";
+import { endedStartedRuns, failStartedWakes, listWakeups as list } from "./repo";
+import type { ExecDeps } from "./run-input";
 import { dueSchedules, onChat, onTask, recordWake, runNow } from "./triggers";
 
 export interface HeartbeatDeps extends ExecDeps {
@@ -29,9 +32,12 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => void {
   // Serialised so two triggers in a row cannot start two runs for one member.
   let chain: Promise<void> = Promise.resolve();
   let deferred = false;
+  // Settling runs here, ahead of the next launch, so a member whose run just ended cannot start a
+  // second run while a failover is still starting its replacement.
   const kick = (): void => {
     chain = chain
       .then(async () => {
+        await sweepEnded(db, deps);
         deferred = await runPending(db, deps);
       })
       .catch((err: unknown) => report("executor", err));
@@ -45,19 +51,20 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => void {
     onMessage((event) => {
       onChat(db, event, triage).then(kick, (err: unknown) => report("message trigger", err));
     }),
-    onRunEvent((runId, event) => {
-      if (event.kind !== "run") return;
+    onRunEvent((_runId, event) => {
+      if (event.kind === "run") kick();
+    }),
+    onProposalChange((change) => {
       try {
-        settleRun(db, runId);
+        if (onPolicyChange(db, change)) kick();
       } catch (err) {
-        report("run end", err);
+        report("policy trigger", err);
       }
-      kick();
     }),
   ];
   const timer = setInterval(() => {
     try {
-      const swept = sweepEnded(db);
+      const swept = endedStartedRuns(db).length > 0;
       const scheduled = isHalted(db) ? 0 : dueSchedules(db, Date.now());
       if (swept || scheduled > 0 || deferred) kick();
     } catch (err) {

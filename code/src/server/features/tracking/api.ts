@@ -4,8 +4,9 @@ import { getRun, onRunEvent } from "../runtimes/api";
 import { addEstimate, estimatesOf, priorFor, seedPrior } from "./estimates";
 import { memberReport } from "./report";
 import { recordRunStack } from "./stack";
+import { taskTrackingFields } from "./task-view";
 
-export { addEstimate, estimatesOf, memberReport, priorFor };
+export { addEstimate, estimatesOf, memberReport, priorFor, taskTrackingFields };
 
 export function startTracking(db: Database): () => void {
   const stopRuns = onRunEvent((runId, e) => {

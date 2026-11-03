@@ -5,9 +5,9 @@ import { type ChatEvent, channelAccess, channelMembers, getChannel } from "../ch
 import type { triageWake } from "../laya/api";
 import { appendEvent } from "../logs/api";
 import { getMember, type MemberRow, projectAccess } from "../orgs/api";
+import { contextForMember, effective } from "../policies/api";
 import { insertWake, scheduleCandidates, startedRunsSince } from "./repo";
 
-const HOURLY_CAP = 20;
 const HOUR_MS = 3_600_000;
 const EXCERPT_CHARS = 500;
 
@@ -21,19 +21,28 @@ interface WakeInput {
   causedBy: string | null;
 }
 
-// One error event per member and hour is enough to show the cap was hit.
-const capLogged = new WeakMap<Database, Map<string, number>>();
+// One error event per member and hour is enough to show a cap or a budget pause was hit.
+const logged = new WeakMap<Database, Map<string, number>>();
+
+function logOncePerHour(db: Database, key: string, body: string, now: number): void {
+  const seen = logged.get(db) ?? new Map<string, number>();
+  logged.set(db, seen);
+  if (now - (seen.get(key) ?? 0) < HOUR_MS) return;
+  seen.set(key, now);
+  appendEvent(db, { kind: "error", source: "heartbeat", body });
+}
+
+const capOf = (db: Database, memberId: string): number =>
+  effective(db, contextForMember(db, memberId), "heartbeat.maxRunsPerHour").value;
 
 function logCap(db: Database, member: MemberRow, now: number): void {
-  const seen = capLogged.get(db) ?? new Map<string, number>();
-  capLogged.set(db, seen);
-  if (now - (seen.get(member.id) ?? 0) < HOUR_MS) return;
-  seen.set(member.id, now);
-  appendEvent(db, {
-    kind: "error",
-    source: "heartbeat",
-    body: `wake cap reached: @${member.handle} already had ${HOURLY_CAP} runs in the last hour`,
-  });
+  const body = `wake cap reached: @${member.handle} already had ${capOf(db, member.id)} runs in the last hour`;
+  logOncePerHour(db, `cap:${member.id}`, body, now);
+}
+
+export function logBudgetPaused(db: Database, member: MemberRow): void {
+  const body = `runs skipped: a budget covering @${member.handle} is spent`;
+  logOncePerHour(db, `budget:${member.id}`, body, Date.now());
 }
 
 export class WakeCapError extends Error {
@@ -44,7 +53,7 @@ export class WakeCapError extends Error {
 }
 
 export function overCap(db: Database, memberId: string): boolean {
-  return startedRunsSince(db, memberId, Date.now() - HOUR_MS) >= HOURLY_CAP;
+  return startedRunsSince(db, memberId, Date.now() - HOUR_MS) >= capOf(db, memberId);
 }
 
 function store(db: Database, member: MemberRow, input: WakeInput): string {

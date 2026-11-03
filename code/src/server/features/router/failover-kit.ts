@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { gitEnv } from "../../git-env";
+import { fakeAgents } from "../../test-support/agents-kit";
 import type { AgentSpec } from "../agents/api";
 import { createTask } from "../board/api";
 import { addAgentMember, createOrg, createProject } from "../orgs/api";
@@ -73,24 +74,7 @@ export function holdUntilKilled(): Adapter {
     );
 }
 
-export const agents = (...ids: string[]): RouteDeps => ({
-  agents: () =>
-    Promise.resolve(
-      ids.map((id) => ({
-        id,
-        name: id,
-        lane: "acp" as const,
-        installed: true,
-        path: null,
-        version: null,
-        loggedIn: true,
-        error: null,
-        canLogin: true,
-        enabled: true,
-        models: [],
-      })),
-    ),
-});
+export const agents = (...ids: string[]): RouteDeps => fakeAgents(...ids);
 
 export interface World {
   db: Database;

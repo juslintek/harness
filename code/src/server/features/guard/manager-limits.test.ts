@@ -17,6 +17,7 @@ const base: DecideContext = {
   managerMemberId: "m",
   inSubtree: true,
   ownsProject: true,
+  autonomy: null,
   category: "shell",
   rule: null,
   kind: "execute",

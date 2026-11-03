@@ -22,7 +22,7 @@ import { getRun as get, listRuns as list, listLiveRuns, type RunRow } from "./ru
 import { scratchRepo as scratch } from "./scratch";
 import { defaultBranch as defaultBranchOf } from "./worktree";
 
-export type { RunDeps } from "./launch";
+export type { RunDeps, RunMember } from "./launch";
 export type { RunRow } from "./runs-repo";
 
 export class HaltedError extends Error {

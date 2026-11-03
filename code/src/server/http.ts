@@ -30,6 +30,7 @@ import { profilesRoutes } from "./features/profiles/routes";
 import { routerRoutes } from "./features/router/routes";
 import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
 import { haltRoutes, runRoutes } from "./features/runtimes/routes";
+import { addEstimate, taskTrackingFields } from "./features/tracking/api";
 import { trackingRoutes } from "./features/tracking/routes";
 import { probeQuota, recordQuota, usageSummary } from "./features/usage/api";
 import { wsUpgrade } from "./realtime";
@@ -148,6 +149,7 @@ export function createApp(deps: AppDeps): Hono {
     db,
     {
       harnessHome: deps.home,
+      tracking: { addEstimate, taskFields: taskTrackingFields },
       onReport: (runId, text) =>
         appendEvent(db, { kind: "message", source: "mcp", runId, body: text }),
     },

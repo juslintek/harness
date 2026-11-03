@@ -2,16 +2,35 @@ import type { Database } from "bun:sqlite";
 import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
 import type { HarnessToolName } from "../../../shared/harness-tools";
+import type { EstimateKind } from "../../../shared/tracking";
 import { DomainError } from "../../route-kit";
 import { BoardError } from "../board/api";
 import { ChatError } from "../chat/api";
 import { getMember } from "../orgs/api";
 import type { RunIdentity, TokenScope } from "./tokens";
 
+// Tracking and routing reach the runtimes, which mint the tokens these tools run under, so the
+// app hands them in instead of the tools importing them.
+export interface TrackingPort {
+  addEstimate: (
+    db: Database,
+    e: {
+      taskId: string;
+      kind: EstimateKind;
+      minutes: number;
+      source: "agent";
+      byMember: string;
+      rationale?: string;
+    },
+  ) => void;
+  taskFields: (db: Database, taskId: string) => Record<string, unknown>;
+}
+
 export interface ToolEnv {
   db: Database;
   identity: RunIdentity;
   harnessHome: string;
+  tracking: TrackingPort;
 }
 
 export interface ToolCtx {

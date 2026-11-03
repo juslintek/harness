@@ -4,6 +4,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { mcpHandler, mintRunToken, revokeRunTokens } from "./api";
+import { trackingPort } from "./test-kit";
 
 let server: ReturnType<typeof Bun.serve>;
 let token: string;
@@ -22,7 +23,7 @@ async function listen(database: ReturnType<typeof openDb>): Promise<ReturnType<t
       fetch: (req) =>
         mcpHandler(
           database,
-          { onReport: (r, t) => reports.push([r, t]), harnessHome: "/h" },
+          { onReport: (r, t) => reports.push([r, t]), harnessHome: "/h", tracking: trackingPort },
           own.port as number,
         )(req),
     });

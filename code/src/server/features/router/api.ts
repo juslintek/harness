@@ -1,17 +1,21 @@
 import type { Database } from "bun:sqlite";
-import { rankEngines, readyRuntimes, route } from "./candidates";
-import { startWatchdog } from "./failover";
+import { type RouteDeps, rankEngines, readyRuntimes, route } from "./candidates";
+import { linkHandoff, type NextAttempt, nextAttempt, startWatchdog } from "./failover";
 import { estimateCostUsd, priceOf, refreshRegistry, registryStale } from "./registry";
 import { onTriaged, startTriage, triageOf } from "./triage";
 
+export type { NextAttempt, RouteDeps };
 export {
   estimateCostUsd,
+  linkHandoff,
+  nextAttempt,
   onTriaged,
   priceOf,
   rankEngines,
   readyRuntimes,
   refreshRegistry,
   route,
+  startWatchdog,
   triageOf,
 };
 

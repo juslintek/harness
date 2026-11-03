@@ -9,6 +9,7 @@ import { registerApprovalTools } from "./tools-approvals";
 import { registerBoardTools } from "./tools-board";
 import { registerChatTools } from "./tools-chat";
 import { registerHiringTools } from "./tools-hiring";
+import type { TrackingPort } from "./tools-kit";
 import { registerManagerTools } from "./tools-manager";
 import { registerPoliciesTools } from "./tools-policies";
 import { registerProfilesTools } from "./tools-profiles";
@@ -19,6 +20,7 @@ const MAX_REPORT_CHARS = 4000;
 export interface McpDeps {
   onReport: (runId: string, text: string) => void;
   harnessHome: string;
+  tracking: TrackingPort;
 }
 
 function whoami(db: Database, identity: RunIdentity): unknown {
@@ -41,7 +43,7 @@ function whoami(db: Database, identity: RunIdentity): unknown {
 
 function buildServer(db: Database, identity: RunIdentity, deps: McpDeps): McpServer {
   const server = new McpServer({ name: "harness", version: "1.0.0" });
-  const env = { db, identity, harnessHome: deps.harnessHome };
+  const env = { db, identity, harnessHome: deps.harnessHome, tracking: deps.tracking };
   const whoamiName: HarnessToolName = "whoami";
   server.registerTool(
     whoamiName,
