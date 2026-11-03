@@ -16,7 +16,7 @@ class ApiError extends Error {
 }
 
 export interface ApiInit {
-  method: "POST" | "PATCH" | "DELETE";
+  method: "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
 }
 
