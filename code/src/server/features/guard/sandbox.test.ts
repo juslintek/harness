@@ -151,3 +151,17 @@ test("a read-only worktree drops the worktree and git refs from allowWrite", () 
   expect(allowWrite).toContain(runTmpDir("/runs/r1"));
   expect(allowWrite).toContain(join(homedir(), ".claude"));
 });
+
+test("a read-only run's scratch checkout and its admin dir are writable, refs and objects are not", () => {
+  const scratch = { path: "/hh/scratch-checkouts/r1", gitDir: "/repo/.git/worktrees/r11" };
+  const { filesystem } = buildSrtSettings({ ...baseInput, readOnlyWorktree: true, scratch });
+  expect(filesystem.allowWrite).toEqual(expect.arrayContaining([scratch.path, scratch.gitDir]));
+  expect(filesystem.allowWrite).not.toContain("/wt/r1");
+  expect(filesystem.allowWrite).not.toContain("/repo/.git/objects");
+  expect(
+    filesystem.allowWrite.filter((p) => String(p).startsWith("/repo/.git") && p !== scratch.gitDir),
+  ).toEqual([]);
+  expect(filesystem.denyWrite).toEqual(
+    expect.arrayContaining([join(scratch.path, ".git"), join(scratch.gitDir, "commondir")]),
+  );
+});

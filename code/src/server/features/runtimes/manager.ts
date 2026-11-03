@@ -26,6 +26,7 @@ import {
   setStarting,
   worktreeOf,
 } from "./runs-repo";
+import { dropScratchCheckout } from "./scratch-checkout";
 import { type Live, stopAll } from "./shutdown";
 import { NotAGitRepo } from "./worktree";
 
@@ -115,6 +116,7 @@ function finalize(
       revokeRunTokens(db, id);
       expireRunApprovals(db, id);
       live.delete(id);
+      void dropScratchCheckout(id);
     }
   }
   const row = getRun(db, id);

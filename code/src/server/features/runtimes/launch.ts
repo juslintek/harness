@@ -15,6 +15,7 @@ import {
 import { mintRunToken, type TokenScope } from "../mcp/api";
 import type { Adapter } from "./adapter";
 import { prepareCodexHome } from "./codex-home";
+import { createScratchCheckout } from "./scratch-checkout";
 import { createWorktree, defaultBranch, reuseWorktree } from "./worktree";
 
 export interface RunDeps {
@@ -88,6 +89,18 @@ async function worktreeAdminDir(worktree: string): Promise<string> {
   return pointer.slice("gitdir: ".length);
 }
 
+// Only a manager run gets one; an interview run is read-only too but runs nothing.
+async function scratchFor(
+  repo: string,
+  home: string,
+  runId: string,
+  member: RunMember | RunCandidate | undefined,
+): Promise<{ path: string; gitDir: string } | null> {
+  if (member === undefined || "candidateId" in member || member.readOnly !== true) return null;
+  const path = await createScratchCheckout(repo, runId, home);
+  return { path, gitDir: await worktreeAdminDir(path) };
+}
+
 export async function createLaunch(
   db: Database,
   deps: RunDeps,
@@ -105,6 +118,7 @@ export async function createLaunch(
     ? await reuseWorktree(reuse.worktree, reuse.branch)
     : await createWorktree(repo, runId, home);
   const branch = await defaultBranch(repo);
+  const scratch = await scratchFor(repo, home, runId, member);
   const runDir = join(home, "runs", runId);
   const token = tokenFor(db, runId, member);
   const codexHome = spec.id === "codex" ? await prepareCodexHome(runDir, codexRules()) : null;
@@ -122,6 +136,7 @@ export async function createLaunch(
     weakerNetworkIsolation: spec.weakerNetworkIsolation,
     codexHome,
     readOnlyWorktree: member !== undefined && ("candidateId" in member || member.readOnly === true),
+    ...(scratch === null ? {} : { scratch }),
   });
   const tmp = runTmpDir(runDir);
   const base = `http://127.0.0.1:${deps.port}`;
@@ -135,6 +150,7 @@ export async function createLaunch(
     HARNESS_HOOK_URL: `${base}/api/guard/hook`,
     HARNESS_RUN_TOKEN: token,
     HARNESS_RUN_ID: runId,
+    ...(scratch === null ? {} : { HARNESS_SCRATCH: scratch.path }),
   });
   return {
     worktree: tree.path,

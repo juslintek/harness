@@ -32,7 +32,7 @@ async function git(args: string[], cwd: string): Promise<GitResult> {
   return { code, out: out.trim(), err: err.trim() };
 }
 
-async function gitOk(args: string[], cwd: string): Promise<string> {
+export async function gitOk(args: string[], cwd: string): Promise<string> {
   const res = await git(args, cwd);
   if (res.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${res.err}`);
   return res.out;

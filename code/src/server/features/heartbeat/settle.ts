@@ -4,6 +4,7 @@ import { appendEvent } from "../logs/api";
 import { getMember } from "../orgs/api";
 import { linkHandoff, type NextAttempt, nextAttempt } from "../router/api";
 import { getRun, type RunRow, startRun } from "../runtimes/api";
+import { nudgeUndelegated } from "./nudge";
 import { buildPrompt } from "./prompt";
 import { setStatus, startedWakesOf, type WakeRow } from "./repo";
 import { type ExecDeps, fail, runMember, wakeProject } from "./run-input";
@@ -48,7 +49,6 @@ async function startNext(
     attempt: run.attempt + 1,
     batchId: run.batchId ?? run.id,
   });
-  linkHandoff(db, next.handoffId, runId);
   return runId;
 }
 
@@ -75,10 +75,21 @@ export async function settleRun(db: Database, deps: ExecDeps, runId: string): Pr
       fail(db, ids, err);
       return;
     }
+    // The new run is live whether or not the link is written, so a failure here only loses the audit row.
+    try {
+      linkHandoff(db, next.handoffId, nextRunId);
+    } catch (err) {
+      appendEvent(db, {
+        kind: "error",
+        source: "heartbeat",
+        body: `handoff ${next.handoffId} not linked to run ${nextRunId}: ${String(err)}`,
+      });
+    }
     setStatus(db, ids, "started", { runId: nextRunId });
     await settleRun(db, deps, nextRunId);
     return;
   }
   const detail = { state: run.state, reason: run.reason };
   setStatus(db, ids, run.state === "completed" ? "done" : "failed", { detail });
+  nudgeUndelegated(db, run, wakes);
 }

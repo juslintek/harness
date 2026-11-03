@@ -17,13 +17,14 @@ import {
 import { publicAuthRoutes } from "./features/auth/routes";
 import { accountRoutes } from "./features/auth/routes-account";
 import { boardRoutes } from "./features/board/routes";
+import { budgetGate } from "./features/budgets/api";
 import { budgetsRoutes } from "./features/budgets/routes";
 import { chatRoutes } from "./features/chat/routes";
 import { approvalRoutes } from "./features/guard/routes";
 import { wakeRoutes } from "./features/heartbeat/routes";
 import { hiringRoutes } from "./features/hiring/routes";
 import { appendEvent, searchEvents } from "./features/logs/api";
-import { mcpHandler, verifyRunToken } from "./features/mcp/api";
+import { type McpDeps, mcpHandler, verifyRunToken } from "./features/mcp/api";
 import { orgRoutes } from "./features/orgs/routes";
 import { harnessPolicyRoutes, policiesRoutes } from "./features/policies/routes";
 import { profilesRoutes } from "./features/profiles/routes";
@@ -128,6 +129,12 @@ function adminRoutes(deps: AppDeps): Hono {
   return app;
 }
 
+const trackingPort: McpDeps["tracking"] = {
+  addEstimate,
+  taskFields: taskTrackingFields,
+  budgetState: (d, memberId) => budgetGate(d, memberId).state,
+};
+
 export function createApp(deps: AppDeps): Hono {
   const { db } = deps;
   const app = new Hono();
@@ -149,7 +156,7 @@ export function createApp(deps: AppDeps): Hono {
     db,
     {
       harnessHome: deps.home,
-      tracking: { addEstimate, taskFields: taskTrackingFields },
+      tracking: trackingPort,
       onReport: (runId, text) =>
         appendEvent(db, { kind: "message", source: "mcp", runId, body: text }),
     },

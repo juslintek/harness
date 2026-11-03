@@ -153,6 +153,16 @@ export function startedWakesOf(db: Database, runId: string): WakeRow[] {
     .map(wakeRow);
 }
 
+export function hasNudge(db: Database, taskId: string): boolean {
+  return (
+    db
+      .query(
+        "SELECT 1 FROM wakeups WHERE task_id = ? AND json_extract(detail, '$.nudge') = 'delegate' LIMIT 1",
+      )
+      .get(taskId) !== null
+  );
+}
+
 export function hasPolicyWake(db: Database, memberId: string, proposalId: string): boolean {
   return (
     db

@@ -22,9 +22,8 @@ test("a member with reports is told to delegate and not to code; the report is n
   const managerPrompt = buildPrompt(k.db, lead, []);
   expect(managerPrompt).toContain("You manage @dev.");
   expect(managerPrompt).toContain("worktree is read-only");
-  expect(managerPrompt).toContain("`task_create`");
-  expect(managerPrompt).toContain("move the parent to `done`");
-  expect(managerPrompt).toContain("ask them in the channel to release it");
+  expect(managerPrompt).toContain("`task_delegate`");
+  expect(managerPrompt).toContain("move the parent task to `done`");
   const devPrompt = buildPrompt(k.db, dev, []);
   expect(devPrompt).not.toContain("You manage");
   expect(devPrompt).toContain("`task_checkout`");

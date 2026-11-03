@@ -9,8 +9,8 @@ import { ChatError } from "../chat/api";
 import { getMember } from "../orgs/api";
 import type { RunIdentity, TokenScope } from "./tokens";
 
-// Tracking and routing reach the runtimes, which mint the tokens these tools run under, so the
-// app hands them in instead of the tools importing them.
+// Tracking, routing and budgets reach the runtimes, which mint the tokens these tools run under, so
+// the app hands them in instead of the tools importing them.
 export interface TrackingPort {
   addEstimate: (
     db: Database,
@@ -24,6 +24,7 @@ export interface TrackingPort {
     },
   ) => void;
   taskFields: (db: Database, taskId: string) => Record<string, unknown>;
+  budgetState: (db: Database, memberId: string) => "ok" | "warn" | "paused";
 }
 
 export interface ToolEnv {
