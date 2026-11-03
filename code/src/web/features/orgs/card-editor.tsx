@@ -1,21 +1,12 @@
 import { useState } from "preact/hooks";
-import { z } from "zod";
 import type { SelfCard } from "../../../shared/profiles";
+import { ApiError, api } from "../../api";
+import { errorText } from "../../format";
+import { ignored } from "../auth/me";
 
-const failureSchema = z.object({ error: z.string(), issues: z.array(z.string()).optional() });
-
-// The shared api() helper keeps only the error name; the card route's per-field issues are the point here.
-async function putCard(url: string, raw: unknown): Promise<string[]> {
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(raw),
-    credentials: "same-origin",
-  });
-  if (res.ok) return [];
-  const parsed = failureSchema.safeParse(await res.json().catch(() => null));
-  if (parsed.success) return parsed.data.issues ?? [parsed.data.error];
-  return [`HTTP ${res.status}`];
+function issuesOf(err: unknown): string[] {
+  if (err instanceof ApiError && err.issues.length > 0) return err.issues;
+  return [errorText(err)];
 }
 
 export function CardEditor({
@@ -35,16 +26,16 @@ export function CardEditor({
     try {
       raw = JSON.parse(text);
     } catch (err) {
-      setIssues([`not valid JSON: ${err instanceof Error ? err.message : String(err)}`]);
+      setIssues([`not valid JSON: ${errorText(err)}`]);
       return;
     }
     setBusy(true);
     try {
-      const found = await putCard(url, raw);
-      setIssues(found);
-      if (found.length === 0) onSaved();
+      await api(url, ignored, { method: "PUT", body: raw });
+      setIssues([]);
+      onSaved();
     } catch (err) {
-      setIssues([err instanceof Error ? err.message : String(err)]);
+      setIssues(issuesOf(err));
     } finally {
       setBusy(false);
     }

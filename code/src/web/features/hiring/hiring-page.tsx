@@ -1,9 +1,9 @@
+import { hireListSchema } from "../../../shared/hiring";
 import { api, useLoad } from "../../api";
 import { fmtTime } from "../../format";
 import { ErrorLine } from "../auth/error-line";
 import { OrgGate, useOrg } from "../orgs/org-data";
 import { HireDetail } from "./hire-detail";
-import { hireListSchema } from "./hire-schemas";
 import { NewHire } from "./new-hire";
 
 function HireList({ slug }: { slug: string }): preact.JSX.Element {

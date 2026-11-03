@@ -1,12 +1,12 @@
 import { useState } from "preact/hooks";
 import type { HireView } from "../../../shared/hiring";
+import { hireViewSchema } from "../../../shared/hiring";
 import { api, useLoad } from "../../api";
 import { ErrorLine } from "../auth/error-line";
 import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
 import { isAdmin, useOrg } from "../orgs/org-data";
 import { CandidateCard } from "./candidate-card";
-import { hireViewSchema } from "./hire-schemas";
 
 const OPEN: HireView["status"][] = [
   "interviewing",

@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import type { RoleSpec } from "../../../shared/hiring";
 import type { OrgDetail } from "../../../shared/orgs";
 import { type Specialty, specialties, type TaskType, taskTypes } from "../../../shared/router";
 import { api } from "../../api";
@@ -104,6 +105,19 @@ function BasicFields({
   );
 }
 
+function specOf(basics: Basics, summary: string, mustHave: string, types: TaskType[]): RoleSpec {
+  return {
+    title: basics.title,
+    specialty: basics.specialty,
+    summary,
+    mustHave: mustHave
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean),
+    taskTypes: types,
+  };
+}
+
 export function NewHire({
   detail,
   onFiled,
@@ -123,17 +137,8 @@ export function NewHire({
   const action = useAction();
   const submit = (e: Event): void => {
     e.preventDefault();
-    const { teamId, maxCandidates, title, specialty } = basics;
-    const spec = {
-      title,
-      specialty,
-      summary,
-      mustHave: mustHave
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean),
-      taskTypes: types,
-    };
+    const { teamId, maxCandidates } = basics;
+    const spec = specOf(basics, summary, mustHave, types);
     action
       .run(async () => {
         await api(`/api/orgs/${detail.org.slug}/hires`, ignored, {

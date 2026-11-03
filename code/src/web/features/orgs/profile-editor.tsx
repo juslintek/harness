@@ -1,13 +1,12 @@
 import { useState } from "preact/hooks";
 import { z } from "zod";
 import type { MemberView } from "../../../shared/orgs";
-import type { ProfileInput, ProfileView } from "../../../shared/profiles";
+import { type ProfileInput, type ProfileView, profileViewSchema } from "../../../shared/profiles";
 import { agentRowSchema } from "../../../shared/runs";
 import { api, useLoad } from "../../api";
 import { ErrorLine } from "../auth/error-line";
 import { useAction } from "../auth/use-action";
 import { CardEditor } from "./card-editor";
-import { profileViewSchema } from "./profile-schema";
 
 const MAX_FALLBACKS = 3;
 
@@ -48,7 +47,7 @@ function Fallbacks({
     <fieldset>
       <legend>Fallback engines (tried in order)</legend>
       {value.map((f, i) => (
-        <div class="row" key={`${f.runtime}-${i}`}>
+        <div class="row" key={i}>
           <RuntimeInput
             label={`Fallback ${i + 1} runtime`}
             value={f.runtime}
@@ -75,6 +74,54 @@ function Fallbacks({
   );
 }
 
+interface FieldsProps {
+  form: ProfileInput;
+  onChange: (next: ProfileInput) => void;
+}
+
+function EngineFields({ form, onChange }: FieldsProps): preact.JSX.Element {
+  return (
+    <div class="row">
+      <RuntimeInput
+        label="Runtime"
+        value={form.runtime}
+        onInput={(runtime) => onChange({ ...form, runtime })}
+      />
+      <label>
+        Model
+        <input
+          value={form.model ?? ""}
+          onInput={(e) => onChange({ ...form, model: e.currentTarget.value || null })}
+        />
+      </label>
+    </div>
+  );
+}
+
+function PersonaFields({ form, onChange }: FieldsProps): preact.JSX.Element {
+  return (
+    <>
+      <label>
+        Persona
+        <textarea
+          rows={4}
+          maxLength={2000}
+          value={form.persona}
+          onInput={(e) => onChange({ ...form, persona: e.currentTarget.value })}
+        />
+      </label>
+      <label class="inline">
+        <input
+          type="checkbox"
+          checked={form.scope.readOnly}
+          onChange={(e) => onChange({ ...form, scope: { readOnly: e.currentTarget.checked } })}
+        />
+        Read-only scope (the agent cannot write to the repository)
+      </label>
+    </>
+  );
+}
+
 function ProfileForm({
   url,
   profile,
@@ -91,16 +138,13 @@ function ProfileForm({
   const action = useAction();
   const submit = (e: Event): void => {
     e.preventDefault();
-    const body: ProfileInput = {
-      ...form,
-      skills: skills
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-    };
+    const list = skills
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     action
       .run(async () => {
-        await api(url, profileViewSchema, { method: "PUT", body });
+        await api(url, profileViewSchema, { method: "PUT", body: { ...form, skills: list } });
         onSaved();
       })
       .catch((err: unknown) => console.error(err));
@@ -109,45 +153,14 @@ function ProfileForm({
     <form onSubmit={submit}>
       <datalist id={RUNTIME_LIST}>
         {runtimes.map((a) => (
-          <option key={a.id} value={a.id}>
-            {a.name}
-          </option>
+          <option key={a.id} value={a.id} label={a.name} />
         ))}
       </datalist>
-      <div class="row">
-        <RuntimeInput
-          label="Runtime"
-          value={form.runtime}
-          onInput={(runtime) => setForm({ ...form, runtime })}
-        />
-        <label>
-          Model
-          <input
-            value={form.model ?? ""}
-            onInput={(e) => setForm({ ...form, model: e.currentTarget.value || null })}
-          />
-        </label>
-      </div>
-      <label>
-        Persona
-        <textarea
-          rows={4}
-          maxLength={2000}
-          value={form.persona}
-          onInput={(e) => setForm({ ...form, persona: e.currentTarget.value })}
-        />
-      </label>
+      <EngineFields form={form} onChange={setForm} />
+      <PersonaFields form={form} onChange={setForm} />
       <label>
         Skills (comma separated)
         <input value={skills} onInput={(e) => setSkills(e.currentTarget.value)} />
-      </label>
-      <label class="inline">
-        <input
-          type="checkbox"
-          checked={form.scope.readOnly}
-          onChange={(e) => setForm({ ...form, scope: { readOnly: e.currentTarget.checked } })}
-        />
-        Read-only scope (the agent cannot write to the repository)
       </label>
       <Fallbacks value={form.fallbacks} onChange={(fallbacks) => setForm({ ...form, fallbacks })} />
       <button type="submit" disabled={action.busy}>
