@@ -224,13 +224,32 @@ export function postMessage(db: Database, input: PostInput): MessageView {
     mentions,
     taskIds: resolveTaskIds(db, channel, parsed.taskNumbers),
   });
+  notify({ message, mentions, channel });
+  return message;
+}
+
+function notify(event: ChatEvent): void {
   for (const fn of listeners) {
     try {
-      fn({ message, mentions, channel });
+      fn(event);
     } catch (err) {
       console.error("chat listener failed", err);
     }
   }
+}
+
+// For the harness itself (budget alerts): no author, shown as "System", no mentions.
+export function postSystemMessage(db: Database, orgId: string, body: string): MessageView {
+  const channel = ensureOrgChannel(db, orgId);
+  const message = insertMessage(db, {
+    channelId: channel.id,
+    authorId: null,
+    body,
+    threadRootId: null,
+    mentions: [],
+    taskIds: [],
+  });
+  notify({ message, mentions: [], channel });
   return message;
 }
 

@@ -1,5 +1,4 @@
-import type { Database } from "bun:sqlite";
+import { budgetGate } from "./spend";
+import { startBudgets } from "./watch";
 
-export function startBudgets(_db: Database): () => void {
-  return () => {};
-}
+export { budgetGate, startBudgets };

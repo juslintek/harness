@@ -140,7 +140,7 @@ export function resolveTaskIds(
 
 export interface NewMessage {
   channelId: string;
-  authorId: string;
+  authorId: string | null;
   body: string;
   threadRootId: string | null;
   mentions: string[];
@@ -163,7 +163,7 @@ export function insertMessage(db: Database, input: NewMessage): MessageView {
       db.query("INSERT INTO message_tasks (message_id, task_id) VALUES (?, ?)").run(id, taskId);
     }
   })();
-  return getMessage(db, id, input.authorId) as MessageView;
+  return getMessage(db, id, input.authorId ?? "") as MessageView;
 }
 
 const SELECT_MESSAGE = `SELECT m.*, (SELECT COUNT(*) FROM messages r WHERE r.thread_root_id = m.id) AS reply_count

@@ -34,6 +34,13 @@ export interface UsageSummaryRow {
   events: number;
 }
 
+const usageListeners = new Set<(runId: string | null) => void>();
+
+export function onUsageRecorded(listener: (runId: string | null) => void): () => void {
+  usageListeners.add(listener);
+  return () => usageListeners.delete(listener);
+}
+
 export function recordUsage(
   db: Database,
   run: { id: string; agent: string; conversationId?: string },
@@ -65,6 +72,13 @@ export function recordUsage(
     };
     appendEvent(db, event);
   });
+  for (const listener of usageListeners) {
+    try {
+      listener(run.id);
+    } catch (err) {
+      console.error("usage listener failed", err);
+    }
+  }
 }
 
 // usedPercent is 0..100; callers holding a 0..1 fraction multiply first.
