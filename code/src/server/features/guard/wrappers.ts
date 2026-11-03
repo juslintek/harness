@@ -201,7 +201,7 @@ function finishRest(name: string, rest: string[], vals: Record<string, string>):
   return name === "xargs" ? markStdin(rest, vals["-I"]) : rest;
 }
 
-export function unwrap(argv: string[]): { rest: string[]; assigns: string[] } | null {
+export function unwrap(argv: string[]): { rest: string[]; assigns: string[]; name: string } | null {
   const { name, from } = wrapperKey(argv);
   if (!Object.hasOwn(WRAPPERS, name)) return null;
   if (name === "command" && (argv[1] === "-v" || argv[1] === "-V")) return null;
@@ -211,7 +211,7 @@ export function unwrap(argv: string[]): { rest: string[]; assigns: string[] } | 
   const { next, assigns, vals } = scanOptions(argv, spec, from);
   rejectChdir(name, argv.slice(0, next), vals);
   const rest = finishRest(name, argv.slice(next + spec.skip), vals);
-  return rest.length ? { rest, assigns } : null;
+  return rest.length ? { rest, assigns, name } : null;
 }
 
 export function runsScript(name: string): boolean {

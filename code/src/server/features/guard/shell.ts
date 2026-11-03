@@ -13,6 +13,7 @@ interface Redirect {
 export interface Cmd {
   argv: string[];
   assigns: string[];
+  wrappers: string[];
   piped: boolean;
   fromPipe: boolean;
   hereString: boolean;
@@ -55,6 +56,7 @@ function plain(argv: string[]): Cmd {
   return {
     argv,
     assigns: [],
+    wrappers: [],
     piped: false,
     fromPipe: false,
     hereString: false,
@@ -102,10 +104,11 @@ function findExtras(argv: string[], depth: number): Cmd[] {
   return out;
 }
 
-function stripPrefix(stmt: Stmt): { argv: string[]; assigns: string[] } {
+function stripPrefix(stmt: Stmt): { argv: string[]; assigns: string[]; wrappers: string[] } {
   let argv = [...stmt.words];
   while (argv.length && RESERVED.has(argv[0] as string)) argv.shift();
   const assigns: string[] = [];
+  const wrappers: string[] = [];
   const takeAssigns = (): void => {
     while (argv.length && ASSIGN.test(argv[0] as string)) assigns.push(argv.shift() as string);
   };
@@ -115,19 +118,21 @@ function stripPrefix(stmt: Stmt): { argv: string[]; assigns: string[] } {
     if (!un) break;
     argv = un.rest;
     assigns.push(...un.assigns);
+    wrappers.push(un.name);
     takeAssigns();
   }
-  return { argv, assigns };
+  return { argv, assigns, wrappers };
 }
 
 function resolve(rawStmt: Stmt, depth: number): Cmd[] {
   const stmt = { ...rawStmt, words: rawStmt.words.flatMap(expandBraces) };
-  const { argv, assigns } = stripPrefix(stmt);
+  const { argv, assigns, wrappers } = stripPrefix(stmt);
   const name = base(argv[0]);
   const runs = runsScript(name);
   const cmd: Cmd = {
     ...plain(argv),
     assigns,
+    wrappers,
     piped: stmt.piped,
     hereString: stmt.hereString,
     redirects: stmt.redirects,
