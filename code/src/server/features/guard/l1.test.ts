@@ -38,6 +38,11 @@ test("non-shell actions", () => {
     category: "secret",
   });
   expect(run({ kind: "read", paths: ["/etc/hosts"] }).verdict).toBe("ask");
+  expect(run({ kind: "read", paths: ["~/.agents/skills/x/SKILL.md"] }).verdict).toBe("allow");
+  expect(run({ kind: "read", paths: ["~/.agents/skills/../../.ssh/id_rsa"] }).verdict).not.toBe(
+    "allow",
+  );
+  expect(run({ kind: "edit", paths: ["~/.agents/skills/x/SKILL.md"] }).verdict).toBe("deny");
   expect(run({ kind: "fetch", paths: [] }).verdict).toBe("ask");
   expect(run({ kind: "other", paths: [] }).verdict).toBe("ask");
   expect(run({ kind: "other", paths: [], toolName: "ToolSearch" }).verdict).toBe("allow");

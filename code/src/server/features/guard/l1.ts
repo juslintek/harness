@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { HARNESS_TOOL_NAMES } from "../../../shared/harness-tools";
 import { ShellParseError } from "./lexer";
 import { RULES } from "./rules";
@@ -152,7 +153,14 @@ function evaluatePaths(action: ActionRequest, scope: Scope): L1Result {
   }
   const outside = action.paths.find((p) => {
     const abs = resolvePath(p, scope);
-    return abs === null || !isInside(abs, scope);
+    if (abs === null) return true;
+    // Codex reads its installed skills from here on every run; reading them is harmless, editing stays denied.
+    if (
+      action.kind === "read" &&
+      isInside(abs, { ...scope, root: join(scope.home, ".agents/skills") })
+    )
+      return false;
+    return !isInside(abs, scope);
   });
   if (outside !== undefined) {
     return action.kind === "read"
