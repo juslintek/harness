@@ -121,7 +121,7 @@ const excerpt = (text: string): string => text.slice(0, EXCERPT_CHARS);
 function wakeParentAssignee(db: Database, change: TaskChange): void {
   const { task } = change;
   if (change.kind !== "moved" || change.from === task.status || task.parentId === null) return;
-  if (task.status !== "in_review" && task.status !== "done") return;
+  if (!["in_review", "done", "cancelled"].includes(task.status)) return;
   const parent = getTask(db, task.parentId);
   if (!parent || parent.assigneeId === null) return;
   const detail = { excerpt: excerpt(`#${task.number} ${task.title} moved to ${task.status}`) };

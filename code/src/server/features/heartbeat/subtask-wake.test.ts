@@ -44,6 +44,22 @@ test("a subtask moved to done wakes the parent's assignee on the parent", async 
   expect(row?.detail).toContain(`#${child.number} child moved to done`);
 });
 
+test("a subtask moved to cancelled wakes the parent's assignee on the parent", async () => {
+  const k = setup();
+  const { lead, dev, parent, child } = split(k);
+  stops.push(k.start());
+  await until(() => wakes(k.db, lead.id).every((w) => w.status === "done"));
+  moveTask(k.db, child.id, "cancelled", dev.id);
+  await until(() => reasons(k, lead.id).includes("subtask"));
+  const row = k.db
+    .query<{ task_id: string; detail: string }, [string]>(
+      "SELECT task_id, detail FROM wakeups WHERE reason = 'subtask' AND member_id = ?",
+    )
+    .get(lead.id);
+  expect(row?.task_id).toBe(parent.id);
+  expect(row?.detail).toContain("moved to cancelled");
+});
+
 test("a subtask moved to in_progress does not wake the parent's assignee", async () => {
   const k = setup();
   const { lead, dev, child } = split(k);
