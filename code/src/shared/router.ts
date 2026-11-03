@@ -40,3 +40,12 @@ export interface Engine {
   runtime: string;
   model: string | null;
 }
+
+// Provider key in the models.dev registry per agent runtime; runtimes not listed have no prices.
+export const REGISTRY_PROVIDER: Readonly<Record<string, string>> = {
+  claude: "anthropic",
+  codex: "openai",
+  gemini: "google",
+  agy: "google",
+  copilot: "github-copilot",
+};
