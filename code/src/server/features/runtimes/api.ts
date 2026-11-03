@@ -7,7 +7,7 @@ import { expireApprovals } from "../guard/api";
 import type { NewEvent } from "../logs/api";
 import { onGrantChanged, onMemberDemoted, onMemberRemoved } from "../orgs/api";
 import { listAcpModels } from "./acp-models";
-import { createProbeLaunch, type RunDeps, type RunMember } from "./launch";
+import { createProbeLaunch, type RunCandidate, type RunDeps, type RunMember } from "./launch";
 import {
   setHalted as halt,
   isHalted as halted,
@@ -49,6 +49,7 @@ export async function startRun(
     model?: string;
     taskId?: string;
     member?: RunMember;
+    candidate?: RunCandidate;
     reuseWorktreeOf?: string;
     attempt?: number;
     batchId?: string;

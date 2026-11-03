@@ -9,6 +9,7 @@ import type { Adapter, RunContext } from "./adapter";
 import { runAgy } from "./agy";
 import { runApi } from "./api-lane";
 import { createBreaker, defaultLimits } from "./breaker";
+import type { RunCandidate } from "./launch";
 import { createLaunch, inProcessLaunch, type Launch, type RunDeps, type RunMember } from "./launch";
 import { pidIdentity } from "./orphans";
 import { endState } from "./outcome";
@@ -35,6 +36,7 @@ export interface StartInput {
   model?: string;
   taskId?: string;
   member?: RunMember;
+  candidate?: RunCandidate;
   reuseWorktreeOf?: string;
   attempt?: number;
   batchId?: string;
@@ -223,10 +225,11 @@ async function prepare(
 ): Promise<Launch | { failed: string }> {
   try {
     const reuse = input.reuseWorktreeOf ? worktreeOf(db, input.reuseWorktreeOf) : undefined;
+    const who = input.member ?? input.candidate;
     const launch =
       spec.lane === "api"
         ? inProcessLaunch(input.repo)
-        : await createLaunch(db, deps, spec, input.id, input.repo, input.member, reuse);
+        : await createLaunch(db, deps, spec, input.id, input.repo, who, reuse);
     setStarting(db, input.id, launch.worktree, launch.branch);
     return launch;
   } catch (err) {

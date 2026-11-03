@@ -1,5 +1,10 @@
 import type { Database } from "bun:sqlite";
-import { type Engine, QUOTA_PROVIDER } from "../../../shared/router";
+import {
+  type Difficulty,
+  type Engine,
+  QUOTA_PROVIDER,
+  type TaskType,
+} from "../../../shared/router";
 import { type AgentView, listAgents } from "../agents/api";
 import { contextForMember, effective } from "../policies/api";
 import { ensureProfile } from "../profiles/api";
@@ -95,4 +100,45 @@ export async function route(
       return { engine, score, reasons };
     })
     .sort((a, b) => b.score - a.score);
+}
+
+// Linked, logged in and with no exhausted quota window: what a new run could start on right now.
+export async function readyRuntimes(db: Database, deps: RouteDeps = {}): Promise<Set<string>> {
+  const agents = await (deps.agents ?? (() => listAgents(db)))();
+  const quota = await probeQuota(db);
+  return new Set(
+    agents
+      .filter((a) => a.enabled && a.loggedIn !== false)
+      .filter((a) => !windowsOf(quota, a.id).some((used) => used >= 100))
+      .map((a) => a.id),
+  );
+}
+
+// For callers with no member to route for (hiring candidates): one engine per ready runtime, best first.
+export async function rankEngines(
+  db: Database,
+  input: { orgId: string; difficulty: Difficulty; taskType: TaskType | null },
+  deps: RouteDeps = {},
+): Promise<Engine[]> {
+  const ready = await readyRuntimes(db, deps);
+  const allowed = effective(db, { orgId: input.orgId }, "router.allowedRuntimes").value;
+  const quota = await probeQuota(db);
+  const stats = learnedStats(db, Date.now() - LEARN_WINDOW_MS);
+  return [...ready]
+    .filter((runtime) => allowed === null || allowed.includes(runtime))
+    .map((runtime) => {
+      const engine: Engine = { runtime, model: null };
+      const used = windowsOf(quota, runtime);
+      const score = scoreEngine({
+        engine,
+        primary: false,
+        triage: { difficulty: input.difficulty },
+        price: priceOf(db, engine),
+        headroom: used.length === 0 ? null : 1 - Math.max(...used) / 100,
+        stat: statOf(stats, engine, input.taskType),
+      });
+      return { engine, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .map((r) => r.engine);
 }

@@ -42,7 +42,15 @@ function wakeProject(db: Database, wake: WakeRow): string | null {
 }
 
 function scopesFor(db: Database, member: MemberRow): TokenScope[] {
-  const scopes: TokenScope[] = ["report", "guard_hook", "board", "chat"];
+  const scopes: TokenScope[] = [
+    "report",
+    "guard_hook",
+    "board",
+    "chat",
+    "hiring",
+    "profile",
+    "policy",
+  ];
   if (managerPositionsOf(db, member.id).length > 0) scopes.push("approvals_decide");
   return scopes;
 }

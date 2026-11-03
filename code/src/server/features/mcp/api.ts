@@ -1,6 +1,13 @@
 import type { Database } from "bun:sqlite";
 import { createHandler, type McpDeps } from "./server";
-import { mint, type RunIdentity, revoke, type TokenScope, verify } from "./tokens";
+import {
+  mint,
+  type RunIdentity,
+  revoke,
+  type TokenHolder,
+  type TokenScope,
+  verify,
+} from "./tokens";
 
 export type { McpDeps, TokenScope };
 
@@ -8,9 +15,9 @@ export function mintRunToken(
   db: Database,
   runId: string,
   scopes: TokenScope[],
-  member?: { memberId: string; orgId: string },
+  holder?: TokenHolder,
 ): string {
-  return mint(db, runId, scopes, member);
+  return mint(db, runId, scopes, holder);
 }
 
 export function verifyRunToken(db: Database, token: string): RunIdentity | null {

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import type { WakeupView } from "../../../shared/heartbeat";
+import type { WakeReason, WakeupView } from "../../../shared/heartbeat";
 import { getTask, onTaskChange } from "../board/api";
 import { channelAccess, getChannel, onMessage } from "../chat/api";
 import { triageWake } from "../laya/api";
@@ -8,7 +8,7 @@ import { projectAccess } from "../orgs/api";
 import { isHalted, onRunEvent, type RunDeps } from "../runtimes/api";
 import { type ExecDeps, runPending, settleRun, sweepEnded } from "./executor";
 import { failStartedWakes, listWakeups as list } from "./repo";
-import { dueSchedules, onChat, onTask, runNow } from "./triggers";
+import { dueSchedules, onChat, onTask, recordWake, runNow } from "./triggers";
 
 export interface HeartbeatDeps extends ExecDeps {
   runDeps: RunDeps;
@@ -77,6 +77,19 @@ export function wakeNow(db: Database, memberId: string, causedBy: string, taskId
   const id = runNow(db, memberId, causedBy, taskId);
   for (const kick of kickers) kick();
   return id;
+}
+
+// For wakes that belong to no task or channel, like the hiring ones. Quietly nothing for a human,
+// a paused agent or one over its hourly cap, same as every other trigger.
+export function wakeFor(
+  db: Database,
+  memberId: string,
+  reason: WakeReason,
+  detail: object,
+  causedBy: string,
+): void {
+  recordWake(db, { memberId, reason, detail, causedBy });
+  for (const kick of kickers) kick();
 }
 
 function visibleChannel(db: Database, w: WakeupView, viewerId: string): WakeupView {

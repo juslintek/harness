@@ -13,7 +13,7 @@ const spec: RoleSpec = {
 };
 
 const deps: HiringDeps = {
-  pickEngines: () => [{ runtime: "claude", model: null }],
+  pickEngines: () => Promise.resolve([{ runtime: "claude", model: null }]),
   engineReady: () => true,
   startInterview: () => {},
   wake: () => {},

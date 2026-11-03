@@ -40,6 +40,20 @@ export interface RunMember {
   projectId?: string | undefined;
 }
 
+// An interview run has no member: its token carries the candidate id and only the interview scope.
+export interface RunCandidate {
+  candidateId: string;
+  orgId: string;
+}
+
+const CANDIDATE_SCOPES: TokenScope[] = ["report", "guard_hook", "interview"];
+
+function tokenFor(db: Database, runId: string, who: RunMember | RunCandidate | undefined): string {
+  if (!who) return mintRunToken(db, runId, ["report", "guard_hook"]);
+  if ("candidateId" in who) return mintRunToken(db, runId, CANDIDATE_SCOPES, who);
+  return mintRunToken(db, runId, who.scopes, who);
+}
+
 export interface Launch {
   worktree: string | null;
   branch: string | null;
@@ -78,7 +92,7 @@ export async function createLaunch(
   spec: AgentSpec,
   runId: string,
   repo: string,
-  member?: RunMember,
+  member?: RunMember | RunCandidate,
   reuse?: { worktree: string; branch: string },
 ): Promise<Launch> {
   // srt's sandbox profile matches resolved paths only, so a home behind a symlink (macOS /var)
@@ -90,9 +104,7 @@ export async function createLaunch(
     : await createWorktree(repo, runId, home);
   const branch = await defaultBranch(repo);
   const runDir = join(home, "runs", runId);
-  const token = member
-    ? mintRunToken(db, runId, member.scopes, member)
-    : mintRunToken(db, runId, ["report", "guard_hook"]);
+  const token = tokenFor(db, runId, member);
   const codexHome = spec.id === "codex" ? await prepareCodexHome(runDir, codexRules()) : null;
   const settingsPath = await writeSrtSettings({
     runDir,
@@ -107,7 +119,7 @@ export async function createLaunch(
     preset: "dev",
     weakerNetworkIsolation: spec.weakerNetworkIsolation,
     codexHome,
-    readOnlyWorktree: member?.readOnly === true,
+    readOnlyWorktree: member !== undefined && ("candidateId" in member || member.readOnly === true),
   });
   const tmp = runTmpDir(runDir);
   const base = `http://127.0.0.1:${deps.port}`;

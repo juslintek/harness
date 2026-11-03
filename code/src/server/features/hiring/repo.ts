@@ -178,3 +178,12 @@ export function teamHasSpecialty(db: Database, teamId: string, specialty: string
       .get(teamId, specialty) !== null
   );
 }
+
+export function teamIdsOf(db: Database, memberId: string): string[] {
+  return db
+    .query<{ team_id: string }, [string]>(
+      "SELECT team_id FROM team_members WHERE member_id = ? ORDER BY team_id",
+    )
+    .all(memberId)
+    .map((r) => r.team_id);
+}

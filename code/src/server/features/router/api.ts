@@ -1,10 +1,19 @@
 import type { Database } from "bun:sqlite";
-import { route } from "./candidates";
+import { rankEngines, readyRuntimes, route } from "./candidates";
 import { startWatchdog } from "./failover";
 import { estimateCostUsd, priceOf, refreshRegistry, registryStale } from "./registry";
 import { onTriaged, startTriage, triageOf } from "./triage";
 
-export { estimateCostUsd, onTriaged, priceOf, refreshRegistry, route, triageOf };
+export {
+  estimateCostUsd,
+  onTriaged,
+  priceOf,
+  rankEngines,
+  readyRuntimes,
+  refreshRegistry,
+  route,
+  triageOf,
+};
 
 const REFRESH_EVERY_MS = 24 * 60 * 60 * 1000;
 

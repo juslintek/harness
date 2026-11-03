@@ -5,7 +5,7 @@ import { setPolicy } from "../policies/api";
 import { submitCard } from "../profiles/api";
 import { advance, decide, getHire, pass, score } from "./api";
 
-function atDeciding() {
+async function atDeciding() {
   const w = hiringWorld();
   const rev = w.agent("rev1");
   setPolicy(w.db, {
@@ -15,7 +15,7 @@ function atDeciding() {
     value: "human",
     setBy: "u1",
   });
-  const hire = w.file(rev.id);
+  const hire = await w.file(rev.id);
   w.answerAll(hire);
   for (const r of getHire(w.db, hire.id)?.reviewers ?? []) pass(w.db, w.deps, hire.id, r.memberId);
   for (const c of hire.candidates) {
@@ -33,8 +33,8 @@ function atDeciding() {
   return { w, rev, hire, pick: hire.candidates[0]?.id as string };
 }
 
-test("only an admin of the request's org, or the woken manager, may decide", () => {
-  const { w, rev, hire, pick } = atDeciding();
+test("only an admin of the request's org, or the woken manager, may decide", async () => {
+  const { w, rev, hire, pick } = await atDeciding();
   const ask = (decidedBy: string) =>
     decide(w.db, w.deps, { requestId: hire.id, candidateId: pick, decidedBy, reason: "" });
   const refused = { ok: false, reason: "not allowed to decide" };
@@ -62,8 +62,8 @@ test("only an admin of the request's org, or the woken manager, may decide", () 
   expect(ask(w.boss.id).ok).toBe(true);
 });
 
-test("a human admin of the org may decide", () => {
-  const { w, hire, pick } = atDeciding();
+test("a human admin of the org may decide", async () => {
+  const { w, hire, pick } = await atDeciding();
   const result = decide(w.db, w.deps, {
     requestId: hire.id,
     candidateId: pick,
@@ -73,7 +73,7 @@ test("a human admin of the org may decide", () => {
   expect(result.ok).toBe(true);
 });
 
-test("after a scoring timeout an unreviewed candidate cannot beat a reviewed one", () => {
+test("after a scoring timeout an unreviewed candidate cannot beat a reviewed one", async () => {
   const w = hiringWorld();
   const rev = w.agent("rev1");
   setPolicy(w.db, {
@@ -83,7 +83,7 @@ test("after a scoring timeout an unreviewed candidate cannot beat a reviewed one
     value: "auto",
     setBy: "u1",
   });
-  const hire = w.file(rev.id);
+  const hire = await w.file(rev.id);
   const [reviewed, unreviewed] = hire.candidates;
   // The reviewed one has the weaker system score (no specialty match) on purpose.
   submitCard(w.db, reviewed?.profile.id as string, {

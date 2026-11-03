@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { getTask } from "../board/api";
 import { getChannel } from "../chat/api";
 import { directReportsOf, getMember, getOrg, listPositions, type MemberRow } from "../orgs/api";
+import { describeHiring, profileHeader, teamLacksHints } from "./prompt-hiring";
 import type { WakeRow } from "./repo";
 
 const MAX_WAKES = 10;
@@ -50,13 +51,10 @@ function describe(db: Database, wake: WakeRow): string {
         ? "A person asked you to run now."
         : `A person asked you to run now on ${taskLabel(db, wake.taskId)}.`;
     case "hire_review":
-      return `You are asked to review a hire request: ${text}`;
     case "hire_decision":
-      return `A hire request you made was decided: ${text}`;
     case "onboarding":
-      return `You are new here: ${text}`;
     case "approval_resolved":
-      return `An approval you were waiting on was resolved: ${text}`;
+      return describeHiring(db, wake);
     case "policy_review":
       return `You are asked to review a policy change: ${text}`;
   }
@@ -81,5 +79,6 @@ export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[]): 
   }.`;
   const shown = wakes.slice(0, MAX_WAKES).map((w) => `- ${describe(db, w)}`);
   if (wakes.length > MAX_WAKES) shown.push(`- and ${wakes.length - MAX_WAKES} more`);
-  return `${who}\n\n${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}${managerNotice(db, member)}\n\n${INSTRUCTION}`;
+  const woken = `${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}${teamLacksHints(db, member, wakes)}`;
+  return `${profileHeader(db, member)}${who}\n\n${woken}${managerNotice(db, member)}\n\n${INSTRUCTION}`;
 }

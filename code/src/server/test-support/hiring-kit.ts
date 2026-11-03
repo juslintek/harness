@@ -54,7 +54,7 @@ export interface HiringWorld {
   wakes: Wake[];
   clock: { now: number };
   agent: (handle: string, inTeam?: boolean) => MemberRow;
-  file: (requestedBy?: string) => HireView;
+  file: (requestedBy?: string) => Promise<HireView>;
   // Every candidate answers all its open questions; only the ones in `withCard` submit a valid card.
   answerAll: (hire: HireView, withCard?: number[]) => void;
 }
@@ -66,10 +66,12 @@ function stubDeps(
 ): HiringDeps {
   return {
     pickEngines: ({ max }) =>
-      [
-        { runtime: "claude", model: null },
-        { runtime: "codex", model: null },
-      ].slice(0, max),
+      Promise.resolve(
+        [
+          { runtime: "claude", model: null },
+          { runtime: "codex", model: null },
+        ].slice(0, max),
+      ),
     engineReady: () => true,
     startInterview: (candidateId, questionIds) => interviews.push({ candidateId, questionIds }),
     wake: (memberId, reason, detail, causedBy) =>
@@ -105,7 +107,7 @@ export function hiringWorld(): HiringWorld {
   const wakes: Wake[] = [];
   const clock = { now: 1_000_000 };
   const deps = stubDeps(interviews, wakes, clock);
-  const file = (requestedBy = boss.id): HireView =>
+  const file = (requestedBy = boss.id): Promise<HireView> =>
     fileRequest(db, deps, { orgId: org.id, teamId, requestedBy, spec });
   const answerAll = (hire: HireView, withCard: number[] = [0, 1]): void => {
     hire.candidates.forEach((c, i) => {

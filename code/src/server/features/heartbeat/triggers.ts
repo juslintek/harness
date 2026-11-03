@@ -88,7 +88,7 @@ export function staleAssignment(
 }
 
 // Agents only, never for their own doing, never while paused and never where they cannot work.
-function recordWake(db: Database, input: WakeInput): string | null {
+export function recordWake(db: Database, input: WakeInput): string | null {
   const member = getMember(db, input.memberId);
   if (member?.kind !== "agent" || member.paused) return null;
   if (input.causedBy === member.id || !mayWork(db, member.id, input)) return null;

@@ -48,7 +48,15 @@ test("assigning a task to agent B creates one assignment wake and one run with m
   expect(wakes(k.db, b.id).map((w) => w.reason)).toEqual(["assignment"]);
   expect(k.seen).toHaveLength(1);
   expect(k.seen[0]).toMatchObject({ memberId: b.id });
-  expect(k.seen[0]?.scopes).toEqual(["report", "guard_hook", "board", "chat"]);
+  expect(k.seen[0]?.scopes).toEqual([
+    "report",
+    "guard_hook",
+    "board",
+    "chat",
+    "hiring",
+    "profile",
+    "policy",
+  ]);
   expect(runsOf(k, b.id)).toBe(1);
 });
 
@@ -283,9 +291,9 @@ test("a wake with reason onboarding can be stored and described", () => {
     memberId: dev.id,
     reason: "onboarding",
     causedBy: null,
-    detail: { excerpt: "read the handbook" },
+    detail: { requestId: "gone" },
   });
   const stored = pendingWakes(k.db, dev.id);
   expect(stored.map((w) => w.reason)).toEqual(["onboarding"]);
-  expect(buildPrompt(k.db, dev, stored)).toContain("read the handbook");
+  expect(buildPrompt(k.db, dev, stored)).toContain("You are new here");
 });

@@ -4,9 +4,9 @@ import { addAgentMember, createOrg, listMembers } from "../orgs/api";
 import { advance, ask, candidateRunEnded, getHire, pass, score } from "./api";
 import { systemScore } from "./score";
 
-test("fileRequest proposes two candidates on distinct runtimes with base questions and starts two interviews", () => {
+test("fileRequest proposes two candidates on distinct runtimes with base questions and starts two interviews", async () => {
   const w = hiringWorld();
-  const hire = w.file();
+  const hire = await w.file();
   expect(hire.status).toBe("interviewing");
   expect(hire.candidates.map((c) => c.profile.runtime)).toEqual(["claude", "codex"]);
   expect(hire.candidates[0]?.profile.persona).toBe(
@@ -22,10 +22,10 @@ test("fileRequest proposes two candidates on distinct runtimes with base questio
   expect(w.interviews[0]?.questionIds).toEqual(hire.questions.map((q) => q.id));
 });
 
-test("both answered, followups open and two reviewers are woken", () => {
+test("both answered, followups open and two reviewers are woken", async () => {
   const w = hiringWorld();
   w.agent("rev1");
-  const hire = w.file();
+  const hire = await w.file();
   w.answerAll(hire);
   const now = getHire(w.db, hire.id);
   expect(now?.status).toBe("followups");
@@ -36,18 +36,18 @@ test("both answered, followups open and two reviewers are woken", () => {
   expect(woken[0]?.detail).toEqual({ requestId: hire.id, phase: "followups" });
 });
 
-test("no agent reviewers skips follow-ups and scoring straight to deciding", () => {
+test("no agent reviewers skips follow-ups and scoring straight to deciding", async () => {
   const w = hiringWorld();
-  const hire = w.file("user:u1");
+  const hire = await w.file("user:u1");
   w.db.query("DELETE FROM team_members WHERE team_id = ?").run(w.teamId);
   w.answerAll(hire);
   expect(getHire(w.db, hire.id)?.status).toBe("deciding");
 });
 
-test("a follow-up moves to answering and restarts that interview with only the new question", () => {
+test("a follow-up moves to answering and restarts that interview with only the new question", async () => {
   const w = hiringWorld();
   const rev = w.agent("rev1");
-  const hire = w.file();
+  const hire = await w.file();
   w.answerAll(hire);
   const first = hire.candidates[0]?.id as string;
   const second = hire.candidates[1]?.id as string;
@@ -74,10 +74,10 @@ test("a follow-up moves to answering and restarts that interview with only the n
   ).toThrow();
 });
 
-test("one question per reviewer per candidate", () => {
+test("one question per reviewer per candidate", async () => {
   const w = hiringWorld();
   w.agent("rev1");
-  const hire = w.file();
+  const hire = await w.file();
   w.answerAll(hire);
   const input = {
     requestId: hire.id,
@@ -89,7 +89,7 @@ test("one question per reviewer per candidate", () => {
   expect(() => ask(w.db, w.deps, input)).toThrow("already asked this candidate");
 });
 
-test("people from another org can neither ask nor score", () => {
+test("people from another org can neither ask nor score", async () => {
   const w = hiringWorld();
   w.agent("rev1");
   const other = createOrg(w.db, {
@@ -105,7 +105,7 @@ test("people from another org can neither ask nor score", () => {
     displayName: "x",
     specialties: [],
   });
-  const hire = w.file();
+  const hire = await w.file();
   w.answerAll(hire);
   const candidateId = hire.candidates[0]?.id as string;
   expect(() =>
@@ -121,10 +121,10 @@ test("people from another org can neither ask nor score", () => {
   );
 });
 
-test("a phase older than 20 minutes moves on at the next tick", () => {
+test("a phase older than 20 minutes moves on at the next tick", async () => {
   const w = hiringWorld();
   w.agent("rev1");
-  const hire = w.file();
+  const hire = await w.file();
   w.answerAll(hire);
   advance(w.db, w.deps, hire.id);
   expect(getHire(w.db, hire.id)?.status).toBe("followups");
@@ -133,9 +133,9 @@ test("a phase older than 20 minutes moves on at the next tick", () => {
   expect(getHire(w.db, hire.id)?.status).toBe("scoring");
 });
 
-test("every candidate failing rejects the request", () => {
+test("every candidate failing rejects the request", async () => {
   const w = hiringWorld();
-  const hire = w.file();
+  const hire = await w.file();
   for (const c of hire.candidates) candidateRunEnded(w.db, w.deps, c.id, false);
   const done = getHire(w.db, hire.id);
   expect(done?.status).toBe("rejected");

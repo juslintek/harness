@@ -18,6 +18,7 @@ test("minted token verifies, revoked does not, random string does not", () => {
     scopes: ["report"],
     memberId: null,
     orgId: null,
+    candidateId: null,
   });
   expect(verifyRunToken(db, "not-a-token")).toBeNull();
   revokeRunTokens(db, "run-1");

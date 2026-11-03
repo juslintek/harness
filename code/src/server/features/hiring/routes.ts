@@ -43,7 +43,7 @@ function writeRoutes(db: Database, app: Hono<AuthEnv>): void {
     const deps = hiringDeps();
     if (!deps) return unavailable(c);
     const { teamId, spec, maxCandidates } = body;
-    const hire = fileRequest(db, deps, {
+    const hire = await fileRequest(db, deps, {
       orgId: who.orgId,
       teamId,
       requestedBy: who.me.id,

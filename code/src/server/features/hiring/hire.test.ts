@@ -36,11 +36,11 @@ const firstCandidate = (w: HiringWorld, hire: HireView): string => {
   return id;
 };
 
-test("auto policy hires the best candidate under the manager and wakes the new member", () => {
+test("auto policy hires the best candidate under the manager and wakes the new member", async () => {
   const w = hiringWorld();
   w.agent("rev1");
   policy(w, "auto");
-  const hire = w.file();
+  const hire = await w.file();
   toDeciding(w, hire, [
     [
       [4, 4, 3],
@@ -78,10 +78,10 @@ test("auto policy hires the best candidate under the manager and wakes the new m
   });
 });
 
-test("auto policy rejects everyone when nobody reaches the minimum", () => {
+test("auto policy rejects everyone when nobody reaches the minimum", async () => {
   const w = hiringWorld();
   policy(w, "auto");
-  const hire = w.file();
+  const hire = await w.file();
   toDeciding(w, hire, [
     [
       [1, 1, 1],
@@ -92,10 +92,10 @@ test("auto policy rejects everyone when nobody reaches the minimum", () => {
   expect(findMemberByHandle(w.db, w.orgId, "backend-engineer")).toBeNull();
 });
 
-test("manager policy wakes the manager, human policy waits", () => {
+test("manager policy wakes the manager, human policy waits", async () => {
   const w = hiringWorld();
   const rev = w.agent("rev1");
-  const hire = w.file(rev.id);
+  const hire = await w.file(rev.id);
   toDeciding(w, hire, []);
   expect(getHire(w.db, hire.id)?.status).toBe("deciding");
   const asked = w.wakes.filter((x) => x.reason === "hire_decision");
@@ -110,16 +110,16 @@ test("manager policy wakes the manager, human policy waits", () => {
 
   const other = hiringWorld();
   policy(other, "human");
-  const waiting = other.file();
+  const waiting = await other.file();
   toDeciding(other, waiting, []);
   expect(getHire(other.db, waiting.id)?.status).toBe("deciding");
   expect(other.wakes.some((x) => x.reason === "hire_decision")).toBe(false);
 });
 
-test("two decide calls make one member and the second is told it was already decided", () => {
+test("two decide calls make one member and the second is told it was already decided", async () => {
   const w = hiringWorld();
   policy(w, "human");
-  const hire = w.file();
+  const hire = await w.file();
   toDeciding(w, hire, []);
   const input = {
     requestId: hire.id,
@@ -138,9 +138,9 @@ test("two decide calls make one member and the second is told it was already dec
   expect(count?.n).toBe(1);
 });
 
-test("a decision before the scoring is done is refused", () => {
+test("a decision before the scoring is done is refused", async () => {
   const w = hiringWorld();
-  const hire = w.file();
+  const hire = await w.file();
   const result = decide(w.db, w.deps, {
     requestId: hire.id,
     candidateId: null,
@@ -150,11 +150,11 @@ test("a decision before the scoring is done is refused", () => {
   expect(result).toEqual({ ok: false, reason: "not ready to decide" });
 });
 
-test("a clashing handle gets a number", () => {
+test("a clashing handle gets a number", async () => {
   const w = hiringWorld();
   w.agent("backend-engineer");
   policy(w, "human");
-  const hire = w.file();
+  const hire = await w.file();
   toDeciding(w, hire, []);
   decide(w.db, w.deps, {
     requestId: hire.id,
@@ -165,11 +165,11 @@ test("a clashing handle gets a number", () => {
   expect(findMemberByHandle(w.db, w.orgId, "backend-engineer-2")).not.toBeNull();
 });
 
-test("the onboarding pack names the manager and the team projects", () => {
+test("the onboarding pack names the manager and the team projects", async () => {
   const w = hiringWorld();
   policy(w, "human");
   createProject(w.db, { orgId: w.orgId, teamId: w.teamId, key: "WEB", name: "Website" });
-  const hire = w.file();
+  const hire = await w.file();
   toDeciding(w, hire, []);
   decide(w.db, w.deps, {
     requestId: hire.id,
@@ -192,9 +192,9 @@ test("teamLacks is true for a specialty nobody lists", () => {
   expect(teamLacks(w.db, w.teamId, "database")).toBe(false);
 });
 
-test("candidateOfRun finds the candidate a run token was minted for", () => {
+test("candidateOfRun finds the candidate a run token was minted for", async () => {
   const w = hiringWorld();
-  const hire = w.file();
+  const hire = await w.file();
   const candidateId = firstCandidate(w, hire);
   w.db
     .query(

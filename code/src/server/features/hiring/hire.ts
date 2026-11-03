@@ -33,7 +33,12 @@ type WakeReason = "hire_review" | "hire_decision" | "onboarding" | "approval_res
 
 export interface HiringDeps {
   // Distinct runtimes, best first; the router decides what best means.
-  pickEngines(input: { orgId: string; teamId: string; spec: RoleSpec; max: number }): Engine[];
+  pickEngines(input: {
+    orgId: string;
+    teamId: string;
+    spec: RoleSpec;
+    max: number;
+  }): Promise<Engine[]>;
   engineReady(engine: Engine): boolean;
   startInterview(candidateId: string, questionIds: string[]): void;
   wake(memberId: string, reason: WakeReason, detail: object, causedBy: string): void;
@@ -59,14 +64,19 @@ function baseQuestions(spec: RoleSpec): string[] {
   ];
 }
 
-function pickAllowed(db: Database, deps: HiringDeps, input: FileInput, max: number): Engine[] {
+async function pickAllowed(
+  db: Database,
+  deps: HiringDeps,
+  input: FileInput,
+  max: number,
+): Promise<Engine[]> {
   const allowed = effective(
     db,
     { orgId: input.orgId, teamId: input.teamId },
     "router.allowedRuntimes",
   ).value;
   const picked: Engine[] = [];
-  for (const e of deps.pickEngines({
+  for (const e of await deps.pickEngines({
     orgId: input.orgId,
     teamId: input.teamId,
     spec: input.spec,
@@ -78,11 +88,15 @@ function pickAllowed(db: Database, deps: HiringDeps, input: FileInput, max: numb
   return picked.slice(0, max);
 }
 
-export function fileRequest(db: Database, deps: HiringDeps, input: FileInput): HireView {
+export async function fileRequest(
+  db: Database,
+  deps: HiringDeps,
+  input: FileInput,
+): Promise<HireView> {
   if (!listTeams(db, input.orgId).some((t) => t.id === input.teamId)) {
     throw new DomainError("unknown team");
   }
-  const engines = pickAllowed(db, deps, input, input.maxCandidates ?? 2);
+  const engines = await pickAllowed(db, deps, input, input.maxCandidates ?? 2);
   if (engines.length === 0) throw new DomainError("no engine is available for this role");
   const { spec } = input;
   const persona = `You are a ${spec.title}. Focus: ${spec.summary}. Must have: ${spec.mustHave.join(", ")}.`;

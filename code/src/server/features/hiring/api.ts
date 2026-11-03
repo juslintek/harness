@@ -1,21 +1,34 @@
 import type { Database } from "bun:sqlite";
 import type { HireView } from "../../../shared/hiring";
+import { type HireDigest, hireDigest } from "./digest";
 import { advance, ask, candidateRunEnded, pass, recordAnswer, score } from "./flow";
-import { decide, fileRequest, type HiringDeps } from "./hire";
-import { candidateOfRun, getHire, listHeads, openRequestIds, teamHasSpecialty } from "./repo";
+import { approverOf, decide, fileRequest, type HiringDeps } from "./hire";
+import {
+  candidateOfRun,
+  getCandidate,
+  getHire,
+  listHeads,
+  openRequestIds,
+  teamHasSpecialty,
+  teamIdsOf,
+} from "./repo";
 
-export type { HiringDeps };
+export type { HireDigest, HiringDeps };
 export {
   advance,
+  approverOf,
   ask,
   candidateOfRun,
   candidateRunEnded,
   decide,
   fileRequest,
+  getCandidate,
   getHire,
+  hireDigest,
   pass,
   recordAnswer,
   score,
+  teamIdsOf,
 };
 
 const TICK_MS = 60_000;

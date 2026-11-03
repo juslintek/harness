@@ -1,4 +1,61 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ToolEnv } from "./tools-kit";
+import { z } from "zod";
+import { getCandidate } from "../hiring/api";
+import { findMemberByHandle, getMember } from "../orgs/api";
+import { ensureProfile, submitCard } from "../profiles/api";
+import { defineCandidateTool, defineTool, fail, type ToolEnv } from "./tools-kit";
 
-export function registerProfilesTools(_server: McpServer, _env: ToolEnv): void {}
+const cardShape = { card: z.record(z.string(), z.unknown()) };
+const CARD_DESCRIPTION =
+  "Submit your self-description card; invalid fields come back as text so you can retry";
+
+function submit(db: ToolEnv["db"], profileId: string, card: unknown): string {
+  const result = submitCard(db, profileId, card);
+  return result.ok ? "ok" : fail(`invalid card: ${result.issues.join("; ")}`);
+}
+
+export function registerProfilesTools(server: McpServer, env: ToolEnv): void {
+  defineTool(
+    server,
+    env,
+    {
+      name: "profile_get",
+      scope: "profile",
+      description: "Your own profile, or a teammate's by handle: card, runtime, model and skills",
+      shape: { handle: z.string().optional() },
+    },
+    (ctx, a) => {
+      const target = a.handle
+        ? findMemberByHandle(ctx.db, ctx.orgId, a.handle.replace(/^@/, ""))
+        : getMember(ctx.db, ctx.memberId);
+      if (target?.kind !== "agent") return fail("no agent with that handle");
+      const { runtime, model, skills, card } = ensureProfile(ctx.db, target.id);
+      return { handle: target.handle, runtime, model, skills, card };
+    },
+  );
+  // One tool name serves both callers, so the token decides which profile it writes.
+  if (env.identity.candidateId !== null) {
+    defineCandidateTool(
+      server,
+      env,
+      { name: "profile_card_submit", description: CARD_DESCRIPTION, shape: cardShape },
+      (ctx, a) => {
+        const cand = getCandidate(ctx.db, ctx.candidateId);
+        const open = cand && !["failed", "hired", "rejected"].includes(cand.status);
+        return open ? submit(ctx.db, cand.profileId, a.card) : fail("interview is closed");
+      },
+    );
+    return;
+  }
+  defineTool(
+    server,
+    env,
+    {
+      name: "profile_card_submit",
+      scope: "profile",
+      description: CARD_DESCRIPTION,
+      shape: cardShape,
+    },
+    (ctx, a) => submit(ctx.db, ensureProfile(ctx.db, ctx.memberId).id, a.card),
+  );
+}
