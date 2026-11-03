@@ -20,6 +20,7 @@ import {
 import { reapRuns } from "./orphans";
 import { getRun as get, listRuns as list, listLiveRuns, type RunRow } from "./runs-repo";
 import { scratchRepo as scratch } from "./scratch";
+import { sweepScratchCheckouts } from "./scratch-checkout";
 import { defaultBranch as defaultBranchOf } from "./worktree";
 
 export type { RunDeps, RunMember } from "./launch";
@@ -139,6 +140,10 @@ export function shutdownRuns(db: Database, graceMs?: number): Promise<void> {
 export function recoverRuns(db: Database): void {
   reapRuns(db);
   expireApprovals(db, Number.MAX_SAFE_INTEGER);
+}
+
+export function sweepStaleScratch(home: string): Promise<void> {
+  return sweepScratchCheckouts(home);
 }
 
 export async function refreshAcpModels(

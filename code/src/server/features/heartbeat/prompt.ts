@@ -72,7 +72,7 @@ const MANAGER_WORKFLOW = [
   "Call `team_roster` to see your reports, their specialties and their open work.",
   "Split the task into pieces and call `task_delegate` once per piece. If nobody fits the specialty a piece needs, call `hire_request`.",
   "End your run. You are woken when a subtask moves.",
-  'When a subtask is `in_review`, check out its branch in your scratch checkout (`git -C "$HARNESS_SCRATCH" checkout --detach <branch>`), run the tests there, then call `task_estimate` with kind `reviewer` based on `git diff --stat main..<branch>`. Move the subtask to `done`, or back to `in_progress` with a `task_comment` saying what to fix.',
+  'When a subtask is `in_review`, check out its branch in your scratch checkout (`git -C "$HARNESS_SCRATCH" checkout --detach <branch>`), run the tests there, then call `task_estimate` with kind `reviewer` based on `git diff --stat "$HARNESS_DEFAULT_BRANCH"..<branch>`. Move the subtask to `done`, or back to `in_progress` with a `task_comment` saying what to fix.',
   "When all subtasks are done, move the parent task to `done`.",
 ];
 

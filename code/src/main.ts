@@ -11,7 +11,12 @@ import { startHeartbeat } from "./server/features/heartbeat/api";
 import { startHiring } from "./server/features/hiring/api";
 import { wireHiring } from "./server/features/hiring/wiring";
 import { startRouter } from "./server/features/router/api";
-import { recoverRuns, shutdownRuns, wireRuntimes } from "./server/features/runtimes/api";
+import {
+  recoverRuns,
+  shutdownRuns,
+  sweepStaleScratch,
+  wireRuntimes,
+} from "./server/features/runtimes/api";
 import { startTracking } from "./server/features/tracking/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
@@ -31,6 +36,7 @@ wireChat(db);
 wireRuntimes();
 
 recoverRuns(db);
+await sweepStaleScratch(config.home);
 const app = createApp({
   db,
   home: config.home,

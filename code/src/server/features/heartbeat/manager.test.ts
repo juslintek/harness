@@ -36,6 +36,7 @@ test("manager prompt contains task_delegate and HARNESS_SCRATCH", () => {
   expect(prompt).toContain("`task_delegate`");
   expect(prompt).toContain('git -C "$HARNESS_SCRATCH" checkout --detach');
   expect(prompt).toContain("Your worktree is read-only on purpose.");
+  expect(prompt).toContain('"$HARNESS_DEFAULT_BRANCH"..<branch>');
 });
 
 test("manager run ending without a subtask gets one nudge wake; a second ending gets none", async () => {

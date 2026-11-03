@@ -8,7 +8,6 @@ import {
   listPositions,
   listProjects,
   type MemberRow,
-  managerPositionsOf,
   projectAccess,
   reportsTransitivelyTo,
 } from "../orgs/api";
@@ -17,9 +16,14 @@ import { defineTool, fail, type ToolCtx, type ToolEnv } from "./tools-kit";
 import { task } from "./tools-refs";
 import { recordPlannerEstimate } from "./tools-tracking";
 
-// Viewers and paused agents cannot take work, so they are neither listed nor delegated to.
+// A manager is whoever has direct reports (the same rule as the read-only run and the prompt),
+// flagged or not. Viewers and paused agents cannot take work, so they are neither listed nor
+// delegated to.
 function reportsOf(ctx: ToolCtx): MemberRow[] {
-  const mine = managerPositionsOf(ctx.db, ctx.memberId).map((p) => p.id);
+  if (directReportsOf(ctx.db, ctx.memberId).length === 0) return [];
+  const mine = listPositions(ctx.db, ctx.orgId)
+    .filter((p) => p.memberId === ctx.memberId)
+    .map((p) => p.id);
   return listMembers(ctx.db, ctx.orgId).filter(
     (m) =>
       m.id !== ctx.memberId &&

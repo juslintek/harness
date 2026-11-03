@@ -101,6 +101,63 @@ async function scratchFor(
   return { path, gitDir: await worktreeAdminDir(path) };
 }
 
+interface RunEnvInput {
+  runDir: string;
+  runId: string;
+  token: string;
+  base: string;
+  codexHome: string | null;
+  treePath: string;
+  branch: string;
+  scratch: { path: string } | null;
+}
+
+function runEnv(deps: RunDeps, i: RunEnvInput): Record<string, string> {
+  const tmp = runTmpDir(i.runDir);
+  return scrubEnv(process.env, {
+    ...deps.agentEnv?.(i.runDir),
+    TMPDIR: tmp,
+    CLAUDE_CODE_TMPDIR: tmp,
+    ...(i.codexHome === null ? {} : { CODEX_HOME: i.codexHome }),
+    HARNESS_SCOPE_ROOT: i.treePath,
+    HARNESS_DEFAULT_BRANCH: i.branch,
+    HARNESS_HOOK_URL: `${i.base}/api/guard/hook`,
+    HARNESS_RUN_TOKEN: i.token,
+    HARNESS_RUN_ID: i.runId,
+    ...(i.scratch === null ? {} : { HARNESS_SCRATCH: i.scratch.path }),
+  });
+}
+
+interface SettingsInput {
+  spec: AgentSpec;
+  home: string;
+  runDir: string;
+  tree: { path: string; branch: string; gitCommonDir: string };
+  codexHome: string | null;
+  member: RunMember | RunCandidate | undefined;
+  scratch: { path: string; gitDir: string } | null;
+}
+
+async function writeRunSettings(i: SettingsInput): Promise<string> {
+  return writeSrtSettings({
+    runDir: i.runDir,
+    worktree: i.tree.path,
+    gitCommonDir: i.tree.gitCommonDir,
+    gitWorktreeDir: await worktreeAdminDir(i.tree.path),
+    branch: i.tree.branch,
+    agentId: i.spec.id,
+    harnessHome: i.home,
+    agentStateWrite: i.spec.stateWrite,
+    agentEgress: i.spec.egress,
+    preset: "dev",
+    weakerNetworkIsolation: i.spec.weakerNetworkIsolation,
+    codexHome: i.codexHome,
+    readOnlyWorktree:
+      i.member !== undefined && ("candidateId" in i.member || i.member.readOnly === true),
+    ...(i.scratch === null ? {} : { scratch: i.scratch }),
+  });
+}
+
 export async function createLaunch(
   db: Database,
   deps: RunDeps,
@@ -122,35 +179,25 @@ export async function createLaunch(
   const runDir = join(home, "runs", runId);
   const token = tokenFor(db, runId, member);
   const codexHome = spec.id === "codex" ? await prepareCodexHome(runDir, codexRules()) : null;
-  const settingsPath = await writeSrtSettings({
+  const settingsPath = await writeRunSettings({
+    spec,
+    home,
     runDir,
-    worktree: tree.path,
-    gitCommonDir: tree.gitCommonDir,
-    gitWorktreeDir: await worktreeAdminDir(tree.path),
-    branch: tree.branch,
-    agentId: spec.id,
-    harnessHome: home,
-    agentStateWrite: spec.stateWrite,
-    agentEgress: spec.egress,
-    preset: "dev",
-    weakerNetworkIsolation: spec.weakerNetworkIsolation,
+    tree,
     codexHome,
-    readOnlyWorktree: member !== undefined && ("candidateId" in member || member.readOnly === true),
-    ...(scratch === null ? {} : { scratch }),
+    member,
+    scratch,
   });
-  const tmp = runTmpDir(runDir);
   const base = `http://127.0.0.1:${deps.port}`;
-  const env = scrubEnv(process.env, {
-    ...deps.agentEnv?.(runDir),
-    TMPDIR: tmp,
-    CLAUDE_CODE_TMPDIR: tmp,
-    ...(codexHome === null ? {} : { CODEX_HOME: codexHome }),
-    HARNESS_SCOPE_ROOT: tree.path,
-    HARNESS_DEFAULT_BRANCH: branch,
-    HARNESS_HOOK_URL: `${base}/api/guard/hook`,
-    HARNESS_RUN_TOKEN: token,
-    HARNESS_RUN_ID: runId,
-    ...(scratch === null ? {} : { HARNESS_SCRATCH: scratch.path }),
+  const env = runEnv(deps, {
+    runDir,
+    runId,
+    token,
+    base,
+    codexHome,
+    treePath: tree.path,
+    branch,
+    scratch,
   });
   return {
     worktree: tree.path,

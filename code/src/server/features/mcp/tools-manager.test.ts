@@ -72,6 +72,24 @@ test("task_delegate to a report creates subtask, assignment, estimate, channel p
   expect(getTask(db, parent.id)?.status).toBe("in_progress");
 });
 
+test("a position without the manager flag but with a report can delegate and see a roster", async () => {
+  const w = world(db);
+  const lead = w.agent(w.a.id, "lead");
+  const dev = w.agent(w.a.id, "dev");
+  const boss = createPosition(db, { orgId: w.a.id, title: "Lead", memberId: lead.id });
+  createPosition(db, { orgId: w.a.id, title: "Dev", memberId: dev.id, reportsTo: boss.id });
+  const parent = createTask(db, { projectId: w.project.id, title: "Ship", createdBy: lead.id });
+  const token = tokenFor(db, lead.id, w.a.id);
+  const res = await call(server, token, "task_delegate", {
+    task: parent.number,
+    to: "dev",
+    title: "piece",
+  });
+  expect(res.isError).toBe(false);
+  const roster = JSON.parse((await call(server, token, "team_roster")).text) as unknown[];
+  expect(roster).toHaveLength(1);
+});
+
 test("task_delegate to a non-report is refused", async () => {
   const t = team();
   const parent = createTask(db, {

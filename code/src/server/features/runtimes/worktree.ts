@@ -9,7 +9,7 @@ export class NotAGitRepo extends Error {
   }
 }
 
-const RUN_ID = /^[0-9a-f-]{36}$/;
+export const RUN_ID: RegExp = /^[0-9a-f-]{36}$/;
 
 interface GitResult {
   code: number;
