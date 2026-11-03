@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { BudgetView } from "./budgets";
+import { type BudgetView, budgetViewSchema } from "./budgets";
 
 export type EstimateKind = "planner" | "reviewer";
 export type EstimateSource = "agent" | "human" | "laya_prior";
@@ -90,17 +90,6 @@ const memberReportSchema: z.ZodType<MemberReport> = z.object({
   tasksDone: z.number(),
   tools: z.array(z.object({ name: z.string(), count: z.number() })),
   stack: z.array(z.string()),
-});
-
-const budgetViewSchema: z.ZodType<BudgetView> = z.object({
-  id: z.string(),
-  scopeKind: z.enum(["org", "team", "member"]),
-  scopeId: z.string(),
-  monthlyUsd: z.number(),
-  spentUsd: z.number(),
-  ratio: z.number(),
-  state: z.enum(["ok", "warn", "paused"]),
-  unpriced: z.number(),
 });
 
 const quotaWindowSchema: z.ZodType<QuotaWindow> = z.object({

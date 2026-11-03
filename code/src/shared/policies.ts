@@ -101,3 +101,55 @@ export const policyExplainQuery: z.ZodType<PolicyExplainQuery> = z.strictObject(
   member: z.string().min(1).optional(),
   task: z.string().min(1).optional(),
 });
+
+export interface EffectivePolicy {
+  key: PolicyKey;
+  value?: unknown;
+  layer: Layer | "default";
+  targetId: string | null;
+  setBy: string | null;
+  chain: { layer: Layer; targetId: string; value?: unknown }[];
+}
+export const effectiveListSchema: z.ZodType<EffectivePolicy[]> = z.array(
+  z.object({
+    key: keyName,
+    value: z.unknown(),
+    layer: z.enum([...layers, "default"]),
+    targetId: z.string().nullable(),
+    setBy: z.string().nullable(),
+    chain: z.array(z.object({ layer: z.enum(layers), targetId: z.string(), value: z.unknown() })),
+  }),
+);
+
+export interface PolicyProposal {
+  id: string;
+  targetId: string;
+  key: PolicyKey;
+  value?: unknown;
+  reason: string;
+  proposedBy: string;
+  status: Status;
+  decisionReason: string | null;
+  createdAt: number;
+  reviews: { reviewerId: string; verdict: "approve" | "reject"; comment: string | null }[];
+}
+export const proposalListSchema: z.ZodType<PolicyProposal[]> = z.array(
+  z.object({
+    id: z.string(),
+    targetId: z.string(),
+    key: keyName,
+    value: z.unknown(),
+    reason: z.string(),
+    proposedBy: z.string(),
+    status: z.enum(["open", "approved", "rejected", "withdrawn"]),
+    decisionReason: z.string().nullable(),
+    createdAt: z.number(),
+    reviews: z.array(
+      z.object({
+        reviewerId: z.string(),
+        verdict: z.enum(["approve", "reject"]),
+        comment: z.string().nullable(),
+      }),
+    ),
+  }),
+);

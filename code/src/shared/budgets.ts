@@ -29,3 +29,16 @@ export const budgetBody: z.ZodType<BudgetBody> = z
     monthlyUsd: z.number().positive().finite(),
   })
   .strict();
+
+export const budgetViewSchema: z.ZodType<BudgetView> = z.object({
+  id: z.string(),
+  scopeKind: z.enum(budgetScopeKinds),
+  scopeId: z.string(),
+  monthlyUsd: z.number(),
+  spentUsd: z.number(),
+  ratio: z.number(),
+  state: z.enum(["ok", "warn", "paused"]),
+  unpriced: z.number(),
+});
+
+export const budgetListSchema: z.ZodType<BudgetView[]> = z.array(budgetViewSchema);
