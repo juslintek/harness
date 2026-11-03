@@ -16,7 +16,7 @@ import {
 } from "../orgs/api";
 import { effective } from "../policies/api";
 import { attachProfile, createProfile, getProfile } from "../profiles/api";
-import { insertQuestion } from "./interview-repo";
+import { CARD_QUESTION, insertQuestion } from "./interview-repo";
 import { onboardingPack } from "./onboarding";
 import {
   candidatesOf,
@@ -64,7 +64,7 @@ function baseQuestions(spec: RoleSpec): string[] {
   return [
     `In at most 120 words, how would you approach: ${spec.summary}?`,
     `Which of these are you strong or weak at, honestly: ${strengths}?`,
-    "Submit your self-description card with profile_card_submit.",
+    CARD_QUESTION,
   ];
 }
 

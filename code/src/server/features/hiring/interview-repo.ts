@@ -3,6 +3,9 @@ import type { InterviewAnswer, InterviewQuestion, Scorecard } from "../../../sha
 
 type Raw = Record<string, string | number | null>;
 
+// The card is submitted through its own tool, so its question is found by this text.
+export const CARD_QUESTION = "Submit your self-description card with profile_card_submit.";
+
 export function insertQuestion(
   db: Database,
   q: {
@@ -44,6 +47,15 @@ export function getQuestion(
 ): (InterviewQuestion & { requestId: string }) | null {
   const r = db.query<Raw, [string]>("SELECT * FROM interview_questions WHERE id = ?").get(id);
   return r ? { ...question(r), requestId: r.request_id as string } : null;
+}
+
+export function baseQuestionIdByBody(db: Database, requestId: string, body: string): string | null {
+  const r = db
+    .query<{ id: string }, [string, string]>(
+      "SELECT id FROM interview_questions WHERE request_id = ? AND kind = 'base' AND body = ?",
+    )
+    .get(requestId, body);
+  return r?.id ?? null;
 }
 
 export function questionProgress(

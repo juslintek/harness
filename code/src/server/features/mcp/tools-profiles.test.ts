@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { type HiringWorld, hiringWorld } from "../../test-support/hiring-kit";
+import { candidateRunEnded, getHire } from "../hiring/api";
 import { getProfile } from "../profiles/api";
 import { mintRunToken } from "./api";
 import { call, listen } from "./test-kit";
@@ -74,4 +75,20 @@ test("profile_get with the caller's own handle behaves like no handle", async ()
   expect(own.isError).toBe(false);
   expect(JSON.parse(own.text)).toMatchObject({ handle: "dev", card: null });
   expect(await call(server, token, "profile_get", { handle: "@dev" })).toEqual(own);
+});
+
+test("a candidate who answers the text questions and submits a card is answered", async () => {
+  const hire = await w.file();
+  const cand = hire.candidates[0];
+  const token = candidateToken(cand?.id as string);
+  for (const q of hire.questions.slice(0, 2)) {
+    await call(server, token, "interview_answer", { question: q.id, answer: "my answer" });
+  }
+  expect((await call(server, token, "profile_card_submit", { card: goodCard })).isError).toBe(
+    false,
+  );
+  candidateRunEnded(w.db, w.deps, cand?.id as string, true);
+  const now = getHire(w.db, hire.id)?.candidates.find((c) => c.id === cand?.id);
+  expect(now?.status).toBe("answered");
+  expect(now?.answers).toHaveLength(3);
 });

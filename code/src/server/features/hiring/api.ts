@@ -1,7 +1,15 @@
 import type { Database } from "bun:sqlite";
 import type { HireView } from "../../../shared/hiring";
 import { type HireDigest, hireDigest } from "./digest";
-import { advance, ask, candidateRunEnded, pass, recordAnswer, score } from "./flow";
+import {
+  advance,
+  ask,
+  candidateRunEnded,
+  pass,
+  recordAnswer,
+  recordCardAnswer,
+  score,
+} from "./flow";
 import { approverOf, decide, fileRequest, type HiringDeps } from "./hire";
 import {
   candidateOfRun,
@@ -27,6 +35,7 @@ export {
   hireDigest,
   pass,
   recordAnswer,
+  recordCardAnswer,
   score,
   teamIdsOf,
 };

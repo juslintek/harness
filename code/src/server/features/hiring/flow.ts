@@ -4,6 +4,8 @@ import { getMember, roleAtLeast } from "../orgs/api";
 import { effective } from "../policies/api";
 import { approverOf, clock, decide, type HiringDeps } from "./hire";
 import {
+  baseQuestionIdByBody,
+  CARD_QUESTION,
   getQuestion,
   insertAnswer,
   insertQuestion,
@@ -185,6 +187,15 @@ export function recordAnswer(
   const { total, answered } = questionProgress(db, head.id, cand.id);
   if (answered === total) setCandidateStatus(db, cand.id, "answered");
   return head.id;
+}
+
+// A candidate who submits the card never calls interview_answer for that question, so the submit counts as its answer.
+export function recordCardAnswer(db: Database, candidateId: string, runId: string | null): void {
+  const cand = getCandidate(db, candidateId);
+  const head = cand ? getHead(db, cand.requestId) : null;
+  if (!cand || !head || (head.status !== "interviewing" && head.status !== "answering")) return;
+  const questionId = baseQuestionIdByBody(db, head.id, CARD_QUESTION);
+  if (questionId) recordAnswer(db, candidateId, questionId, "card submitted", runId);
 }
 
 // While answering follow-ups a clean exit with some answers still counts; otherwise unanswered questions mean the candidate failed.

@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getCandidate } from "../hiring/api";
+import { getCandidate, recordCardAnswer } from "../hiring/api";
 import { findMemberByHandle, getMember } from "../orgs/api";
 import { ensureProfile, profileOfMember, submitCard } from "../profiles/api";
 import { defineCandidateTool, defineTool, fail, type ToolEnv } from "./tools-kit";
@@ -48,7 +48,10 @@ export function registerProfilesTools(server: McpServer, env: ToolEnv): void {
       (ctx, a) => {
         const cand = getCandidate(ctx.db, ctx.candidateId);
         const open = cand && !["failed", "hired", "rejected"].includes(cand.status);
-        return open ? submit(ctx.db, cand.profileId, a.card) : fail("interview is closed");
+        if (!open) return fail("interview is closed");
+        const out = submit(ctx.db, cand.profileId, a.card);
+        recordCardAnswer(ctx.db, cand.id, ctx.runId);
+        return out;
       },
     );
     return;
