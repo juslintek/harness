@@ -35,8 +35,17 @@ export function teamLacks(db: Database, teamId: string, specialty: string): bool
   return !teamHasSpecialty(db, teamId, specialty);
 }
 
-export function startHiring(db: Database, deps: HiringDeps): () => void {
+// A null tick only registers the deps, for tests that drive the flow by hand.
+export function startHiring(
+  db: Database,
+  deps: HiringDeps,
+  tickMs: number | null = TICK_MS,
+): () => void {
   active = deps;
+  if (tickMs === null)
+    return () => {
+      active = null;
+    };
   const timer = setInterval(() => {
     for (const id of openRequestIds(db)) {
       try {
@@ -45,7 +54,7 @@ export function startHiring(db: Database, deps: HiringDeps): () => void {
         console.error("hiring tick failed", id, err);
       }
     }
-  }, TICK_MS);
+  }, tickMs);
   return () => {
     clearInterval(timer);
     active = null;

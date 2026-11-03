@@ -12,6 +12,7 @@ import {
   listTeams,
   managerPositionsOf,
   type PositionRow,
+  roleAtLeast,
 } from "../orgs/api";
 import { effective } from "../policies/api";
 import { attachProfile, createProfile, getProfile } from "../profiles/api";
@@ -211,9 +212,20 @@ function notify(db: Database, deps: HiringDeps, head: HireHead, memberId: string
   }
 }
 
+const SYSTEM_DECIDERS = new Set(["policy:auto", "harness"]);
+
+// Humans decide as admins of the request's org; an agent only as the manager the harness woke for it.
+function mayDecide(db: Database, head: HireHead, decidedBy: string): boolean {
+  if (SYSTEM_DECIDERS.has(decidedBy)) return true;
+  const who = getMember(db, decidedBy);
+  if (!who || who.orgId !== head.orgId) return false;
+  return who.kind === "human" ? roleAtLeast(who.role, "admin") : approverOf(db, head) === who.id;
+}
+
 export function decide(db: Database, deps: HiringDeps, input: DecideInput): DecideResult {
   const head = getHead(db, input.requestId);
   if (!head) return { ok: false, reason: "unknown request" };
+  if (!mayDecide(db, head, input.decidedBy)) return { ok: false, reason: "not allowed to decide" };
   const chosen = input.candidateId ? getCandidate(db, input.candidateId) : null;
   if (input.candidateId && (chosen?.requestId !== head.id || chosen.status === "failed")) {
     return { ok: false, reason: "unknown candidate" };

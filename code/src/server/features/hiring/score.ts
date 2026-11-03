@@ -25,15 +25,18 @@ export function systemScore(i: SystemInput): number {
 
 const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
 
-// Without any reviewer scorecard the system score stands alone, so a team with no agents can still hire.
-function totalScore(system: number, cards: Scorecard[]): number {
-  if (cards.length === 0) return system;
+// Once any candidate has been reviewed, one that was not gets nothing for the reviewer part, so a
+// timeout cannot let an unreviewed candidate beat a reviewed one on system score alone.
+function totalScore(system: number, cards: Scorecard[], anyReviewed: boolean): number {
+  if (cards.length === 0) return anyReviewed ? 0.4 * system : system;
   const reviewers = mean(cards.map((c) => mean([c.fit, c.depth, c.honesty])));
   return 0.6 * reviewers + 0.4 * system;
 }
 
 export function computeTotals(db: Database, deps: HiringDeps, head: HireHead): void {
-  for (const c of candidatesOf(db, head.id).filter((c) => c.status !== "failed")) {
+  const live = candidatesOf(db, head.id).filter((c) => c.status !== "failed");
+  const anyReviewed = live.some((c) => scorecardsOf(db, c.id).length > 0);
+  for (const c of live) {
     const profile = getProfile(db, c.profileId);
     const card = profile?.card ?? null;
     const progress = questionProgress(db, head.id, c.id);
@@ -45,6 +48,6 @@ export function computeTotals(db: Database, deps: HiringDeps, head: HireHead): v
         ? deps.engineReady({ runtime: profile.runtime, model: profile.model })
         : false,
     });
-    setCandidateScores(db, c.id, system, totalScore(system, scorecardsOf(db, c.id)));
+    setCandidateScores(db, c.id, system, totalScore(system, scorecardsOf(db, c.id), anyReviewed));
   }
 }

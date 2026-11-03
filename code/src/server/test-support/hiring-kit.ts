@@ -14,6 +14,7 @@ import {
   addToTeam,
   createOrg,
   createPosition,
+  listMembers,
   listTeams,
   type MemberRow,
 } from "../features/orgs/api";
@@ -47,6 +48,7 @@ export interface HiringWorld {
   orgId: string;
   teamId: string;
   boss: MemberRow;
+  ownerId: string;
   deps: HiringDeps;
   interviews: { candidateId: string; questionIds: string[] }[];
   wakes: Wake[];
@@ -118,6 +120,7 @@ export function hiringWorld(): HiringWorld {
     orgId: org.id,
     teamId,
     boss,
+    ownerId: listMembers(db, org.id).find((m) => m.kind === "human")?.id as string,
     deps,
     interviews,
     wakes,

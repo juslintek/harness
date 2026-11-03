@@ -124,7 +124,7 @@ test("two decide calls make one member and the second is told it was already dec
   const input = {
     requestId: hire.id,
     candidateId: firstCandidate(w, hire),
-    decidedBy: "u1",
+    decidedBy: w.ownerId,
     reason: "ok",
   };
   const first = decide(w.db, w.deps, input);
@@ -144,7 +144,7 @@ test("a decision before the scoring is done is refused", () => {
   const result = decide(w.db, w.deps, {
     requestId: hire.id,
     candidateId: null,
-    decidedBy: "u1",
+    decidedBy: w.ownerId,
     reason: "",
   });
   expect(result).toEqual({ ok: false, reason: "not ready to decide" });
@@ -159,7 +159,7 @@ test("a clashing handle gets a number", () => {
   decide(w.db, w.deps, {
     requestId: hire.id,
     candidateId: firstCandidate(w, hire),
-    decidedBy: "u1",
+    decidedBy: w.ownerId,
     reason: "",
   });
   expect(findMemberByHandle(w.db, w.orgId, "backend-engineer-2")).not.toBeNull();
@@ -174,7 +174,7 @@ test("the onboarding pack names the manager and the team projects", () => {
   decide(w.db, w.deps, {
     requestId: hire.id,
     candidateId: firstCandidate(w, hire),
-    decidedBy: "u1",
+    decidedBy: w.ownerId,
     reason: "",
   });
   const pack = getHire(w.db, hire.id)?.onboarding ?? "";
