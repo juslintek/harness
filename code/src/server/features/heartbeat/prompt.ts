@@ -41,6 +41,8 @@ function describe(db: Database, wake: WakeRow): string {
       return `You were mentioned in ${channelLabel(db, wake.channelId)}: ${text}`;
     case "laya_mention":
       return `A message in ${channelLabel(db, wake.channelId)} matches your specialty: ${text}`;
+    case "subtask":
+      return `A subtask of ${taskLabel(db, wake.taskId)} changed: ${text}`;
     case "schedule":
       return "Your scheduled heartbeat: look at the board for work that is yours.";
     case "run_now":

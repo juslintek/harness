@@ -117,6 +117,18 @@ export function runNow(db: Database, memberId: string, causedBy: string, taskId?
 
 const excerpt = (text: string): string => text.slice(0, EXCERPT_CHARS);
 
+// The parent's assignee is the one who closes the parent, and nobody tells them a subtask is done.
+function wakeParentAssignee(db: Database, change: TaskChange): void {
+  const { task } = change;
+  if (change.kind !== "moved" || task.parentId === null) return;
+  if (task.status !== "in_review" && task.status !== "done") return;
+  const parent = getTask(db, task.parentId);
+  if (!parent || parent.assigneeId === null) return;
+  const detail = { excerpt: excerpt(`#${task.number} ${task.title} moved to ${task.status}`) };
+  const input = { taskId: parent.id, causedBy: change.by, detail };
+  recordWake(db, { ...input, memberId: parent.assigneeId, reason: "subtask" });
+}
+
 export function onTask(db: Database, change: TaskChange): void {
   const { task } = change;
   const base = { taskId: task.id, causedBy: change.by };
@@ -125,6 +137,7 @@ export function onTask(db: Database, change: TaskChange): void {
   if (assigns && task.assigneeId !== null && task.assigneeId !== change.by) {
     recordWake(db, { ...base, memberId: task.assigneeId, reason: "assignment" });
   }
+  wakeParentAssignee(db, change);
   if (change.kind !== "commented") return;
   const body = change.commentId === undefined ? undefined : getComment(db, change.commentId)?.body;
   const detail = body === undefined ? undefined : { excerpt: excerpt(body) };

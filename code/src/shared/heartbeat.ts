@@ -5,6 +5,7 @@ export type WakeReason =
   | "comment"
   | "mention"
   | "laya_mention"
+  | "subtask"
   | "schedule"
   | "run_now";
 export type WakeStatus = "pending" | "started" | "done" | "failed" | "skipped";
