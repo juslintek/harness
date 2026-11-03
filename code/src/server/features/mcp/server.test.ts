@@ -19,7 +19,12 @@ async function listen(database: ReturnType<typeof openDb>): Promise<ReturnType<t
     // not see the next test's port (it answered 403 for the wrong Host) or token store.
     const own: ReturnType<typeof Bun.serve> = Bun.serve({
       port: 0,
-      fetch: (req) => mcpHandler(database, (r, t) => reports.push([r, t]), own.port as number)(req),
+      fetch: (req) =>
+        mcpHandler(
+          database,
+          { onReport: (r, t) => reports.push([r, t]), harnessHome: "/h" },
+          own.port as number,
+        )(req),
     });
     try {
       const res = await fetch(`http://127.0.0.1:${own.port}/`, {

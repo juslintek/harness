@@ -9,7 +9,7 @@ import type { Adapter, RunContext, RunOutcome } from "./adapter";
 import { runAgy } from "./agy";
 import { runApi } from "./api-lane";
 import { createBreaker, defaultLimits } from "./breaker";
-import { createLaunch, inProcessLaunch, type Launch, type RunDeps } from "./launch";
+import { createLaunch, inProcessLaunch, type Launch, type RunDeps, type RunMember } from "./launch";
 import { pidIdentity } from "./orphans";
 import {
   getFlag,
@@ -33,12 +33,11 @@ export interface StartInput {
   prompt: string;
   model?: string;
   taskId?: string;
+  member?: RunMember;
 }
-
 const LANES: Record<AgentSpec["lane"], Adapter> = { acp: runAcp, agy: runAgy, api: runApi };
 const DEFAULT_IDLE_TIMEOUT_MS = 300_000;
 const APPROVAL_SLACK_MS = 30_000;
-
 const live = new Map<string, Live>();
 const waits = new Map<string, Promise<RunRow>>();
 const listeners = new Set<(runId: string, e: NewEvent) => void>();
@@ -240,7 +239,7 @@ async function prepare(
     const launch =
       spec.lane === "api"
         ? inProcessLaunch(input.repo)
-        : await createLaunch(db, deps, spec, input.id, input.repo);
+        : await createLaunch(db, deps, spec, input.id, input.repo, input.member);
     setStarting(db, input.id, launch.worktree, launch.branch);
     return launch;
   } catch (err) {
@@ -264,6 +263,7 @@ export async function startRun(
   insertRun(db, {
     id: full.id,
     taskId: input.taskId ?? null,
+    member: input.member ?? null,
     agentId: spec.id,
     model: input.model ?? null,
     repo: input.repo,

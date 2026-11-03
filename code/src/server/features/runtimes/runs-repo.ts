@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { RunMember } from "./launch";
 
 export type RunState =
   | "queued"
@@ -13,6 +14,7 @@ export type RunState =
 export interface RunRow {
   id: string;
   taskId: string | null;
+  memberId: string | null;
   agentId: string;
   model: string | null;
   repo: string;
@@ -29,6 +31,7 @@ export interface RunRow {
 interface DbRun {
   id: string;
   task_id: string | null;
+  member_id: string | null;
   agent_id: string;
   model: string | null;
   repo: string;
@@ -45,6 +48,7 @@ interface DbRun {
 export interface NewRun {
   id: string;
   taskId: string | null;
+  member?: RunMember | null;
   agentId: string;
   model: string | null;
   repo: string;
@@ -55,6 +59,7 @@ function toRow(r: DbRun): RunRow {
   return {
     id: r.id,
     taskId: r.task_id,
+    memberId: r.member_id,
     agentId: r.agent_id,
     model: r.model,
     repo: r.repo,
@@ -71,8 +76,18 @@ function toRow(r: DbRun): RunRow {
 
 export function insertRun(db: Database, run: NewRun): void {
   db.run(
-    "INSERT INTO runs (id, task_id, agent_id, model, repo, prompt, state, created_at) VALUES (?, ?, ?, ?, ?, ?, 'queued', ?)",
-    [run.id, run.taskId, run.agentId, run.model, run.repo, run.prompt, Date.now()],
+    "INSERT INTO runs (id, task_id, member_id, project_id, agent_id, model, repo, prompt, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)",
+    [
+      run.id,
+      run.taskId,
+      run.member?.memberId ?? null,
+      run.member?.projectId ?? null,
+      run.agentId,
+      run.model,
+      run.repo,
+      run.prompt,
+      Date.now(),
+    ],
   );
 }
 

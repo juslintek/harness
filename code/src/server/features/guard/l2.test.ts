@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { startStub, stopStubs } from "../../test-support/stub-server";
+import { resetLayaCircuit } from "../laya/api";
 import type { L1Result } from "./l1";
 import { ASK_DESTRUCTIVE, DENY_EXFILTRATION, escalateL2 } from "./l2";
-import { resetLayaCircuit } from "./laya";
 
 let hits = { n: 0 };
 
@@ -62,9 +62,15 @@ afterEach(async () => {
 });
 
 describe("escalateL2 policy", () => {
-  test("exfiltration 0.95 denies", async () => {
+  test("exfiltration 0.95 on a shell line asks, on a read-only line allows", async () => {
     await stub({ exfiltration: 0.95 });
-    const res = await escalateL2(...input("shell"));
+    expect((await escalateL2(...input("shell"))).verdict).toBe("ask");
+    expect((await escalateL2(...input("read"))).verdict).toBe("allow");
+  });
+
+  test("exfiltration 0.95 denies a network command", async () => {
+    await stub({ exfiltration: 0.95 });
+    const res = await escalateL2(...input("network"));
     expect(res.verdict).toBe("deny");
     expect(res.source).toBe("laya");
     expect(res.probs?.exfiltration).toBe(0.95);
@@ -72,9 +78,9 @@ describe("escalateL2 policy", () => {
 
   test("exact boundaries: exfiltration denies from 0.9, destructive asks from 0.95", async () => {
     await stub({ exfiltration: DENY_EXFILTRATION - 0.01 });
-    expect((await escalateL2(...input("shell"))).verdict).toBe("allow");
+    expect((await escalateL2(...input("network"))).verdict).toBe("allow");
     await stub({ exfiltration: DENY_EXFILTRATION });
-    expect((await escalateL2(...input("shell"))).verdict).toBe("deny");
+    expect((await escalateL2(...input("network"))).verdict).toBe("deny");
     await stub({ destructive: ASK_DESTRUCTIVE - 0.01 });
     expect((await escalateL2(...input("delete"))).verdict).toBe("allow");
     await stub({ destructive: ASK_DESTRUCTIVE });

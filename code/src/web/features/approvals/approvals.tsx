@@ -46,10 +46,11 @@ function ApprovalItem({
   );
 }
 
-export function PendingApprovals({ runId }: { runId: string }): preact.JSX.Element {
+// Without a run id it lists every pending approval the server lets this user decide.
+export function PendingApprovals({ runId }: { runId?: string }): preact.JSX.Element {
   const list = useLoad(() => api("/api/approvals?status=pending", listSchema), []);
   useTopic("approvals", list.reload);
-  const mine = (list.data ?? []).filter((a) => a.runId === runId);
+  const mine = (list.data ?? []).filter((a) => runId === undefined || a.runId === runId);
   return (
     <section aria-labelledby="approvals-title">
       <h3 id="approvals-title">Pending approvals</h3>

@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, realpathSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -72,4 +72,14 @@ test("defaultBranch prefers origin/HEAD", async () => {
   await git(repo, "update-ref", "refs/remotes/origin/trunk", "HEAD");
   await git(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk");
   expect(await defaultBranch(repo)).toBe("trunk");
+});
+
+test("createWorktree returns the resolved path when the harness home is behind a symlink", async () => {
+  const repo = await makeRepo("repo-link");
+  const real = join(root, "real-home");
+  mkdirSync(real);
+  const link = join(root, "link-home");
+  symlinkSync(real, link);
+  const wt = await createWorktree(repo, Bun.randomUUIDv7(), link);
+  expect(wt.path.startsWith(`${real}/worktrees/`)).toBe(true);
 });

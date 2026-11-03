@@ -1,3 +1,4 @@
+import { splitCommands } from "../guard/api";
 import type { UsageRecord } from "../usage/api";
 import { type Rec, rec } from "./acp-rpc";
 import type { PermissionAsk, RunContext } from "./adapter";
@@ -16,6 +17,26 @@ function commandOf(rawInput: unknown): string | undefined {
   const cmd = rec(rawInput).command;
   if (Array.isArray(cmd)) return cmd.join(" ");
   return str(cmd);
+}
+
+// Codex shell-quotes a multi-statement script into one word in the permission request, which L1
+// reads as a dynamic command name. The tool_call announced the same call unquoted, so the asked
+// command is replaced only when it is exactly that one word.
+// An unparseable command must reach L1 unchanged so its shell.unparseable ask path applies.
+function splitOrNull(command: string): string[][] | null {
+  try {
+    return splitCommands(command);
+  } catch {
+    return null;
+  }
+}
+
+function unquoted(asked: string | undefined, announced: string | undefined): string | undefined {
+  if (asked === undefined || announced === undefined) return asked ?? announced;
+  const lines = splitOrNull(asked);
+  return lines !== null && lines.length === 1 && lines[0]?.length === 1 && lines[0][0] === announced
+    ? announced
+    : asked;
 }
 
 function pathsOf(locations: unknown): string[] {
@@ -75,7 +96,7 @@ export class UpdateSink {
   describe(toolCall: Rec): PermissionAsk {
     const known = this.tools.get(str(toolCall.toolCallId) ?? "");
     const kind = str(toolCall.kind) ?? known?.kind;
-    const command = commandOf(toolCall.rawInput) ?? known?.command;
+    const command = unquoted(commandOf(toolCall.rawInput), known?.command);
     const paths = pathsOf(toolCall.locations);
     const toolName = str(toolCall.name) ?? known?.title;
     const title = str(toolCall.title) ?? known?.title;

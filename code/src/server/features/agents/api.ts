@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { layaHealth } from "../laya/api";
 import { bunRunner, type DiscoveredAgent, discoverAgents, type Runner } from "./discover";
 import { getKey, type Provider } from "./keys";
 import { type AgentSpec, agentSpecs } from "./specs";
@@ -138,16 +139,8 @@ export function saveModels(
   })();
 }
 
-export async function ollayaStatus(): Promise<{ up: boolean; version: string | null }> {
-  const base = process.env.OLLAYA_URL ?? "http://127.0.0.1:11435";
-  try {
-    const res = await fetch(`${base}/api/version`, { signal: AbortSignal.timeout(1000) });
-    if (!res.ok) return { up: false, version: null };
-    const body = (await res.json()) as { version?: unknown };
-    return { up: true, version: typeof body.version === "string" ? body.version : null };
-  } catch {
-    return { up: false, version: null };
-  }
+export function ollayaStatus(): Promise<{ up: boolean; version: string | null }> {
+  return layaHealth();
 }
 
 export type ModelList = Array<{ id: string; name: string }>;

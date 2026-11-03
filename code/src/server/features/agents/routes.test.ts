@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { beforeEach, expect, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { withActor } from "../../test-support/app-kit";
 import {
   LoginError,
   type LoginProcess,
@@ -21,7 +22,7 @@ beforeEach(() => {
 });
 
 const post = (
-  app: ReturnType<typeof agentRoutes>,
+  app: { request: ReturnType<typeof withActor>["request"] },
   path: string,
   body: unknown,
 ): Response | Promise<Response> =>
@@ -32,7 +33,7 @@ const post = (
   });
 
 test("link toggles persist and unknown agents are rejected", async () => {
-  const app = agentRoutes(db);
+  const app = withActor(agentRoutes(db));
   expect((await post(app, "/claude/link", { enabled: true })).status).toBe(200);
   expect(db.query("SELECT enabled FROM agent_links WHERE agent_id = 'claude'").get()).toEqual({
     enabled: 1,
@@ -41,15 +42,30 @@ test("link toggles persist and unknown agents are rejected", async () => {
   expect((await post(app, "/claude/link", { enabled: "yes" })).status).toBe(400);
 });
 
+test("link toggles and key saves need a fresh step-up", async () => {
+  const app = withActor(agentRoutes(db), { stepUpAt: null });
+  const link = await post(app, "/claude/link", { enabled: true });
+  expect(link.status).toBe(403);
+  expect(await link.json()).toEqual({ error: "step_up_required" });
+  expect((await post(app, "/keys/openai", { key: "a".repeat(30) })).status).toBe(403);
+});
+
+test("starting a host-side login needs a fresh step-up", async () => {
+  const app = withActor(agentRoutes(db), { stepUpAt: null });
+  const res = await post(app, "/codex/login", {});
+  expect(res.status).toBe(403);
+  expect(await res.json()).toEqual({ error: "step_up_required" });
+});
+
 test("keys are validated before anything is stored", async () => {
-  const app = agentRoutes(db);
+  const app = withActor(agentRoutes(db));
   expect((await post(app, "/keys/openai", { key: "short" })).status).toBe(400);
   expect((await post(app, "/keys/openai", { key: `${"a".repeat(19)}\n` })).status).toBe(400);
   expect((await post(app, "/keys/nope", { key: "a".repeat(30) })).status).toBe(404);
 });
 
 test("login is refused for agents without a login command", async () => {
-  expect((await post(agentRoutes(db), "/agy/login", {})).status).toBe(404);
+  expect((await post(withActor(agentRoutes(db)), "/agy/login", {})).status).toBe(404);
 });
 
 function fakeLogin(): {

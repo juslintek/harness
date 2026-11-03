@@ -41,6 +41,7 @@ export const haltBody: z.ZodType<HaltBody> = z.object({ halted: z.boolean() });
 
 export interface RunView {
   id: string;
+  memberId: string | null;
   agentId: string;
   model: string | null;
   repo: string;
@@ -56,6 +57,7 @@ export interface RunView {
 }
 export const runViewSchema: z.ZodType<RunView> = z.object({
   id: z.string(),
+  memberId: z.string().nullable(),
   agentId: z.string(),
   model: z.string().nullable(),
   repo: z.string(),
@@ -126,26 +128,6 @@ export const approvalViewSchema: z.ZodType<ApprovalView> = z.object({
   expiresAt: z.number(),
   decidedAt: z.number().nullable(),
 });
-
-export const wsTopicSchema: z.ZodType<string> = z
-  .string()
-  .regex(/^(runs|approvals|run:[0-9a-f-]{36})$/);
-
-// Bodies stay out of the socket: a message is only a nudge to refetch, so a huge tool output never rides it.
-export type WsMessage =
-  | { type: "event"; runId: string; event: { kind: string; ts: number | null } }
-  | { type: "run"; run: RunView }
-  | { type: "approval"; approval: ApprovalView };
-
-export const wsMessageSchema: z.ZodType<WsMessage> = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("event"),
-    runId: z.string(),
-    event: z.object({ kind: z.string(), ts: z.number().nullable() }),
-  }),
-  z.object({ type: z.literal("run"), run: runViewSchema }),
-  z.object({ type: z.literal("approval"), approval: approvalViewSchema }),
-]);
 
 export interface AgentRow {
   id: string;

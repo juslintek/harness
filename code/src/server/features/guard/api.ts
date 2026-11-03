@@ -14,8 +14,18 @@ import {
 } from "./approvals";
 import { claudeSettings as buildClaudeSettings, type ClaudeSettings } from "./claude-settings";
 import { codexRules as buildCodexRules } from "./codex-rules";
-import { type ActionRequest, type L1Result, evaluateL1 as l1Evaluate, type Scope } from "./l1";
+import {
+  type ActionRequest,
+  type L1Result,
+  evaluateL1 as l1Evaluate,
+  splitCommands as l1Split,
+  type Scope,
+} from "./l1";
 import { escalateL2, type L2Result } from "./l2";
+import {
+  decidableApprovals as decidable,
+  managerDecide as decideAsManager,
+} from "./manager-limits";
 import {
   type SandboxInput,
   runTmpDir as sandboxRunTmpDir,
@@ -85,6 +95,23 @@ export function decideApproval(
   return decide(db, id, decision, by);
 }
 
+export function managerDecide(
+  db: Database,
+  input: Parameters<typeof decideAsManager>[1],
+): ReturnType<typeof decideAsManager> {
+  const result = decideAsManager(db, input);
+  if (result.ok) notifyApproval(db, input.approvalId);
+  return result;
+}
+
+export function decidableApprovals(
+  db: Database,
+  managerMemberId: string,
+  harnessHome: string,
+): ApprovalRow[] {
+  return decidable(db, managerMemberId, harnessHome);
+}
+
 export function listApprovals(db: Database, status?: string): ApprovalRow[] {
   return list(db, status);
 }
@@ -107,6 +134,10 @@ export function codexRules(): string {
 
 export function evaluateL1(action: ActionRequest, scope: Scope): L1Result {
   return l1Evaluate(action, scope);
+}
+
+export function splitCommands(command: string): string[][] {
+  return l1Split(command);
 }
 
 export function writeSrtSettings(input: SandboxInput): Promise<string> {
@@ -216,6 +247,11 @@ export async function checkAction(
   logLayer(db, run, "L1", l1.verdict, l1.rule, command, l1.reason);
   if (l1.verdict === "deny") {
     return { verdict: "deny", layer: "L1", reason: l1.reason, rule: l1.rule, approvalId: null };
+  }
+  // Laya reads command text; a bare path inside the task root told it nothing and it scored
+  // ordinary edits as exfiltration.
+  if (l1.verdict === "allow" && action.kind !== "execute") {
+    return { verdict: "allow", layer: "L1", reason: l1.reason, rule: l1.rule, approvalId: null };
   }
   let l2: L2Result | null = null;
   if (l1.verdict === "allow") {

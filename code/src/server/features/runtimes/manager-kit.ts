@@ -12,6 +12,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { gitEnv } from "../../git-env";
 import type { AgentSpec } from "../agents/api";
 import { listRunEvents, readBody } from "../logs/api";
 import type { RunDeps } from "./api";
@@ -26,7 +27,7 @@ export interface Fixture {
 }
 
 function git(args: string[], cwd: string): void {
-  const res = Bun.spawnSync(["git", ...args], { cwd });
+  const res = Bun.spawnSync(["git", ...args], { cwd, env: gitEnv() });
   if (res.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${res.stderr.toString()}`);
 }
 

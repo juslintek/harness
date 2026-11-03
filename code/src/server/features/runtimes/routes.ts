@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
 import { z } from "zod";
 import { haltBody, type RunDetail, type RunView, startRunBody } from "../../../shared/runs";
+import { type AuthEnv, requireStepUp } from "../auth/api";
 import { listRunEvents, readBody } from "../logs/api";
 import { usageSummary } from "../usage/api";
 import {
@@ -25,6 +26,7 @@ type Tokens = { input: number; output: number };
 function runView(row: RunRow, tokens: Tokens): RunView {
   return {
     id: row.id,
+    memberId: row.memberId,
     agentId: row.agentId,
     model: row.model,
     repo: row.repo,
@@ -65,8 +67,8 @@ function detail(db: Database, row: RunRow, after: number): RunDetail {
   return { run: viewRun(db, row), events };
 }
 
-export function runRoutes(db: Database, deps: RunDeps): Hono {
-  const app = new Hono();
+export function runRoutes(db: Database, deps: RunDeps): Hono<AuthEnv> {
+  const app = new Hono<AuthEnv>();
   app.get("/", (c) => {
     const totals = new Map(usageSummary(db, "run", 0).map((u) => [u.key, u]));
     return c.json(
@@ -78,7 +80,7 @@ export function runRoutes(db: Database, deps: RunDeps): Hono {
       ),
     );
   });
-  app.post("/", async (c) => {
+  app.post("/", requireStepUp, async (c) => {
     const body = startRunBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid body" }, 400);
     const { model, ...rest } = body.data;
@@ -98,16 +100,16 @@ export function runRoutes(db: Database, deps: RunDeps): Hono {
     if (!row) return c.json({ error: "unknown run" }, 404);
     return c.json(detail(db, row, after.data));
   });
-  app.post("/:id/kill", (c) =>
+  app.post("/:id/kill", requireStepUp, (c) =>
     killRun(db, c.req.param("id")) ? c.json({ ok: true }) : c.json({ error: "no live run" }, 404),
   );
   return app;
 }
 
-export function haltRoutes(db: Database): Hono {
-  const app = new Hono();
+export function haltRoutes(db: Database): Hono<AuthEnv> {
+  const app = new Hono<AuthEnv>();
   app.get("/", (c) => c.json({ halted: isHalted(db) }));
-  app.post("/", async (c) => {
+  app.post("/", requireStepUp, async (c) => {
     const body = haltBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid body" }, 400);
     setHalted(db, body.data.halted);

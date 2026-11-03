@@ -7,9 +7,9 @@ import { join } from "node:path";
 import { ensureInstance, migrate, openDb } from "../src/server/db/db";
 import { migrations } from "../src/server/db/migrations";
 import { type AgentSpec, getSpec, listAgents } from "../src/server/features/agents/api";
-import { ensureAdminSecret } from "../src/server/features/auth/api";
 import { listRunEvents, readBody } from "../src/server/features/logs/api";
 import { startRun, waitForRun } from "../src/server/features/runtimes/api";
+import { gitEnv } from "../src/server/git-env";
 import { createApp } from "../src/server/http";
 import {
   approvalLog,
@@ -34,7 +34,7 @@ function check(ok: boolean, what: string): void {
 }
 
 function git(args: string[], cwd: string): string {
-  const res = Bun.spawnSync(["git", ...args], { cwd });
+  const res = Bun.spawnSync(["git", ...args], { cwd, env: gitEnv() });
   if (res.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${res.stderr.toString()}`);
   return res.stdout.toString().trim();
 }
@@ -205,8 +205,8 @@ async function main(): Promise<void> {
   };
   const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: (r) => handler.fetch(r) });
   const port = server.port ?? 0;
-  const secret = ensureAdminSecret(home);
-  handler.fetch = createApp({ db, home, port, secret, instanceId, version: "smoke" }).fetch;
+  const rp = { id: "localhost", name: "Harness", origin: `http://localhost:${port}` };
+  handler.fetch = createApp({ db, home, port, rp, instanceId, version: "smoke" }).fetch;
   const ctx = { home, port, root };
   const rows: Row[] = [];
   try {
