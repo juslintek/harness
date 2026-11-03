@@ -182,11 +182,12 @@ async function main(): Promise<void> {
   const s = build(db, root);
   const stopTimeline = watchTimeline(s);
   const seen = new Set<string>();
+  const stopApprovals: Array<() => void> = [];
   const approvals = setInterval(() => {
     for (const r of listRuns(db, 100)) {
       if (seen.has(r.id)) continue;
       seen.add(r.id);
-      watchApprovals(db, r.id);
+      stopApprovals.push(watchApprovals(db, r.id));
     }
   }, 500);
   const stopHeartbeat = startHeartbeat(db, { runDeps: { home, port }, home, tickMs: 5000 });
@@ -209,6 +210,7 @@ async function main(): Promise<void> {
     }
   } finally {
     clearInterval(approvals);
+    for (const stopWatch of stopApprovals) stopWatch();
     stopHeartbeat();
     stopTimeline();
     await shutdownRuns(db);
