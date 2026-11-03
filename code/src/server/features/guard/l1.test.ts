@@ -98,6 +98,7 @@ test("harness tool allow needs a registered full name, no paths and a tool-like 
     run({ kind: "other", paths: [], toolName: "mcp__harness__task_get", ...extra }).verdict;
   expect(tool({})).toBe("allow");
   expect(tool({ toolName: "mcp.harness.approvals_decide" })).toBe("allow");
+  expect(tool({ toolName: "mcp__harness__whoami" })).toBe("allow");
   expect(tool({ kind: "delete", paths: ["/"], toolName: "mcp.harness.evil anything" })).toBe(
     "deny",
   );
