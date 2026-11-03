@@ -49,6 +49,23 @@ function scratchRepo(root: string): string {
   return repo;
 }
 
+function seedPositions(db: Db, orgId: string, teamId: string, leadId: string, devId: string): void {
+  const leadPos = createPosition(db, {
+    orgId,
+    teamId,
+    title: "Tech lead",
+    memberId: leadId,
+    isManager: true,
+  });
+  createPosition(db, {
+    orgId,
+    teamId,
+    title: "Developer",
+    memberId: devId,
+    reportsTo: leadPos.id,
+  });
+}
+
 export function build(db: Db, root: string): Scene {
   const repo = scratchRepo(root);
   const userId = createUser(db, { email: "gate@test.local", name: "Gate", instanceAdmin: true });
@@ -68,20 +85,7 @@ export function build(db: Db, root: string): Scene {
   const lead = agent("claude", "lead", "Lead");
   const dev = agent("codex", "dev", "Dev");
   for (const m of [lead, dev]) addToTeam(db, core.id, m.id);
-  const leadPos = createPosition(db, {
-    orgId: org.id,
-    teamId: core.id,
-    title: "Tech lead",
-    memberId: lead.id,
-    isManager: true,
-  });
-  createPosition(db, {
-    orgId: org.id,
-    teamId: core.id,
-    title: "Developer",
-    memberId: dev.id,
-    reportsTo: leadPos.id,
-  });
+  seedPositions(db, org.id, core.id, lead.id, dev.id);
   const project = createProject(db, {
     orgId: org.id,
     teamId: core.id,

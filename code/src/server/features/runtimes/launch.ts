@@ -158,6 +158,14 @@ async function writeRunSettings(i: SettingsInput): Promise<string> {
   });
 }
 
+const treeFor = (
+  repo: string,
+  runId: string,
+  home: string,
+  reuse: { worktree: string; branch: string } | undefined,
+): ReturnType<typeof reuseWorktree> =>
+  reuse ? reuseWorktree(reuse.worktree, reuse.branch) : createWorktree(repo, runId, home);
+
 export async function createLaunch(
   db: Database,
   deps: RunDeps,
@@ -171,9 +179,7 @@ export async function createLaunch(
   // would leave the run's own tmp dir read-only and break heredocs.
   await mkdir(deps.home, { recursive: true });
   const home = await realpath(deps.home);
-  const tree = reuse
-    ? await reuseWorktree(reuse.worktree, reuse.branch)
-    : await createWorktree(repo, runId, home);
+  const tree = await treeFor(repo, runId, home, reuse);
   const branch = await defaultBranch(repo);
   const scratch = await scratchFor(repo, home, runId, member);
   const runDir = join(home, "runs", runId);

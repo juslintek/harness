@@ -81,9 +81,12 @@ function stubDeps(
   };
 }
 
-export function hiringWorld(): HiringWorld {
-  const db = openDb(":memory:");
-  migrate(db, migrations);
+function seedOrg(db: Database): {
+  orgId: string;
+  teamId: string;
+  agent: (handle: string, inTeam?: boolean) => MemberRow;
+  boss: MemberRow;
+} {
   const org = createOrg(db, {
     name: "A",
     slug: "aa",
@@ -104,12 +107,19 @@ export function hiringWorld(): HiringWorld {
   };
   const boss = agent("boss");
   createPosition(db, { orgId: org.id, teamId, title: "Lead", memberId: boss.id, isManager: true });
+  return { orgId: org.id, teamId, agent, boss };
+}
+
+export function hiringWorld(): HiringWorld {
+  const db = openDb(":memory:");
+  migrate(db, migrations);
+  const { orgId, teamId, agent, boss } = seedOrg(db);
   const interviews: HiringWorld["interviews"] = [];
   const wakes: Wake[] = [];
   const clock = { now: 1_000_000 };
   const deps = stubDeps(interviews, wakes, clock);
   const file = (requestedBy = boss.id): Promise<HireView> =>
-    fileRequest(db, deps, { orgId: org.id, teamId, requestedBy, spec });
+    fileRequest(db, deps, { orgId, teamId, requestedBy, spec });
   const answerAll = (hire: HireView, withCard: number[] = [0, 1]): void => {
     hire.candidates.forEach((c, i) => {
       if (withCard.includes(i)) submitCard(db, c.profile.id, goodCard);
@@ -120,10 +130,10 @@ export function hiringWorld(): HiringWorld {
   };
   return {
     db,
-    orgId: org.id,
+    orgId,
     teamId,
     boss,
-    ownerId: listMembers(db, org.id).find((m) => m.kind === "human")?.id as string,
+    ownerId: listMembers(db, orgId).find((m) => m.kind === "human")?.id as string,
     deps,
     interviews,
     wakes,

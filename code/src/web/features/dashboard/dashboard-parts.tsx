@@ -26,6 +26,50 @@ function Bar({ pct, kind }: { pct: number; kind: string }): preact.JSX.Element {
   );
 }
 
+function MemberRow({
+  m,
+  maxTokens,
+  maxWall,
+}: {
+  m: MemberReport;
+  maxTokens: number;
+  maxWall: number;
+}): preact.JSX.Element {
+  return (
+    <tr>
+      <th scope="row">{m.handle}</th>
+      <td data-label="Runs">
+        {m.completed} / {m.runs} done
+      </td>
+      <td data-label="Tokens in / out">
+        <span>
+          {nf.format(m.inputTokens)} / {nf.format(m.outputTokens)}
+          <Bar pct={share(m.inputTokens + m.outputTokens, maxTokens)} kind="tokens" />
+        </span>
+      </td>
+      <td data-label="Cost">
+        <span>
+          <Cost m={m} />
+        </span>
+      </td>
+      <td data-label="Active / waiting / wall">
+        <span>
+          {minutes(m.activeMs)} / {minutes(m.waitingMs)} / {minutes(m.wallMs)}
+          <Bar pct={share(m.wallMs, maxWall)} kind="time" />
+        </span>
+      </td>
+      <td data-label="Estimate vs actual">
+        planner {m.plannerMinutes} min, reviewer {m.reviewerMinutes} min, actual{" "}
+        {minutes(m.activeMs)}
+      </td>
+      <td data-label="Top tools">
+        {m.tools.map((t) => `${t.name} (${t.count})`).join(", ") || "-"}
+      </td>
+      <td data-label="Stack">{m.stack.join(", ") || "-"}</td>
+    </tr>
+  );
+}
+
 export function MemberTable({ members }: { members: MemberReport[] }): preact.JSX.Element {
   const maxTokens = Math.max(0, ...members.map((m) => m.inputTokens + m.outputTokens));
   const maxWall = Math.max(0, ...members.map((m) => m.wallMs));
@@ -46,37 +90,7 @@ export function MemberTable({ members }: { members: MemberReport[] }): preact.JS
       </thead>
       <tbody>
         {members.map((m) => (
-          <tr key={m.memberId}>
-            <th scope="row">{m.handle}</th>
-            <td data-label="Runs">
-              {m.completed} / {m.runs} done
-            </td>
-            <td data-label="Tokens in / out">
-              <span>
-                {nf.format(m.inputTokens)} / {nf.format(m.outputTokens)}
-                <Bar pct={share(m.inputTokens + m.outputTokens, maxTokens)} kind="tokens" />
-              </span>
-            </td>
-            <td data-label="Cost">
-              <span>
-                <Cost m={m} />
-              </span>
-            </td>
-            <td data-label="Active / waiting / wall">
-              <span>
-                {minutes(m.activeMs)} / {minutes(m.waitingMs)} / {minutes(m.wallMs)}
-                <Bar pct={share(m.wallMs, maxWall)} kind="time" />
-              </span>
-            </td>
-            <td data-label="Estimate vs actual">
-              planner {m.plannerMinutes} min, reviewer {m.reviewerMinutes} min, actual{" "}
-              {minutes(m.activeMs)}
-            </td>
-            <td data-label="Top tools">
-              {m.tools.map((t) => `${t.name} (${t.count})`).join(", ") || "-"}
-            </td>
-            <td data-label="Stack">{m.stack.join(", ") || "-"}</td>
-          </tr>
+          <MemberRow key={m.memberId} m={m} maxTokens={maxTokens} maxWall={maxWall} />
         ))}
       </tbody>
     </table>

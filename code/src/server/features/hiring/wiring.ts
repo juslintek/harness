@@ -8,14 +8,11 @@ import { type InterviewEnv, runInterview } from "./interview";
 
 const READY_REFRESH_MS = 60_000;
 
-// Kept apart from hiring/api.ts: it needs runtimes and the router, and the mcp tools that import
-// hiring/api are themselves reachable from runtimes.
-export function wireHiring(
+// engineReady is read inside synchronous scoring, so it reads the last answer of an async probe.
+function watchReady(
   db: Database,
-  env: InterviewEnv,
-  probe: RouteDeps = {},
-): { deps: HiringDeps; stop: () => void } {
-  // engineReady is read inside synchronous scoring, so it reads the last answer of an async probe.
+  probe: RouteDeps,
+): { isReady: (runtime: string) => boolean; stop: () => void } {
   let ready = new Set<string>();
   let stopped = false;
   const stoppedMidProbe = new Error("hiring stopped");
@@ -41,13 +38,30 @@ export function wireHiring(
   refresh();
   const timer = setInterval(refresh, READY_REFRESH_MS);
   timer.unref();
+  return {
+    isReady: (runtime) => ready.has(runtime),
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
+}
+
+// Kept apart from hiring/api.ts: it needs runtimes and the router, and the mcp tools that import
+// hiring/api are themselves reachable from runtimes.
+export function wireHiring(
+  db: Database,
+  env: InterviewEnv,
+  probe: RouteDeps = {},
+): { deps: HiringDeps; stop: () => void } {
+  const watch = watchReady(db, probe);
   const deps: HiringDeps = {
     // A role has no difficulty of its own; medium keeps the ranking from favouring either extreme.
     pickEngines: async ({ orgId, spec, max }) =>
       (
         await rankEngines(db, { orgId, difficulty: "medium", taskType: spec.taskTypes[0] ?? null })
       ).slice(0, max),
-    engineReady: (engine) => ready.has(engine.runtime),
+    engineReady: (engine) => watch.isReady(engine.runtime),
     budgetPaused: (memberId) => budgetGate(db, memberId).state === "paused",
     startInterview: (candidateId, questionIds) => {
       runInterview(db, env, deps, candidateId, questionIds).catch((err: unknown) =>
@@ -56,11 +70,5 @@ export function wireHiring(
     },
     wake: (memberId, reason, detail, causedBy) => wakeFor(db, memberId, reason, detail, causedBy),
   };
-  return {
-    deps,
-    stop: () => {
-      stopped = true;
-      clearInterval(timer);
-    },
-  };
+  return { deps, stop: watch.stop };
 }

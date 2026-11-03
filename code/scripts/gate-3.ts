@@ -236,16 +236,36 @@ async function settle(db: Db): Promise<void> {
   }
 }
 
-async function main(): Promise<void> {
-  const root = mkdtempSync(join(tmpdir(), "harness-gate3-"));
-  const { db, home, port, app, stop } = await boot(root);
-  const runDeps = { home, port };
+async function pickLeadModel(
+  db: Db,
+  runDeps: { home: string; port: number },
+): Promise<string | null> {
   await refreshModels(db, "claude", { listAcp: (spec) => refreshAcpModels(runDeps, spec) }).catch(
     (err: unknown) => console.error("claude model list unavailable, using the default", err),
   );
   const leadModel = await cheapestClaudeModel(db);
   console.log(`@lead model: ${leadModel ?? "default (no haiku listed)"}`);
-  const s = build(db, root, leadModel);
+  return leadModel;
+}
+
+function assignGateTask(db: Db, s: Scene): void {
+  const task = createTask(db, {
+    projectId: s.projectId,
+    title: "Add a notes migration and helper",
+    description:
+      "Add a SQL migration `db/001_notes.sql` creating table notes(id, body) and a `db/notes.ts` helper `addNote(body)` with a bun test.",
+    assigneeId: s.lead.id,
+    createdBy: s.owner,
+  });
+  s.taskId = task.id;
+  mark(`task #${task.number} created and assigned to @lead; no further input from here`);
+}
+
+async function main(): Promise<void> {
+  const root = mkdtempSync(join(tmpdir(), "harness-gate3-"));
+  const { db, home, port, app, stop } = await boot(root);
+  const runDeps = { home, port };
+  const s = build(db, root, await pickLeadModel(db, runDeps));
   const stopTimeline = watchTimeline(db, s);
   const leftovers = watchLeftovers(db, { graceMs: 90_000 });
   const hireRun = watchHireRun(db, s);
@@ -257,16 +277,7 @@ async function main(): Promise<void> {
     hiring.stop,
   ];
   try {
-    const task = createTask(db, {
-      projectId: s.projectId,
-      title: "Add a notes migration and helper",
-      description:
-        "Add a SQL migration `db/001_notes.sql` creating table notes(id, body) and a `db/notes.ts` helper `addNote(body)` with a bun test.",
-      assigneeId: s.lead.id,
-      createdBy: s.owner,
-    });
-    s.taskId = task.id;
-    mark(`task #${task.number} created and assigned to @lead; no further input from here`);
+    assignGateTask(db, s);
     await waitFor(db, s);
     await settle(db);
   } finally {

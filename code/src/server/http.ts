@@ -135,6 +135,36 @@ const trackingPort: McpDeps["tracking"] = {
   budgetState: (d, memberId) => budgetGate(d, memberId).state,
 };
 
+function mountMcp(app: Hono, deps: AppDeps): void {
+  const mcp = mcpHandler(
+    deps.db,
+    {
+      harnessHome: deps.home,
+      tracking: trackingPort,
+      onReport: (runId, text) =>
+        appendEvent(deps.db, { kind: "message", source: "mcp", runId, body: text }),
+    },
+    deps.port,
+  );
+  app.all("/mcp", (c) => mcp(c.req.raw));
+}
+
+function mountSessionRoutes(app: Hono, deps: AppDeps): void {
+  const { db } = deps;
+  app.use("/api/*", sessionMiddleware(db, deps.rp.origin));
+  app.route("/api/auth", accountRoutes(db, deps.rp));
+  app.route("/api", orgRoutes({ db, origin: deps.rp.origin }));
+  app.route("/api", boardRoutes(db));
+  app.route("/api", chatRoutes(db));
+  app.route("/api", wakeRoutes(db));
+  app.route("/api", profilesRoutes(db));
+  app.route("/api", policiesRoutes(db));
+  app.route("/api", hiringRoutes(db));
+  app.route("/api", budgetsRoutes(db));
+  app.route("/api", trackingRoutes(db));
+  app.route("/api", adminRoutes(deps));
+}
+
 export function createApp(deps: AppDeps): Hono {
   const { db } = deps;
   const app = new Hono();
@@ -152,17 +182,7 @@ export function createApp(deps: AppDeps): Hono {
     });
     return c.json(body);
   });
-  const mcp = mcpHandler(
-    db,
-    {
-      harnessHome: deps.home,
-      tracking: trackingPort,
-      onReport: (runId, text) =>
-        appendEvent(db, { kind: "message", source: "mcp", runId, body: text }),
-    },
-    deps.port,
-  );
-  app.all("/mcp", (c) => mcp(c.req.raw));
+  mountMcp(app, deps);
   app.route("/api/guard/hook", guardHook(db));
   app.use("/api/*", mutationOriginGuard(deps.rp.origin));
   app.route(
@@ -175,18 +195,7 @@ export function createApp(deps: AppDeps): Hono {
         deps.deliverEmailCode ?? ((email, code) => console.log(`email code for ${email}: ${code}`)),
     }),
   );
-  app.use("/api/*", sessionMiddleware(db, deps.rp.origin));
-  app.route("/api/auth", accountRoutes(db, deps.rp));
-  app.route("/api", orgRoutes({ db, origin: deps.rp.origin }));
-  app.route("/api", boardRoutes(db));
-  app.route("/api", chatRoutes(db));
-  app.route("/api", wakeRoutes(db));
-  app.route("/api", profilesRoutes(db));
-  app.route("/api", policiesRoutes(db));
-  app.route("/api", hiringRoutes(db));
-  app.route("/api", budgetsRoutes(db));
-  app.route("/api", trackingRoutes(db));
-  app.route("/api", adminRoutes(deps));
+  mountSessionRoutes(app, deps);
   app.use("/ws", sessionMiddleware(db), originGuard(deps.rp.origin));
   app.get("/ws", wsUpgrade(db));
   return app;

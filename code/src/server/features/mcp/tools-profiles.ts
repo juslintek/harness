@@ -14,7 +14,7 @@ function submit(db: ToolEnv["db"], profileId: string, card: unknown): string {
   return result.ok ? "ok" : fail(`invalid card: ${result.issues.join("; ")}`);
 }
 
-export function registerProfilesTools(server: McpServer, env: ToolEnv): void {
+function registerGet(server: McpServer, env: ToolEnv): void {
   defineTool(
     server,
     env,
@@ -39,23 +39,25 @@ export function registerProfilesTools(server: McpServer, env: ToolEnv): void {
       return { handle: target.handle, runtime, model, skills, card };
     },
   );
-  // One tool name serves both callers, so the token decides which profile it writes.
-  if (env.identity.candidateId !== null) {
-    defineCandidateTool(
-      server,
-      env,
-      { name: "profile_card_submit", description: CARD_DESCRIPTION, shape: cardShape },
-      (ctx, a) => {
-        const cand = getCandidate(ctx.db, ctx.candidateId);
-        const open = cand && !["failed", "hired", "rejected"].includes(cand.status);
-        if (!open) return fail("interview is closed");
-        const out = submit(ctx.db, cand.profileId, a.card);
-        recordCardAnswer(ctx.db, cand.id, ctx.runId);
-        return out;
-      },
-    );
-    return;
-  }
+}
+
+function registerCandidateSubmit(server: McpServer, env: ToolEnv): void {
+  defineCandidateTool(
+    server,
+    env,
+    { name: "profile_card_submit", description: CARD_DESCRIPTION, shape: cardShape },
+    (ctx, a) => {
+      const cand = getCandidate(ctx.db, ctx.candidateId);
+      const open = cand && !["failed", "hired", "rejected"].includes(cand.status);
+      if (!open) return fail("interview is closed");
+      const out = submit(ctx.db, cand.profileId, a.card);
+      recordCardAnswer(ctx.db, cand.id, ctx.runId);
+      return out;
+    },
+  );
+}
+
+function registerMemberSubmit(server: McpServer, env: ToolEnv): void {
   defineTool(
     server,
     env,
@@ -67,4 +69,11 @@ export function registerProfilesTools(server: McpServer, env: ToolEnv): void {
     },
     (ctx, a) => submit(ctx.db, ensureProfile(ctx.db, ctx.memberId).id, a.card),
   );
+}
+
+export function registerProfilesTools(server: McpServer, env: ToolEnv): void {
+  registerGet(server, env);
+  // One tool name serves both callers, so the token decides which profile it writes.
+  if (env.identity.candidateId !== null) registerCandidateSubmit(server, env);
+  else registerMemberSubmit(server, env);
 }
