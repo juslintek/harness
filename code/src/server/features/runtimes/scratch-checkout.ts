@@ -41,23 +41,33 @@ async function commonDirOf(path: string): Promise<string | null> {
   }
 }
 
+async function sweepOne(path: string): Promise<void> {
+  const common = await commonDirOf(path);
+  try {
+    // Twice: a locked worktree needs --force --force to be unregistered.
+    if (common !== null)
+      await gitOk(["--git-dir", common, "worktree", "remove", "--force", "--force", path], common);
+  } catch (err) {
+    console.error(`stale scratch checkout ${path} not removed by git`, err);
+  }
+  await rm(path, { recursive: true, force: true });
+  if (common !== null)
+    await gitOk(["--git-dir", common, "worktree", "prune"], common).catch(() => "");
+}
+
 // A crash or restart loses the in-memory map, so checkouts of runs that are no longer live would
-// stay forever. Only direct children named like a run id are touched.
+// stay forever. Only direct children named like a run id are touched. A run can write inside its
+// checkout, so one that cannot be removed is logged and skipped: startup must never wait on it.
 export async function sweepScratchCheckouts(home: string): Promise<void> {
-  const parent = join(home, "scratch-checkouts");
-  const names = await readdir(parent).catch(() => [] as string[]);
-  for (const name of names) {
+  const parent = await realpath(join(home, "scratch-checkouts")).catch(() => null);
+  if (parent === null) return;
+  for (const name of await readdir(parent).catch(() => [] as string[])) {
     if (!RUN_ID.test(name) || open.has(name)) continue;
     const path = join(parent, name);
-    const common = await commonDirOf(path);
     try {
-      if (common !== null)
-        await gitOk(["--git-dir", common, "worktree", "remove", "--force", path], common);
+      await sweepOne(path);
     } catch (err) {
-      console.error(`stale scratch checkout ${path} not removed by git`, err);
+      console.error(`stale scratch checkout ${path} not removed`, err);
     }
-    await rm(path, { recursive: true, force: true });
-    if (common !== null)
-      await gitOk(["--git-dir", common, "worktree", "prune"], common).catch(() => "");
   }
 }

@@ -1,5 +1,12 @@
 import { afterAll, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -60,4 +67,38 @@ test("sweep removes checkouts of runs that are not live and keeps live ones and 
   expect(existsSync(live)).toBe(true);
   expect(existsSync(foreign)).toBe(true);
   await dropScratchCheckout(live.slice(live.lastIndexOf("/") + 1));
+});
+
+test("a checkout that cannot be removed is skipped and the sweep still finishes", async () => {
+  const repo = await makeRepo();
+  const home = join(root, "home-locked");
+  const parent = join(home, "scratch-checkouts");
+  // A run can chmod inside its own checkout; rm then fails with EACCES.
+  const stuck = join(parent, Bun.randomUUIDv7());
+  mkdirSync(join(stuck, "sub"), { recursive: true });
+  writeFileSync(join(stuck, "sub", "f"), "x");
+  chmodSync(join(stuck, "sub"), 0o555);
+  const stale = join(parent, Bun.randomUUIDv7());
+  await git(repo, "worktree", "add", "--detach", stale, "HEAD");
+  const warn = console.error;
+  console.error = () => {};
+  try {
+    await sweepScratchCheckouts(home);
+  } finally {
+    console.error = warn;
+    chmodSync(join(stuck, "sub"), 0o755);
+  }
+  expect(existsSync(join(stuck, "sub", "f"))).toBe(true);
+  expect(existsSync(stale)).toBe(false);
+});
+
+test("a locked stale checkout is removed too", async () => {
+  const repo = await makeRepo();
+  const home = join(root, "home-lock");
+  const stale = join(home, "scratch-checkouts", Bun.randomUUIDv7());
+  await git(repo, "worktree", "add", "--detach", stale, "HEAD");
+  await git(repo, "worktree", "lock", stale);
+  await sweepScratchCheckouts(home);
+  expect(existsSync(stale)).toBe(false);
+  expect(await git(repo, "worktree", "list")).not.toContain(stale);
 });
