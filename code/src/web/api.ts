@@ -6,17 +6,19 @@ import { stepUp } from "./features/auth/webauthn";
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 
-class ApiError extends Error {
+export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly issues: string[];
+  constructor(status: number, message: string, issues: string[] = []) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.issues = issues;
   }
 }
 
 export interface ApiInit {
-  method: "POST" | "PATCH" | "DELETE";
+  method: "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
 }
 
@@ -35,6 +37,11 @@ const send = (path: string, init: ApiInit | undefined): Promise<Response> =>
 
 const errorOf = (body: unknown): string =>
   typeof body === "object" && body !== null && "error" in body ? String(body.error) : "";
+
+const issuesOf = (body: unknown): string[] =>
+  typeof body === "object" && body !== null && "issues" in body && Array.isArray(body.issues)
+    ? body.issues.map(String)
+    : [];
 
 // The login and enroll pages answer 401 themselves (a wrong code is not an expired session).
 function sessionLost(): void {
@@ -57,7 +64,8 @@ export async function api<T>(path: string, schema: z.ZodType<T>, init?: ApiInit)
     body = await res.json().catch(() => null);
   }
   if (res.status === 401) sessionLost();
-  if (!res.ok) throw new ApiError(res.status, errorOf(body) || `HTTP ${res.status}`);
+  if (!res.ok)
+    throw new ApiError(res.status, errorOf(body) || `HTTP ${res.status}`, issuesOf(body));
   return schema.parse(body);
 }
 

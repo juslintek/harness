@@ -7,6 +7,7 @@ import { ignored, me } from "../auth/me";
 import { useAction } from "../auth/use-action";
 import { AddAgent } from "./add-agent";
 import { isAdmin } from "./org-data";
+import { ProfileEditor } from "./profile-editor";
 
 const ROLES: Role[] = ["owner", "admin", "member", "viewer"];
 
@@ -20,6 +21,7 @@ function MemberRow({
   onChange: () => void;
 }): preact.JSX.Element {
   const action = useAction();
+  const [editing, setEditing] = useState(false);
   const base = `/api/orgs/${detail.org.slug}/members/${member.id}`;
   const call = (method: "PATCH" | "DELETE", body?: unknown): void => {
     action
@@ -68,6 +70,16 @@ function MemberRow({
             {member.paused ? "Resume" : "Pause"}
           </button>
         )}
+        {admin && member.kind === "agent" && (
+          <button
+            type="button"
+            aria-expanded={editing}
+            aria-label={`Profile of @${member.handle}`}
+            onClick={() => setEditing(!editing)}
+          >
+            Profile
+          </button>
+        )}
         {admin && (
           <button
             type="button"
@@ -80,6 +92,7 @@ function MemberRow({
         )}
       </span>
       <ErrorLine message={action.error} />
+      {editing && <ProfileEditor slug={detail.org.slug} member={member} />}
     </li>
   );
 }

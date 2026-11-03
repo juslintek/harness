@@ -1,0 +1,50 @@
+.new-hire textarea,
+.profile-editor textarea {
+  margin-bottom: 0.5rem;
+}
+
+.checks {
+  margin: 0.5rem 0;
+}
+
+.checks label,
+.profile-editor label.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-right: 1rem;
+}
+
+.candidate h4,
+.candidate h5 {
+  margin: 0.75rem 0 0.25rem;
+}
+
+.answers dt {
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.answers dd {
+  margin: 0.15rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.json {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+}
+
+.badge[data-state="hired"],
+.badge[data-state="answered"],
+.badge[data-state="deciding"] {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+
+.badge[data-state="rejected"],
+.badge[data-state="cancelled"] {
+  border-color: var(--error);
+  color: var(--error);
+}
