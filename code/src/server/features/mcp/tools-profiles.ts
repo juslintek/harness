@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { getCandidate } from "../hiring/api";
 import { findMemberByHandle, getMember } from "../orgs/api";
-import { ensureProfile, submitCard } from "../profiles/api";
+import { ensureProfile, profileOfMember, submitCard } from "../profiles/api";
 import { defineCandidateTool, defineTool, fail, type ToolEnv } from "./tools-kit";
 
 const cardShape = { card: z.record(z.string(), z.unknown()) };
@@ -29,7 +29,12 @@ export function registerProfilesTools(server: McpServer, env: ToolEnv): void {
         ? findMemberByHandle(ctx.db, ctx.orgId, a.handle.replace(/^@/, ""))
         : getMember(ctx.db, ctx.memberId);
       if (target?.kind !== "agent") return fail("no agent with that handle");
-      const { runtime, model, skills, card } = ensureProfile(ctx.db, target.id);
+      // Reading a teammate must not create their profile row.
+      const profile = a.handle
+        ? profileOfMember(ctx.db, target.id)
+        : ensureProfile(ctx.db, target.id);
+      if (!profile) return fail("no profile");
+      const { runtime, model, skills, card } = profile;
       return { handle: target.handle, runtime, model, skills, card };
     },
   );

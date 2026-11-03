@@ -254,6 +254,7 @@ export async function startRun(
     id: full.id,
     taskId: input.taskId ?? null,
     member: input.member ?? null,
+    chargedTo: input.candidate?.chargedTo,
     agentId: spec.id,
     model: input.model ?? null,
     repo: input.repo,

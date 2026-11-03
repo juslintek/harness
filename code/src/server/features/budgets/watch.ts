@@ -29,7 +29,7 @@ function killLiveRuns(db: Database, b: BudgetRow): void {
   for (const memberId of memberIdsOf(db, { kind: b.scopeKind, id: b.scopeId })) {
     const live = db
       .query<{ id: string }, [string]>(
-        "SELECT id FROM runs WHERE member_id = ? AND ended_at IS NULL",
+        "SELECT id FROM runs WHERE COALESCE(member_id, charged_to) = ? AND ended_at IS NULL",
       )
       .all(memberId);
     for (const { id } of live) killRun(db, id, "budget_exhausted");
@@ -41,7 +41,9 @@ function evaluate(db: Database, runId: string | null): void {
     runId === null
       ? null
       : (db
-          .query<{ member_id: string | null }, [string]>("SELECT member_id FROM runs WHERE id = ?")
+          .query<{ member_id: string | null }, [string]>(
+            "SELECT COALESCE(member_id, charged_to) AS member_id FROM runs WHERE id = ?",
+          )
           .get(runId)?.member_id ?? null);
   if (memberId === null) return;
   const now = Date.now();

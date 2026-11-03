@@ -38,7 +38,7 @@ function spendOf(
          e.reported_cost_usd IS NOT NULL AS reported
        FROM events e JOIN runs r ON r.id = e.run_id
        WHERE e.kind = 'usage' AND e.ts >= ?
-         AND r.member_id IN (${SCOPE_MEMBERS_SQL[scope.kind]})
+         AND COALESCE(r.member_id, r.charged_to) IN (${SCOPE_MEMBERS_SQL[scope.kind]})
        GROUP BY r.agent_id, e.gen_ai_request_model, reported`,
     )
     .all(periodStart, scope.id);

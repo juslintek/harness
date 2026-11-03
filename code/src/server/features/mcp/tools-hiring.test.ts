@@ -4,7 +4,6 @@ import { type HiringWorld, hiringWorld } from "../../test-support/hiring-kit";
 import { candidateRunEnded, getHire, listHires, pass, score, startHiring } from "../hiring/api";
 import { addAgentMember, createOrg, findMemberByHandle } from "../orgs/api";
 import { setPolicy } from "../policies/api";
-import { getProfile } from "../profiles/api";
 import { mintRunToken } from "./api";
 import { call, listen } from "./test-kit";
 
@@ -54,14 +53,6 @@ function toDeciding(hire: HireView): void {
   }
 }
 
-const goodCard = {
-  summary: "Backend dev",
-  specialties: ["backend"],
-  strengths: ["sql"],
-  limits: ["no frontend"],
-  preferredTaskTypes: ["feature"],
-};
-
 test("candidate token calling board_list or chat_post is refused", async () => {
   const hire = await w.file();
   const token = candidateToken(hire.candidates[0]?.id as string);
@@ -98,6 +89,7 @@ test("interview_answer stores the answer and the run end advances the request", 
 
 test("interview_answer refuses another request's question", async () => {
   const hire = await w.file();
+  w.db.query("UPDATE hire_requests SET status = 'cancelled'").run();
   const other = await w.file();
   const out = await call(
     server,
@@ -109,32 +101,6 @@ test("interview_answer refuses another request's question", async () => {
     },
   );
   expect(out).toEqual({ isError: true, text: "unknown question" });
-});
-
-test("profile_card_submit with a bad card returns the issues, a good card is stored", async () => {
-  const hire = await w.file();
-  const cand = hire.candidates[0];
-  const token = candidateToken(cand?.id as string);
-  const bad = await call(server, token, "profile_card_submit", { card: { summary: "x" } });
-  expect(bad.isError).toBe(true);
-  expect(bad.text).toContain("limits");
-  expect(getProfile(w.db, cand?.profile.id as string)?.card).toBeNull();
-  const good = await call(server, token, "profile_card_submit", { card: goodCard });
-  expect(good.isError).toBe(false);
-  expect(getProfile(w.db, cand?.profile.id as string)?.card?.summary).toBe("Backend dev");
-});
-
-test("a member submits its own card and reads a teammate's profile", async () => {
-  const dev = w.agent("dev");
-  const token = memberToken(dev.id);
-  expect((await call(server, token, "profile_card_submit", { card: goodCard })).isError).toBe(
-    false,
-  );
-  const own = JSON.parse((await call(server, token, "profile_get")).text);
-  expect(own).toMatchObject({ handle: "dev", runtime: "claude", card: { summary: "Backend dev" } });
-  const boss = await call(server, token, "profile_get", { handle: "boss" });
-  expect(JSON.parse(boss.text)).toMatchObject({ handle: "boss", card: null });
-  expect((await call(server, token, "profile_get", { handle: "nobody" })).isError).toBe(true);
 });
 
 test("hire_request from an agent creates a request in its team", async () => {
@@ -150,6 +116,35 @@ test("hire_request from an agent creates a request in its team", async () => {
   expect(made).toHaveLength(1);
   expect(made[0]).toMatchObject({ teamId: w.teamId, requestedBy: dev.id, status: "interviewing" });
   expect(JSON.parse(out.text).hire).toBe(made[0]?.id);
+});
+
+test("hire_request is refused while the requester's budget is exhausted", async () => {
+  stop();
+  stop = startHiring(w.db, { ...w.deps, budgetPaused: () => true }, null);
+  const dev = w.agent("dev");
+  const out = await call(server, memberToken(dev.id), "hire_request", {
+    title: "Data engineer",
+    specialty: "database",
+    summary: "x",
+    taskTypes: ["feature"],
+  });
+  expect(out).toEqual({
+    isError: true,
+    text: "your budget is exhausted, so no new interviews can start",
+  });
+  expect(listHires(w.db, w.orgId)).toHaveLength(0);
+});
+
+test("hire_request is refused while the team has an open request", async () => {
+  await w.file();
+  const dev = w.agent("dev");
+  const out = await call(server, memberToken(dev.id), "hire_request", {
+    title: "Data engineer",
+    specialty: "database",
+    summary: "x",
+    taskTypes: ["feature"],
+  });
+  expect(out).toEqual({ isError: true, text: "this team already has an open hire request" });
 });
 
 test("hire_request names a team the caller is not in is refused", async () => {

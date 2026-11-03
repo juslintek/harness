@@ -15,6 +15,7 @@ const spec: RoleSpec = {
 const deps: HiringDeps = {
   pickEngines: () => Promise.resolve([{ runtime: "claude", model: null }]),
   engineReady: () => true,
+  budgetPaused: () => false,
   startInterview: () => {},
   wake: () => {},
 };
@@ -83,6 +84,16 @@ test("an admin of another org gets nothing on this org's hire and writes nothing
   expect(k.db.query<{ status: string }, []>("SELECT status FROM hire_requests").get()?.status).toBe(
     "scoring",
   );
+});
+
+test("filing is refused with a reason while the requester's budget is exhausted", async () => {
+  const { k, owner, teamId } = await world();
+  stop();
+  stop = startHiring(k.db, { ...deps, budgetPaused: () => true }, null);
+  const res = await k.call(owner, "POST", "/api/orgs/acme/hires", { teamId, spec });
+  expect(res.status).toBeGreaterThanOrEqual(400);
+  expect((await res.json()).error).toBe("your budget is exhausted, so no new interviews can start");
+  expect(k.db.query("SELECT 1 FROM hire_requests").get()).toBeNull();
 });
 
 test("decide needs step-up, and a second decide is a conflict", async () => {

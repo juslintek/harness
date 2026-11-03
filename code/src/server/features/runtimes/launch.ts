@@ -44,6 +44,8 @@ export interface RunMember {
 export interface RunCandidate {
   candidateId: string;
   orgId: string;
+  // The member whose budgets the run counts against; null when a person without a member asked.
+  chargedTo: string | null;
 }
 
 const CANDIDATE_SCOPES: TokenScope[] = ["report", "guard_hook", "interview"];

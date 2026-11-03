@@ -73,6 +73,7 @@ function stubDeps(
         ].slice(0, max),
       ),
     engineReady: () => true,
+    budgetPaused: () => false,
     startInterview: (candidateId, questionIds) => interviews.push({ candidateId, questionIds }),
     wake: (memberId, reason, detail, causedBy) =>
       wakes.push({ memberId, reason, detail, causedBy }),

@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { specialties, taskTypes } from "../../../shared/router";
-import { getOrg } from "../orgs/api";
+import { getMember, getOrg } from "../orgs/api";
 import { getProfile } from "../profiles/api";
 import { type RunDeps, scratchRepo, startRun, waitForRun } from "../runtimes/api";
 import { candidateRunEnded } from "./flow";
@@ -61,12 +61,17 @@ export async function runInterview(
     const hire = cand ? getHire(db, cand.requestId) : null;
     const prompt = promptOf(db, candidateId, questionIds);
     if (!profile || !hire || prompt === null) throw new Error("candidate is gone");
+    if (deps.budgetPaused(hire.requestedBy)) return candidateRunEnded(db, deps, candidateId, false);
     const runId = await startRun(db, env.runDeps, {
       agentId: profile.runtime,
       ...(profile.model ? { model: profile.model } : {}),
       repo: scratchRepo(env.home, hire.orgId),
       prompt,
-      candidate: { candidateId, orgId: hire.orgId },
+      candidate: {
+        candidateId,
+        orgId: hire.orgId,
+        chargedTo: getMember(db, hire.requestedBy)?.id ?? null,
+      },
     });
     ok = (await waitForRun(runId)).state === "completed";
   } catch (err) {

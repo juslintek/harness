@@ -187,3 +187,23 @@ export function teamIdsOf(db: Database, memberId: string): string[] {
     .all(memberId)
     .map((r) => r.team_id);
 }
+
+export function hasOpenRequest(db: Database, teamId: string): boolean {
+  return (
+    db
+      .query(
+        "SELECT 1 FROM hire_requests WHERE team_id = ? AND status IN ('interviewing', 'followups', 'answering', 'scoring', 'deciding') LIMIT 1",
+      )
+      .get(teamId) !== null
+  );
+}
+
+export function requestsSince(db: Database, orgId: string, since: number): number {
+  return (
+    db
+      .query<{ n: number }, [string, number]>(
+        "SELECT COUNT(*) AS n FROM hire_requests WHERE org_id = ? AND created_at >= ?",
+      )
+      .get(orgId, since)?.n ?? 0
+  );
+}

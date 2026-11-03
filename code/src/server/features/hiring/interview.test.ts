@@ -3,8 +3,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type HiringWorld, hiringWorld } from "../../test-support/hiring-kit";
+import { budgetGate, startBudgets, upsertBudget } from "../budgets/api";
+import { wireChat } from "../chat/api";
 import { verifyRunToken } from "../mcp/api";
 import { getRun, type RunDeps } from "../runtimes/api";
+import { recordUsage } from "../usage/api";
 import { getHire, recordAnswer } from "./api";
 import { runInterview } from "./interview";
 
@@ -122,4 +125,75 @@ test("a run that ends without answering fails its candidate and a launch failure
   expect(now?.candidates.map((c) => c.status)).toEqual(["failed", "failed"]);
   expect(now?.status).toBe("rejected");
   expect(now?.decisionReason).toBe("no candidate answered");
+});
+
+function usage(db: HiringWorld["db"], runId: string, usd: number): void {
+  recordUsage(db, { id: runId, agent: "claude" }, [
+    {
+      model: "m",
+      inputTokens: 1,
+      outputTokens: 1,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      reasoningTokens: 0,
+      reportedCostUsd: usd,
+      source: "acp",
+    },
+  ]);
+}
+
+test("an interview run counts against the requester's budget and is killed when it runs out", async () => {
+  const w = hiringWorld();
+  wireChat(w.db);
+  const hire = await w.file();
+  upsertBudget(w.db, w.orgId, { scopeKind: "member", scopeId: w.boss.id, monthlyUsd: 1 }, "owner");
+  const stop = startBudgets(w.db);
+  const home = mkdtempSync(join(tmpdir(), "interview-"));
+  homes.push(home);
+  const lane: Lane = async (ctx) => {
+    usage(w.db, ctx.runId, 1.5);
+    // The usage above already tripped the kill, so the signal may have fired before this line.
+    if (!ctx.signal.aborted) {
+      await new Promise<void>((resolve) => ctx.signal.addEventListener("abort", () => resolve()));
+    }
+    return finished;
+  };
+  const env = { home, runDeps: { home, port: 1, lane } };
+  await runInterview(
+    w.db,
+    env,
+    w.deps,
+    hire.candidates[0]?.id as string,
+    hire.questions.map((q) => q.id),
+  );
+  stop();
+  const run = w.db
+    .query<
+      { member_id: string | null; charged_to: string | null; state: string; reason: string },
+      []
+    >("SELECT member_id, charged_to, state, reason FROM runs")
+    .get();
+  expect(run).toEqual({
+    member_id: null,
+    charged_to: w.boss.id,
+    state: "killed",
+    reason: "budget_exhausted",
+  });
+  expect(budgetGate(w.db, w.boss.id).state).toBe("paused");
+});
+
+test("no interview run starts while the requester's budget is exhausted", async () => {
+  const w = hiringWorld();
+  const hire = await w.file();
+  const { env, seen } = interviewEnv(w, () => {});
+  const paused = { ...w.deps, budgetPaused: () => true };
+  await runInterview(
+    w.db,
+    env,
+    paused,
+    hire.candidates[0]?.id as string,
+    hire.questions.map((q) => q.id),
+  );
+  expect(seen).toHaveLength(0);
+  expect(getHire(w.db, hire.id)?.candidates[0]?.status).toBe("failed");
 });

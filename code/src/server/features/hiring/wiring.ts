@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { budgetGate } from "../budgets/api";
 import { wakeFor } from "../heartbeat/api";
 import { rankEngines, readyRuntimes } from "../router/api";
 import type { HiringDeps } from "./hire";
@@ -32,6 +33,7 @@ export function wireHiring(
         await rankEngines(db, { orgId, difficulty: "medium", taskType: spec.taskTypes[0] ?? null })
       ).slice(0, max),
     engineReady: (engine) => ready.has(engine.runtime),
+    budgetPaused: (memberId) => budgetGate(db, memberId).state === "paused",
     startInterview: (candidateId, questionIds) => {
       runInterview(db, env, deps, candidateId, questionIds).catch((err: unknown) =>
         console.error("hiring: interview crashed", candidateId, err),

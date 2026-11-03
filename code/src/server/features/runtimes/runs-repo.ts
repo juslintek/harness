@@ -53,6 +53,7 @@ export interface NewRun {
   id: string;
   taskId: string | null;
   member?: RunMember | null;
+  chargedTo?: string | null | undefined;
   agentId: string;
   model: string | null;
   repo: string;
@@ -84,7 +85,7 @@ function toRow(r: DbRun): RunRow {
 
 export function insertRun(db: Database, run: NewRun): void {
   db.run(
-    "INSERT INTO runs (id, task_id, member_id, project_id, agent_id, model, repo, prompt, state, created_at, attempt, batch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)",
+    "INSERT INTO runs (id, task_id, member_id, project_id, agent_id, model, repo, prompt, state, created_at, attempt, batch_id, charged_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)",
     [
       run.id,
       run.taskId,
@@ -97,6 +98,7 @@ export function insertRun(db: Database, run: NewRun): void {
       Date.now(),
       run.attempt ?? 1,
       run.batchId ?? null,
+      run.chargedTo ?? null,
     ],
   );
 }
