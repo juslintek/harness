@@ -1,12 +1,12 @@
 import { afterAll, expect, test } from "bun:test";
-import { budgetGate, startBudgets } from "./features/budgets/api";
-import { upsertBudget } from "./features/budgets/repo";
+import { budgetGate, startBudgets, upsertBudget } from "./features/budgets/api";
 import { wireChat } from "./features/chat/api";
 import { addAgentMember, createOrg } from "./features/orgs/api";
 import type { RunOutcome } from "./features/runtimes/adapter";
 import { startRun, waitForRun, wireRuntimes } from "./features/runtimes/api";
 import { cleanup, fakeDeps, fixture } from "./features/runtimes/manager-kit";
 import { recordUsage } from "./features/usage/api";
+import { until } from "./test-support/app-kit";
 
 afterAll(cleanup);
 
@@ -43,7 +43,7 @@ test("crossing 100% kills a live run of the member with budget_exhausted and bud
     prompt: "go",
     member: { memberId: bob.id, orgId: org.id, scopes: ["report"] },
   });
-  while (!started) await Bun.sleep(10);
+  await until(() => started);
   recordUsage(x.db, { id: runId, agent: "fake" }, [
     {
       model: "m",

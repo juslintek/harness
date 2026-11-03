@@ -155,6 +155,23 @@ test("PUT with monthlyUsd 0 is a 400, a valid PUT then DELETE works and a foreig
   const scope = { scopeKind: "org", scopeId: acme.id };
   expect((await put({ ...scope, monthlyUsd: 0 })).status).toBe(400);
   expect((await put({ scopeKind: "org", scopeId: "other-org", monthlyUsd: 5 })).status).toBe(400);
+  const rival = await k.user({ stepUp: true });
+  const beta = k.org(rival, "beta");
+  const betaTeam = createTeam(k.db, beta.id, "Red");
+  const betaAgent = addAgentMember(k.db, beta.id, {
+    agentId: "fake",
+    handle: "eve",
+    displayName: "eve",
+    specialties: [],
+  });
+  for (const [scopeKind, scopeId] of [
+    ["org", beta.id],
+    ["team", betaTeam.id],
+    ["member", betaAgent.id],
+  ] as const) {
+    expect((await put({ scopeKind, scopeId, monthlyUsd: 5 })).status).toBe(400);
+  }
+  expect(k.db.query("SELECT 1 FROM budgets").all()).toHaveLength(0);
   const saved = await (await put({ ...scope, monthlyUsd: 5 })).json();
   expect(saved).toMatchObject({ monthlyUsd: 5, state: "ok" });
   const list = await (await k.call(owner, "GET", "/api/orgs/acme/budgets")).json();
