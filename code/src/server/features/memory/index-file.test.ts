@@ -83,8 +83,8 @@ test("project lessons lead the index even when the task text matches nothing in 
   );
   add("orgs/A/agents/m1/mine.md", "# Mine\nclamp helper tips");
   const text = buildMemoryIndex(env.db, alice, "pa", "clamp helper");
-  expect(text.startsWith("# Project lessons\n\n## Header rule\n/memories/project/pa/rule.md")).toBe(
-    true,
-  );
-  expect(text.indexOf("# Your notes")).toBeGreaterThan(text.indexOf("# Project lessons"));
+  expect(
+    text.startsWith("# Project and org lessons\n\n## Header rule\n/memories/project/pa/rule.md"),
+  ).toBe(true);
+  expect(text.indexOf("# Your notes")).toBeGreaterThan(text.indexOf("# Project and org lessons"));
 });

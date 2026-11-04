@@ -142,3 +142,36 @@ test("a lesson of another org's project with the same slug is not listed", async
   expect(memoryNotice(k.db, bob, "Their rule", true, k.projectId)).not.toContain("Their rule");
   expect(memoryNotice(k.db, bob, "x", true, theirs.id)).not.toContain("Their rule");
 });
+
+test("an org lesson is listed for a task in any project of the org, another org's is not", async () => {
+  const k = setup();
+  const bob = k.agent("bob");
+  const viewer = agentViewer(k.db, bob.id);
+  const put = async (orgId: string, v: typeof viewer, title: string): Promise<void> => {
+    const loc = resolveNotePath("/memories/org/owner.md", v, projectSlugs(k.db, orgId));
+    if (loc === null || loc === "dir") throw new Error("bad path");
+    await createNote(k.db, k.home, { viewer: v, runId: null }, loc, `# ${title}\nbody`, {
+      type: "lesson",
+    });
+  };
+  await put(k.orgId, viewer, "Org owner line");
+  const second = createProject(k.db, { orgId: k.orgId, key: "api", name: "Api" });
+  const text = memoryNotice(k.db, bob, "unrelated", true, second.id);
+  expect(text).toContain("Lessons for this project and org.");
+  expect(text).toContain("- /memories/org/owner.md — Org owner line");
+  const other = createOrg(k.db, {
+    name: "Other",
+    slug: "other",
+    ownerUserId: "u2",
+    ownerName: "O",
+    ownerHandle: "owner2",
+  });
+  const eve = addAgentMember(k.db, other.id, {
+    agentId: "fake",
+    handle: "eve",
+    displayName: "eve",
+    specialties: [],
+  });
+  await put(other.id, agentViewer(k.db, eve.id), "Their org line");
+  expect(memoryNotice(k.db, bob, "Their org line", true, k.projectId)).not.toContain("Their org");
+});

@@ -50,10 +50,11 @@ export function buildMemoryIndex(
   let size = 0;
   // Lessons are cross-cutting rules, so they lead even when the task text matches nothing in them.
   const isLesson = (n: NoteSummary): boolean =>
-    wanted !== null && n.scope === "project" && n.projectId === wanted && n.type === "lesson";
+    n.type === "lesson" &&
+    (n.scope === "org" || (wanted !== null && n.scope === "project" && n.projectId === wanted));
   const lessons = notes.filter(isLesson).sort((a, b) => b.updated.localeCompare(a.updated));
   const groups: Array<[NoteSummary[], string]> = [
-    [lessons, "# Project lessons"],
+    [lessons, "# Project and org lessons"],
     ...SCOPES.map(([scope, heading]): [NoteSummary[], string] => [
       notes.filter((x) => x.scope === scope && !isLesson(x)),
       heading,

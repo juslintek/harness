@@ -64,10 +64,12 @@ export function noteDisk(db: Db, noteId: string): string | null {
       "SELECT disk, type, scope FROM notes WHERE id = ?",
     )
     .get(noteId);
-  return row?.type === "lesson" && row.scope === "project" ? row.disk : null;
+  return row?.type === "lesson" && (row.scope === "project" || row.scope === "org")
+    ? row.disk
+    : null;
 }
 
-// The accepted lesson whose project note carries the rule; null until memory has written it.
+// The accepted lesson whose project or org note carries the rule; null until memory has written it.
 export function acceptedLesson(db: Db, home: string, s: Scene): LessonRow | null {
   for (const l of lessons(db, s.orgId)) {
     if (l.status !== "accepted" || l.reviewer_id !== s.lead.id || l.note_id === null) continue;
@@ -204,10 +206,16 @@ export function assertOutcome(db: Db, s: Scene, home: string, taskA: string, tas
     "2 a lesson by @dev was decided by @lead",
   );
   const disk = lesson?.note_id == null ? null : noteDisk(db, lesson.note_id);
-  const inDir = disk?.startsWith(`orgs/${s.orgId}/projects/${s.projectId}/lessons/`) ?? false;
+  const inDir =
+    disk?.startsWith(`orgs/${s.orgId}/projects/${s.projectId}/lessons/`) === true ||
+    disk?.startsWith(`orgs/${s.orgId}/org/lessons/`) === true;
   check(
-    disk !== null && inDir && existsSync(join(home, "memory", disk)) && committed(home, disk),
-    "3 the lesson note file is in the project lessons dir and in the vault git log",
+    disk !== null &&
+      inDir &&
+      existsSync(join(home, "memory", disk)) &&
+      readFileSync(join(home, "memory", disk), "utf8").includes(SECRET) &&
+      committed(home, disk),
+    "3 the lesson note file is in the project or org lessons dir, carries the rule and is in the vault git log",
   );
   const reads = devReads(db, s, taskB);
   const first = reads.at(0);

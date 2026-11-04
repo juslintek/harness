@@ -169,7 +169,7 @@ async function main(): Promise<void> {
   try {
     taskA = createTaskA(db, s);
     if (await waitForLesson(db, home, s, taskA)) {
-      mark("lesson accepted by @lead and its note is in the project scope");
+      mark("lesson accepted by @lead and its note is in the project or org scope");
       taskB = createTaskB(db, s);
       await waitForTaskB(db, s, taskB);
     }

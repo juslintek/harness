@@ -20,10 +20,10 @@ const WITH_FILE =
   "Shared memory notes are in the file named by $HARNESS_MEMORY_FILE; read it before you start.";
 
 const LESSONS_HEAD =
-  "Lessons for this project. Your first step, before `task_checkout`, is to read each one with the `memory` tool (`action: view`, `path` as listed) and follow it unless the task says otherwise:";
+  "Lessons for this project and org. Your first step, before `task_checkout`, is to read each one with the `memory` tool (`action: view`, `path` as listed) and follow it unless the task says otherwise:";
 
 // Path and title only: the body is for the agent to open, and a note could carry instructions.
-// Project lessons are rules for all work there, so they are listed by recency, not by topic match.
+// Project and org lessons are rules for all work there, so they are listed by recency, not by topic match.
 function hints(
   db: Database,
   member: MemberRow,
@@ -32,10 +32,14 @@ function hints(
 ): string {
   const viewer = agentViewer(db, member.id);
   const slugs = projectSlugs(db, member.orgId);
-  const lessons =
-    projectId === null
+  const lessons = [
+    ...(projectId === null
       ? []
-      : searchNotes(db, viewer, { type: "lesson", scope: "project", projectId, limit: HITS });
+      : searchNotes(db, viewer, { type: "lesson", scope: "project", projectId, limit: HITS })),
+    ...searchNotes(db, viewer, { type: "lesson", scope: "org", limit: HITS }),
+  ]
+    .sort((a, b) => b.updated.localeCompare(a.updated))
+    .slice(0, HITS);
   const listed = new Set(lessons.map((n) => n.id));
   const found = searchNotes(db, viewer, { text: taskText, anyWord: true, limit: HITS + HITS })
     .filter((n) => !listed.has(n.id))
@@ -53,7 +57,7 @@ function hints(
   return out;
 }
 
-// Only a wake about a task puts the member in a project's lessons.
+// Org lessons are listed for every member; only a wake about a task adds a project's lessons.
 export function wakeTaskProject(db: Database, wakes: WakeRow[]): string | null {
   for (const w of wakes) {
     const task = w.taskId === null ? null : getTask(db, w.taskId);
