@@ -3,6 +3,7 @@ import { afterEach, expect, test } from "bun:test";
 import { startMemory } from "./api";
 import { proposeLessons } from "./lessons";
 import { decideLesson } from "./lessons-decide";
+import { finishAcceptedLessons } from "./lessons-recover";
 import { close, GOOD, type World, world } from "./lessons-test-kit";
 
 let w: World;
@@ -66,4 +67,23 @@ test("another lesson note of the same task is not taken for the unfinished one",
   await startMemory(w.db, { home: w.home })();
   expect(noteCount()).toBe(2);
   expect(noteIdOf(b?.id as string)).not.toBe(noteIdOf(a?.id as string));
+});
+
+test("a failed note_id link keeps the lesson accepted and the next start links the same note", async () => {
+  const { lead, id } = await accepted();
+  w.db.run(
+    "CREATE TRIGGER no_link BEFORE UPDATE OF note_id ON lessons BEGIN SELECT RAISE(ABORT, 'link failed'); END",
+  );
+  await expect(
+    decideLesson(w.db, w.home, id, { memberId: lead.id, userId: null }, "accept", "ok"),
+  ).rejects.toThrow("link failed");
+  expect(w.db.query("SELECT status FROM lessons WHERE id = ?").get(id)).toEqual({
+    status: "accepted",
+  });
+  expect(noteIdOf(id)).toBeNull();
+  expect(noteCount()).toBe(1);
+  w.db.run("DROP TRIGGER no_link");
+  await finishAcceptedLessons(w.db, w.home);
+  expect(noteIdOf(id)).not.toBeNull();
+  expect(noteCount()).toBe(1);
 });

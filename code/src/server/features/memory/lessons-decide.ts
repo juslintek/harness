@@ -146,13 +146,16 @@ export async function decideLesson(
     // The status flips first so a second reviewer is turned away at once; it flips back when the
     // note cannot be written, so no lesson stays accepted without a note.
     claim(db, lesson.id, "accepted", reviewerId, why, body);
+    let noteId: string;
     try {
-      const noteId = await writeNote(db, home, lesson, body);
-      db.query("UPDATE lessons SET note_id = ? WHERE id = ?").run(noteId, lesson.id);
+      noteId = await writeNote(db, home, lesson, body);
     } catch (e) {
       release(db, lesson.id, lesson.body);
       throw e;
     }
+    // The note exists now, so a failed link must not release the lesson: it stays accepted with no
+    // note_id and finishAcceptedLessons links the tagged note on the next start.
+    db.query("UPDATE lessons SET note_id = ? WHERE id = ?").run(noteId, lesson.id);
   }
   // confidence is a ranking input and not part of the public LessonView.
   const { confidence: _confidence, ...out } = getLesson(db, lesson.id) as LessonView & {
