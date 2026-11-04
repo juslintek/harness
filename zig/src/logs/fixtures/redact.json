@@ -1,0 +1,182 @@
+[
+ {
+  "input": "",
+  "expected": ""
+ },
+ {
+  "input": "nothing secret here",
+  "expected": "nothing secret here"
+ },
+ {
+  "input": "PASSWORD=hunter2 TOKEN=abc SECRET=x",
+  "expected": "PASSWORD=[REDACTED:secret] TOKEN=[REDACTED:secret] SECRET=[REDACTED:secret]"
+ },
+ {
+  "input": "password = \"a b c\" and password: 'x y' done",
+  "expected": "password = [REDACTED:secret] and password: [REDACTED:secret] done"
+ },
+ {
+  "input": "password=\"unterminated and more",
+  "expected": "password=\"unterminated and more"
+ },
+ {
+  "input": "password=[REDACTED:secret] again",
+  "expected": "password=[REDACTED:secret] again"
+ },
+ {
+  "input": "--password=hunter2 --api-key abc --access_key 'q r'",
+  "expected": "--password=[REDACTED:secret] --api-key [REDACTED:secret] --access_key [REDACTED:secret]"
+ },
+ {
+  "input": "--token  \t tok1 --secret=--password",
+  "expected": "--token  \t [REDACTED:secret] --secret=[REDACTED:secret]"
+ },
+ {
+  "input": "{\"api_key\":\"abc\",\"token\":\"t\",\"nested\":{\"secret\":\"s\"}}",
+  "expected": "{\"api_key\":[REDACTED:secret],\"token\":[REDACTED:secret],\"nested\":{\"secret\":[REDACTED:secret]}}"
+ },
+ {
+  "input": "x-api-key: abc123; token=abc&other=1",
+  "expected": "x-api-key: [REDACTED:secret]; token=[REDACTED:secret]&other=1"
+ },
+ {
+  "input": "my_token_value=abc not_a_secret=1 mytoken=zzz",
+  "expected": "my_token_value=abc not_a_secret=[REDACTED:secret] mytoken=[REDACTED:secret]"
+ },
+ {
+  "input": "Token : abc\nSecret\t=\tdef",
+  "expected": "Token : [REDACTED:secret]\nSecret\t=\t[REDACTED:secret]"
+ },
+ {
+  "input": "Ünïcödé password=héllo wörld",
+  "expected": "Ünïcödé password=[REDACTED:secret] wörld"
+ },
+ {
+  "input": "password= spaced",
+  "expected": "password= [REDACTED:secret]"
+ },
+ {
+  "input": "password=a b",
+  "expected": "password=[REDACTED:secret] b"
+ },
+ {
+  "input": "emoji 🙂 token=🙂🙂 end",
+  "expected": "emoji 🙂 token=[REDACTED:secret] end"
+ },
+ {
+  "input": "tÖken=abc passwörd=abc",
+  "expected": "tÖken=abc passwörd=abc"
+ },
+ {
+  "input": "Bearer abcdefgh and BEARER   ABCDEFGH12 and bearer short",
+  "expected": "[REDACTED:bearer] and [REDACTED:bearer] and bearer short"
+ },
+ {
+  "input": "Authorization: Basic dXNlcjpwYXNzd29yZA==",
+  "expected": "Authorization: [REDACTED:basic-auth]"
+ },
+ {
+  "input": "authorization=\"Basic abcdefgh1234\"",
+  "expected": "authorization=\"[REDACTED:basic-auth]\""
+ },
+ {
+  "input": "AUTHORIZATION: basic ABCDEFGH",
+  "expected": "AUTHORIZATION: [REDACTED:basic-auth]"
+ },
+ {
+  "input": "postgres://user:pa:ss@host:5432/db and http://u:p@x/ and ftp://onlyuser@host",
+  "expected": "postgres://[REDACTED:url-credentials]@host:5432/db and http://[REDACTED:url-credentials]@x/ and ftp://onlyuser@host"
+ },
+ {
+  "input": "git clone HTTPS://Bob:Pw@github.com/x.git; a1+b.c-d://u:p@h",
+  "expected": "git clone HTTPS://[REDACTED:url-credentials]@github.com/x.git; a1+b.c-d://[REDACTED:url-credentials]@h"
+ },
+ {
+  "input": "sk-ant-abcdefgh sk-ant-abc sk-abcdefghijklmnopqrstuvwxyz sk-proj-abcdefghijklmnop12",
+  "expected": "[REDACTED:anthropic-key] sk-ant-abc [REDACTED:openai-key] [REDACTED:openai-key]"
+ },
+ {
+  "input": "xsk-ant-abcdefghijkl and _sk-ant-abcdefghijkl",
+  "expected": "xsk-ant-abcdefghijkl and _sk-ant-abcdefghijkl"
+ },
+ {
+  "input": "ghp_abcdefghijklmnopqrst ghs_abcdefghijklmnopqrstu gho_short",
+  "expected": "[REDACTED:github-token] [REDACTED:github-token] gho_short"
+ },
+ {
+  "input": "AKIAIOSFODNN7EXAMPLE, wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+  "expected": "[REDACTED:aws-key], [REDACTED:aws-secret]"
+ },
+ {
+  "input": "AKIAIOSFODNN7EXAMPLE\n:= \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEYextra\"",
+  "expected": "[REDACTED:aws-key]\n:= \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEYextra\""
+ },
+ {
+  "input": "ASIAIOSFODNN7EXAMPLE0 AKIAIOSFODNN7EXAMPLE",
+  "expected": "ASIAIOSFODNN7EXAMPLE0 [REDACTED:aws-key]"
+ },
+ {
+  "input": "xoxb-1234567890-abcdef xoxz-1234567890",
+  "expected": "[REDACTED:slack-token] xoxz-1234567890"
+ },
+ {
+  "input": "AIzaSyA1234567890abcdefghijklmnopqrstuv AIzaShort",
+  "expected": "[REDACTED:google-key] AIzaShort"
+ },
+ {
+  "input": "sk_live_abcdefghijklmnop rk_live_abcdefghijklmnop12 pk_live_abcdefghijklmnop",
+  "expected": "[REDACTED:stripe-key] [REDACTED:stripe-key] pk_live_abcdefghijklmnop"
+ },
+ {
+  "input": "npm_abcdefghijklmnopqrstuvwxyz0123456789 npm_abcdefghijklmnopqrstuvwxyz01234567890",
+  "expected": "[REDACTED:npm-token] npm_abcdefghijklmnopqrstuvwxyz01234567890"
+ },
+ {
+  "input": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U and eyJabcde.eyJabcde.abc",
+  "expected": "[REDACTED:jwt] and eyJabcde.eyJabcde.abc"
+ },
+ {
+  "input": "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY----- tail",
+  "expected": "[REDACTED:private-key] tail"
+ },
+ {
+  "input": "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n-----BEGIN RSA PRIVATE KEY-----\nmore",
+  "expected": "[REDACTED:private-key]\n[REDACTED:private-key]"
+ },
+ {
+  "input": "-----BEGIN PRIVATE KEY-----",
+  "expected": "[REDACTED:private-key]"
+ },
+ {
+  "input": "multi\nline\npassword=abc\nnext line token: def",
+  "expected": "multi\nline\npassword=[REDACTED:secret]\nnext line token: [REDACTED:secret]"
+ },
+ {
+  "input": "a=b;secret=1,c=d&token=2}x",
+  "expected": "a=b;secret=[REDACTED:secret],c=d&token=[REDACTED:secret]}x"
+ },
+ {
+  "input": "'password':'hunter2', \"token\": \"abc def\"",
+  "expected": "'password':[REDACTED:secret], \"token\": [REDACTED:secret]"
+ },
+ {
+  "input": "https://user:pw@host/path?token=abc&secret=def",
+  "expected": "https://[REDACTED:url-credentials]@host/path?token=[REDACTED:secret]&secret=[REDACTED:secret]"
+ },
+ {
+  "input": "curl -H 'Authorization: Bearer abcdefghijkl' -u user:pass",
+  "expected": "curl -H 'Authorization: [REDACTED:bearer]' -u user:pass"
+ },
+ {
+  "input": "SECRET_ACCESS_KEY=abc AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE",
+  "expected": "SECRET_ACCESS_KEY=[REDACTED:secret] AWS_ACCESS_KEY_ID=[REDACTED:aws-key]"
+ },
+ {
+  "input": "ACCESS-KEY: abc and api-key=def and apikey=ghi and api_key:jkl",
+  "expected": "ACCESS-KEY: [REDACTED:secret] and api-key=[REDACTED:secret] and apikey=[REDACTED:secret] and api_key:[REDACTED:secret]"
+ },
+ {
+  "input": "password=a password=b token=c",
+  "expected": "password=[REDACTED:secret] password=[REDACTED:secret] token=[REDACTED:secret]"
+ }
+]

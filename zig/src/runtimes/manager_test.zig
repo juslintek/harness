@@ -10,6 +10,7 @@ const types = @import("types.zig");
 const kit = @import("testkit.zig");
 const process = @import("process.zig");
 const launch = @import("launch.zig");
+const logs_api = @import("../logs/api.zig");
 
 const Io = std.Io;
 const testing = std.testing;
@@ -783,6 +784,18 @@ test "manager: event bodies are stored in pending_payloads like the TS repo does
     try testing.expectEqual(@as(i64, 1), try h.count("SELECT count(*) FROM pending_payloads p JOIN events e ON e.rowid = p.event_rowid WHERE e.kind = 'message' AND p.body = 'hello from the fake agent'"));
     try testing.expectEqual(@as(i64, 1), try h.count("SELECT count(*) FROM pending_payloads p JOIN events e ON e.rowid = p.event_rowid WHERE e.kind = 'run' AND p.body = 'completed'"));
     try testing.expectEqual(@as(i64, 1), try h.count("SELECT count(*) FROM events_fts WHERE events_fts MATCH 'hello'"));
+}
+
+test "manager: with the logs appender wired a run's events are redacted and indexed" {
+    const h = try Harness.init("[{\"say\":\"deploy with token=hunter2 done\"}]");
+    defer h.deinit();
+    h.mgr.links.append_event = logs_api.appendLinked;
+    _ = try h.mgr.startRun(h.input());
+    try h.mgr.waitIdle();
+    try testing.expectEqual(@as(i64, 1), try h.count("SELECT count(*) FROM pending_payloads WHERE body = 'deploy with token=[REDACTED:secret] done'"));
+    try testing.expectEqual(@as(i64, 1), try h.count("SELECT count(*) FROM events_fts WHERE events_fts MATCH 'deploy'"));
+    try testing.expectEqual(@as(i64, 0), try h.count("SELECT count(*) FROM events_fts WHERE events_fts MATCH 'hunter2'"));
+    try testing.expectEqual(@as(i64, 1), try h.count("SELECT count(*) FROM pending_payloads p JOIN events e ON e.rowid = p.event_rowid WHERE e.kind = 'run' AND p.body = 'completed'"));
 }
 
 test "manager: a stored event body survives reopening the database" {

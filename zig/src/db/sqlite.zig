@@ -105,6 +105,12 @@ pub const Db = struct {
         try db.exec("BEGIN IMMEDIATE");
     }
 
+    /// True between BEGIN and COMMIT or ROLLBACK, so a caller that may run inside a transaction
+    /// can choose a savepoint.
+    pub fn inTransaction(db: Db) bool {
+        return c.sqlite3_get_autocommit(db.handle) == 0;
+    }
+
     pub fn commit(db: Db) Error!void {
         try db.exec("COMMIT");
     }
