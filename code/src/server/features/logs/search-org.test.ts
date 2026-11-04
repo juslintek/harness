@@ -122,7 +122,7 @@ test("a run in a project the user cannot open is hidden until the org is granted
      VALUES ('hu', 'A', 'human', 'u1', 'hu', 'hu', 'member', 1)`,
   );
   db.run("UPDATE runs SET project_id = 'P' WHERE id = 'runA'");
-  add("runA", "deploy secret", 10);
+  add("runA", "deploy secret", 10, "error");
   expect(searchOrgEvents(db, "A", { userId: "u1", text: "deploy" })).toEqual([]);
   db.run(
     "INSERT INTO grants (id, project_id, org_id, permission, granted_by, created_at) VALUES ('g', 'P', 'A', 'read', 'x', 1)",
@@ -196,7 +196,25 @@ test("a run with no project is hidden from a member and shown to an admin", () =
       [id, user, id, id, role],
     );
   }
-  add("runA", "deploy dm", 10);
+  add("runA", "deploy dm", 10, "error");
   expect(searchOrgEvents(db, "A", { userId: "u3", text: "deploy" })).toEqual([]);
   expect(searchOrgEvents(db, "A", { userId: "u4", text: "deploy" })).toHaveLength(1);
+});
+
+test("a member never finds agent messages, an admin does, and the kind filter cannot bypass it", () => {
+  db.run(
+    `INSERT INTO members (id, org_id, kind, user_id, handle, display_name, role, created_at)
+     VALUES ('hm', 'A', 'human', 'u3', 'hm', 'hm', 'member', 1)`,
+  );
+  db.run("INSERT INTO projects (id, org_id, key, name, created_at) VALUES ('P', 'A', 'P', 'P', 1)");
+  db.run("UPDATE runs SET project_id = 'P' WHERE id = 'runA'");
+  db.run(
+    "INSERT INTO grants (id, project_id, org_id, permission, granted_by, created_at) VALUES ('g', 'P', 'A', 'read', 'x', 1)",
+  );
+  add("runA", "zebra said in chat", 10, "message");
+  add("runA", "zebra command output", 11, "tool_call");
+  const member = { userId: "u3", text: "zebra" };
+  expect(searchOrgEvents(db, "A", member).map((h) => h.kind)).toEqual(["tool_call"]);
+  expect(searchOrgEvents(db, "A", { ...member, kind: "message" })).toEqual([]);
+  expect(searchOrgEvents(db, "A", { userId: "u", text: "zebra" })).toHaveLength(2);
 });

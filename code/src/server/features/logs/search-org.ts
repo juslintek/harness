@@ -43,22 +43,30 @@ function openableProjects(db: Database, orgId: string, userId: string): string[]
     .filter((id) => projectAccess(db, userId, id) !== "none");
 }
 
+// Event kinds that carry conversation text (agent messages and thoughts); only org admins search them.
+const TRANSCRIPT_KINDS = ["message"];
+
 // A run with no project can come from a private channel or a DM wake, so only org admins see it.
-function seesProjectless(db: Database, orgId: string, userId: string): boolean {
+function isOrgAdmin(db: Database, orgId: string, userId: string): boolean {
   const role = orgAccess(db, userId, orgId);
   return role !== null && roleAtLeast(role, "admin");
 }
 
 function scopeOf(db: Database, orgId: string, q: OrgSearchQuery): RowidScope {
+  const admin = isOrgAdmin(db, orgId, q.userId);
   const where = [
     "r.org_id = ?",
     "((r.project_id IS NULL AND ?) OR r.project_id IN (SELECT value FROM json_each(?)))",
   ];
   const params: Array<string | number> = [
     orgId,
-    seesProjectless(db, orgId, q.userId) ? 1 : 0,
+    admin ? 1 : 0,
     JSON.stringify(openableProjects(db, orgId, q.userId)),
   ];
+  if (!admin) {
+    where.push(`e.kind NOT IN (${TRANSCRIPT_KINDS.map(() => "?").join(", ")})`);
+    params.push(...TRANSCRIPT_KINDS);
+  }
   if (q.kind !== undefined) {
     where.push("e.kind = ?");
     params.push(q.kind);
