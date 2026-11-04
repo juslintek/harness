@@ -22,11 +22,19 @@ jobs:
       - run: bun run check
 
   zig:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - id: has
-        run: test -f zig/build.zig && echo "yes=true" >> "$GITHUB_OUTPUT" || echo "yes=false" >> "$GITHUB_OUTPUT"
+        # a zig/ tree without build.zig is a failure, only a missing zig/ is a skip
+        run: |
+          if [ -f zig/build.zig ]; then echo "yes=true" >> "$GITHUB_OUTPUT"
+          elif [ -d zig ]; then echo "zig/ exists without zig/build.zig" >&2; exit 1
+          else echo "yes=false" >> "$GITHUB_OUTPUT"; fi
       - if: steps.has.outputs.yes == 'true'
         uses: mlugg/setup-zig@v2
         with:
