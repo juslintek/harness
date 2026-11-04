@@ -17,7 +17,7 @@ export const ownProjects = (detail: OrgDetail): OrgDetail["projects"] =>
   detail.projects.filter((p) => p.orgId === detail.org.id);
 
 export type Tab = "notes" | "writes" | "review";
-export const TABS: Tab[] = ["notes", "writes", "review"];
+const TABS: Tab[] = ["notes", "writes", "review"];
 
 export interface Facets {
   scopes: Record<string, number>;
