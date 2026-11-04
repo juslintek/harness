@@ -16,7 +16,8 @@ CREATE TABLE notes (
   created INTEGER NOT NULL,
   updated INTEGER NOT NULL,
   hash TEXT NOT NULL,
-  slug TEXT NOT NULL
+  slug TEXT NOT NULL,
+  title_key TEXT NOT NULL
 ) STRICT;
 CREATE INDEX idx_notes_org_scope ON notes(org_id, scope);
 CREATE INDEX idx_notes_slug ON notes(slug);

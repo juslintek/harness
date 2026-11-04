@@ -93,6 +93,21 @@ test("backlinks follow slug or title and respect visibility", () => {
   expect(backlinks(db, viewer("A", "m2", []), target.id)).toHaveLength(3);
 });
 
+test("a non-ASCII title and wikilink match case-insensitively, also across NFC and NFD", () => {
+  const target = upsertIndexed(db, loc("orgs/A/org/eclair.md"), noteText("# Éclair\nbody"));
+  upsertIndexed(db, loc("orgs/A/org/a.md"), noteText("see [[Éclair]]"));
+  upsertIndexed(db, loc("orgs/A/org/b.md"), noteText("see [[e\u0301clair]]"));
+  const v = viewer("A", "m1", []);
+  expect(resolveWikilink(db, v, "Éclair", GLOBAL)?.id).toBe(target.id);
+  expect(resolveWikilink(db, v, "éCLAIR", GLOBAL)?.id).toBe(target.id);
+  expect(resolveWikilink(db, v, "e\u0301clair", GLOBAL)?.id).toBe(target.id);
+  expect(
+    backlinks(db, v, target.id)
+      .map((l) => l.path)
+      .sort(),
+  ).toEqual(["orgs/A/org/a.md", "orgs/A/org/b.md"]);
+});
+
 test("resolveWikilink prefers same directory, then narrower scope", () => {
   upsertIndexed(db, loc("global/topic.md"), noteText("g"));
   upsertIndexed(db, loc("orgs/A/org/topic.md"), noteText("o"));

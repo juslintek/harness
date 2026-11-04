@@ -139,11 +139,16 @@ function stripFences(body: string): string {
   return body.replace(/```[\s\S]*?```/g, "");
 }
 
+// SQLite lower() only folds ASCII, so every key compared against a title or slug is built here.
+export function normKey(text: string): string {
+  return text.normalize("NFC").toLowerCase();
+}
+
 export function wikilinks(body: string): string[] {
   const found = new Set<string>();
   for (const m of stripFences(body).matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)) {
-    const target = (m[1] ?? "").split("#")[0]?.trim().toLowerCase();
-    if (target) found.add(target);
+    const target = (m[1] ?? "").split("#")[0]?.trim();
+    if (target) found.add(normKey(target));
   }
   return [...found];
 }

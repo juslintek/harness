@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { NoteScope, NoteSummary, NoteType } from "../../../shared/memory";
 import { redact } from "../logs/api";
-import { hashText, noteTitle, parseNote, wikilinks } from "./frontmatter";
+import { hashText, normKey, noteTitle, parseNote, wikilinks } from "./frontmatter";
 import type { Located } from "./paths";
 
 export type IndexedNote = NoteSummary & { disk: string; slug: string };
@@ -22,6 +22,7 @@ export interface NoteRow {
   updated: number;
   hash: string;
   slug: string;
+  title_key: string;
   snippet?: string;
 }
 
@@ -90,7 +91,7 @@ export function upsertIndexed(db: Database, loc: Located, text: string): Indexed
   const { meta, body } = parseNote(redact(text));
   const now = Date.now();
   const title = noteTitle(body, loc.rel);
-  const slug = (loc.rel.split("/").pop() ?? loc.rel).replace(/\.md$/, "").toLowerCase();
+  const slug = normKey((loc.rel.split("/").pop() ?? loc.rel).replace(/\.md$/, ""));
   const updated = epoch(meta.updated, now);
   db.transaction(() => {
     const prior = getIndexedByDisk(db, loc.disk);
@@ -98,14 +99,14 @@ export function upsertIndexed(db: Database, loc: Located, text: string): Indexed
     const id = prior?.id ?? pickId(db, meta.id ?? Bun.randomUUIDv7());
     db.run(
       `INSERT INTO notes (id, disk, scope, org_id, project_id, member_id, type, title, tags,
-         source_agent, confidence, created, updated, hash, slug)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         source_agent, confidence, created, updated, hash, slug, title_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(disk) DO UPDATE SET id = excluded.id, scope = excluded.scope,
          org_id = excluded.org_id, project_id = excluded.project_id, member_id = excluded.member_id,
          type = excluded.type, title = excluded.title, tags = excluded.tags,
          source_agent = excluded.source_agent, confidence = excluded.confidence,
          created = excluded.created, updated = excluded.updated, hash = excluded.hash,
-         slug = excluded.slug`,
+         slug = excluded.slug, title_key = excluded.title_key`,
       [
         id,
         loc.disk,
@@ -122,6 +123,7 @@ export function upsertIndexed(db: Database, loc: Located, text: string): Indexed
         updated,
         hashText(text),
         slug,
+        normKey(title),
       ],
     );
     for (const target of wikilinks(body)) {

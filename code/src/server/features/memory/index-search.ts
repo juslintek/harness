@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { dirname } from "node:path";
 import type { NoteScope, NoteSummary, NoteType } from "../../../shared/memory";
+import { normKey } from "./frontmatter";
 import { type IndexedNote, type NoteRow, toIndexed } from "./index-repo";
 import type { Viewer } from "./paths";
 
@@ -130,7 +131,9 @@ export function facets(
 
 export function backlinks(db: Database, viewer: Viewer, noteId: string): NoteSummary[] {
   const target = db
-    .query<{ slug: string; title: string }, [string]>("SELECT slug, title FROM notes WHERE id = ?")
+    .query<{ slug: string; title_key: string }, [string]>(
+      "SELECT slug, title_key FROM notes WHERE id = ?",
+    )
     .get(noteId);
   if (target === null) return [];
   const v = visible(viewer);
@@ -140,7 +143,7 @@ export function backlinks(db: Database, viewer: Viewer, noteId: string): NoteSum
          SELECT 1 FROM note_links l WHERE l.src_id = n.id AND l.target IN (?, ?))
        ORDER BY n.updated DESC`,
     )
-    .all(noteId, ...v.params, target.slug, target.title.toLowerCase())
+    .all(noteId, ...v.params, target.slug, target.title_key)
     .map(toIndexed);
 }
 
@@ -152,11 +155,11 @@ export function resolveWikilink(
   target: string,
   fromDisk: string,
 ): IndexedNote | null {
-  const t = target.trim().toLowerCase();
+  const t = normKey(target.trim());
   const v = visible(viewer);
   const rows = db
     .query<NoteRow, Param[]>(
-      `SELECT n.* FROM notes n WHERE ${v.sql} AND (n.slug = ? OR lower(n.title) = ?)`,
+      `SELECT n.* FROM notes n WHERE ${v.sql} AND (n.slug = ? OR n.title_key = ?)`,
     )
     .all(...v.params, t, t)
     .map(toIndexed);
