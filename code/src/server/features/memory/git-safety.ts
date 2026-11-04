@@ -74,9 +74,26 @@ function attributeFiles(dir: string, out: string[]): string[] {
   return out;
 }
 
+// Git follows a symlinked ref, object or log path, so a commit could write outside the vault.
+// These two files also redirect object or ref storage without being links.
+const REDIRECTS = new Set([
+  join(".git", "objects", "info", "alternates"),
+  join(".git", "commondir"),
+]);
+
+function assertPlainTree(vault: string, rel: string): void {
+  for (const e of readdirSync(join(vault, rel), { withFileTypes: true })) {
+    const child = join(rel, e.name);
+    if (REDIRECTS.has(child)) refuse(`${child} redirects git storage`);
+    if (e.isDirectory()) assertPlainTree(vault, child);
+    else if (!e.isFile()) refuse(`${child} is not a regular file or directory`);
+  }
+}
+
 // Called before any git command touches an existing vault repo.
 export function assertSafeVaultRepo(vault: string): void {
   if (lstatSync(join(vault, ".git"), { throwIfNoEntry: false }) === undefined) return;
+  assertPlainTree(vault, ".git");
   assertConfig(vault);
   const files = [join(vault, ".git", "info", "attributes"), ...attributeFiles(vault, [])];
   const bad = files.find(hasDriver);

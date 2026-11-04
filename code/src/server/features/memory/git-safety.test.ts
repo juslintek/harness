@@ -1,6 +1,14 @@
 import "../../test-support/no-git-env";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { gitOutput } from "../../git-env";
 import { startMemory } from "./api";
@@ -83,4 +91,48 @@ test("a merge driver or textconv in any .gitattributes is refused", async () => 
   expect(() => startMemory(env.db, { home: env.dir })).toThrow("driver");
   writeFileSync(join(vault, ".gitattributes"), "*.md diff\n*.md textconv=x\n");
   expect(() => startMemory(env.db, { home: env.dir })).toThrow("driver");
+});
+
+async function commitCount(vault: string): Promise<string | null> {
+  return gitOutput(vault, ["rev-list", "--all", "--count"]);
+}
+
+async function writeNoteQuietly(): Promise<string> {
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (...a: unknown[]) => errors.push(a.join(" "));
+  try {
+    await createNote(env.db, env.dir, ctx(aliceA), orgNote, "hello");
+    await drainCommits();
+  } finally {
+    console.error = original;
+  }
+  return errors.join("\n");
+}
+
+test("a symlinked refs/heads is refused and the other repo's branch does not move", async () => {
+  await ensureVaultRepo(env.dir);
+  const vault = vaultDir(env.dir);
+  const other = join(env.dir, "other");
+  mkdirSync(other);
+  await gitOutput(other, ["init", "-q"]);
+  const refs = join(other, ".git", "refs", "heads");
+  const heads = join(vault, ".git", "refs", "heads");
+  rmSync(heads, { recursive: true });
+  symlinkSync(refs, heads);
+  const log = await writeNoteQuietly();
+  expect(readdirSync(refs)).toEqual([]);
+  expect(await commitCount(vault)).toBe("0\n");
+  expect(log).toContain(join(".git", "refs", "heads"));
+  expect(log).not.toContain(env.dir);
+});
+
+test("an objects/info/alternates file is refused", async () => {
+  await ensureVaultRepo(env.dir);
+  const vault = vaultDir(env.dir);
+  mkdirSync(join(vault, ".git", "objects", "info"), { recursive: true });
+  writeFileSync(join(vault, ".git", "objects", "info", "alternates"), `${env.dir}\n`);
+  expect(() => startMemory(env.db, { home: env.dir })).toThrow("alternates");
+  expect(await writeNoteQuietly()).toContain("alternates");
+  expect(await commitCount(vault)).toBe("0\n");
 });
