@@ -1,7 +1,7 @@
 import { type Signal, signal } from "@preact/signals";
 import { z } from "zod";
 import { api } from "../../api";
-import { takeReturn } from "../../route";
+import { takeReturn } from "../../return-hash";
 
 export interface Me {
   user: { id: string; email: string; name: string; instanceAdmin: boolean };

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { type WsMessage, wsMessageSchema } from "../shared/realtime";
 import { stepUp } from "./features/auth/webauthn";
-import { rememberReturn } from "./route";
+import { rememberReturn } from "./return-hash";
 
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
