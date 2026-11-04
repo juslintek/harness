@@ -209,3 +209,12 @@ test("a note whose frontmatter id is a/b is indexed under a fresh id", () => {
   expect(n.id).toMatch(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
   expect(n.id).not.toBe("a/b");
 });
+
+test("a link is a backlink only of the note it resolves to from the source's folder", () => {
+  const inX = upsertIndexed(db, loc("orgs/A/org/x/topic.md"), noteText("# Topic\nx side"));
+  const inY = upsertIndexed(db, loc("orgs/A/org/y/topic.md"), noteText("# Topic\ny side"));
+  upsertIndexed(db, loc("orgs/A/org/x/src.md"), noteText("see [[topic]]"));
+  const v = viewer("A", "m1", []);
+  expect(backlinks(db, v, inX.id).map((l) => l.path)).toEqual(["orgs/A/org/x/src.md"]);
+  expect(backlinks(db, v, inY.id)).toEqual([]);
+});

@@ -143,14 +143,21 @@ export function backlinks(db: Database, viewer: Viewer, noteId: string): Indexed
     .get(noteId);
   if (target === null) return [];
   const v = visible(viewer);
-  return db
-    .query<NoteRow, Param[]>(
-      `SELECT n.* FROM notes n WHERE n.id != ? AND ${v.sql} AND EXISTS (
-         SELECT 1 FROM note_links l WHERE l.src_id = n.id AND l.target IN (?, ?))
-       ORDER BY n.updated DESC`,
+  const rows = db
+    .query<NoteRow & { link: string }, Param[]>(
+      `SELECT n.*, l.target AS link FROM notes n JOIN note_links l ON l.src_id = n.id
+       WHERE n.id != ? AND ${v.sql} AND l.target IN (?, ?) ORDER BY n.updated DESC`,
     )
-    .all(noteId, ...v.params, target.slug, target.title_key)
-    .map(toIndexed);
+    .all(noteId, ...v.params, target.slug, target.title_key);
+  // The stored target only says the text matches; with the same title in several folders the link
+  // belongs to whichever note the reader's resolution picks from the source's own folder.
+  const sources = new Map<string, IndexedNote>();
+  for (const { link, ...row } of rows) {
+    if (sources.has(row.id)) continue;
+    if (resolveWikilink(db, viewer, link, row.disk)?.id === noteId)
+      sources.set(row.id, toIndexed(row));
+  }
+  return [...sources.values()];
 }
 
 const SCOPE_RANK: Record<NoteScope, number> = { agent: 0, project: 1, org: 2, global: 3 };
