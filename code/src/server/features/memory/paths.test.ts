@@ -34,7 +34,6 @@ test("path tricks are rejected", () => {
     "/memories/org/.git/config",
     "/memories/org/.git/x.md",
     "/memories/org/.hidden.md",
-    "/memories/org/x.txt",
     "/memories/org/X.md",
     "/memories/org/a\\b.md",
     "/memories/org/a\0b.md",
@@ -60,8 +59,16 @@ test("directories", () => {
 test("nested folders resolve as dir, bad folder names do not", () => {
   for (const p of ["/memories/org/howto", "/memories/org/a/b", "/memories/project/alpha/docs/x"])
     expect(resolveVirtual(p, agent, bySlug)).toBe("dir");
+  expect(resolveVirtual("/memories/org/foo.bar", agent, bySlug)).toBe("dir");
+  expect(resolveVirtual("/memories/org/foo.bar/baz.v2", agent, bySlug)).toBe("dir");
   expect(resolveVirtual("/memories/org/howto/a.md", agent, bySlug)).not.toBe("dir");
-  for (const p of ["/memories/org/.git", "/memories/org/A B", "/memories/project/beta/docs"])
+  for (const p of [
+    "/memories/org/.git",
+    "/memories/org/a/..",
+    "/memories/org/a/.b",
+    "/memories/org/A B",
+    "/memories/project/beta/docs",
+  ])
     expect(resolveVirtual(p, agent, bySlug)).toBeNull();
 });
 

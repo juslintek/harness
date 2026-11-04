@@ -32,9 +32,10 @@ function validRel(rel: string): boolean {
 }
 
 // A folder path follows the note rules minus the .md ending, so nested folders can be viewed.
-// Dots are left out so a file such as x.txt does not read as a folder.
+// Dots stay allowed because note paths allow them in any segment, so a folder like foo.bar exists.
 function validDirRel(rel: string): boolean {
-  if (rel.length > 200 || !/^[a-z0-9_/-]+$/.test(rel) || posix.normalize(rel) !== rel) return false;
+  if (rel.length > 200 || !/^[a-z0-9._/-]+$/.test(rel) || posix.normalize(rel) !== rel)
+    return false;
   return rel.split("/").every((s) => s !== "" && !s.startsWith("."));
 }
 
