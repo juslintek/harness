@@ -13,3 +13,19 @@
   flex: 1 1 8rem;
   min-height: 2.75rem;
 }
+
+.consent {
+  max-width: 32rem;
+}
+
+.consent fieldset {
+  margin: 1rem 0;
+}
+
+.consent-scope {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  font-weight: 400;
+}

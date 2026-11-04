@@ -13,6 +13,7 @@ import { DashboardPage } from "./features/dashboard/dashboard-page";
 import { HiringPage } from "./features/hiring/hiring-page";
 import { LogsPage } from "./features/logs/logs-page";
 import { MemoryPage } from "./features/memory/memory-page";
+import { ConsentPage } from "./features/oauth/consent-page";
 import { OrgPage } from "./features/orgs/org-page";
 import { selectedSlug } from "./features/orgs/org-switcher";
 import { PoliciesPage } from "./features/policies/policies-page";
@@ -48,11 +49,18 @@ function ApprovalsRoute({ id }: { id: string | undefined }): preact.JSX.Element 
   return canDecideApprovals(me.value) ? <PendingApprovals /> : <p class="muted">Not available.</p>;
 }
 
+// Pages of the signed-in person, not tied to an org or to instance admin.
+function ownRoute(parts: string[]): preact.JSX.Element | null {
+  if (parts[0] === "account") return <AccountPage />;
+  return parts[0] === "oauth" && parts[1]?.startsWith("consent") ? <ConsentPage /> : null;
+}
+
 function Page(): preact.JSX.Element {
   const parts = routeParts();
   const admin = me.value?.user.instanceAdmin === true;
   if (parts[0] === "o" && parts[1]) return <OrgRoute parts={parts} />;
-  if (parts[0] === "account") return <AccountPage />;
+  const own = ownRoute(parts);
+  if (own) return own;
   if (parts[0] === "approvals") return <ApprovalsRoute id={parts[1]} />;
   if (admin && parts[0] === "agents") return <AgentsPage />;
   if (admin && parts[0] === "search") return <SearchPage />;

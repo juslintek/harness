@@ -1,6 +1,34 @@
 [
   {
     "method": "GET",
+    "path": "/.well-known/oauth-authorization-server",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/.well-known/oauth-protected-resource/mcp/remote",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
     "path": "/api/agents",
     "policy": {
       "admin": true,
@@ -688,6 +716,48 @@
   {
     "method": "DELETE",
     "path": "/api/notify/targets/:id",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/oauth/clients/:id",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/oauth/grants",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/oauth/grants/:id",
     "policy": {
       "admin": false,
       "loopback": false,
@@ -1760,6 +1830,76 @@
       "public": false,
       "rateLimited": false,
       "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/oauth/authorize",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/consent",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/deny",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/register",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/token",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
       "stepUp": false
     }
   }

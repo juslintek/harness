@@ -29,6 +29,7 @@ import { logsRoutes } from "./features/logs/routes";
 import { type McpDeps, mcpHandler, verifyRunToken } from "./features/mcp/api";
 import { memoryRoutes } from "./features/memory/routes";
 import { notifyRoutes } from "./features/notify/api";
+import { consentRoutes, grantRoutes, oauthPublicRoutes } from "./features/oauth/api";
 import { orgRoutes } from "./features/orgs/routes";
 import { harnessPolicyRoutes, policiesRoutes } from "./features/policies/routes";
 import { profilesRoutes } from "./features/profiles/routes";
@@ -161,6 +162,19 @@ function mountMcp(app: Hono, deps: AppDeps): void {
   app.all("/mcp", (c) => mcp(c.req.raw));
 }
 
+// Public: discovery, registration and the token endpoint carry no cookie, so no Origin check
+// applies, but hostGuard above still does. Consent and deny act on the signed-in human's cookie,
+// so they get the same Origin check as /api mutations.
+function mountOauth(app: Hono, deps: AppDeps): void {
+  const { db } = deps;
+  const oauth = { db, origin: deps.rp.origin };
+  app.route("/", oauthPublicRoutes(oauth));
+  for (const path of ["/oauth/consent", "/oauth/deny"]) {
+    app.use(path, mutationOriginGuard(deps.rp.origin), sessionMiddleware(db, deps.rp.origin));
+  }
+  app.route("/oauth", consentRoutes(db, deps.rp.origin, Date.now));
+}
+
 function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   const { db } = deps;
   app.use("/api/*", sessionMiddleware(db, deps.rp.origin));
@@ -178,6 +192,7 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", logsRoutes(db));
   app.route("/api/notify", notifyRoutes(db, deps.home));
   app.route("/api/bridge", bridgeRoutes(db));
+  app.route("/api/oauth", grantRoutes(db, Date.now));
   app.route("/api", adminRoutes(deps));
 }
 
@@ -205,6 +220,7 @@ export function createApp(deps: AppDeps): Hono {
   });
   mountMcp(app, deps);
   app.route("/api/guard/hook", guardHook(db));
+  mountOauth(app, deps);
   app.use("/api/*", mutationOriginGuard(deps.rp.origin));
   app.route(
     "/api/auth",
