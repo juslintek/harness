@@ -16,6 +16,9 @@ export interface NoteMeta {
 
 const TYPES: readonly string[] = ["lesson", "fact", "decision", "howto", "reference"];
 const SCOPES: readonly string[] = ["global", "org", "project", "agent"];
+// The id is used as a URL segment and a log key, so a hand-edited value outside this shape is
+// parked in extra and the index assigns a fresh one.
+const ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const FM = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
 // Plain assignment of "__proto__" would change the prototype instead of adding a key.
@@ -56,9 +59,11 @@ function enumSetter(allowed: readonly string[], set: (meta: NoteMeta, v: string)
 }
 
 const SETTERS: Record<string, Setter> = {
-  id: strSetter((m, v) => {
+  id: (m, v) => {
+    if (typeof v !== "string" || !ID.test(v)) return false;
     m.id = v;
-  }),
+    return true;
+  },
   source_agent: strSetter((m, v) => {
     m.sourceAgent = v;
   }),

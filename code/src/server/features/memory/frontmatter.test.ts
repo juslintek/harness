@@ -80,3 +80,16 @@ test("an invalid value in extra never overwrites the canonical field set later",
   expect(fixed.id).toBe("n1");
   expect(fixed.extra["type"]).toBeUndefined();
 });
+
+test("an id that is empty or has a slash is not accepted; a rewrite replaces it", () => {
+  for (const bad of ['""', "a/b", "-x", "a b"]) {
+    const { meta } = parseNote(`---\nid: ${bad}\n---\n\nbody\n`);
+    expect(meta.id).toBeUndefined();
+    expect(Object.hasOwn(meta.extra, "id")).toBe(true);
+    const fixed = parseNote(serializeNote({ ...meta, id: "fresh-1" }, "body")).meta;
+    expect(fixed.id).toBe("fresh-1");
+    expect(Object.hasOwn(fixed.extra, "id")).toBe(false);
+  }
+  expect(parseNote(`---\nid: ${"a".repeat(65)}\n---\n\nbody\n`).meta.id).toBeUndefined();
+  expect(parseNote(`---\nid: ${"a".repeat(64)}\n---\n\nbody\n`).meta.id).toBe("a".repeat(64));
+});

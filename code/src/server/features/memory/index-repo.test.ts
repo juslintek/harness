@@ -188,3 +188,9 @@ test("a note without source_agent is counted and filtered as outside", () => {
   const hits = searchNotes(db, v, { sourceAgent: "outside" });
   expect(hits.map((n) => n.sourceAgent)).toEqual(["outside"]);
 });
+
+test("a note whose frontmatter id is a/b is indexed under a fresh id", () => {
+  const n = upsertIndexed(db, loc("orgs/A/org/odd.md"), "---\nid: a/b\n---\n\n# Odd\nbody");
+  expect(n.id).toMatch(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
+  expect(n.id).not.toBe("a/b");
+});
