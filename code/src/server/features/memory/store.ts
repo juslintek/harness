@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { NoteScope, NoteType, NoteView } from "../../../shared/memory";
+import { redact } from "../logs/api";
 import { hashText, type NoteMeta, parseNote, serializeNote } from "./frontmatter";
 import { removeIndexed, upsertIndexed } from "./index-repo";
 import type { Located, Viewer } from "./paths";
@@ -146,5 +147,5 @@ export function readNote(db: Database, home: string, viewer: Viewer, id: string)
     throw new MemoryError("not_found", "note file is missing");
   }
   const fresh = note.hash === hashText(text) ? note : upsertIndexed(db, loc, text);
-  return toView(fresh, parseNote(text).body);
+  return toView(fresh, parseNote(redact(text)).body);
 }

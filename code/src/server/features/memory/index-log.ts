@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { NoteWriteOp, NoteWriteView } from "../../../shared/memory";
+import { redact } from "../logs/api";
 
 export interface NoteWriteRow {
   noteId: string;
@@ -30,8 +31,8 @@ export function logWrite(db: Database, w: Omit<NoteWriteRow, "id" | "at">): stri
       w.actor,
       w.memberId,
       w.runId,
-      w.beforeText,
-      w.afterText,
+      w.beforeText === null ? null : redact(w.beforeText),
+      w.afterText === null ? null : redact(w.afterText),
       w.beforeHash,
       w.afterHash,
       Date.now(),

@@ -34,6 +34,9 @@ export function revertWrite(
   if ((current === null ? null : hashText(current)) !== w.afterHash) {
     throw new MemoryError("conflict", "note changed since that write");
   }
+  if (w.beforeText === null && w.beforeHash !== null) {
+    throw new MemoryError("invalid", "previous text unknown");
+  }
   if (w.beforeText === null) {
     const note = getIndexed(db, w.noteId);
     if (note === null || current === null) throw new MemoryError("not_found", "note not found");

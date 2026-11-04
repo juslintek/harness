@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { NoteScope, NoteSummary, NoteType } from "../../../shared/memory";
+import { redact } from "../logs/api";
 import { hashText, noteTitle, parseNote, wikilinks } from "./frontmatter";
 import type { Located } from "./paths";
 
@@ -93,7 +94,9 @@ function replaceFts(db: Database, disk: string, title: string, body: string, tag
 
 // The location decides scope and owner; frontmatter cannot move a note into another org.
 export function upsertIndexed(db: Database, loc: Located, text: string): IndexedNote {
-  const { meta, body } = parseNote(text);
+  // Title, links and full-text come from the redacted text; the hash stays the raw file hash so
+  // "disk hash equals index hash" still means no change.
+  const { meta, body } = parseNote(redact(text));
   const now = Date.now();
   const title = noteTitle(body, loc.rel);
   const slug = (loc.rel.split("/").pop() ?? loc.rel).replace(/\.md$/, "").toLowerCase();
