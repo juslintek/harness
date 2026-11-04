@@ -7,10 +7,10 @@ import type { Notification, Target } from "../../../../shared/notify";
 import { migrate, openDb } from "../../../db/db";
 import { migrations } from "../../../db/migrations";
 import { until } from "../../../test-support/app-kit";
+import { seedMember } from "../../../test-support/bridge-kit";
 import { type SmtpFake, type SmtpFakeOpts, startSmtpFake } from "../../../test-support/smtp-fake";
 import { setSecret } from "../../agents/api";
 import { requestEmailCode } from "../../auth/api";
-import { seedMember } from "../fake-notifier";
 import { emailCodeSender, emailNotifier } from "./adapter";
 import { saveSmtpConfig } from "./config";
 

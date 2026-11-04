@@ -7,15 +7,25 @@ import { effectivePrefs, setPref } from "./prefs";
 import { notifyRoutes } from "./routes";
 import { openSlackConnection, postSlackMessage, slackConfigured } from "./slack/client";
 import { deleteTarget, insertTarget, targetsOf, viewOf } from "./targets-repo";
+import {
+  getTelegramUpdates,
+  sendTelegramMessage,
+  type TelegramUpdate,
+  telegramConfigured,
+} from "./telegram/client";
 
+export type { TelegramUpdate };
 export {
   effectivePrefs,
   emailCodeSender,
+  getTelegramUpdates,
   notifyRoutes,
   openSlackConnection,
   postSlackMessage,
+  sendTelegramMessage,
   setPref,
   slackConfigured,
+  telegramConfigured,
 };
 
 export interface NotifyDeps extends Partial<Omit<DispatcherDeps, "origin" | "home">> {

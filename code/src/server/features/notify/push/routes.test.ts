@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { migrate, openDb } from "../../../db/db";
 import { migrations } from "../../../db/migrations";
 import { withActor } from "../../../test-support/app-kit";
+import { seedMember } from "../../../test-support/bridge-kit";
 import { newReceiver } from "../../../test-support/push-stub";
 import { listTargets } from "../api";
-import { seedMember } from "../fake-notifier";
 import { notifyRoutes } from "../routes";
 import { vapidPublicKey } from "./vapid";
 

@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { seedMember } from "../../test-support/bridge-kit";
 import { createProject } from "../orgs/api";
-import { seedMember } from "./fake-notifier";
 import { runOrgId } from "./recipients";
 
 test("a run's org comes from the stamped org, then the project, then the member", () => {

@@ -5,6 +5,7 @@ import { notFound, parseBody } from "../../route-kit";
 import { type AuthEnv, requireStepUp } from "../auth/api";
 import { getChannel } from "../chat/api";
 import { getOrgBySlug, listOrgsForUser, memberForUser, orgAccess, roleAtLeast } from "../orgs/api";
+import { linkCodesFor } from "./link-codes";
 import { bridgesOfOrg, getBridge, linkBridge, linkExternalUser, unlinkBridge } from "./repo";
 
 const kind = z.enum(["slack", "telegram"]);
@@ -19,6 +20,11 @@ function isOrgAdmin(db: Database, c: Context<AuthEnv>, orgId: string): boolean {
 
 function isUniqueViolation(err: unknown): boolean {
   return err instanceof Error && err.message.includes("UNIQUE");
+}
+
+function memberFor(db: Database, userId: string, slug?: string): { id: string } | null {
+  const org = slug ? getOrgBySlug(db, slug) : listOrgsForUser(db, userId)[0];
+  return org ? memberForUser(db, org.id, userId) : null;
 }
 
 export function bridgeRoutes(db: Database): Hono<AuthEnv> {
@@ -61,11 +67,17 @@ export function bridgeRoutes(db: Database): Hono<AuthEnv> {
     const body = await parseBody(c, userBody);
     if (body instanceof Response) return body;
     const userId = c.get("actor").userId;
-    const org = body.org ? getOrgBySlug(db, body.org) : listOrgsForUser(db, userId)[0];
-    const member = org ? memberForUser(db, org.id, userId) : null;
+    const member = memberFor(db, userId, body.org);
     if (!member) return notFound(c);
     linkExternalUser(db, body.kind, body.externalUserId, member.id);
     return c.json({ ok: true });
+  });
+
+  // The code proves a Telegram account belongs to this member once the bot receives it.
+  app.post("/telegram/link-code", (c) => {
+    const member = memberFor(db, c.get("actor").userId, c.req.query("org"));
+    if (!member) return notFound(c);
+    return c.json(linkCodesFor(db).issue(member.id));
   });
 
   return app;

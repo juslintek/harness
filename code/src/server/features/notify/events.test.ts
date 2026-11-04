@@ -2,12 +2,13 @@ import type { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { seedMember } from "../../test-support/bridge-kit";
 import { listChannels, openDm, postMessage, wireChat } from "../chat/api";
 import { type ActionRequest, checkAction, decideApproval, listApprovals } from "../guard/api";
 import { addAgentMember, addHumanMember, getMember } from "../orgs/api";
 import { setPolicy } from "../policies/api";
 import { addTarget, startNotify } from "./api";
-import { type FakeNotifier, fakeNotifier, seedMember } from "./fake-notifier";
+import { type FakeNotifier, fakeNotifier } from "./fake-notifier";
 
 interface World {
   db: Database;

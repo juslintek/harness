@@ -2,8 +2,8 @@ import type { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { seedMember } from "../../test-support/bridge-kit";
 import { effectivePrefs, setPref } from "./api";
-import { seedMember } from "./fake-notifier";
 
 function setup(): { db: Database; memberId: string } {
   const db = openDb(":memory:");

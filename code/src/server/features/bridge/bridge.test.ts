@@ -7,38 +7,15 @@ import type { Hono } from "hono";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { withActor } from "../../test-support/app-kit";
+import { bodiesOf, orgChannelOf, type Seed, seedMember } from "../../test-support/bridge-kit";
 import { type SlackMock, startSlackMock, until } from "../../test-support/slack-mock";
 import { setSecret } from "../agents/api";
 import type { AuthEnv } from "../auth/api";
-import { listChannels, postMessage, wireChat } from "../chat/api";
-import { createOrg, memberForUser } from "../orgs/api";
+import { postMessage, wireChat } from "../chat/api";
 import { startBridges } from "./api";
 import { createEcho } from "./inbound";
 import { bridgesOfChannel, linkBridge, linkExternalUser } from "./repo";
 import { bridgeRoutes } from "./routes";
-
-interface Seed {
-  userId: string;
-  memberId: string;
-  orgId: string;
-}
-
-function seedMember(db: Database, handle: string): Seed {
-  const userId = `u-${handle}`;
-  db.query(
-    "INSERT INTO users (id, email, name, instance_admin, created_at) VALUES (?, ?, ?, 0, ?)",
-  ).run(userId, `${handle}@example.test`, handle, Date.now());
-  const org = createOrg(db, {
-    name: handle,
-    slug: handle,
-    ownerUserId: userId,
-    ownerName: handle,
-    ownerHandle: handle,
-  });
-  const member = memberForUser(db, org.id, userId);
-  if (!member) throw new Error("owner member missing");
-  return { userId, memberId: member.id, orgId: org.id };
-}
 
 interface World {
   db: Database;
@@ -72,11 +49,6 @@ function world(): World {
   const ada = seedMember(db, "ada");
   const bob = seedMember(db, "bob");
   wireChat(db);
-  const orgChannel = (memberId: string): string => {
-    const found = listChannels(db, memberId).find((c) => c.kind === "org");
-    if (!found) throw new Error("no org channel");
-    return found.id;
-  };
   const home = mkdtempSync(join(tmpdir(), "bridge-"));
   setSecret("slack.bot_token", mock.botToken, home);
   setSecret("slack.app_token", mock.appToken, home);
@@ -85,16 +57,10 @@ function world(): World {
     home,
     ada,
     bob,
-    adaChannel: orgChannel(ada.memberId),
-    bobChannel: orgChannel(bob.memberId),
+    adaChannel: orgChannelOf(db, ada.memberId),
+    bobChannel: orgChannelOf(db, bob.memberId),
   };
 }
-
-const bodies = (db: Database): string[] =>
-  db
-    .query<{ body: string }, []>("SELECT body FROM messages ORDER BY created_at, rowid")
-    .all()
-    .map((r) => r.body);
 
 const slackMessage = (
   user: string,
@@ -121,7 +87,7 @@ test("a linked user's Slack message becomes a harness message by that member and
   const w = world();
   await boot(w);
   mock.push(slackMessage("UADA", "from slack"));
-  await until(() => bodies(w.db).includes("from slack"));
+  await until(() => bodiesOf(w.db).includes("from slack"));
   const row = w.db
     .query<{ author_id: string }, [string]>("SELECT author_id FROM messages WHERE body = ?")
     .get("from slack");
@@ -133,14 +99,14 @@ test("a linked user's Slack message becomes a harness message by that member and
 test("unlinked users, bot posts and unlinked channels leave no trace", async () => {
   const w = world();
   await boot(w);
-  const sent = bodies(w.db).length;
+  const sent = bodiesOf(w.db).length;
   mock.push(slackMessage("USTRANGER", "who am i"));
   mock.push(slackMessage("UBOT", "my own echo"));
   mock.push(slackMessage("UADA", "bot flagged", { bot_id: "B1" }));
   mock.push(slackMessage("UADA", "elsewhere", { channel: "C404" }));
   await until(() => mock.acks.length === 4);
   await Bun.sleep(50);
-  expect(bodies(w.db)).toHaveLength(sent);
+  expect(bodiesOf(w.db)).toHaveLength(sent);
   expect(w.db.query("SELECT 1 FROM notify_log").all()).toHaveLength(0);
 });
 
@@ -154,7 +120,7 @@ test("a harness message in a bridged channel is posted to Slack once and not ech
   await until(() => mock.acks.length === 1);
   await Bun.sleep(50);
   expect(mock.posts).toHaveLength(1);
-  expect(bodies(w.db).filter((b) => b === "*ada*: from harness")).toHaveLength(0);
+  expect(bodiesOf(w.db).filter((b) => b === "*ada*: from harness")).toHaveLength(0);
 });
 
 test("a channel that is not bridged posts nothing", async () => {
@@ -179,7 +145,7 @@ test("a Slack user linked in org A cannot post into an org B channel bridged to 
   mock.push(slackMessage("UADA", "cross org"));
   await until(() => mock.acks.length === 1);
   await Bun.sleep(50);
-  expect(bodies(w.db)).not.toContain("cross org");
+  expect(bodiesOf(w.db)).not.toContain("cross org");
 });
 
 test("no Socket Mode connection without both tokens", async () => {

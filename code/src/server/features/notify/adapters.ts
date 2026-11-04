@@ -4,6 +4,7 @@ import { emailNotifier } from "./email/adapter";
 import type { Notifier } from "./port";
 import { pushNotifier } from "./push/adapter";
 import { slackNotifier } from "./slack/adapter";
+import { telegramNotifier } from "./telegram/adapter";
 import { webhookNotifier } from "./webhook/adapter";
 
 // Adapters read their secrets from the secrets file under `home`, so they are built per instance.
@@ -12,20 +13,12 @@ export interface AdapterEnv {
   home: string;
 }
 
-function notConfigured(channel: Channel): Notifier {
-  return {
-    channel,
-    deliver: async () => ({ ok: false, retry: false, reason: "not configured" }),
-  };
-}
-
-// One line per channel: the adapter tasks each replace exactly their own line.
 export function buildAdapters(env: AdapterEnv): Record<Channel, Notifier> {
   return {
     push: pushNotifier(env),
     email: emailNotifier(env),
     slack: slackNotifier(env.home),
-    telegram: notConfigured("telegram"),
+    telegram: telegramNotifier(env.home),
     webhook: webhookNotifier(env.home),
   };
 }

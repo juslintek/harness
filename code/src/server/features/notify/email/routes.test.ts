@@ -7,10 +7,10 @@ import type { Hono } from "hono";
 import { migrate, openDb } from "../../../db/db";
 import { migrations } from "../../../db/migrations";
 import { withActor } from "../../../test-support/app-kit";
+import { seedMember } from "../../../test-support/bridge-kit";
 import { type SmtpFake, startSmtpFake } from "../../../test-support/smtp-fake";
 import { getSecret } from "../../agents/api";
 import type { AuthEnv } from "../../auth/api";
-import { seedMember } from "../fake-notifier";
 import { emailRoutes } from "./routes";
 
 const PASSWORD = "hunter2-s3cret";

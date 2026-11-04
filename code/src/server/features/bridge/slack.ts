@@ -1,14 +1,11 @@
 import { openSlackConnection } from "../notify/api";
+import { MAX_BACKOFF_MS, MIN_BACKOFF_MS, type Sleep, waitFor } from "./backoff";
 import type { InboundMessage } from "./inbound";
-
-const MIN_BACKOFF_MS = 1000;
-const MAX_BACKOFF_MS = 30_000;
 
 export interface SocketOptions {
   home: string;
   onMessage: (msg: InboundMessage) => void;
-  // Tests replace the wait so reconnect timing can be asserted without real delays.
-  sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+  sleep?: Sleep;
 }
 
 interface Envelope {
@@ -37,20 +34,6 @@ function toInbound(payload: SlackPayload | undefined): InboundMessage | null {
   if (!e.user || !e.channel || !e.text) return null;
   if (payload?.authorizations?.some((a) => a.user_id === e.user)) return null;
   return { kind: "slack", externalChannel: e.channel, externalUser: e.user, text: e.text };
-}
-
-function waitFor(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
-  });
 }
 
 // Resolves when the socket closes; true if it ever opened, so the caller can reset its backoff.

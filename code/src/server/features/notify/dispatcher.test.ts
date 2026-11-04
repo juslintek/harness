@@ -3,9 +3,10 @@ import { expect, test } from "bun:test";
 import type { Notification } from "../../../shared/notify";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { seedMember } from "../../test-support/bridge-kit";
 import { addTarget, listTargets, notifyMembers, setPref, startNotify } from "./api";
 import { createDispatcher } from "./dispatcher";
-import { type FakeNotifier, fakeNotifier, seedMember } from "./fake-notifier";
+import { type FakeNotifier, fakeNotifier } from "./fake-notifier";
 
 const note = (over: Partial<Notification> = {}): Notification => ({
   kind: "mention",
