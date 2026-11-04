@@ -41,7 +41,19 @@ function opFor(ctx: ToolCtx): Op {
     return fail("this token's member no longer exists");
   }
   if (viewer.orgId !== ctx.orgId) return fail("token does not match the member's org");
-  const write: WriteCtx = { viewer, runId: ctx.runId, classify: classifyNote };
+  const write: WriteCtx = {
+    viewer,
+    runId: ctx.runId,
+    classify: classifyNote,
+    refreshViewer: () => {
+      try {
+        const live = agentViewer(ctx.db, ctx.memberId);
+        return live.orgId === ctx.orgId ? live : null;
+      } catch {
+        return null;
+      }
+    },
+  };
   return {
     db: ctx.db,
     home: ctx.harnessHome,

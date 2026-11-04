@@ -39,17 +39,28 @@ async function pickType(ctx: WriteCtx, loc: Located, body: string, meta: Patch):
   }
 }
 
+// The classifier call can take seconds, long enough for the member to be demoted or removed.
+function stillAllowed(ctx: WriteCtx, loc: Located): WriteCtx {
+  if (ctx.refreshViewer === undefined) return ctx;
+  const viewer = ctx.refreshViewer();
+  if (viewer === null || !canWrite(viewer, loc)) {
+    throw new MemoryError("forbidden", "not allowed to write there");
+  }
+  return { ...ctx, viewer };
+}
+
 export async function createNote(
   db: Database,
   home: string,
-  ctx: WriteCtx,
+  first: WriteCtx,
   loc: Located,
   body: string,
   meta: Patch = {},
 ): Promise<WriteResult> {
-  needWrite(ctx.viewer, loc);
+  needWrite(first.viewer, loc);
   if (!validConfidence(meta.confidence)) throw new MemoryError("invalid", "confidence is 0..1");
-  const type = await pickType(ctx, loc, body, meta);
+  const type = await pickType(first, loc, body, meta);
+  const ctx = stillAllowed(first, loc);
   // Everything below is synchronous: the await above is the only gap, so "exists" is checked after it.
   if (readNoteFile(home, loc.disk) !== null) throw new MemoryError("exists", "note already exists");
   const now = new Date().toISOString();

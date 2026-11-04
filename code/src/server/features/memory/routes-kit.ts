@@ -42,6 +42,17 @@ export function memoryCtx(db: Database, c: Context<AuthEnv>, min: Role): MemoryC
     orgId: org.id,
     viewer,
     userId: actor.userId,
-    write: { viewer, runId: null, classify: classifyNote },
+    write: {
+      viewer,
+      runId: null,
+      classify: classifyNote,
+      refreshViewer: () => {
+        try {
+          return humanViewer(db, org.id, actor.userId, actor.instanceAdmin);
+        } catch {
+          return null;
+        }
+      },
+    },
   };
 }

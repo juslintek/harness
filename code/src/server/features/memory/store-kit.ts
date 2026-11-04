@@ -27,6 +27,9 @@ export class MemoryError extends Error {
 export interface WriteCtx {
   viewer: Viewer;
   runId: string | null;
+  // Rebuilds the viewer from the database; null once the member is gone. Set where a write can
+  // wait on something slow first, so a role change during the wait is seen before the file is written.
+  refreshViewer?: () => Viewer | null;
   classify?: (
     body: string,
     allowed: NoteView["scope"][],
