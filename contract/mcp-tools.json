@@ -1,0 +1,1035 @@
+[
+  {
+    "description": "Approve or deny a pending approval of one of your reports",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "decision": {
+          "enum": [
+            "approve",
+            "deny"
+          ],
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "decision",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "name": "approvals_decide",
+    "scope": "approvals_decide"
+  },
+  {
+    "description": "Pending approvals of your reports that you may decide",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {},
+      "type": "object"
+    },
+    "name": "approvals_list",
+    "scope": "approvals_decide"
+  },
+  {
+    "description": "List tasks on the projects you can see; pass the returned next as cursor for the next page",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "cursor": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "limit": {
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "mine": {
+          "type": "boolean"
+        },
+        "project": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "board_list",
+    "scope": "board"
+  },
+  {
+    "description": "List the channels you can use",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {},
+      "type": "object"
+    },
+    "name": "chat_channels",
+    "scope": "chat"
+  },
+  {
+    "description": "Send a direct message to a member of your org",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "body": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "handle": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "handle",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "chat_dm",
+    "scope": "chat"
+  },
+  {
+    "description": "Post a message; @handle mentions a member and #12 links a task",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "body": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "thread": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "chat_post",
+    "scope": "chat"
+  },
+  {
+    "description": "Read recent messages of a channel or thread and mark it read",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "channel": {
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "thread": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel"
+      ],
+      "type": "object"
+    },
+    "name": "chat_read",
+    "scope": "chat"
+  },
+  {
+    "description": "Hire one candidate, or pass \"none\" to reject all; only the manager asked to decide",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "candidate": {
+          "type": "string"
+        },
+        "hire": {
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "maxLength": 500,
+          "type": "string"
+        }
+      },
+      "required": [
+        "hire",
+        "candidate"
+      ],
+      "type": "object"
+    },
+    "name": "hire_decide",
+    "scope": "hiring"
+  },
+  {
+    "description": "Open hire requests of your teams, with each candidate's answers, card and scores",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {},
+      "type": "object"
+    },
+    "name": "hire_list",
+    "scope": "hiring"
+  },
+  {
+    "description": "Ask for a new team member: interviews candidates on the available runtimes",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "mustHave": {
+          "items": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 6,
+          "type": "array"
+        },
+        "specialty": {
+          "enum": [
+            "frontend",
+            "backend",
+            "database",
+            "devops",
+            "security",
+            "writing",
+            "mobile"
+          ],
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        "taskTypes": {
+          "items": {
+            "enum": [
+              "feature",
+              "bugfix",
+              "refactor",
+              "test",
+              "docs",
+              "review",
+              "ops",
+              "research"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array"
+        },
+        "team": {
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 60,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "specialty",
+        "summary",
+        "taskTypes"
+      ],
+      "type": "object"
+    },
+    "name": "hire_request",
+    "scope": "hiring"
+  },
+  {
+    "description": "Answer one interview question by its id (at most 120 words)",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "answer": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "question",
+        "answer"
+      ],
+      "type": "object"
+    },
+    "name": "interview_answer",
+    "scope": "interview"
+  },
+  {
+    "description": "Ask one candidate a follow-up question while follow-ups are open",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "candidate": {
+          "type": "string"
+        },
+        "hire": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hire",
+        "candidate",
+        "question"
+      ],
+      "type": "object"
+    },
+    "name": "interview_ask",
+    "scope": "hiring"
+  },
+  {
+    "description": "Say you have no more follow-up questions for this hire request",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "hire": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "hire"
+      ],
+      "type": "object"
+    },
+    "name": "interview_pass",
+    "scope": "hiring"
+  },
+  {
+    "description": "Score a candidate from 1 to 5 on fit, depth and honesty",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "candidate": {
+          "type": "string"
+        },
+        "depth": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "fit": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "hire": {
+          "type": "string"
+        },
+        "honesty": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "notes": {
+          "default": "",
+          "maxLength": 1000,
+          "type": "string"
+        }
+      },
+      "required": [
+        "hire",
+        "candidate",
+        "fit",
+        "depth",
+        "honesty"
+      ],
+      "type": "object"
+    },
+    "name": "interview_score",
+    "scope": "hiring"
+  },
+  {
+    "description": "Approve or reject a policy proposal of one of your reports; you can never approve a loosening of a tighten-only policy",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "decision": {
+          "enum": [
+            "approve",
+            "reject"
+          ],
+          "type": "string"
+        },
+        "proposal": {
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "maxLength": 500,
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "name": "policy_decide",
+    "scope": "policy"
+  },
+  {
+    "description": "The policies that apply to you now, each with the layer that decides it and the chain of layers above",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "key": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "policy_get",
+    "scope": "policy"
+  },
+  {
+    "description": "Propose a policy value for yourself; a manager of yours or a person decides it. Name reviewers by handle to have them comment first",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        "reviewers": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "type": "array"
+        },
+        "value": {}
+      },
+      "required": [
+        "key",
+        "value",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "name": "policy_propose",
+    "scope": "policy"
+  },
+  {
+    "description": "Say whether a policy proposal you were asked about is sound",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "comment": {
+          "default": "",
+          "maxLength": 1000,
+          "type": "string"
+        },
+        "proposal": {
+          "type": "string"
+        },
+        "verdict": {
+          "enum": [
+            "approve",
+            "reject"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal",
+        "verdict"
+      ],
+      "type": "object"
+    },
+    "name": "policy_review",
+    "scope": "policy"
+  },
+  {
+    "description": "Submit your self-description card; invalid fields come back as text so you can retry",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "card": {
+          "additionalProperties": {},
+          "propertyNames": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "card"
+      ],
+      "type": "object"
+    },
+    "name": "profile_card_submit",
+    "scope": "profile"
+  },
+  {
+    "description": "Your own profile, or a teammate's by handle: card, runtime, model and skills",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "handle": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "profile_get",
+    "scope": "profile"
+  },
+  {
+    "description": "Send a progress note to the manager",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "text": {
+          "maxLength": 4000,
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "name": "report",
+    "scope": "report"
+  },
+  {
+    "description": "Take a task and start it",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "task": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "name": "task_checkout",
+    "scope": "board"
+  },
+  {
+    "description": "Comment on a task",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "body": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": [
+        "task",
+        "body"
+      ],
+      "type": "object"
+    },
+    "name": "task_comment",
+    "scope": "board"
+  },
+  {
+    "description": "Create a task in a project",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "assignee": {
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 20000,
+          "type": "string"
+        },
+        "estimateMinutes": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "project": {
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "title"
+      ],
+      "type": "object"
+    },
+    "name": "task_create",
+    "scope": "board"
+  },
+  {
+    "description": "Split off a subtask of a task and hand it to one of your reports; they are assigned and told in the project channel. Returns the subtask number",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "description": {
+          "maxLength": 20000,
+          "type": "string"
+        },
+        "estimateMinutes": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task",
+        "to",
+        "title"
+      ],
+      "type": "object"
+    },
+    "name": "task_delegate",
+    "scope": "board"
+  },
+  {
+    "description": "Make a task depend on another task of the same project",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "dependsOn": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "task": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": [
+        "task",
+        "dependsOn"
+      ],
+      "type": "object"
+    },
+    "name": "task_depend",
+    "scope": "board"
+  },
+  {
+    "description": "Record your estimate in minutes for a task: a planner estimate sizes the work, a reviewer estimate corrects it",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "kind": {
+          "enum": [
+            "planner",
+            "reviewer"
+          ],
+          "type": "string"
+        },
+        "minutes": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "type": "integer"
+        },
+        "rationale": {
+          "default": "",
+          "maxLength": 500,
+          "type": "string"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": [
+        "task",
+        "minutes",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "name": "task_estimate",
+    "scope": "board"
+  },
+  {
+    "description": "Show a task with deps, subtasks and comments",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "task": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "name": "task_get",
+    "scope": "board"
+  },
+  {
+    "description": "Move a task to another status",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "task": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "to": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "task",
+        "to"
+      ],
+      "type": "object"
+    },
+    "name": "task_move",
+    "scope": "board"
+  },
+  {
+    "description": "Give a task you hold back",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "task": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "name": "task_release",
+    "scope": "board"
+  },
+  {
+    "description": "Change a task's title, description, estimate or assignee (null unassigns)",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "assignee": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "maxLength": 20000,
+          "type": "string"
+        },
+        "estimateMinutes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "task": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "task"
+      ],
+      "type": "object"
+    },
+    "name": "task_update",
+    "scope": "board"
+  },
+  {
+    "description": "Your direct and indirect reports: handle, position, runtime, model, card summary, specialties, open assigned tasks and budget state",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {},
+      "type": "object"
+    },
+    "name": "team_roster",
+    "scope": "board"
+  },
+  {
+    "description": "Identify the run and member this token belongs to",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "whoami",
+    "scope": null
+  }
+]

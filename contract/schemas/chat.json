@@ -1,0 +1,1070 @@
+{
+  "channelListSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "properties": {
+          "createdAt": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "org",
+              "team",
+              "project",
+              "group",
+              "dm"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "orgId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "teamId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unread": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "kind",
+          "name",
+          "teamId",
+          "projectId",
+          "createdAt",
+          "unread"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "type": "number"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "org",
+              "team",
+              "project",
+              "group",
+              "dm"
+            ],
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "orgId": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "teamId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unread": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "kind",
+          "name",
+          "teamId",
+          "projectId",
+          "createdAt",
+          "unread"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "channelViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "createdAt": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "org",
+            "team",
+            "project",
+            "group",
+            "dm"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "teamId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unread": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "orgId",
+        "kind",
+        "name",
+        "teamId",
+        "projectId",
+        "createdAt",
+        "unread"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "createdAt": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "org",
+            "team",
+            "project",
+            "group",
+            "dm"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "teamId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unread": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "orgId",
+        "kind",
+        "name",
+        "teamId",
+        "projectId",
+        "createdAt",
+        "unread"
+      ],
+      "type": "object"
+    }
+  },
+  "chatMembersSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "type": "string"
+          },
+          "orgName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "handle",
+          "displayName"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "type": "string"
+          },
+          "orgName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "handle",
+          "displayName"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "chatOrgSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "me": {
+          "properties": {
+            "handle": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "handle"
+          ],
+          "type": "object"
+        },
+        "members": {
+          "items": {
+            "properties": {
+              "displayName": {
+                "type": "string"
+              },
+              "handle": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "human",
+                  "agent"
+                ],
+                "type": "string"
+              },
+              "orgName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "handle",
+              "displayName"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "me",
+        "members"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "me": {
+          "additionalProperties": false,
+          "properties": {
+            "handle": {
+              "type": "string"
+            },
+            "id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "handle"
+          ],
+          "type": "object"
+        },
+        "members": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "displayName": {
+                "type": "string"
+              },
+              "handle": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "human",
+                  "agent"
+                ],
+                "type": "string"
+              },
+              "orgName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "handle",
+              "displayName"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "me",
+        "members"
+      ],
+      "type": "object"
+    }
+  },
+  "dmBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "memberId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "memberId"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "memberId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "memberId"
+      ],
+      "type": "object"
+    }
+  },
+  "groupBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "memberIds": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "memberIds"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "memberIds": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 200,
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "memberIds"
+      ],
+      "type": "object"
+    }
+  },
+  "messageBodySchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "maxLength": 8000,
+      "minLength": 1,
+      "type": "string"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "maxLength": 8000,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "messageListSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "properties": {
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "handle": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "enum": [
+                      "human",
+                      "agent"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "handle",
+                  "displayName",
+                  "kind"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authorId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "channelId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "number"
+          },
+          "editedAt": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "mentions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "replyCount": {
+            "type": "number"
+          },
+          "taskIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tasks": {
+            "items": {
+              "properties": {
+                "number": {
+                  "type": "number"
+                },
+                "projectId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "number",
+                "projectId"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "threadRootId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "channelId",
+          "threadRootId",
+          "authorId",
+          "author",
+          "body",
+          "createdAt",
+          "editedAt",
+          "replyCount",
+          "mentions",
+          "taskIds",
+          "tasks"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "handle": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "enum": [
+                      "human",
+                      "agent"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "handle",
+                  "displayName",
+                  "kind"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authorId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "channelId": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "number"
+          },
+          "editedAt": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "mentions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "replyCount": {
+            "type": "number"
+          },
+          "taskIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tasks": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "number": {
+                  "type": "number"
+                },
+                "projectId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "number",
+                "projectId"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "threadRootId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "channelId",
+          "threadRootId",
+          "authorId",
+          "author",
+          "body",
+          "createdAt",
+          "editedAt",
+          "replyCount",
+          "mentions",
+          "taskIds",
+          "tasks"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "messageViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "author": {
+          "anyOf": [
+            {
+              "properties": {
+                "displayName": {
+                  "type": "string"
+                },
+                "handle": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "human",
+                    "agent"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "handle",
+                "displayName",
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "body": {
+          "type": "string"
+        },
+        "channelId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "editedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "mentions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "replyCount": {
+          "type": "number"
+        },
+        "taskIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tasks": {
+          "items": {
+            "properties": {
+              "number": {
+                "type": "number"
+              },
+              "projectId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "projectId"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "threadRootId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "channelId",
+        "threadRootId",
+        "authorId",
+        "author",
+        "body",
+        "createdAt",
+        "editedAt",
+        "replyCount",
+        "mentions",
+        "taskIds",
+        "tasks"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "displayName": {
+                  "type": "string"
+                },
+                "handle": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "human",
+                    "agent"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "handle",
+                "displayName",
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "body": {
+          "type": "string"
+        },
+        "channelId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "editedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "mentions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "replyCount": {
+          "type": "number"
+        },
+        "taskIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tasks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "number": {
+                "type": "number"
+              },
+              "projectId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "projectId"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "threadRootId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "channelId",
+        "threadRootId",
+        "authorId",
+        "author",
+        "body",
+        "createdAt",
+        "editedAt",
+        "replyCount",
+        "mentions",
+        "taskIds",
+        "tasks"
+      ],
+      "type": "object"
+    }
+  },
+  "messagesQuery": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "pattern": "^[1-9]\\d{0,15}(:[\\w-]{1,64})?$",
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "thread": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "pattern": "^[1-9]\\d{0,15}(:[\\w-]{1,64})?$",
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "thread": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "postMessageBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "threadRootId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "threadRootId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "type": "object"
+    }
+  }
+}

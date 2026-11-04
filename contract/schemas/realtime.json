@@ -1,0 +1,581 @@
+{
+  "wsMessageSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "properties": {
+            "event": {
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "ts": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "ts"
+              ],
+              "type": "object"
+            },
+            "runId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "event",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "runId",
+            "event"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "run": {
+              "properties": {
+                "agentId": {
+                  "type": "string"
+                },
+                "branch": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "endedAt": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "inputTokens": {
+                  "type": "number"
+                },
+                "memberId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "outputTokens": {
+                  "type": "number"
+                },
+                "prompt": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "repo": {
+                  "type": "string"
+                },
+                "startedAt": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "queued",
+                    "starting",
+                    "running",
+                    "completed",
+                    "failed",
+                    "blocked",
+                    "cancelled",
+                    "killed"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "memberId",
+                "agentId",
+                "model",
+                "repo",
+                "branch",
+                "prompt",
+                "state",
+                "reason",
+                "createdAt",
+                "startedAt",
+                "endedAt",
+                "inputTokens",
+                "outputTokens"
+              ],
+              "type": "object"
+            },
+            "type": {
+              "const": "run",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "run"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "approval": {
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "decidedAt": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "decidedBy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "expiresAt": {
+                  "type": "number"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "runId": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "pending",
+                    "approved",
+                    "denied",
+                    "expired"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "runId",
+                "command",
+                "reason",
+                "status",
+                "decidedBy",
+                "createdAt",
+                "expiresAt",
+                "decidedAt"
+              ],
+              "type": "object"
+            },
+            "type": {
+              "const": "approval",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "approval"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "taskId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "task",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "projectId",
+            "taskId",
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "channelId": {
+              "type": "string"
+            },
+            "messageId": {
+              "type": "string"
+            },
+            "threadRootId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "chat",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "channelId",
+            "messageId",
+            "threadRootId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "dashboard",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "event": {
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "ts": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "ts"
+              ],
+              "type": "object"
+            },
+            "runId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "event",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "runId",
+            "event"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "run": {
+              "additionalProperties": false,
+              "properties": {
+                "agentId": {
+                  "type": "string"
+                },
+                "branch": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "endedAt": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "inputTokens": {
+                  "type": "number"
+                },
+                "memberId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "outputTokens": {
+                  "type": "number"
+                },
+                "prompt": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "repo": {
+                  "type": "string"
+                },
+                "startedAt": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "queued",
+                    "starting",
+                    "running",
+                    "completed",
+                    "failed",
+                    "blocked",
+                    "cancelled",
+                    "killed"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "memberId",
+                "agentId",
+                "model",
+                "repo",
+                "branch",
+                "prompt",
+                "state",
+                "reason",
+                "createdAt",
+                "startedAt",
+                "endedAt",
+                "inputTokens",
+                "outputTokens"
+              ],
+              "type": "object"
+            },
+            "type": {
+              "const": "run",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "run"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "approval": {
+              "additionalProperties": false,
+              "properties": {
+                "command": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "decidedAt": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "decidedBy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "expiresAt": {
+                  "type": "number"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "runId": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "pending",
+                    "approved",
+                    "denied",
+                    "expired"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "runId",
+                "command",
+                "reason",
+                "status",
+                "decidedBy",
+                "createdAt",
+                "expiresAt",
+                "decidedAt"
+              ],
+              "type": "object"
+            },
+            "type": {
+              "const": "approval",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "approval"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "taskId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "task",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "projectId",
+            "taskId",
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "channelId": {
+              "type": "string"
+            },
+            "messageId": {
+              "type": "string"
+            },
+            "threadRootId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "chat",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "channelId",
+            "messageId",
+            "threadRootId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "dashboard",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "wsTopicSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "pattern": "^(runs|approvals|(run|org):[0-9a-f-]{36})$",
+      "type": "string"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "pattern": "^(runs|approvals|(run|org):[0-9a-f-]{36})$",
+      "type": "string"
+    }
+  }
+}

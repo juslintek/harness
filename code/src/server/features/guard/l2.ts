@@ -8,10 +8,10 @@ export interface L2Result {
   probs: Record<string, number> | null;
 }
 
-const GUARD_TIMEOUT_MS = 1500;
-const MIN_COMMAND_CHARS = 15;
-const MAX_COMMAND_CHARS = 1000;
-const MAX_REQUEST_CHARS = 500;
+export const GUARD_TIMEOUT_MS = 1500;
+export const MIN_COMMAND_CHARS = 15;
+export const MAX_COMMAND_CHARS = 1000;
+export const MAX_REQUEST_CHARS = 500;
 // Tuned on live Ollaya answers for 28 ordinary and 18 dangerous commands (laya-guide.md, "Phase 1
 // tuning"). out_of_scope and risk are still asked and logged but do not decide: both flagged
 // `cat`, `git add` and `git commit` at 0.7 to 1.0. Destructive scored `ls -la` 0.90 and

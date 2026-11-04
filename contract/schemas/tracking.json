@@ -1,0 +1,512 @@
+{
+  "dashboardViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "budgets": {
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "monthlyUsd": {
+                "type": "number"
+              },
+              "ratio": {
+                "type": "number"
+              },
+              "scopeId": {
+                "type": "string"
+              },
+              "scopeKind": {
+                "enum": [
+                  "org",
+                  "team",
+                  "member"
+                ],
+                "type": "string"
+              },
+              "spentUsd": {
+                "type": "number"
+              },
+              "state": {
+                "enum": [
+                  "ok",
+                  "warn",
+                  "paused"
+                ],
+                "type": "string"
+              },
+              "unpriced": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "scopeKind",
+              "scopeId",
+              "monthlyUsd",
+              "spentUsd",
+              "ratio",
+              "state",
+              "unpriced"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "members": {
+          "items": {
+            "properties": {
+              "activeMs": {
+                "type": "number"
+              },
+              "cacheReadTokens": {
+                "type": "number"
+              },
+              "completed": {
+                "type": "number"
+              },
+              "costEstimated": {
+                "type": "boolean"
+              },
+              "costUsd": {
+                "type": "number"
+              },
+              "handle": {
+                "type": "string"
+              },
+              "inputTokens": {
+                "type": "number"
+              },
+              "memberId": {
+                "type": "string"
+              },
+              "outputTokens": {
+                "type": "number"
+              },
+              "plannerMinutes": {
+                "type": "number"
+              },
+              "reviewerMinutes": {
+                "type": "number"
+              },
+              "runs": {
+                "type": "number"
+              },
+              "stack": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "tasksDone": {
+                "type": "number"
+              },
+              "tools": {
+                "items": {
+                  "properties": {
+                    "count": {
+                      "type": "number"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "count"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "unpricedEvents": {
+                "type": "number"
+              },
+              "waitingMs": {
+                "type": "number"
+              },
+              "wallMs": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "memberId",
+              "handle",
+              "runs",
+              "completed",
+              "inputTokens",
+              "outputTokens",
+              "cacheReadTokens",
+              "costUsd",
+              "costEstimated",
+              "unpricedEvents",
+              "wallMs",
+              "activeMs",
+              "waitingMs",
+              "plannerMinutes",
+              "reviewerMinutes",
+              "tasksDone",
+              "tools",
+              "stack"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "quota": {
+          "items": {
+            "properties": {
+              "provider": {
+                "type": "string"
+              },
+              "resetsAt": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "source": {
+                "type": "string"
+              },
+              "ts": {
+                "type": "number"
+              },
+              "usedPercent": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "window": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "window",
+              "usedPercent",
+              "resetsAt",
+              "source",
+              "ts"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "tasks": {
+          "items": {
+            "properties": {
+              "agentActiveMinutes": {
+                "type": "number"
+              },
+              "assignee": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "number": {
+                "type": "number"
+              },
+              "plannerMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "reviewerMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "title",
+              "status",
+              "assignee",
+              "plannerMinutes",
+              "reviewerMinutes",
+              "agentActiveMinutes"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "members",
+        "budgets",
+        "quota",
+        "tasks"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "budgets": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "monthlyUsd": {
+                "type": "number"
+              },
+              "ratio": {
+                "type": "number"
+              },
+              "scopeId": {
+                "type": "string"
+              },
+              "scopeKind": {
+                "enum": [
+                  "org",
+                  "team",
+                  "member"
+                ],
+                "type": "string"
+              },
+              "spentUsd": {
+                "type": "number"
+              },
+              "state": {
+                "enum": [
+                  "ok",
+                  "warn",
+                  "paused"
+                ],
+                "type": "string"
+              },
+              "unpriced": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "scopeKind",
+              "scopeId",
+              "monthlyUsd",
+              "spentUsd",
+              "ratio",
+              "state",
+              "unpriced"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "members": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "activeMs": {
+                "type": "number"
+              },
+              "cacheReadTokens": {
+                "type": "number"
+              },
+              "completed": {
+                "type": "number"
+              },
+              "costEstimated": {
+                "type": "boolean"
+              },
+              "costUsd": {
+                "type": "number"
+              },
+              "handle": {
+                "type": "string"
+              },
+              "inputTokens": {
+                "type": "number"
+              },
+              "memberId": {
+                "type": "string"
+              },
+              "outputTokens": {
+                "type": "number"
+              },
+              "plannerMinutes": {
+                "type": "number"
+              },
+              "reviewerMinutes": {
+                "type": "number"
+              },
+              "runs": {
+                "type": "number"
+              },
+              "stack": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "tasksDone": {
+                "type": "number"
+              },
+              "tools": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "count": {
+                      "type": "number"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "count"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "unpricedEvents": {
+                "type": "number"
+              },
+              "waitingMs": {
+                "type": "number"
+              },
+              "wallMs": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "memberId",
+              "handle",
+              "runs",
+              "completed",
+              "inputTokens",
+              "outputTokens",
+              "cacheReadTokens",
+              "costUsd",
+              "costEstimated",
+              "unpricedEvents",
+              "wallMs",
+              "activeMs",
+              "waitingMs",
+              "plannerMinutes",
+              "reviewerMinutes",
+              "tasksDone",
+              "tools",
+              "stack"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "quota": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "provider": {
+                "type": "string"
+              },
+              "resetsAt": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "source": {
+                "type": "string"
+              },
+              "ts": {
+                "type": "number"
+              },
+              "usedPercent": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "window": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider",
+              "window",
+              "usedPercent",
+              "resetsAt",
+              "source",
+              "ts"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "tasks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "agentActiveMinutes": {
+                "type": "number"
+              },
+              "assignee": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "number": {
+                "type": "number"
+              },
+              "plannerMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "reviewerMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "title",
+              "status",
+              "assignee",
+              "plannerMinutes",
+              "reviewerMinutes",
+              "agentActiveMinutes"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "members",
+        "budgets",
+        "quota",
+        "tasks"
+      ],
+      "type": "object"
+    }
+  }
+}

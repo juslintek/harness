@@ -1,0 +1,5 @@
+id: stale-build-api
+valid:
+  - "run.addPassthruArgs();"
+invalid:
+  - "const a = b.args;"

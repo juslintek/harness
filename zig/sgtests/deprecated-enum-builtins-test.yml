@@ -1,0 +1,5 @@
+id: deprecated-enum-builtins
+valid:
+  - "const n = @backingInt(e);"
+invalid:
+  - "const n = @intFromEnum(e);"

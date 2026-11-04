@@ -1,0 +1,5 @@
+id: stale-heap-allocators
+valid:
+  - "const a = std.heap.SafeAllocator;"
+invalid:
+  - "const a = std.heap.DebugAllocator(.{});"

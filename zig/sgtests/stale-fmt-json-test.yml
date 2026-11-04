@@ -1,0 +1,5 @@
+id: stale-fmt-json
+valid:
+  - "const h = std.fmt.bytesToHex(d, .lower);"
+invalid:
+  - "const j = std.json.stringify(v, .{}, w);"

@@ -1,0 +1,5 @@
+id: stale-thread-sync
+valid:
+  - "const m: std.Io.Mutex = .init;"
+invalid:
+  - "var m: std.Thread.Mutex = .{};"

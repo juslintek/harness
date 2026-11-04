@@ -1,0 +1,5 @@
+id: stale-cimport
+valid:
+  - "extern fn sqlite3_close(db: *Db) c_int;"
+invalid:
+  - "const c = @cImport({});"

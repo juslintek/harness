@@ -1,0 +1,5 @@
+id: deprecated-mem-index-of
+valid:
+  - "const i = std.mem.find(u8, a, b);"
+invalid:
+  - "const i = std.mem.indexOf(u8, a, b);"

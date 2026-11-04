@@ -1,0 +1,53 @@
+[
+  {
+    "kind": "entry",
+    "methods": "any",
+    "note": "main.ts answers any method on a Host other than 127.0.0.1:<port> with the UI shell (the /_app response, fetched with GET); on Host 127.0.0.1:<port> the request falls through to the app, whose redirect to the origin handles GET",
+    "path": "/"
+  },
+  {
+    "kind": "static",
+    "methods": "GET",
+    "note": "the web bundle's entry file, or index.html of HARNESS_UI_DIST",
+    "path": "/_app"
+  },
+  {
+    "kind": "guard-hook",
+    "methods": "POST",
+    "note": "Bearer run token with scope guard_hook, own run only",
+    "path": "/api/guard/hook"
+  },
+  {
+    "contentType": "image/svg+xml",
+    "kind": "static",
+    "methods": "any",
+    "note": "served before Hono and before the host guard, public",
+    "path": "/icon.svg"
+  },
+  {
+    "contentType": "application/manifest+json",
+    "kind": "static",
+    "methods": "any",
+    "note": "served before Hono and before the host guard, public",
+    "path": "/manifest.webmanifest"
+  },
+  {
+    "kind": "mcp",
+    "methods": "POST",
+    "note": "other methods get 405 with Allow: POST; Host must be 127.0.0.1:<port> or localhost:<port>; Bearer run token",
+    "path": "/mcp"
+  },
+  {
+    "contentType": "text/javascript; charset=utf-8",
+    "kind": "static",
+    "methods": "any",
+    "note": "served before Hono and before the host guard, public",
+    "path": "/sw.js"
+  },
+  {
+    "kind": "websocket",
+    "methods": "GET",
+    "note": "query topic matches ^(runs|approvals|(run|org):[0-9a-f-]{36})$; Origin required",
+    "path": "/ws"
+  }
+]

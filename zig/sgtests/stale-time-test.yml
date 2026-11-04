@@ -1,0 +1,5 @@
+id: stale-time
+valid:
+  - "const n = std.Io.Clock.real.now(io);"
+invalid:
+  - "const n = std.time.milliTimestamp();"

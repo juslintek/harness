@@ -1,0 +1,53 @@
+{
+  "personRefSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "human",
+            "agent"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "handle",
+        "displayName",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "human",
+            "agent"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "handle",
+        "displayName",
+        "kind"
+      ],
+      "type": "object"
+    }
+  }
+}

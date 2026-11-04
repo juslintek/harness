@@ -1,0 +1,5 @@
+id: stale-usingnamespace
+valid:
+  - "pub const x = @import(\"x.zig\").x;"
+invalid:
+  - "pub usingnamespace @import(\"x.zig\");"

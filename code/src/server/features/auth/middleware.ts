@@ -23,12 +23,16 @@ export interface AuthEnv {
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 // Agents reach the first two by the loopback address with a run token; health is for local probes.
-const LOOPBACK_PATHS = new Set(["/mcp", "/api/guard/hook", "/api/health"]);
+export const LOOPBACK_PATHS: ReadonlySet<string> = new Set([
+  "/mcp",
+  "/api/guard/hook",
+  "/api/health",
+]);
 
 // Rejects DNS-rebinding: a page on evil.test resolving to 127.0.0.1 still sends its own Host.
 export function hostGuard(origin: string, port: number): MiddlewareHandler {
   const browserHost = new URL(origin).host;
-  return async (c, next) => {
+  return async function hostGuard(c, next) {
     const host = c.req.header("host") ?? "";
     const loopback = host === `127.0.0.1:${port}` && LOOPBACK_PATHS.has(c.req.path);
     if (host !== browserHost && !loopback) return c.json({ error: "forbidden host" }, 403);
@@ -38,7 +42,7 @@ export function hostGuard(origin: string, port: number): MiddlewareHandler {
 
 // Mutations from a browser always carry Origin; anything else is a cross-site or non-browser call.
 export function mutationOriginGuard(origin: string): MiddlewareHandler {
-  return async (c, next) => {
+  return async function mutationOriginGuard(c, next) {
     if (!SAFE_METHODS.has(c.req.method) && c.req.header("origin") !== origin) {
       return c.json({ error: "forbidden origin" }, 403);
     }
@@ -49,7 +53,7 @@ export function mutationOriginGuard(origin: string): MiddlewareHandler {
 // A WebSocket handshake is a GET, so mutationOriginGuard skips it; browsers always send Origin
 // on it, and a socket without one has no business here.
 export function originGuard(origin: string): MiddlewareHandler {
-  return async (c, next) => {
+  return async function originGuard(c, next) {
     if (c.req.header("origin") !== origin) return c.json({ error: "forbidden origin" }, 403);
     await next();
   };
@@ -59,7 +63,7 @@ export function originGuard(origin: string): MiddlewareHandler {
 // origin, a request that slid the stored expiry also re-sets the cookie, whose Max-Age would
 // otherwise run out 30 days after login however active the user is.
 export function sessionMiddleware(db: Database, origin?: string): MiddlewareHandler<AuthEnv> {
-  return async (c, next) => {
+  return async function sessionMiddleware(c, next) {
     const token = getCookie(c, SESSION_COOKIE);
     const session = token ? sessionFromToken(db, token) : null;
     if (!session) return c.json({ error: "unauthorized" }, 401);

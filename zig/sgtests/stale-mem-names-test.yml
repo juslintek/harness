@@ -1,0 +1,5 @@
+id: stale-mem-names
+valid:
+  - "const s = std.mem.trimStart(u8, a, \" \");"
+invalid:
+  - "const s = std.mem.trimLeft(u8, a, \" \");"

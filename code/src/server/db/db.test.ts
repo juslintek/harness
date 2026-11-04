@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureInstance, migrate, openDb } from "./db";
+import { ensureInstance, lockHome, migrate, openDb } from "./db";
 import { migrations } from "./migrations";
 
 let dir: string;
@@ -68,4 +68,96 @@ test("a db at version 7 gains runs.pid_identity at version 8", () => {
   expect(columns(db)).toBe(0);
   migrate(db, migrations);
   expect(columns(db)).toBe(1);
+});
+
+test("a db with a newer user_version than the known migrations is refused and left alone", () => {
+  const db = openDb(join(dir, "t.db"));
+  migrate(db, migrations);
+  db.run(`PRAGMA user_version = ${migrations.length + 1}`);
+  expect(() => migrate(db, migrations)).toThrow(/only knows up to/);
+  expect(userVersion(db)).toBe(migrations.length + 1);
+});
+
+test("a second lock on the same home is refused until the first is released", () => {
+  const release = lockHome(dir);
+  expect(() => lockHome(dir)).toThrow(/already using/);
+  release();
+  lockHome(dir)();
+});
+
+test("a lock file left by a dead process is taken over", () => {
+  const dead = Bun.spawnSync(["true"]).pid;
+  writeFileSync(join(dir, "harness.lock"), `${dead}\n`);
+  const release = lockHome(dir);
+  expect(readFileSync(join(dir, "harness.lock"), "utf8")).toBe(`${process.pid}\n`);
+  release();
+});
+
+test("a lock file with unparsable content counts as stale", () => {
+  writeFileSync(join(dir, "harness.lock"), "garbage");
+  lockHome(dir)();
+});
+
+test("pid 0, a negative pid and other junk are stale, not signalled", () => {
+  for (const content of ["0\n", "-1\n", "NaN", "1e3x", ""]) {
+    writeFileSync(join(dir, "harness.lock"), content);
+    const release = lockHome(dir);
+    expect(readFileSync(join(dir, "harness.lock"), "utf8")).toBe(`${process.pid}\n`);
+    release();
+  }
+});
+
+test("servers racing to take over one stale lock end with exactly one owner", async () => {
+  writeFileSync(join(dir, "harness.lock"), `${Bun.spawnSync(["true"]).pid}\n`);
+  const code = `
+    import { lockHome } from ${JSON.stringify(join(import.meta.dir, "db"))};
+    try { lockHome(process.argv[1]); console.log("ok"); } catch { console.log("refused"); }
+    await new Promise((done) => process.stdin.on("end", done).resume());
+  `;
+  const children = Array.from({ length: 6 }, () =>
+    Bun.spawn(["bun", "-e", code, dir], { stdin: "pipe", stdout: "pipe" }),
+  );
+  try {
+    const results = await Promise.all(
+      children.map(async (child) => await new Response(child.stdout).body?.getReader().read()),
+    );
+    const lines = results.map((r) => new TextDecoder().decode(r?.value).trim());
+    expect(lines.filter((line) => line === "ok")).toHaveLength(1);
+    const owner = Number.parseInt(readFileSync(join(dir, "harness.lock"), "utf8"), 10);
+    expect(children.map((child) => child.pid)).toContain(owner);
+  } finally {
+    for (const child of children) {
+      child.stdin.end();
+      await child.exited;
+    }
+  }
+});
+
+test("a lock or takeover file that is a symlink is refused and its target left alone", () => {
+  const outside = mkdtempSync(join(tmpdir(), "harness-outside-"));
+  const target = join(outside, "target");
+  try {
+    for (const name of ["harness.lock", "harness.lock.takeover"]) {
+      writeFileSync(target, "untouched");
+      symlinkSync(target, join(dir, name));
+      expect(() => lockHome(dir)).toThrow(/not a regular file/);
+      expect(readFileSync(target, "utf8")).toBe("untouched");
+      rmSync(join(dir, name));
+    }
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test("release is idempotent, drops its exit listener and never removes another owner's lock", () => {
+  const listeners = process.listenerCount("exit");
+  const release = lockHome(dir);
+  expect(process.listenerCount("exit")).toBe(listeners + 1);
+  release();
+  expect(process.listenerCount("exit")).toBe(listeners);
+  expect(existsSync(join(dir, "harness.lock"))).toBe(false);
+  // Another server (here: our parent, a live pid that is not ours) now owns the home.
+  writeFileSync(join(dir, "harness.lock"), `${process.ppid}\n`);
+  release();
+  expect(readFileSync(join(dir, "harness.lock"), "utf8")).toBe(`${process.ppid}\n`);
 });

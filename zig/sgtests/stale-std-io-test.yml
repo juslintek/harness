@@ -1,0 +1,5 @@
+id: stale-std-io
+valid:
+  - "const w = std.Io.Writer;"
+invalid:
+  - "const w = std.io.getStdOut().writer();"

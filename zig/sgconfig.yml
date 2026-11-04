@@ -1,0 +1,4 @@
+ruleDirs:
+  - sgrules
+testConfigs:
+  - testDir: sgtests

@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { withRealpaths } from "./real-paths";
 import { buildSrtSettings, runTmpDir, scrubEnv, wrapCommand } from "./sandbox";
 import { baseInput } from "./sandbox-kit";
 
@@ -66,6 +67,30 @@ test("git admin pointers and agent code and config dirs are write-denied", () =>
       join(homedir(), ".gemini/antigravity-cli/settings.json"),
     ]),
   );
+});
+
+test("the worktree's .mcp.json is write-denied", () => {
+  expect(buildSrtSettings(baseInput).filesystem.denyWrite).toContain("/wt/r1/.mcp.json");
+});
+
+test("a denied path reached through a symlink is denied by its real path too", () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "sb-link-")));
+  try {
+    const real = join(dir, "real");
+    mkdirSync(real);
+    symlinkSync(real, join(dir, "link"));
+    writeFileSync(join(real, "mcp-target.json"), "{}");
+    symlinkSync(join(real, "mcp-target.json"), join(real, ".mcp.json"));
+    const { denyWrite } = buildSrtSettings({
+      ...baseInput,
+      worktree: join(dir, "link"),
+    }).filesystem;
+    expect(denyWrite).toContain(join(dir, "link/.mcp.json"));
+    expect(denyWrite).toContain(join(real, "mcp-target.json"));
+    expect(denyWrite).toContain(join(real, ".claude"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("presets and missing git dir", () => {
@@ -174,4 +199,36 @@ test("a read-only run's scratch checkout and its admin dir are writable, refs an
   expect(filesystem.denyWrite).toEqual(
     expect.arrayContaining([join(scratch.path, ".git"), join(scratch.gitDir, "commondir")]),
   );
+});
+
+test("a missing path under a symlinked directory is denied at its real location too", () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "sb-deep-")));
+  try {
+    mkdirSync(join(dir, "real"));
+    symlinkSync(join(dir, "real"), join(dir, "link"));
+    const deep = join(dir, "link/antigravity-cli/state/token.json");
+    expect(withRealpaths([deep])).toEqual([
+      deep,
+      join(dir, "real/antigravity-cli/state/token.json"),
+    ]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("read-denied paths under a symlinked or missing directory are denied at the real location too", () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "sb-read-")));
+  try {
+    mkdirSync(join(dir, "real"));
+    symlinkSync(join(dir, "real"), join(dir, "link"));
+    const { denyRead } = buildSrtSettings({
+      ...baseInput,
+      harnessHome: join(dir, "link/deeper/home"),
+    }).filesystem;
+    expect(denyRead).toContain(join(dir, "link/deeper/home/secret"));
+    expect(denyRead).toContain(join(dir, "real/deeper/home/secret"));
+    expect(denyRead).toContain(join(dir, "real/deeper/home/harness.db*"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

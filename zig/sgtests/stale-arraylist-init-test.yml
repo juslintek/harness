@@ -1,0 +1,5 @@
+id: stale-arraylist-init
+valid:
+  - "var list: std.ArrayList(u8) = .empty;"
+invalid:
+  - "var list = std.ArrayList(u8).init(gpa);"

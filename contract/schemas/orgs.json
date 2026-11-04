@@ -1,0 +1,1359 @@
+{
+  "addAgentBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "displayName": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "handle": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$",
+          "type": "string"
+        },
+        "heartbeatMinutes": {
+          "maximum": 10080,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "model": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        "specialties": {
+          "items": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        }
+      },
+      "required": [
+        "agentId",
+        "handle",
+        "displayName"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "displayName": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "handle": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$",
+          "type": "string"
+        },
+        "heartbeatMinutes": {
+          "maximum": 10080,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "model": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        "specialties": {
+          "items": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        }
+      },
+      "required": [
+        "agentId",
+        "handle",
+        "displayName"
+      ],
+      "type": "object"
+    }
+  },
+  "addHumanBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "handle": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "owner",
+            "admin",
+            "member",
+            "viewer"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "email",
+        "role"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "format": "email",
+          "maxLength": 254,
+          "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+          "type": "string"
+        },
+        "handle": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "owner",
+            "admin",
+            "member",
+            "viewer"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "email",
+        "role"
+      ],
+      "type": "object"
+    }
+  },
+  "createOrgBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "slug": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "slug"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "slug": {
+          "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "slug"
+      ],
+      "type": "object"
+    }
+  },
+  "grantBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "orgId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "permission": {
+          "enum": [
+            "read",
+            "write"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "orgId",
+        "permission"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "orgId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "permission": {
+          "enum": [
+            "read",
+            "write"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "orgId",
+        "permission"
+      ],
+      "type": "object"
+    }
+  },
+  "handleSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$",
+      "type": "string"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$",
+      "type": "string"
+    }
+  },
+  "inviteResultSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "enrollmentLink": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "enrollmentLink"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "enrollmentLink": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "enrollmentLink"
+      ],
+      "type": "object"
+    }
+  },
+  "memberIdBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "memberId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "memberId"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "memberId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "memberId"
+      ],
+      "type": "object"
+    }
+  },
+  "memberPatchBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "heartbeatMinutes": {
+          "anyOf": [
+            {
+              "maximum": 10080,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "role": {
+          "enum": [
+            "owner",
+            "admin",
+            "member",
+            "viewer"
+          ],
+          "type": "string"
+        },
+        "specialties": {
+          "items": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "heartbeatMinutes": {
+          "anyOf": [
+            {
+              "maximum": 10080,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paused": {
+          "type": "boolean"
+        },
+        "role": {
+          "enum": [
+            "owner",
+            "admin",
+            "member",
+            "viewer"
+          ],
+          "type": "string"
+        },
+        "specialties": {
+          "items": {
+            "maxLength": 40,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "nameBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "orgDetailSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "me": {
+          "properties": {
+            "agentId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "handle": {
+              "type": "string"
+            },
+            "heartbeatMinutes": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "human",
+                "agent"
+              ],
+              "type": "string"
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "orgId": {
+              "type": "string"
+            },
+            "paused": {
+              "type": "boolean"
+            },
+            "role": {
+              "enum": [
+                "owner",
+                "admin",
+                "member",
+                "viewer"
+              ],
+              "type": "string"
+            },
+            "specialties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "userId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "orgId",
+            "kind",
+            "userId",
+            "agentId",
+            "model",
+            "handle",
+            "displayName",
+            "role",
+            "specialties",
+            "heartbeatMinutes",
+            "paused"
+          ],
+          "type": "object"
+        },
+        "members": {
+          "items": {
+            "properties": {
+              "agentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "handle": {
+                "type": "string"
+              },
+              "heartbeatMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "human",
+                  "agent"
+                ],
+                "type": "string"
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "orgId": {
+                "type": "string"
+              },
+              "paused": {
+                "type": "boolean"
+              },
+              "role": {
+                "enum": [
+                  "owner",
+                  "admin",
+                  "member",
+                  "viewer"
+                ],
+                "type": "string"
+              },
+              "specialties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "userId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "orgId",
+              "kind",
+              "userId",
+              "agentId",
+              "model",
+              "handle",
+              "displayName",
+              "role",
+              "specialties",
+              "heartbeatMinutes",
+              "paused"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "org": {
+          "properties": {
+            "createdAt": {
+              "type": "number"
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "slug",
+            "name",
+            "createdAt"
+          ],
+          "type": "object"
+        },
+        "positions": {
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "isManager": {
+                "type": "boolean"
+              },
+              "memberId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reportsTo": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "teamId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "teamId",
+              "title",
+              "memberId",
+              "reportsTo",
+              "isManager"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "projects": {
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "orgId": {
+                "type": "string"
+              },
+              "repo": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "teamId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "orgId",
+              "teamId",
+              "key",
+              "name",
+              "repo"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "teams": {
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "org",
+        "me",
+        "teams",
+        "members",
+        "positions",
+        "projects"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "me": {
+          "additionalProperties": false,
+          "properties": {
+            "agentId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "handle": {
+              "type": "string"
+            },
+            "heartbeatMinutes": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "enum": [
+                "human",
+                "agent"
+              ],
+              "type": "string"
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "orgId": {
+              "type": "string"
+            },
+            "paused": {
+              "type": "boolean"
+            },
+            "role": {
+              "enum": [
+                "owner",
+                "admin",
+                "member",
+                "viewer"
+              ],
+              "type": "string"
+            },
+            "specialties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "userId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "orgId",
+            "kind",
+            "userId",
+            "agentId",
+            "model",
+            "handle",
+            "displayName",
+            "role",
+            "specialties",
+            "heartbeatMinutes",
+            "paused"
+          ],
+          "type": "object"
+        },
+        "members": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "agentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "displayName": {
+                "type": "string"
+              },
+              "handle": {
+                "type": "string"
+              },
+              "heartbeatMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "human",
+                  "agent"
+                ],
+                "type": "string"
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "orgId": {
+                "type": "string"
+              },
+              "paused": {
+                "type": "boolean"
+              },
+              "role": {
+                "enum": [
+                  "owner",
+                  "admin",
+                  "member",
+                  "viewer"
+                ],
+                "type": "string"
+              },
+              "specialties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "userId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "orgId",
+              "kind",
+              "userId",
+              "agentId",
+              "model",
+              "handle",
+              "displayName",
+              "role",
+              "specialties",
+              "heartbeatMinutes",
+              "paused"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "org": {
+          "additionalProperties": false,
+          "properties": {
+            "createdAt": {
+              "type": "number"
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "slug": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "slug",
+            "name",
+            "createdAt"
+          ],
+          "type": "object"
+        },
+        "positions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "isManager": {
+                "type": "boolean"
+              },
+              "memberId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reportsTo": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "teamId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "teamId",
+              "title",
+              "memberId",
+              "reportsTo",
+              "isManager"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "projects": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "orgId": {
+                "type": "string"
+              },
+              "repo": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "teamId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "orgId",
+              "teamId",
+              "key",
+              "name",
+              "repo"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "teams": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "org",
+        "me",
+        "teams",
+        "members",
+        "positions",
+        "projects"
+      ],
+      "type": "object"
+    }
+  },
+  "positionBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "isManager": {
+          "type": "boolean"
+        },
+        "memberId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "reportsTo": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "teamId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "isManager": {
+          "type": "boolean"
+        },
+        "memberId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "reportsTo": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "teamId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  "positionPatchBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "isManager": {
+          "type": "boolean"
+        },
+        "memberId": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reportsTo": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "teamId": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "isManager": {
+          "type": "boolean"
+        },
+        "memberId": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reportsTo": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "teamId": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "projectBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 16,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repo": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        "teamId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "maxLength": 16,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repo": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        "teamId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "revokeBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "orgId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "orgId"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "orgId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "orgId"
+      ],
+      "type": "object"
+    }
+  }
+}
