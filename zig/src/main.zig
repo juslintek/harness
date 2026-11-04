@@ -81,6 +81,8 @@ test {
     _ = @import("http/boot.zig");
     _ = @import("realtime/hub.zig");
     _ = @import("auth/cbor.zig");
+    _ = @import("auth/sessions.zig");
+    _ = @import("auth/middleware.zig");
     _ = @import("orgs/repo.zig");
     _ = @import("board/repo.zig");
     _ = @import("chat/repo.zig");

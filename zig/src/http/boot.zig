@@ -13,6 +13,7 @@ const migrate = @import("../db/migrate.zig");
 const sqlite = @import("../db/sqlite.zig");
 const routes = @import("routes.zig");
 const server = @import("server.zig");
+const auth = @import("../auth/middleware.zig");
 
 /// What a running server owns on disk. On the heap because `app` holds a mutex that must not move.
 pub const Home = struct {
@@ -82,7 +83,13 @@ pub fn serveHome(
 ) !void {
     const home = try Home.open(gpa, io, home_path, held);
     defer home.close();
-    try server.run(gpa, io, &home.app, home.health, options, out);
+    var session_auth = auth.SessionAuth.init(&home.app, options.origin);
+    var limiter = auth.RateLimiter.init(gpa, &home.app, options.trust_proxy);
+    defer limiter.deinit();
+    var wired = options;
+    wired.authenticator = options.authenticator orelse session_auth.authenticator();
+    wired.throttle = options.throttle orelse limiter.throttle();
+    try server.run(gpa, io, &home.app, home.health, wired, out);
 }
 
 pub fn serve(init: std.process.Init) u8 {
@@ -100,6 +107,7 @@ pub fn serve(init: std.process.Init) u8 {
         .port = settings.port,
         .origin = settings.origin,
         .ui_dist = init.environ_map.get("HARNESS_UI_DIST"),
+        .trust_proxy = settings.trust_proxy,
     }, &held, &stdout.interface) catch |err| {
         if (err == error.AlreadyLocked) {
             std.debug.print("Another harness server (pid {d}) is already using {s}\n", .{ held.pid, settings.home });

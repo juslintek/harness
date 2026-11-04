@@ -44,6 +44,10 @@ pub const Options = struct {
     ui_dist: ?[]const u8 = null,
     /// Installed by the auth slice. Null makes every session route answer 401.
     authenticator: ?policy.Authenticator = null,
+    /// Installed by the auth slice; null means no rate limit.
+    throttle: ?policy.Throttle = null,
+    /// HARNESS_TRUST_PROXY: the auth rate limit keys on X-Forwarded-For instead of the socket.
+    trust_proxy: bool = false,
     threads: ?u16 = null,
 };
 
@@ -54,6 +58,7 @@ pub const Server = struct {
     configured_origin: ?[]const u8,
     ui_dist: ?[]const u8,
     authenticator: ?policy.Authenticator,
+    throttle: ?policy.Throttle,
     /// The bound port, stored once the listener is up. Requests that race it see 0 and fail the
     /// host guard, which is the safe answer.
     port: std.atomic.Value(u16),
@@ -65,6 +70,7 @@ pub const Server = struct {
             .configured_origin = options.origin,
             .ui_dist = options.ui_dist,
             .authenticator = options.authenticator,
+            .throttle = options.throttle,
             .port = .init(options.port),
         };
     }
@@ -135,8 +141,11 @@ pub const Server = struct {
         if (policy.mutationNeedsOrigin(method, path) and !policy.originMatches(req.header("origin"), origin))
             return headers.sendError(res, 403, "forbidden origin");
 
+        // publicAuthRoutes mounts its limiter right after the Origin guard, ahead of routing.
+        if (self.throttle) |throttle| if (!try throttle.check(throttle.ctx, req, res)) return;
+
         const matched = route orelse {
-            if (policy.isApiPath(path)) switch (policy.sessionGate(self.authenticator, false, req, res)) {
+            if (policy.isApiPath(path)) switch (try policy.sessionGate(self.authenticator, false, req, res)) {
                 .allow => {},
                 .unauthorized => return headers.sendError(res, 401, "unauthorized"),
                 .forbidden => return headers.sendError(res, 403, "forbidden"),
@@ -148,7 +157,7 @@ pub const Server = struct {
 
         // Everything else under /api needs a session whatever its flags say: sessionMiddleware is
         // mounted on `/api/*`, so a row that forgot the flag fails closed instead of open.
-        const actor = switch (policy.sessionGate(self.authenticator, matched.policy.admin, req, res)) {
+        const actor = switch (try policy.sessionGate(self.authenticator, matched.policy.admin, req, res)) {
             .allow => |actor| actor,
             .unauthorized => return headers.sendError(res, 401, "unauthorized"),
             .forbidden => return headers.sendError(res, 403, "forbidden"),

@@ -164,7 +164,7 @@ test "http: session routes fail closed with no authenticator" {
 const StubAuth = struct {
     actor: ?policy.Actor,
 
-    fn authenticate(ctx: *anyopaque, _: *httpz.Request, _: *httpz.Response) ?policy.Actor {
+    fn authenticate(ctx: *anyopaque, _: *httpz.Request, _: *httpz.Response) anyerror!?policy.Actor {
         const self: *StubAuth = @ptrCast(@alignCast(ctx));
         return self.actor;
     }

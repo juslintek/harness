@@ -20,18 +20,32 @@ pub const Policy = struct {
     origin: bool = false,
 };
 
-/// What the session middleware knows about the caller. The auth slice adds fields as handlers need
-/// them; `instance_admin` is what `requireInstanceAdmin` reads.
+/// What the session middleware knows about the caller, the `Session` of sessions.ts. The strings
+/// live in the request arena. `instance_admin` is what `requireInstanceAdmin` reads; handlers
+/// compute step-up freshness against their own clock reading (`hasFreshStepUp`).
 pub const Actor = struct {
     instance_admin: bool = false,
+    user_id: []const u8 = "",
+    session_id: []const u8 = "",
+    /// `SessionMethod` as text: passkey, email, recovery or enroll.
+    method: []const u8 = "",
+    step_up_at: ?i64 = null,
 };
 
 /// Installed by the auth slice. `authenticate` returns null for no or an invalid session, and may
-/// set a cookie on `res` (TS re-sets it when the stored expiry slid). It runs on a pool thread and
-/// takes the state lock itself.
+/// set a cookie on `res` (TS re-sets it when the stored expiry slid). An error is a failed lookup
+/// (database, memory) and becomes a 500, as a throwing query does in TS. It runs on a pool thread
+/// and takes the state lock itself.
 pub const Authenticator = struct {
     ctx: *anyopaque,
-    authenticate: *const fn (ctx: *anyopaque, req: *httpz.Request, res: *httpz.Response) ?Actor,
+    authenticate: *const fn (ctx: *anyopaque, req: *httpz.Request, res: *httpz.Response) anyerror!?Actor,
+};
+
+/// The auth rate limiter (rate-limit.ts), asked once per request after the Origin guard. It answers
+/// 429 on `res` itself and returns false to stop the chain; paths it does not cover return true.
+pub const Throttle = struct {
+    ctx: *anyopaque,
+    check: *const fn (ctx: *anyopaque, req: *httpz.Request, res: *httpz.Response) anyerror!bool,
 };
 
 pub const Verdict = union(enum) {
@@ -44,9 +58,9 @@ pub const Verdict = union(enum) {
 
 /// sessionMiddleware, then requireInstanceAdmin when the route asks for it. With no authenticator
 /// installed nobody has a session, so this fails closed.
-pub fn sessionGate(auth: ?Authenticator, admin_required: bool, req: *httpz.Request, res: *httpz.Response) Verdict {
+pub fn sessionGate(auth: ?Authenticator, admin_required: bool, req: *httpz.Request, res: *httpz.Response) anyerror!Verdict {
     const installed = auth orelse return .unauthorized;
-    const actor = installed.authenticate(installed.ctx, req, res) orelse return .unauthorized;
+    const actor = try installed.authenticate(installed.ctx, req, res) orelse return .unauthorized;
     if (admin_required and !actor.instance_admin) return .forbidden;
     return .{ .allow = actor };
 }
@@ -153,14 +167,14 @@ test "policy: origin must match exactly" {
 test "policy: a session route fails closed when no authenticator is installed" {
     var web = httpz.testing.init(.{});
     defer web.deinit();
-    const verdict = sessionGate(null, false, web.req, web.res);
+    const verdict = try sessionGate(null, false, web.req, web.res);
     try std.testing.expectEqual(Verdict.unauthorized, verdict);
 }
 
 const FakeAuth = struct {
     actor: ?Actor,
 
-    fn authenticate(ctx: *anyopaque, _: *httpz.Request, _: *httpz.Response) ?Actor {
+    fn authenticate(ctx: *anyopaque, _: *httpz.Request, _: *httpz.Response) anyerror!?Actor {
         const self: *FakeAuth = @ptrCast(@alignCast(ctx));
         return self.actor;
     }
@@ -175,12 +189,12 @@ test "policy: session gate maps the authenticator's answer" {
     defer web.deinit();
 
     var nobody: FakeAuth = .{ .actor = null };
-    try std.testing.expectEqual(Verdict.unauthorized, sessionGate(nobody.installed(), false, web.req, web.res));
+    try std.testing.expectEqual(Verdict.unauthorized, try sessionGate(nobody.installed(), false, web.req, web.res));
 
     var member: FakeAuth = .{ .actor = .{} };
-    try std.testing.expectEqual(Verdict{ .allow = .{} }, sessionGate(member.installed(), false, web.req, web.res));
-    try std.testing.expectEqual(Verdict.forbidden, sessionGate(member.installed(), true, web.req, web.res));
+    try std.testing.expectEqual(Verdict{ .allow = .{} }, try sessionGate(member.installed(), false, web.req, web.res));
+    try std.testing.expectEqual(Verdict.forbidden, try sessionGate(member.installed(), true, web.req, web.res));
 
     var admin: FakeAuth = .{ .actor = .{ .instance_admin = true } };
-    try std.testing.expectEqual(Verdict{ .allow = .{ .instance_admin = true } }, sessionGate(admin.installed(), true, web.req, web.res));
+    try std.testing.expectEqual(Verdict{ .allow = .{ .instance_admin = true } }, try sessionGate(admin.installed(), true, web.req, web.res));
 }

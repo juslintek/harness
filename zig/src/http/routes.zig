@@ -11,6 +11,7 @@ const ids = @import("../ids.zig");
 const health_body = @import("../health.zig");
 const headers = @import("headers.zig");
 const policy = @import("policy.zig");
+const session_endpoints = @import("../auth/middleware.zig");
 
 pub const Method = policy.Method;
 pub const Policy = policy.Policy;
@@ -80,8 +81,8 @@ pub const table = [_]Route{
     row(.POST, "/api/auth/enroll/:code/verify", .{ .public = true, .origin = true }),
     row(.POST, "/api/auth/login/options", .{ .public = true, .origin = true }),
     row(.POST, "/api/auth/login/verify", .{ .public = true, .origin = true }),
-    row(.POST, "/api/auth/logout", .{ .session = true, .origin = true }),
-    row(.GET, "/api/auth/me", .{ .session = true }),
+    .{ .method = .POST, .path = "/api/auth/logout", .handler = session_endpoints.logout, .policy = .{ .session = true, .origin = true } },
+    .{ .method = .GET, .path = "/api/auth/me", .handler = session_endpoints.me, .policy = .{ .session = true } },
     row(.GET, "/api/auth/passkeys", .{ .session = true }),
     row(.DELETE, "/api/auth/passkeys/:id", .{ .session = true, .step_up = true, .origin = true }),
     row(.POST, "/api/auth/passkeys/options", .{ .session = true, .step_up = true, .origin = true }),
