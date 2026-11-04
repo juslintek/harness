@@ -1,6 +1,14 @@
 import "../../test-support/no-git-env";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gitOutput } from "../../git-env";
@@ -33,6 +41,7 @@ test("three writes within 100 ms make one commit by the harness identity", async
 
 test("drain flushes the pending debounce and ignores nothing-to-commit", async () => {
   await ensureVaultRepo(env.dir);
+  await Bun.write(join(vaultDir(env.dir), orgNote.disk), "# one");
   queueCommit(env.dir, "first");
   await drainCommits();
   queueCommit(env.dir, "nothing changed");
@@ -72,4 +81,26 @@ test("a global core.hooksPath hook does not run on vault commits", async () => {
     else process.env.GIT_CONFIG_GLOBAL = before;
     rmSync(hooks, { recursive: true, force: true });
   }
+});
+
+test("only note files are committed: a dropped credentials file never reaches history", async () => {
+  const vault = vaultDir(env.dir);
+  await ensureVaultRepo(env.dir);
+  await Bun.write(join(vault, "credentials.txt"), "hunter2");
+  await Bun.write(join(vault, "orgs", "o1", "org", "keys.env"), "TOKEN=abc");
+  await Bun.write(join(vault, orgNote.disk), "# ok");
+  queueCommit(env.dir, "files");
+  await drainCommits();
+  const stat = (await gitOutput(vault, ["log", "--all", "--stat"])) ?? "";
+  expect(stat).toContain(orgNote.disk);
+  expect(stat).not.toContain("credentials.txt");
+  expect(stat).not.toContain("keys.env");
+});
+
+test("an existing vault gets the ignore rules and keeps its old entries", async () => {
+  const vault = vaultDir(env.dir);
+  mkdirSync(vault, { recursive: true });
+  writeFileSync(join(vault, ".gitignore"), "*.tmp\ncustom\n");
+  await ensureVaultRepo(env.dir);
+  expect(readFileSync(join(vault, ".gitignore"), "utf8")).toBe("*.tmp\ncustom\n*\n!*/\n!*.md\n");
 });

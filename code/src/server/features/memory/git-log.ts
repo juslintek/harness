@@ -1,12 +1,14 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gitEnv } from "../../git-env";
 import { redact } from "../logs/api";
+import { diskToLocated } from "./paths";
 import { vaultDir } from "./vault";
 
 const COMMIT_DEBOUNCE_MS = 500;
 const GIT_TIMEOUT_MS = 30_000;
+const STAGE_CHUNK = 200;
 const IDENT = [
   "-c",
   "user.name=harness",
@@ -37,11 +39,26 @@ async function git(cwd: string, args: string[]): Promise<{ code: number; out: st
   return { code, out: stdout + stderr };
 }
 
+// Everything but folders and notes is ignored, so a stray credentials file in the vault is never
+// picked up by a broad `git add`. Existing entries stay; the missing ones are appended in order
+// because a later "!" rule must follow the "*" it carves out of.
+const IGNORE_RULES = ["*.tmp", "*", "!*/", "!*.md"];
+
+function writeIgnore(dir: string): void {
+  const file = join(dir, ".gitignore");
+  const current = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const have = new Set(current.split("\n"));
+  const missing = IGNORE_RULES.filter((r) => !have.has(r));
+  if (missing.length === 0) return;
+  const head = current === "" || current.endsWith("\n") ? current : `${current}\n`;
+  writeFileSync(file, `${head}${missing.join("\n")}\n`);
+}
+
 async function initRepo(home: string): Promise<void> {
   const dir = vaultDir(home);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
+  writeIgnore(dir);
   if (existsSync(join(dir, ".git"))) return;
-  writeFileSync(join(dir, ".gitignore"), "*.tmp\n");
   const res = await git(dir, ["init", "-q"]);
   if (res.code !== 0) throw new Error(`git init failed: ${res.out}`);
 }
@@ -71,7 +88,7 @@ async function changedNotes(dir: string): Promise<string[]> {
     if (entry[0] === "R" || entry[0] === "C") i++;
     const path = entry.slice(3);
     const inside = !path.startsWith(".git") && !path.split("/").includes("..");
-    if (inside && path.endsWith(".md")) out.push(path);
+    if (inside && path.endsWith(".md") && diskToLocated(path) !== null) out.push(path);
   }
   return out;
 }
@@ -86,10 +103,22 @@ export function setOutsideSyncer(fn: Syncer): void {
   syncer = fn;
 }
 
-async function scrubOutside(db: Database, home: string, dir: string): Promise<void> {
+function scrubOutside(db: Database, home: string, notes: string[]): void {
   if (syncer === null) return;
-  for (const disk of await changedNotes(dir)) {
-    syncer(db, home, disk);
+  for (const disk of notes) syncer(db, home, disk);
+}
+
+// Only paths a note can have are staged (never -A), and pathspec magic is switched off so a file
+// named like ":(glob)*" cannot widen the match.
+async function stageNotes(dir: string, notes: string[]): Promise<void> {
+  for (let i = 0; i < notes.length; i += STAGE_CHUNK) {
+    const add = await git(dir, [
+      "--literal-pathspecs",
+      "add",
+      "--",
+      ...notes.slice(i, i + STAGE_CHUNK),
+    ]);
+    if (add.code !== 0) throw new Error(add.out);
   }
 }
 
@@ -110,9 +139,8 @@ async function commitAll(home: string, message: string, db: Database | undefined
   try {
     await ensureVaultRepo(home);
     const dir = vaultDir(home);
-    if (db !== undefined) await scrubOutside(db, home, dir);
-    const add = await git(dir, ["add", "-A"]);
-    if (add.code !== 0) throw new Error(add.out);
+    if (db !== undefined) scrubOutside(db, home, await changedNotes(dir));
+    await stageNotes(dir, await changedNotes(dir));
     await unstageSecrets(dir);
     const commit = await git(dir, ["commit", "-q", "-m", message]);
     if (commit.code !== 0 && !commit.out.includes("nothing to commit")) throw new Error(commit.out);
