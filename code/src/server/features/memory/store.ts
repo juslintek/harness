@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { NoteScope, NoteType, NoteView } from "../../../shared/memory";
 import { redact } from "../logs/api";
 import { hashText, type NoteMeta, parseNote, serializeNote } from "./frontmatter";
-import { removeIndexed, upsertIndexed } from "./index-repo";
+import { syncOutside } from "./outside";
 import type { Located, Viewer } from "./paths";
 import { canWrite } from "./paths";
 import {
@@ -143,9 +143,11 @@ export function readNote(db: Database, home: string, viewer: Viewer, id: string)
   const { note, loc } = locate(db, viewer, id);
   const text = readNoteFile(home, loc.disk);
   if (text === null) {
-    removeIndexed(db, loc.disk);
+    syncOutside(db, home, loc.disk);
     throw new MemoryError("not_found", "note file is missing");
   }
-  const fresh = note.hash === hashText(text) ? note : upsertIndexed(db, loc, text);
-  return toView(fresh, parseNote(redact(text)).body);
+  if (note.hash === hashText(text)) return toView(note, parseNote(redact(text)).body);
+  // Same path as the watcher, so a read that gets there first still leaves the audit row.
+  const fresh = syncOutside(db, home, loc.disk) ?? note;
+  return toView(fresh, parseNote(redact(readNoteFile(home, loc.disk) ?? text)).body);
 }

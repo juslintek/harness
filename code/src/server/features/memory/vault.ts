@@ -67,3 +67,12 @@ export function writeNoteFileAtomic(home: string, disk: string, text: string): v
 export function removeNoteFile(home: string, disk: string): void {
   rmSync(checked(home, disk), { force: true });
 }
+
+export function isMissingPath(path: string): boolean {
+  try {
+    lstatSync(path);
+    return false;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "ENOENT";
+  }
+}

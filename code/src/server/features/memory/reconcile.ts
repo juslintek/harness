@@ -2,7 +2,8 @@ import type { Database } from "bun:sqlite";
 import { lstatSync, readdirSync, type Stats } from "node:fs";
 import { join } from "node:path";
 import { hashText } from "./frontmatter";
-import { getIndexedByDisk, removeIndexed, upsertIndexed } from "./index-repo";
+import { getIndexedByDisk, removeIndexed } from "./index-repo";
+import { syncOutside } from "./outside";
 import { diskToLocated } from "./paths";
 import { readNoteFile, vaultDir } from "./vault";
 
@@ -51,7 +52,7 @@ export function reconcile(db: Database, home: string): { indexed: number; remove
     const text = readNoteFile(home, disk);
     if (text === null) continue;
     if (getIndexedByDisk(db, disk)?.hash === hashText(text)) continue;
-    upsertIndexed(db, loc, text);
+    syncOutside(db, home, disk);
     indexed++;
   }
   let removed = 0;

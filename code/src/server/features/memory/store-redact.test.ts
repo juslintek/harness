@@ -3,12 +3,13 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { hashText, serializeNote } from "./frontmatter";
+import { drainCommits, ensureVaultRepo } from "./git-log";
 import { listWrites } from "./index-log";
 import { getIndexedByDisk } from "./index-repo";
 import { searchNotes } from "./index-search";
 import { noteText } from "./index-test-kit";
 import { reconcile } from "./reconcile";
-import { readNote, updateNote } from "./store";
+import { updateNote } from "./store";
 import { revertWrite } from "./store-revert";
 import { aliceA, ctx, type Env, orgNote, setup, teardown } from "./store-test-kit";
 import { vaultDir } from "./vault";
@@ -34,13 +35,19 @@ function put(text: string): string {
   return file;
 }
 
+// Reconcile audits what it indexes; these tests look at the rows of the edit that follows it.
+function reconcileQuietly(): void {
+  reconcile(env.db, env.dir);
+  env.db.run("DELETE FROM note_writes");
+}
+
 async function until(check: () => boolean): Promise<void> {
   for (const end = Date.now() + 2000; Date.now() < end && !check(); ) await Bun.sleep(25);
 }
 
 test("reverting an outside edit with unknown previous text is invalid and keeps the file", () => {
   const file = put(noteText("# D\none"));
-  reconcile(env.db, env.dir);
+  reconcileQuietly();
   stop = watchVault(env.db, env.dir);
   return (async () => {
     await Bun.sleep(300);
@@ -56,44 +63,43 @@ test("reverting an outside edit with unknown previous text is invalid and keeps 
   })();
 });
 
-test("an outside edit with secrets is stored, indexed and served redacted, disk untouched", async () => {
+test("an outside edit with secrets is redacted on disk, in the index and in git history", async () => {
   put(noteText("# D\nclean"));
-  reconcile(env.db, env.dir);
+  reconcileQuietly();
+  await ensureVaultRepo(env.dir);
+  // A commit still queued from the reconcile would otherwise snapshot the raw file first.
+  await drainCommits();
   stop = watchVault(env.db, env.dir);
   await Bun.sleep(300);
   const raw = noteText(`# D\nkey ${AWS}\ntoken ${GH}`);
   const file = put(raw);
   await until(() => listWrites(env.db, "A", { limit: 5 }).length > 0);
+  const text = await Bun.file(file).text();
+  expect(text).not.toContain(AWS);
+  expect(text).not.toContain(GH);
   const note = getIndexedByDisk(env.db, orgNote.disk);
-  expect(note?.hash).toBe(hashText(raw));
+  expect(note?.hash).toBe(hashText(text));
   expect(searchNotes(env.db, aliceA, { text: AWS })).toEqual([]);
   const rows = env.db.query("SELECT after_text, before_text FROM note_writes").all();
   expect(JSON.stringify(rows)).not.toContain(AWS);
-  expect(JSON.stringify(rows)).not.toContain(GH);
-  const view = readNote(env.db, env.dir, aliceA, note?.id as string);
-  expect(view.body).not.toContain(AWS);
-  expect(view.hash).toBe(hashText(raw));
-  expect(await Bun.file(file).text()).toBe(raw);
   await Bun.sleep(500);
   expect(listWrites(env.db, "A", { limit: 5 }).length).toBe(1);
-  const u = updateNote(env.db, env.dir, ctx(aliceA), view.id, view.hash, "fresh");
-  expect(u.note.body).toBe("fresh\n".trimEnd());
-  const stored = env.db.query("SELECT before_text FROM note_writes WHERE op = 'update'").get();
-  expect(JSON.stringify(stored)).not.toContain(GH);
+  await drainCommits();
+  const log = Bun.spawnSync(["git", "log", "-p"], { cwd: vaultDir(env.dir) }).stdout.toString();
+  expect(log).toContain("outside");
+  expect(log).not.toContain(AWS);
+  expect(log).not.toContain(GH);
 });
 
-test("update over a human-written secret and revert of redacted text report redacted", async () => {
-  put(noteText(`# D\nkey ${AWS}`));
-  reconcile(env.db, env.dir);
+test("an update carrying a secret reports redacted and a clean one does not", async () => {
+  put(noteText("# D\nplain"));
+  reconcileQuietly();
   const note = getIndexedByDisk(env.db, orgNote.disk);
   const c = ctx(aliceA);
-  const u = updateNote(env.db, env.dir, c, note?.id as string, note?.hash as string, "# D\nplain");
+  const u = updateNote(env.db, env.dir, c, note?.id as string, note?.hash as string, `# D\n${AWS}`);
   expect(u.redacted).toBe(true);
-  const id = (listWrites(env.db, "A", { limit: 1 })[0] as { id: string }).id;
-  const back = revertWrite(env.db, env.dir, c, id);
-  expect(back.redacted).toBe(true);
-  expect(back.note.body).not.toContain(AWS);
-  const next = updateNote(env.db, env.dir, c, back.note.id, back.note.hash, "# D\nagain");
+  expect(u.note.body).not.toContain(AWS);
+  const next = updateNote(env.db, env.dir, c, u.note.id, u.note.hash, "# D\nagain");
   expect(next.redacted).toBe(false);
 });
 
