@@ -37,11 +37,13 @@ function Lesson({
     <li class="card">
       <p class="muted">
         {author}, {fmtTime(lesson.createdAt)}, proposed as {lesson.scope} / {lesson.type}
-        {lesson.projectId && (
-          <>
-            {" "}
-            · <a href={`#/o/${detail.org.slug}/board/${lesson.projectId}`}>Project board</a>
-          </>
+        {" · "}
+        {lesson.task ? (
+          <a href={`#/o/${detail.org.slug}/board/${lesson.task.projectId}/${lesson.task.number}`}>
+            Task #{lesson.task.number} {lesson.task.title}
+          </a>
+        ) : (
+          "Task no longer exists"
         )}
       </p>
       <label>

@@ -98,6 +98,8 @@ export interface LessonView {
   noteId: string | null;
   createdAt: number;
   decidedAt: number | null;
+  // Filled by the list route so the review page can deep-link; null when the task is gone.
+  task?: { number: number; projectId: string; title: string } | null | undefined;
 }
 
 export const lessonViewSchema: z.ZodType<LessonView> = z.object({
@@ -115,4 +117,8 @@ export const lessonViewSchema: z.ZodType<LessonView> = z.object({
   noteId: z.string().nullable(),
   createdAt: z.number(),
   decidedAt: z.number().nullable(),
+  task: z
+    .object({ number: z.number(), projectId: z.string(), title: z.string() })
+    .nullable()
+    .optional(),
 });

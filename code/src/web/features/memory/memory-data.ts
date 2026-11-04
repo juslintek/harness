@@ -48,6 +48,14 @@ export const writeResultSchema: z.ZodType<{ note: NoteView; redacted: boolean }>
   redacted: z.boolean(),
 });
 
+// A draft that still equals the server text was never edited, so it must not replace the one the
+// user wrote before an earlier conflict.
+export const keptAfterReload = (
+  kept: string | null,
+  draft: string,
+  serverBody: string,
+): string | null => (draft === serverBody ? kept : draft);
+
 export const memoryBase = (slug: string): string => `/api/orgs/${slug}/memory`;
 
 export const tabOf = (part: string | undefined): Tab => TABS.find((t) => t === part) ?? "notes";

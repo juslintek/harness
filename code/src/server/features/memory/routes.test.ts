@@ -203,6 +203,7 @@ test("lesson decide is admin-only and an accepted lesson becomes a note", async 
   );
   const pending = await (await k.call(k.alice, "GET", `${BASE}/lessons?status=pending`)).json();
   expect(pending).toHaveLength(1);
+  expect(pending[0].task).toEqual({ number: task.number, projectId: project.id, title: "t" });
   addHumanMember(k.db, k.acme.id, k.carol.userId, "carol", "carol", "member");
   const body = { decision: "accept", reason: "good" };
   expect((await k.call(k.carol, "POST", `${BASE}/lessons/l1`, body)).status).toBe(403);

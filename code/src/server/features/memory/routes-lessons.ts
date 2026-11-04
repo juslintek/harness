@@ -3,6 +3,7 @@ import type { Hono } from "hono";
 import { z } from "zod";
 import { parseBody, parseQuery } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
+import { getTask } from "../board/api";
 import { getWrite, listWrites } from "./index-log";
 import { listLessons } from "./lessons";
 import { decideLesson } from "./lessons-decide";
@@ -54,10 +55,14 @@ export function writeAndLessonRoutes(db: Database, home: string, app: Hono<AuthE
     if (m instanceof Response) return m;
     const q = parseQuery(c, lessonsQuery);
     if (q instanceof Response) return q;
+    const visible = listLessons(db, m.orgId, q.status).filter(
+      (l) => l.projectId === null || m.viewer.projectIds.includes(l.projectId),
+    );
     return c.json(
-      listLessons(db, m.orgId, q.status).filter(
-        (l) => l.projectId === null || m.viewer.projectIds.includes(l.projectId),
-      ),
+      visible.map((l) => {
+        const t = getTask(db, l.taskId);
+        return { ...l, task: t && { number: t.number, projectId: t.projectId, title: t.title } };
+      }),
     );
   });
   app.post(`${base}/lessons/:id`, async (c) => {

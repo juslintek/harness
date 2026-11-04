@@ -5,7 +5,7 @@ import { ApiError, api } from "../../api";
 import { ErrorLine } from "../auth/error-line";
 import { me } from "../auth/me";
 import { useAction } from "../auth/use-action";
-import { memoryBase, writableScopes, writeResultSchema } from "./memory-data";
+import { keptAfterReload, memoryBase, writableScopes, writeResultSchema } from "./memory-data";
 
 const closeOnEscape = (onClose: () => void) => (e: KeyboardEvent) => {
   if (e.key === "Escape") {
@@ -81,7 +81,7 @@ export function EditNote({
     action
       .run(async () => {
         const fresh = await api(`${memoryBase(slug)}/notes/${base.id}`, noteViewSchema);
-        setKept(draft);
+        setKept(keptAfterReload(kept, draft, base.body));
         setDraft(fresh.body);
         setBase(fresh);
         setConflict(false);
