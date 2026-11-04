@@ -96,3 +96,12 @@ test("a note too big for the budget is skipped and smaller notes after it still 
   expect(text).toContain("## small");
   expect(text).not.toContain("## huge");
 });
+
+test("an old lesson still reaches the index behind more than 100 newer notes", () => {
+  add("orgs/A/org/rule.md", "# Rule\nalways rebase", "2018-01-01T00:00:00Z");
+  env.db.run("UPDATE notes SET type = 'lesson' WHERE disk = 'orgs/A/org/rule.md'");
+  for (let i = 0; i < 105; i++)
+    add(`orgs/A/org/n${i}.md`, `# N${i}\nfiller`, "2024-01-01T00:00:00Z");
+  const text = buildMemoryIndex(env.db, alice, null, "unrelated words");
+  expect(text).toContain("# Project and org lessons\n\n## Rule");
+});

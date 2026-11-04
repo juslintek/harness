@@ -24,6 +24,18 @@ function ranked(db: Database, viewer: Viewer, taskText: string): NoteSummary[] {
   return [...hits, ...searchNotes(db, viewer, { limit: FETCH }).filter((n) => !seen.has(n.id))];
 }
 
+// Lessons are fetched by their own query: the capped candidates above are the newest notes, and an
+// old accepted lesson would otherwise fall out once enough newer notes exist.
+function lessonsOf(db: Database, viewer: Viewer, projectId: string | null): NoteSummary[] {
+  const base = { type: "lesson", limit: FETCH } as const;
+  return [
+    ...searchNotes(db, viewer, { ...base, scope: "org" }),
+    ...(projectId === null
+      ? []
+      : searchNotes(db, viewer, { ...base, scope: "project", projectId })),
+  ];
+}
+
 // The index holds the redacted body, so a secret that reached a file by hand never reaches a prompt.
 function bodyOf(db: Database, noteId: string): string {
   const row = db
@@ -43,7 +55,8 @@ export function buildMemoryIndex(
 ): string {
   const slugs = projectSlugs(db, viewer.orgId);
   const wanted = projectSlug === null ? null : slugs.idOf(projectSlug);
-  const notes = ranked(db, viewer, taskText).filter(
+  const candidates = [...ranked(db, viewer, taskText), ...lessonsOf(db, viewer, wanted)];
+  const notes = [...new Map(candidates.map((n) => [n.id, n])).values()].filter(
     (n) => n.scope !== "project" || projectSlug === null || n.projectId === wanted,
   );
   const parts: string[] = [];
