@@ -5,12 +5,14 @@ import { ensureInstance, lockHome, migrate, openDb } from "./server/db/db";
 import { migrations } from "./server/db/migrations";
 import { firstRunEnrollment } from "./server/features/auth/api";
 import { wireBoard } from "./server/features/board/api";
+import { startBridges } from "./server/features/bridge/api";
 import { startBudgets } from "./server/features/budgets/api";
 import { wireChat } from "./server/features/chat/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
 import { startHiring } from "./server/features/hiring/api";
 import { wireHiring } from "./server/features/hiring/wiring";
 import { startMemory } from "./server/features/memory/api";
+import { startNotify } from "./server/features/notify/api";
 import { startRouter } from "./server/features/router/api";
 import {
   recoverRuns,
@@ -85,6 +87,8 @@ const stopLoops = [
   ...[startRouter, startBudgets, startTracking].map((start) => start(db)),
   startHiring(db, hiring.deps),
   hiring.stop,
+  startNotify(db, { home: config.home, origin: bound.rp.origin }),
+  startBridges(db, { home: config.home, origin: bound.rp.origin }),
 ];
 
 console.log(`harness listening on ${server.url}`);

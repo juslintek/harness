@@ -27,6 +27,7 @@ import { appendEvent, searchEvents } from "./features/logs/api";
 import { logsRoutes } from "./features/logs/routes";
 import { type McpDeps, mcpHandler, verifyRunToken } from "./features/mcp/api";
 import { memoryRoutes } from "./features/memory/routes";
+import { notifyRoutes } from "./features/notify/api";
 import { orgRoutes } from "./features/orgs/routes";
 import { harnessPolicyRoutes, policiesRoutes } from "./features/policies/routes";
 import { profilesRoutes } from "./features/profiles/routes";
@@ -166,6 +167,7 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", trackingRoutes(db));
   app.route("/api", memoryRoutes(db, deps.home));
   app.route("/api", logsRoutes(db));
+  app.route("/api/notify", notifyRoutes());
   app.route("/api", adminRoutes(deps));
 }
 

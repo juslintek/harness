@@ -27,6 +27,8 @@ import memory from "./migrations/025_memory.sql" with { type: "text" };
 import lessons from "./migrations/026_lessons.sql" with { type: "text" };
 import wakeRetro from "./migrations/027_wake_retro.sql" with { type: "text" };
 import runOrg from "./migrations/028_run_org.sql" with { type: "text" };
+import notify from "./migrations/029_notify.sql" with { type: "text" };
+import oauth from "./migrations/030_oauth.sql" with { type: "text" };
 
 export const migrations: readonly Migration[] = [
   { version: 1, sql: instance },
@@ -57,4 +59,6 @@ export const migrations: readonly Migration[] = [
   { version: 26, sql: lessons },
   { version: 27, sql: wakeRetro },
   { version: 28, sql: runOrg },
+  { version: 29, sql: notify },
+  { version: 30, sql: oauth },
 ];
