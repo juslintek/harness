@@ -939,6 +939,20 @@
   },
   {
     "method": "GET",
+    "path": "/api/orgs/:org/memory/notes/:id/link",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
     "path": "/api/orgs/:org/memory/writes",
     "policy": {
       "admin": false,

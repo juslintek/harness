@@ -3,8 +3,14 @@
     "input": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
-        "authorId": {
+        "authorHandle": {
           "type": "string"
+        },
+        "authorId": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "body": {
           "type": "string"
@@ -111,6 +117,7 @@
         "orgId",
         "projectId",
         "authorId",
+        "authorHandle",
         "body",
         "scope",
         "type",
@@ -127,8 +134,14 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
-        "authorId": {
+        "authorHandle": {
           "type": "string"
+        },
+        "authorId": {
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "body": {
           "type": "string"
@@ -236,6 +249,7 @@
         "orgId",
         "projectId",
         "authorId",
+        "authorHandle",
         "body",
         "scope",
         "type",
