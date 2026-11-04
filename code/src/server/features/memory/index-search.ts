@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { dirname } from "node:path";
-import type { NoteScope, NoteSummary, NoteType } from "../../../shared/memory";
+import type { NoteScope, NoteType } from "../../../shared/memory";
 import { normKey } from "./frontmatter";
 import { type IndexedNote, type NoteRow, toIndexed } from "./index-repo";
 import type { Viewer } from "./paths";
@@ -74,7 +74,7 @@ function ftsQuery(text: string, anyWord: boolean): string | null {
         .join(" OR ");
 }
 
-export function searchNotes(db: Database, viewer: Viewer, q: NoteQuery): NoteSummary[] {
+export function searchNotes(db: Database, viewer: Viewer, q: NoteQuery): IndexedNote[] {
   const limit = Math.min(Math.max(q.limit ?? 20, 1), 200);
   const { where, params } = filters(viewer, q);
   const text = q.text?.trim();
@@ -129,7 +129,7 @@ export function facets(
   };
 }
 
-export function backlinks(db: Database, viewer: Viewer, noteId: string): NoteSummary[] {
+export function backlinks(db: Database, viewer: Viewer, noteId: string): IndexedNote[] {
   const target = db
     .query<{ slug: string; title_key: string }, [string]>(
       "SELECT slug, title_key FROM notes WHERE id = ?",

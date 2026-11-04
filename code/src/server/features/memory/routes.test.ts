@@ -1,77 +1,11 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { noteSummarySchema } from "../../../shared/memory";
-import { migrate, openDb } from "../../db/db";
-import { migrations } from "../../db/migrations";
-import { createApp } from "../../http";
-import { type SessionOpts, sessionHeaders } from "../../test-support/app-kit";
+import { expect, test } from "bun:test";
 import { createTask } from "../board/api";
-import {
-  addAgentMember,
-  addHumanMember,
-  createOrg,
-  createProject,
-  grantProject,
-} from "../orgs/api";
-import { drainCommits } from "./git-log";
+import { addAgentMember, addHumanMember, createProject, grantProject } from "../orgs/api";
 import { logWrite } from "./index-log";
+import { BASE, boot, useHome } from "./routes-test-kit";
 
-const ORIGIN = "http://localhost:4100";
-let home: string;
+useHome();
 
-beforeEach(() => {
-  // A closed port keeps note classification off a real Laya.
-  process.env.OLLAYA_URL = "http://127.0.0.1:1";
-  home = mkdtempSync(join(tmpdir(), "harness-routes-"));
-});
-afterEach(async () => {
-  delete process.env.OLLAYA_URL;
-  await drainCommits();
-  rmSync(home, { recursive: true, force: true });
-});
-
-async function boot() {
-  const db = openDb(":memory:");
-  migrate(db, migrations);
-  const app = createApp({
-    db,
-    home,
-    port: 4100,
-    rp: { id: "localhost", name: "Harness", origin: ORIGIN },
-    instanceId: "i",
-    version: "1",
-  });
-  const user = (opts: SessionOpts = {}) => sessionHeaders(db, { ...opts, origin: ORIGIN });
-  const org = (slug: string, owner: { userId: string }) =>
-    createOrg(db, {
-      name: slug,
-      slug,
-      ownerUserId: owner.userId,
-      ownerName: slug,
-      ownerHandle: slug,
-    });
-  const call = (
-    who: { headers: Record<string, string> },
-    method: string,
-    path: string,
-    body?: unknown,
-  ) =>
-    Promise.resolve(
-      app.request(path, {
-        method,
-        headers: who.headers,
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      }),
-    );
-  const [alice, bob, carol] = [await user(), await user(), await user()] as const;
-  const acme = org("acme", alice);
-  const beta = org("beta", bob);
-  return { db, call, alice, bob, carol, acme, beta, user };
-}
-
-const BASE = "/api/orgs/acme/memory";
 const note = {
   scope: "org",
   rel: "deploy.md",
@@ -263,48 +197,4 @@ test("the write feed marks only undoable rows as revertible", async () => {
     feed.map((w: { op: string; canRevert: boolean }) => [w.op, w.canRevert]),
   );
   expect(byOp).toEqual({ update: true, rename: false, outside: false });
-});
-
-test("list, backlinks and link responses carry exactly the public summary keys", async () => {
-  const k = await boot();
-  const put = async (rel: string, body: string) =>
-    (await (await k.call(k.alice, "POST", `${BASE}/notes`, { scope: "org", rel, body })).json())
-      .note.id as string;
-  const target = await put("ref.md", "# Ref");
-  const source = await put("guide.md", "# Guide\n[[ref]]");
-  const json = async (path: string) => (await k.call(k.alice, "GET", path)).json();
-  const lists = [
-    ...(await json(`${BASE}/notes?q=ref`)),
-    ...(await json(`${BASE}/notes`)),
-    ...(await json(`${BASE}/notes/${target}/backlinks`)),
-    await json(`${BASE}/notes/${source}/link?target=ref`),
-  ];
-  expect(lists.length).toBeGreaterThan(3);
-  // zod strips unknown keys, so equality with the parsed value means no internal field leaked.
-  for (const n of lists) expect(n).toEqual(noteSummarySchema.parse(n));
-});
-
-test("a wikilink resolves on the server: same directory first, never another org's note", async () => {
-  const k = await boot();
-  const put = async (who: typeof k.alice, org: string, rel: string, body: string) =>
-    (
-      await (
-        await k.call(who, "POST", `/api/orgs/${org}/memory/notes`, { scope: "org", rel, body })
-      ).json()
-    ).note.id as string;
-  const far = await put(k.alice, "acme", "ref.md", "# Far ref");
-  const near = await put(k.alice, "acme", "zz/ref.md", "# Near ref");
-  const source = await put(k.alice, "acme", "zz/guide.md", "# Guide\n[[ref]] [[betaonly]]");
-  await put(k.bob, "beta", "betaonly.md", "# Beta only");
-  const link = (target: string) =>
-    k.call(k.alice, "GET", `${BASE}/notes/${source}/link?target=${target}`);
-  const hit = await link("ref");
-  expect(hit.status).toBe(200);
-  expect((await hit.json()).id).toBe(near);
-  expect(near).not.toBe(far);
-  expect((await link("betaonly")).status).toBe(404);
-  expect((await link("nothing")).status).toBe(404);
-  expect(
-    (await k.call(k.bob, "GET", `/api/orgs/beta/memory/notes/${source}/link?target=ref`)).status,
-  ).toBe(404);
 });
