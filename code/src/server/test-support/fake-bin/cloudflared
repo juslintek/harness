@@ -1,0 +1,7 @@
+#!/bin/sh
+# Stand-in for the real CLI: records argv and its pid, prints the quick-tunnel URL on stderr like
+# the real one, then idles until killed (the sleep cap keeps a leaked process from living long).
+echo "cloudflared $*" >> "${FAKE_BIN_LOG:-/dev/null}"
+echo "pid $$" >> "${FAKE_BIN_LOG:-/dev/null}"
+echo "INF |  https://quiet-fake-words.trycloudflare.com  |" >&2
+exec sleep 60

@@ -21,6 +21,7 @@ import {
   wireRuntimes,
 } from "./server/features/runtimes/api";
 import { startTracking } from "./server/features/tracking/api";
+import { createTunnel } from "./server/features/tunnel/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { consoleEmailCode, createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
 import { type WsData, websocket, wireRealtime } from "./server/realtime";
@@ -67,6 +68,7 @@ const server = Bun.serve<WsData>({
 
 const bound =
   config.port === 0 ? loadConfig({ ...process.env, HARNESS_PORT: `${server.port}` }) : config;
+const tunnel = createTunnel({ home: bound.home, port: bound.port });
 app = createApp({
   db,
   home: bound.home,
@@ -78,6 +80,7 @@ app = createApp({
     (emailCodeSender(db, bound.home) ?? consoleEmailCode)(email, code),
   instanceId,
   version: "0.0.0",
+  tunnel,
 });
 startTailers(db, 60000, defaultTailSources(join(config.home, "worktrees")));
 
@@ -92,6 +95,8 @@ const stopLoops = [
   hiring.stop,
   startNotify(db, { home: config.home, origin: bound.rp.origin }),
   startBridges(db, { home: config.home, origin: bound.rp.origin }),
+  // A tunnel this process started must not outlive it.
+  () => tunnel.stop(),
 ];
 
 console.log(`harness listening on ${server.url}`);

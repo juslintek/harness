@@ -1,0 +1,10 @@
+#!/bin/sh
+# Stand-in for the real CLI: records argv and prints canned output, never touches a network.
+echo "tailscale $*" >> "${FAKE_BIN_LOG:-/dev/null}"
+if [ "$1" = "status" ]; then
+  echo '{"Self":{"DNSName":"mac.tail1234.ts.net."}}'
+fi
+if [ -n "$FAKE_TAILSCALE_FAIL" ]; then
+  echo "fake failure" >&2
+  exit 1
+fi

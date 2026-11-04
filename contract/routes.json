@@ -1694,6 +1694,62 @@
     }
   },
   {
+    "method": "DELETE",
+    "path": "/api/tunnel",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/tunnel",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/tunnel/setup",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/tunnel/start",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
     "method": "GET",
     "path": "/api/usage",
     "policy": {

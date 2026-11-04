@@ -37,6 +37,7 @@ import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
 import { haltRoutes, runRoutes } from "./features/runtimes/routes";
 import { addEstimate, taskTrackingFields } from "./features/tracking/api";
 import { trackingRoutes } from "./features/tracking/routes";
+import { createTunnel, type Tunnel, tunnelRoutes } from "./features/tunnel/api";
 import { probeQuota, recordQuota, usageSummary } from "./features/usage/api";
 import { wsUpgrade } from "./realtime";
 import { parseBody } from "./route-kit";
@@ -54,6 +55,8 @@ export interface AppDeps {
   instanceId: string;
   version: string;
   runDeps?: RunDeps;
+  // Owned by the caller when it must stop the child process on shutdown.
+  tunnel?: Tunnel;
 }
 
 const hookBody = z.object({
@@ -104,12 +107,17 @@ function adminRoutes(deps: AppDeps): Hono {
     "/quota",
     "/router",
     "/policies",
+    "/tunnel",
   ]) {
     app.use(`${path}/*`, requireInstanceAdmin);
   }
   app.route("/runs", runRoutes(db, runDeps));
   app.route("/approvals", approvalRoutes(db, deps.home));
   app.route("/halt", haltRoutes(db));
+  app.route(
+    "/tunnel",
+    tunnelRoutes(deps.tunnel ?? createTunnel({ home: deps.home, port: deps.port }), deps.home),
+  );
   app.route("/router", routerRoutes(db));
   app.route("/policies", harnessPolicyRoutes(db));
   app.route("/agents", agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }));
