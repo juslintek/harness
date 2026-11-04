@@ -19,6 +19,9 @@ export interface NoteQuery {
   limit?: number;
 }
 
+// Notes without a source_agent show as "outside" in the API, so filters and facets use the same name.
+const SOURCE = "COALESCE(n.source_agent, 'outside')";
+
 type Param = string | number | null;
 
 // Visibility lives in SQL so a row of another org never leaves the database.
@@ -37,7 +40,7 @@ function filters(viewer: Viewer, q: NoteQuery): { where: string[]; params: Param
   const eq: Array<[string, string | undefined]> = [
     ["n.scope", q.scope],
     ["n.type", q.type],
-    ["n.source_agent", q.sourceAgent],
+    [SOURCE, q.sourceAgent],
     ["n.project_id", q.projectId],
   ];
   for (const [col, val] of eq) {
@@ -121,7 +124,7 @@ export function facets(
     scopes: count(db, viewer, "n.scope"),
     types: count(db, viewer, "n.type"),
     tags: count(db, viewer, "j.value", "notes n, json_each(n.tags) j"),
-    sources: count(db, viewer, "n.source_agent"),
+    sources: count(db, viewer, SOURCE),
   };
 }
 

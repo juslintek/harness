@@ -179,3 +179,12 @@ test("after VACUUM an org B search still returns only org B text", () => {
   expect(hits[0]?.snippet).toContain("b-open");
   expect(hits[0]?.snippet).not.toContain("a-secret");
 });
+
+test("a note without source_agent is counted and filtered as outside", () => {
+  seed();
+  upsertIndexed(db, loc("orgs/A/org/hand.md"), "# Hand\nneedle written in an editor");
+  const v = viewer("A", "m1", ["pa"]);
+  expect(facets(db, v).sources).toEqual({ bot: 4, outside: 1 });
+  const hits = searchNotes(db, v, { sourceAgent: "outside" });
+  expect(hits.map((n) => n.sourceAgent)).toEqual(["outside"]);
+});
