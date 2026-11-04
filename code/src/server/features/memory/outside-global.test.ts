@@ -3,8 +3,9 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getWrite, listWrites } from "./index-log";
-import { noteText } from "./index-test-kit";
+import { loc, noteText } from "./index-test-kit";
 import { syncOutside } from "./outside";
+import { createNote } from "./store";
 import { revertWrite } from "./store-revert";
 import { aliceA, ctx, type Env, setup, teardown } from "./store-test-kit";
 import { readNoteFile, vaultDir } from "./vault";
@@ -16,6 +17,7 @@ beforeEach(() => {
 afterEach(() => teardown(env));
 
 const DISK = "global/shared.md";
+const globalNote = loc("global/fresh.md");
 const admin = { ...aliceA, canWriteGlobal: true };
 
 function outsideGlobalEdit(): string {
@@ -40,10 +42,13 @@ test("an outside edit of a global note is logged without an org, and only an ins
   expect(getWrite(env.db, "A", id, true)?.id).toBe(id);
 });
 
-test("an instance admin reverts a global write; a normal member gets not_found and the file stays", () => {
-  const id = outsideGlobalEdit();
-  expect(() => revertWrite(env.db, env.dir, ctx(aliceA), id)).toThrow(/write not found/);
-  expect(readNoteFile(env.dir, DISK)).not.toBeNull();
+test("revert of a global write: a normal member is refused, an instance admin undoes it, an outside edit is refused", async () => {
+  const outside = outsideGlobalEdit();
+  expect(() => revertWrite(env.db, env.dir, ctx(admin), outside)).toThrow(/cannot be reverted/);
+  await createNote(env.db, env.dir, ctx(admin), globalNote, "# Fresh");
+  const id = (listWrites(env.db, "A", { limit: 1, includeGlobal: true })[0] as { id: string }).id;
+  expect(() => revertWrite(env.db, env.dir, ctx(aliceA), id)).toThrow(/not allowed to write/);
+  expect(readNoteFile(env.dir, globalNote.disk)).not.toBeNull();
   revertWrite(env.db, env.dir, ctx(admin), id);
-  expect(readNoteFile(env.dir, DISK)).toBeNull();
+  expect(readNoteFile(env.dir, globalNote.disk)).toBeNull();
 });
