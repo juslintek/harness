@@ -8,6 +8,8 @@ import type { AuthEnv } from "../auth/api";
 import { addTarget, listTargets, notifyRoutes, removeTarget } from "./api";
 import { seedMember } from "./fake-notifier";
 
+const HOME = "/nonexistent-home";
+
 function setup(): {
   db: Database;
   ada: ReturnType<typeof seedMember>;
@@ -23,8 +25,8 @@ function setup(): {
     db,
     ada,
     bob,
-    asAda: withActor(notifyRoutes(db), { userId: ada.userId, instanceAdmin: false }),
-    asBob: withActor(notifyRoutes(db), { userId: bob.userId, instanceAdmin: false }),
+    asAda: withActor(notifyRoutes(db, HOME), { userId: ada.userId, instanceAdmin: false }),
+    asBob: withActor(notifyRoutes(db, HOME), { userId: bob.userId, instanceAdmin: false }),
   };
 }
 
@@ -119,6 +121,6 @@ test("a user in no org gets 404", async () => {
   db.query(
     "INSERT INTO users (id, email, name, instance_admin, created_at) VALUES ('u-lone', 'l@x.test', 'l', 0, 1)",
   ).run();
-  const lone = withActor(notifyRoutes(db), { userId: "u-lone", instanceAdmin: false });
+  const lone = withActor(notifyRoutes(db, HOME), { userId: "u-lone", instanceAdmin: false });
   expect((await send(lone, "GET", "/targets")).status).toBe(404);
 });

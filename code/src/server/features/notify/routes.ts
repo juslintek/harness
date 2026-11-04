@@ -6,6 +6,7 @@ import { notFound, parseBody } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
 import { getOrgBySlug, listOrgsForUser, memberForUser } from "../orgs/api";
 import { effectivePrefs, setPref } from "./prefs";
+import { pushRoutes } from "./push/routes";
 import { deleteTarget, insertTarget, targetsOf, viewOf } from "./targets-repo";
 import { addWebhookTarget, webhookTargetBody } from "./webhook/add";
 
@@ -53,8 +54,12 @@ function asCaller(db: Database, c: Context<AuthEnv>, run: Handler): Response | P
   return memberId ? run(memberId) : notFound(c);
 }
 
-export function notifyRoutes(db: Database, home?: string): Hono<AuthEnv> {
+export function notifyRoutes(db: Database, home: string): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
+  app.route(
+    "/push",
+    pushRoutes(db, home, (c, run) => asCaller(db, c, run)),
+  );
   app.get("/prefs", (c) => asCaller(db, c, (id) => c.json(effectivePrefs(db, id))));
   app.put("/prefs", (c) =>
     asCaller(db, c, async (id) => {

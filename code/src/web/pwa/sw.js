@@ -1,4 +1,4 @@
-const CACHE = "harness-shell-v1";
+const CACHE = "harness-shell-v2";
 const LIVE = ["/api/", "/ws", "/mcp"];
 
 // Bundled asset URLs carry content hashes, so they are discovered from the served page.
@@ -41,4 +41,42 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   event.respondWith(caches.match(request).then((hit) => hit ?? fetch(request)));
+});
+
+// The payload is JSON from our own server; a broken one still shows something rather than nothing.
+function readPayload(event) {
+  try {
+    return event.data ? event.data.json() : {};
+  } catch {
+    return {};
+  }
+}
+
+self.addEventListener("push", (event) => {
+  const { title, body, tag, url } = readPayload(event);
+  event.waitUntil(
+    self.registration.showNotification(title || "harness", { body, tag, data: { url } }),
+  );
+});
+
+// Only same-origin targets are followed, whatever the payload says.
+function target(url) {
+  try {
+    const parsed = new URL(url || "/", location.origin);
+    return parsed.origin === location.origin ? parsed.href : `${location.origin}/`;
+  } catch {
+    return `${location.origin}/`;
+  }
+}
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = target(event.notification.data?.url);
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((open) => {
+      const client = open.find((c) => new URL(c.url).origin === location.origin);
+      if (!client) return self.clients.openWindow(url);
+      return client.focus().then(() => client.navigate(url));
+    }),
+  );
 });

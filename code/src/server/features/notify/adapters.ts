@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { Channel } from "../../../shared/notify";
 import type { Notifier } from "./port";
+import { pushNotifier } from "./push/adapter";
 import { slackNotifier } from "./slack/adapter";
 import { webhookNotifier } from "./webhook/adapter";
 
@@ -20,7 +21,7 @@ function notConfigured(channel: Channel): Notifier {
 // One line per channel: the adapter tasks each replace exactly their own line.
 export function buildAdapters(env: AdapterEnv): Record<Channel, Notifier> {
   return {
-    push: notConfigured("push"),
+    push: pushNotifier(env),
     email: notConfigured("email"),
     slack: slackNotifier(env.home),
     telegram: notConfigured("telegram"),
