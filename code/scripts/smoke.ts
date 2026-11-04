@@ -62,6 +62,7 @@ const FAKE_SPEC: AgentSpec = {
   stateWrite: [],
   weakerNetworkIsolation: false,
   claudeMeta: false,
+  mcp: true,
 };
 
 // The tee only copies adapter stdout to a file; the agent and its sandbox stay the real ones.

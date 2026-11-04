@@ -12,7 +12,8 @@ export type WsMessage =
   | { type: "approval"; approval: ApprovalView }
   | { type: "task"; projectId: string; taskId: string; kind: string }
   | { type: "chat"; channelId: string; messageId: string; threadRootId: string | null }
-  | { type: "dashboard" };
+  | { type: "dashboard" }
+  | { type: "memory"; orgId: string };
 
 export const wsMessageSchema: z.ZodType<WsMessage> = z.discriminatedUnion("type", [
   z.object({
@@ -35,4 +36,5 @@ export const wsMessageSchema: z.ZodType<WsMessage> = z.discriminatedUnion("type"
     threadRootId: z.string().nullable(),
   }),
   z.object({ type: z.literal("dashboard") }),
+  z.object({ type: z.literal("memory"), orgId: z.string() }),
 ]);

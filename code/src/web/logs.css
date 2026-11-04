@@ -1,0 +1,9 @@
+.logs-page h2 {
+  margin-top: 0;
+}
+
+.logs-page .log-snippet {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

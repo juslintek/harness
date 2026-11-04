@@ -4,6 +4,7 @@ import { getTask, onTaskChange } from "../board/api";
 import { channelAccess, getChannel, onMessage } from "../chat/api";
 import { triageWake } from "../laya/api";
 import { appendEvent } from "../logs/api";
+import { startRetro } from "../memory/api";
 import { projectAccess } from "../orgs/api";
 import { onProposalChange } from "../policies/api";
 import { isHalted, onRunEvent, type RunDeps } from "../runtimes/api";
@@ -77,6 +78,14 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => Promise
   };
   kickers.add(kick);
   const offs = listenForWakes(db, deps.triage ?? triageWake, kick, report);
+  offs.push(
+    startRetro(db, {
+      enqueueWake: (memberId, reason, detail, taskId) => {
+        recordWake(db, { memberId, reason, detail, taskId: taskId ?? undefined, causedBy: null });
+        kick();
+      },
+    }),
+  );
   const timer = setInterval(() => {
     try {
       const swept = endedStartedRuns(db).length > 0;

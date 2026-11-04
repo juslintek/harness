@@ -21,6 +21,7 @@ export function fakeAgent(id: string, script: unknown[], marker: string): AgentS
     stateWrite: [],
     weakerNetworkIsolation: false,
     claudeMeta: false,
+    mcp: false,
   };
 }
 

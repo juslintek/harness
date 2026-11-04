@@ -13,7 +13,7 @@ function insideScope(token: string, worktree: string): boolean {
   return token.startsWith(worktree);
 }
 
-interface Pending {
+export interface Pending {
   kind: string;
   command?: string;
   paths: string[];
@@ -70,7 +70,17 @@ const LEFTOVER_POLL_MS = 500;
 
 // Approvals belong to managers and policy first; the script only takes what nobody decided within
 // graceMs, so the gate's count shows how much the agents could not settle on their own.
-export function watchLeftovers(db: Database, opts: { graceMs?: number } = {}): Leftovers {
+export interface LeftoverOpts {
+  graceMs?: number;
+  // Consulted only when approvable() says no and L1 did not deny.
+  alsoApprove?: (
+    action: Pending,
+    l1: { verdict: string; rule?: string },
+    worktree: string,
+  ) => boolean;
+}
+
+export function watchLeftovers(db: Database, opts: LeftoverOpts = {}): Leftovers {
   const graceMs = opts.graceMs ?? 90_000;
   const firstSeen = new Map<string, number>();
   const decided: string[] = [];
@@ -79,7 +89,7 @@ export function watchLeftovers(db: Database, opts: { graceMs?: number } = {}): L
     for (const a of listApprovals(db, "pending")) {
       const since = firstSeen.get(a.id) ?? now;
       firstSeen.set(a.id, since);
-      if (now - since >= graceMs) settleLeftover(db, a, decided);
+      if (now - since >= graceMs) settleLeftover(db, a, decided, opts.alsoApprove);
     }
   }, LEFTOVER_POLL_MS);
   return { decided, stop: () => clearInterval(timer) };
@@ -89,11 +99,15 @@ function settleLeftover(
   db: Database,
   a: ReturnType<typeof listApprovals>[number],
   decided: string[],
+  alsoApprove: LeftoverOpts["alsoApprove"],
 ): void {
   const worktree = readWorktree(db, a.runId);
   if (worktree === null) return;
   const action: Pending = JSON.parse(a.action);
-  const ok = approvable(action, JSON.parse(a.l1), worktree);
+  const l1 = JSON.parse(a.l1);
+  const ok =
+    approvable(action, l1, worktree) ||
+    (l1.verdict !== "deny" && (alsoApprove?.(action, l1, worktree) ?? false));
   // False means a manager decided it between the listing and now; that one is not ours.
   if (!decideApproval(db, a.id, ok ? "approve" : "deny", "gate")) return;
   const what = action.command ?? `${action.kind} ${action.paths.join(" ")}`;

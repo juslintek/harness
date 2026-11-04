@@ -72,20 +72,29 @@ export async function api<T>(path: string, schema: z.ZodType<T>, init?: ApiInit)
 export interface Loaded<T> {
   data: T | null;
   error: string | null;
+  // Null for a failure that never got an HTTP answer (offline, bad payload).
+  errorStatus: number | null;
   reload: () => void;
 }
 
 export function useLoad<T>(load: () => Promise<T>, deps: unknown[]): Loaded<T> {
-  const [state, setState] = useState<{ data: T | null; error: string | null }>({
+  const [state, setState] = useState<Omit<Loaded<T>, "reload">>({
     data: null,
     error: null,
+    errorStatus: null,
   });
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let live = true;
     load().then(
-      (data) => live && setState({ data, error: null }),
-      (err: unknown) => live && setState((s) => ({ ...s, error: String(err) })),
+      (data) => live && setState({ data, error: null, errorStatus: null }),
+      (err: unknown) =>
+        live &&
+        setState((s) => ({
+          ...s,
+          error: String(err),
+          errorStatus: err instanceof ApiError ? err.status : null,
+        })),
     );
     return () => {
       live = false;

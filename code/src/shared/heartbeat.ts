@@ -12,7 +12,9 @@ export type WakeReason =
   | "hire_decision"
   | "onboarding"
   | "approval_resolved"
-  | "policy_review";
+  | "policy_review"
+  | "retro"
+  | "lesson_review";
 export type WakeStatus = "pending" | "started" | "done" | "failed" | "skipped";
 
 export interface WakeupView {

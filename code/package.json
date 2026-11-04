@@ -17,6 +17,7 @@
     "smoke": "bun scripts/smoke.ts",
     "gate2": "bun scripts/gate-2.ts",
     "gate3": "bun scripts/gate-3.ts",
+    "gate4": "bun scripts/gate-4.ts",
     "check": "bun run lint && bun run typecheck && bun run test && bun run knip && bun run deps && bun run dup && bun run size"
   },
   "dependencies": {
