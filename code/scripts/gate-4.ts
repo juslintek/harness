@@ -144,17 +144,17 @@ function printSummary(db: Db, s: Scene, home: string, approvals: string[]): void
     const row = [r.id.slice(-6), who.get(r.memberId ?? "") ?? "?", r.agentId, r.attempt, r.state];
     console.log(`${row.join("  ")}  ${r.reason ?? ""}`);
   }
-  console.log(`\nscript-decided approvals: ${approvals.length}`);
+  console.log(`\nscript-decided approvals (gate 4 approves every L1 ask): ${approvals.length}`);
   for (const line of approvals) console.log(`  ${line}`);
   console.log(`\nhome (kept): ${home}`);
 }
 
-// The run is confined by srt to its worktree, and running the agent's own test snippet is what a
-// human reviewer would allow. Whitespace tokenizing in approvable() judged near-identical snippets
-// differently, so this looks only at the binary.
-function approveInlineTest(action: Pending, l1: { rule?: string }, worktree: string): boolean {
-  if (worktree === "" || l1.rule !== "exec.inline-code" || action.kind !== "execute") return false;
-  return /^(node|bun)\s/.test(action.command ?? "");
+// srt confines the run to its worktree, and gate 4 tests memory use, not approval policy, so its
+// stand-in human approves every ask L1 did not deny. Gates 2 and 3 keep the strict policy.
+function approveConfinedAsk(action: Pending, l1: { verdict: string }, worktree: string): boolean {
+  return (
+    worktree !== "" && l1.verdict === "ask" && (action.kind === "execute" || action.kind === "edit")
+  );
 }
 
 async function main(): Promise<void> {
@@ -163,7 +163,7 @@ async function main(): Promise<void> {
   const runDeps = { home, port };
   const s = build(db, root, await pickLeadModel(db, runDeps));
   const stopTimeline = watchTimeline(db, s);
-  const leftovers = watchLeftovers(db, { graceMs: 90_000, alsoApprove: approveInlineTest });
+  const leftovers = watchLeftovers(db, { graceMs: 90_000, alsoApprove: approveConfinedAsk });
   const stopHeartbeat = startHeartbeat(db, { runDeps, home, tickMs: 5000 });
   const hiring = wireHiring(db, { runDeps, home });
   const stopMemory = startMemory(db, { home });
