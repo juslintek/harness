@@ -21,6 +21,7 @@ export function insertTarget(
   memberId: string,
   channel: Channel,
   value: Record<string, string>,
+  id: string = Bun.randomUUIDv7(),
 ): string {
   const json = JSON.stringify(value);
   const same = db
@@ -29,7 +30,6 @@ export function insertTarget(
     )
     .get(memberId, channel, json);
   if (same) return same.id;
-  const id = Bun.randomUUIDv7();
   db.query(
     "INSERT INTO notify_targets (id, member_id, channel, value, created_at) VALUES (?, ?, ?, ?, ?)",
   ).run(id, memberId, channel, json, Date.now());

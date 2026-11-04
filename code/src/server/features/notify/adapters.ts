@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { Channel } from "../../../shared/notify";
 import type { Notifier } from "./port";
+import { webhookNotifier } from "./webhook/adapter";
 
 // Adapters read their secrets from the secrets file under `home`, so they are built per instance.
 export interface AdapterEnv {
@@ -16,12 +17,12 @@ function notConfigured(channel: Channel): Notifier {
 }
 
 // One line per channel: the adapter tasks each replace exactly their own line.
-export function buildAdapters(_env: AdapterEnv): Record<Channel, Notifier> {
+export function buildAdapters(env: AdapterEnv): Record<Channel, Notifier> {
   return {
     push: notConfigured("push"),
     email: notConfigured("email"),
     slack: notConfigured("slack"),
     telegram: notConfigured("telegram"),
-    webhook: notConfigured("webhook"),
+    webhook: webhookNotifier(env.home),
   };
 }

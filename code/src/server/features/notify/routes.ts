@@ -7,6 +7,7 @@ import type { AuthEnv } from "../auth/api";
 import { getOrgBySlug, listOrgsForUser, memberForUser } from "../orgs/api";
 import { effectivePrefs, setPref } from "./prefs";
 import { deleteTarget, insertTarget, targetsOf, viewOf } from "./targets-repo";
+import { addWebhookTarget, webhookTargetBody } from "./webhook/add";
 
 const REQUIRED: Record<Channel, readonly string[]> = {
   push: ["endpoint", "p256dh", "auth"],
@@ -16,10 +17,14 @@ const REQUIRED: Record<Channel, readonly string[]> = {
   webhook: ["url", "secretName"],
 };
 
-const targetBody = z.object({
-  channel: z.enum(CHANNELS),
-  value: z.record(z.string(), z.string().max(2000)),
-});
+// A webhook is added only through its own body: a client never names the secret it signs with.
+const targetBody = z.union([
+  webhookTargetBody,
+  z.object({
+    channel: z.enum(CHANNELS).exclude(["webhook"]),
+    value: z.record(z.string(), z.string().max(2000)),
+  }),
+]);
 
 // Only the keys the channel knows are kept, so a client cannot park extra data in a target.
 function cleanValue(
@@ -48,7 +53,7 @@ function asCaller(db: Database, c: Context<AuthEnv>, run: Handler): Response | P
   return memberId ? run(memberId) : notFound(c);
 }
 
-export function notifyRoutes(db: Database): Hono<AuthEnv> {
+export function notifyRoutes(db: Database, home?: string): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
   app.get("/prefs", (c) => asCaller(db, c, (id) => c.json(effectivePrefs(db, id))));
   app.put("/prefs", (c) =>
@@ -64,6 +69,7 @@ export function notifyRoutes(db: Database): Hono<AuthEnv> {
     asCaller(db, c, async (id) => {
       const body = await parseBody(c, targetBody);
       if (body instanceof Response) return body;
+      if (body.channel === "webhook") return addWebhookTarget(c, db, home, id, body);
       const value = cleanValue(body.channel, body.value);
       if (!value) return c.json({ error: "invalid body" }, 400);
       return c.json({ id: insertTarget(db, id, body.channel, value) }, 201);

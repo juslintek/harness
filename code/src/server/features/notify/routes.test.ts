@@ -71,13 +71,13 @@ test("a bad pref body is 400", async () => {
 test("a target is added, listed without secret values and deleted", async () => {
   const { asAda } = setup();
   const created = await send(asAda, "POST", "/targets", {
-    channel: "webhook",
-    value: { url: "https://hook.test/x", secretName: "webhook.one" },
+    channel: "email",
+    value: { address: "ada@example.test" },
   });
   expect(created.status).toBe(201);
   const { id } = (await created.json()) as { id: string };
   const list = await (await send(asAda, "GET", "/targets")).json();
-  expect(list).toEqual([{ id, channel: "webhook", label: "https://hook.test/x" }]);
+  expect(list).toEqual([{ id, channel: "email", label: "ada@example.test" }]);
   expect((await send(asAda, "DELETE", `/targets/${id}`)).status).toBe(200);
   expect(await (await send(asAda, "GET", "/targets")).json()).toEqual([]);
 });
