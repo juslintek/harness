@@ -109,7 +109,7 @@ function triageFallback(text: string): TaskTriage {
 }
 
 // A label counts only when Laya is at least MIN_P sure of a label we know.
-function confident<T extends string>(
+export function confident<T extends string>(
   answer: LayaAnswer | undefined,
   allowed: readonly T[],
 ): { value: T; p: number } | null {

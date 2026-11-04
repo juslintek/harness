@@ -80,7 +80,7 @@ test {
     _ = @import("db/lock.zig");
     _ = @import("db/command.zig");
     _ = @import("health.zig");
-    _ = @import("logs/zstd_c.zig");
+    _ = @import("logs/api.zig");
     _ = @import("http/server.zig");
     _ = @import("http/boot.zig");
     _ = @import("realtime/hub.zig");

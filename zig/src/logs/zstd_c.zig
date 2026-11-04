@@ -1,8 +1,10 @@
-//! Hand-written externs for the vendored libzstd. Segments are written with libzstd at level 3
-//! and read back with std.compress.zstd, which also reads the TS server's segments.
+//! Hand-written externs for the vendored libzstd. Segments are written with libzstd at level 3 and
+//! read back with it too, because the raw length in the segments row is all ZSTD_decompress needs
+//! (std.compress.zstd also needs a window buffer sized for the frame).
 const std = @import("std");
 
 pub extern fn ZSTD_compress(dst: [*]u8, dst_capacity: usize, src: [*]const u8, src_size: usize, level: c_int) usize;
+pub extern fn ZSTD_decompress(dst: [*]u8, dst_capacity: usize, src: [*]const u8, compressed_size: usize) usize;
 pub extern fn ZSTD_compressBound(src_size: usize) usize;
 pub extern fn ZSTD_isError(code: usize) c_uint;
 pub extern fn ZSTD_getErrorName(code: usize) [*:0]const u8;

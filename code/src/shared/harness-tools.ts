@@ -35,6 +35,9 @@ export const HARNESS_TOOL_NAMES = [
   "policy_propose",
   "policy_review",
   "policy_decide",
+  "memory",
+  "lesson_propose",
+  "lesson_review",
 ] as const;
 
 export type HarnessToolName = (typeof HARNESS_TOOL_NAMES)[number];

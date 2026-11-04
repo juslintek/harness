@@ -275,6 +275,22 @@
             "type"
           ],
           "type": "object"
+        },
+        {
+          "properties": {
+            "orgId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "memory",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "orgId"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -560,6 +576,23 @@
           },
           "required": [
             "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "orgId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "memory",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "orgId"
           ],
           "type": "object"
         }

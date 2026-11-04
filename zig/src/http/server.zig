@@ -17,6 +17,7 @@ const httpz = @import("httpz");
 const App = @import("../app.zig").App;
 const config_mod = @import("../config.zig");
 const headers = @import("headers.zig");
+const hub_mod = @import("../realtime/hub.zig");
 const policy = @import("policy.zig");
 const routes = @import("routes.zig");
 const static = @import("static.zig");
@@ -48,11 +49,16 @@ pub const Options = struct {
     throttle: ?policy.Throttle = null,
     /// HARNESS_TRUST_PROXY: the auth rate limit keys on X-Forwarded-For instead of the socket.
     trust_proxy: bool = false,
+    /// The realtime hub behind `/ws`. It must outlive the listener; null leaves `/ws` at 501.
+    hub: ?*hub_mod.Hub = null,
     threads: ?u16 = null,
 };
 
 /// The httpz handler. `dispatch`, `notFound` and `uncaughtError` are the hooks httpz looks for.
 pub const Server = struct {
+    /// httpz closes an upgraded socket unless the handler names who serves it.
+    pub const WebsocketHandler = hub_mod.Client;
+
     services: routes.Services,
     io: std.Io,
     configured_origin: ?[]const u8,
@@ -296,6 +302,7 @@ pub fn start(gpa: std.mem.Allocator, io: std.Io, handler: *Server, options: Opti
         },
         .response = .{ .max_header_count = 32 },
         .timeout = .{ .request = request_timeout_s, .keepalive = keepalive_timeout_s },
+        .websocket = hub_mod.websocket_config,
     }, handler);
     errdefer server.deinit();
     try registerRoutes(server, &routes.table);
@@ -334,7 +341,7 @@ fn installSignalHandlers() void {
 /// SIGINT or SIGTERM once the listener has stopped and its threads are joined.
 pub fn run(gpa: std.mem.Allocator, io: std.Io, app: *App, health: routes.Health, options: Options, out: *std.Io.Writer) !void {
     stop_requested.store(false, .release);
-    var handler = Server.init(.{ .app = app, .health = health }, io, options);
+    var handler = Server.init(.{ .app = app, .health = health, .hub = options.hub }, io, options);
     var running = try start(gpa, io, &handler, options);
     // Whatever fails after the listener is up, the accept thread must be joined before the server
     // is freed, so stop and deinit live in one defer.
@@ -359,5 +366,6 @@ test {
     _ = @import("policy.zig");
     _ = @import("routes.zig");
     _ = @import("static.zig");
+    _ = @import("ws.zig");
     _ = @import("server_test.zig");
 }

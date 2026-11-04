@@ -28,6 +28,7 @@ export interface AgentSpec {
   stateWrite: string[];
   weakerNetworkIsolation: boolean;
   claudeMeta: boolean;
+  mcp: boolean;
 }
 
 export interface BootOpts {

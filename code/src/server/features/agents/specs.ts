@@ -24,6 +24,8 @@ export interface AgentSpec {
   /** Opens com.apple.trustd.agent in srt; needed by Go and Rust TLS clients (codex, agy). */
   weakerNetworkIsolation: boolean;
   claudeMeta: boolean;
+  /** Whether the CLI can call the harness MCP server; without it memory arrives as a file. */
+  mcp: boolean;
 }
 
 const adapterBin = (name: string): string =>
@@ -47,6 +49,7 @@ const builtinSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.claude", "/private/tmp/claude-<uid>", "/private/tmp/claude-*-cwd"],
     weakerNetworkIsolation: false,
     claudeMeta: true,
+    mcp: true,
   },
   {
     id: "codex",
@@ -68,6 +71,7 @@ const builtinSpecs: readonly AgentSpec[] = [
     stateWrite: [],
     weakerNetworkIsolation: true,
     claudeMeta: false,
+    mcp: true,
   },
   {
     id: "junie",
@@ -83,6 +87,7 @@ const builtinSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.junie"],
     weakerNetworkIsolation: false,
     claudeMeta: false,
+    mcp: true,
   },
   {
     id: "copilot",
@@ -98,6 +103,7 @@ const builtinSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.copilot"],
     weakerNetworkIsolation: false,
     claudeMeta: false,
+    mcp: true,
   },
   {
     id: "cursor",
@@ -113,6 +119,7 @@ const builtinSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.cursor"],
     weakerNetworkIsolation: false,
     claudeMeta: false,
+    mcp: true,
   },
   {
     id: "gemini",
@@ -128,6 +135,7 @@ const builtinSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.gemini"],
     weakerNetworkIsolation: false,
     claudeMeta: false,
+    mcp: true,
   },
   {
     id: "agy",
@@ -143,6 +151,7 @@ const builtinSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.gemini"],
     weakerNetworkIsolation: true,
     claudeMeta: false,
+    mcp: false,
   },
 ];
 
@@ -166,6 +175,7 @@ const specSchema: z.ZodType<AgentSpec> = z.object({
   stateWrite: z.array(z.string()),
   weakerNetworkIsolation: z.boolean(),
   claudeMeta: z.boolean(),
+  mcp: z.boolean().default(false),
 });
 
 // The black-box suite swaps in a stub agent this way. Outside HARNESS_TEST=1 the variable is

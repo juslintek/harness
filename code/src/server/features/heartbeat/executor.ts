@@ -4,7 +4,8 @@ import { budgetGate } from "../budgets/api";
 import { getMember, getProject, type MemberRow } from "../orgs/api";
 import { route } from "../router/api";
 import { HaltedError, isHalted, scratchRepo, startRun } from "../runtimes/api";
-import { buildPrompt } from "./prompt";
+import { mcpOnly, memoryRun } from "./memory-notice";
+import { buildPrompt, MAX_WAKES } from "./prompt";
 import {
   endedStartedRuns,
   hasLiveWake,
@@ -17,10 +18,21 @@ import { type ExecDeps, fail, runMember, wakeProject } from "./run-input";
 import { settleRun } from "./settle";
 import { logBudgetPaused, mayWork, overCap, staleAssignment } from "./triggers";
 
+// Retro and lesson-review wakes carry their own prompt and tool set, so they never share a run
+// with other reasons: a batch is one memory reason or only work wakes.
+function lane(w: WakeRow): string {
+  return w.reason === "retro" || w.reason === "lesson_review" ? w.reason : "work";
+}
+
 // A wake stored before a grant was revoked or lowered must not start a run in that project.
 // One run works in one project's repo and is judged by that project's org, so it takes only the
-// wakes of the oldest wake's project; the others wait for the next batch.
-function nextBatch(db: Database, memberId: string): { wakes: WakeRow[]; projectId: string | null } {
+// wakes of the oldest wake's project and lane; the others wait for the next batch. A memory-only
+// prompt lists at most MAX_WAKES wakes, so a larger batch would mark wakes done that the agent
+// was never shown.
+export function nextBatch(
+  db: Database,
+  memberId: string,
+): { wakes: WakeRow[]; projectId: string | null } {
   const wakes = pendingWakes(db, memberId);
   if (getMember(db, memberId)?.role === "viewer") {
     setStatus(
@@ -49,7 +61,11 @@ function nextBatch(db: Database, memberId: string): { wakes: WakeRow[]; projectI
   const reachable = kept.filter((w) => !stale.includes(w));
   const first = reachable[0];
   const projectId = first ? wakeProject(db, first) : null;
-  return { wakes: reachable.filter((w) => wakeProject(db, w) === projectId), projectId };
+  const same = (w: WakeRow): boolean =>
+    wakeProject(db, w) === projectId && first !== undefined && lane(w) === lane(first);
+  const batch = reachable.filter(same);
+  const memoryOnly = first !== undefined && lane(first) !== "work";
+  return { wakes: memoryOnly ? batch.slice(0, MAX_WAKES) : batch, projectId };
 }
 
 interface Batch {
@@ -66,26 +82,35 @@ async function startFirst(
   batch: Batch,
 ): Promise<string | null> {
   const taskId = batch.wakes.find((w) => w.taskId !== null && getTask(db, w.taskId))?.taskId;
-  const [choice] = await route(db, { memberId: member.id, taskId }, deps.routeDeps);
+  const runtimeFilter = mcpOnly(deps, batch.wakes);
+  const [choice] = await route(db, { memberId: member.id, taskId, runtimeFilter }, deps.routeDeps);
   if (!choice) {
-    setStatus(db, batch.ids, "failed", { detail: { route: "no engine" } });
+    const reason = runtimeFilter ? "no engine with MCP for a memory-only run" : "no engine";
+    setStatus(db, batch.ids, "failed", { detail: { route: reason } });
     return null;
   }
   const { runtime, model } = choice.engine;
   const repo = batch.projectId === null ? null : (getProject(db, batch.projectId)?.repo ?? null);
+  const mem = memoryRun(db, deps, member, runtime, batch.projectId, batch.wakes);
   return startRun(db, deps.runDeps, {
     agentId: runtime,
     ...(model === null ? {} : { model }),
     repo: repo ?? scratchRepo(deps.home, member.orgId),
-    prompt: buildPrompt(db, member, batch.wakes),
+    prompt: buildPrompt(db, member, batch.wakes, mem.mcp, mem.index !== undefined),
     ...(taskId == null ? {} : { taskId }),
-    member: runMember(db, member, batch.projectId),
+    member: runMember(db, member, batch.projectId, mem.index),
     attempt: 1,
     batchId: batch.ids[0] as string,
   });
 }
 
-async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<boolean> {
+// "retry" means the batch was marked failed at routing, so the member's next pending batch is
+// still waiting for this pass.
+async function launchBatch(
+  db: Database,
+  deps: ExecDeps,
+  memberId: string,
+): Promise<boolean | "retry"> {
   const member = getMember(db, memberId);
   const { wakes, projectId } = nextBatch(db, memberId);
   if (wakes.length === 0) return false;
@@ -106,7 +131,7 @@ async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<b
   setStatus(db, ids, "started");
   try {
     const runId = await startFirst(db, deps, member, { ids, wakes, projectId });
-    if (runId === null) return false;
+    if (runId === null) return "retry";
     setStatus(db, ids, "started", { runId });
     await settleRun(db, deps, runId);
     return false;
@@ -118,6 +143,15 @@ async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<b
     fail(db, ids, err);
     return false;
   }
+}
+
+// Each retry marks its batch failed, so a pass takes at most one round per pending wake.
+async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<boolean> {
+  for (let left = pendingWakes(db, memberId).length; left > 0; left--) {
+    const outcome = await launchBatch(db, deps, memberId);
+    if (outcome !== "retry") return outcome;
+  }
+  return false;
 }
 
 // Every member with pending wakes and no live run gets one run for the whole batch.

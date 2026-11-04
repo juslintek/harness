@@ -700,6 +700,20 @@
     }
   },
   {
+    "method": "GET",
+    "path": "/api/orgs/:org/logs/search",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
     "method": "DELETE",
     "path": "/api/orgs/:org/members/:id",
     "policy": {
@@ -786,6 +800,174 @@
   {
     "method": "POST",
     "path": "/api/orgs/:org/members/humans",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/orgs/:org/memory/facets",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/orgs/:org/memory/lessons",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/orgs/:org/memory/lessons/:id",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/orgs/:org/memory/notes",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/orgs/:org/memory/notes",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/orgs/:org/memory/notes/:id",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/orgs/:org/memory/notes/:id",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "PUT",
+    "path": "/api/orgs/:org/memory/notes/:id",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/orgs/:org/memory/notes/:id/backlinks",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/orgs/:org/memory/notes/:id/link",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/orgs/:org/memory/writes",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/orgs/:org/memory/writes/:id/revert",
     "policy": {
       "admin": false,
       "loopback": false,
