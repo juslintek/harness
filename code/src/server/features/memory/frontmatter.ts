@@ -113,12 +113,14 @@ export function serializeNote(meta: NoteMeta, body: string): string {
   if (meta.id !== undefined) out["id"] = meta.id;
   if (meta.type !== undefined) out["type"] = meta.type;
   if (meta.scope !== undefined) out["scope"] = meta.scope;
-  out["tags"] = meta.tags;
+  // Tags are always canonical, but an empty list must not hide an invalid value kept in extra.
+  if (meta.tags.length > 0 || !Object.hasOwn(meta.extra, "tags")) out["tags"] = meta.tags;
   if (meta.sourceAgent !== undefined) out["source_agent"] = meta.sourceAgent;
   if (meta.created !== undefined) out["created"] = meta.created;
   if (meta.updated !== undefined) out["updated"] = meta.updated;
   if (meta.confidence !== undefined) out["confidence"] = meta.confidence;
-  for (const [k, v] of Object.entries(meta.extra)) setOwn(out, k, v);
+  // An invalid value parked in extra must not overwrite the canonical field that replaced it.
+  for (const [k, v] of Object.entries(meta.extra)) if (!Object.hasOwn(out, k)) setOwn(out, k, v);
   const yaml = Bun.YAML.stringify(out, null, 2);
   return `---\n${yaml}\n---\n\n${body.replace(/\n+$/, "")}\n`;
 }

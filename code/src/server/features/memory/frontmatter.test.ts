@@ -69,3 +69,14 @@ test("confidence outside 0..1 is kept as an unknown key, not indexed", () => {
   expect(meta.confidence).toBeUndefined();
   expect(meta.extra).toEqual({ confidence: 7 });
 });
+
+test("an invalid value in extra never overwrites the canonical field set later", () => {
+  const { meta } = parseNote("---\nid: n1\ntype: bogus\n---\n\nbody\n");
+  expect(meta.type).toBeUndefined();
+  expect(meta.extra["type"]).toBe("bogus");
+  expect(parseNote(serializeNote(meta, "body")).meta.extra["type"]).toBe("bogus");
+  const fixed = parseNote(serializeNote({ ...meta, type: "fact" }, "body")).meta;
+  expect(fixed.type).toBe("fact");
+  expect(fixed.id).toBe("n1");
+  expect(fixed.extra["type"]).toBeUndefined();
+});
