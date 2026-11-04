@@ -182,3 +182,16 @@ test("an org lesson is listed for a task in any project of the org, another org'
   await put(other.id, agentViewer(k.db, eve.id), "Their org line");
   expect(memoryNotice(k.db, bob, "Their org line", true, k.projectId)).not.toContain("Their org");
 });
+
+test("hints drop project notes of other projects but keep the current project's and the org's", async () => {
+  const k = setup();
+  const bob = k.agent("bob");
+  const api = createProject(k.db, { orgId: k.orgId, key: "api", name: "Api" });
+  await put(k, "bob", "/memories/project/web/clamp.md", "# Clamp web\nclamp helper");
+  await put(k, "bob", "/memories/project/api/clamp.md", "# Clamp api\nclamp helper");
+  await put(k, "bob", "/memories/org/clamp.md", "# Clamp org\nclamp helper");
+  const text = memoryNotice(k.db, bob, "clamp helper", true, k.projectId);
+  expect(text).toContain("/memories/project/web/clamp.md");
+  expect(text).toContain("/memories/org/clamp.md");
+  expect(text).not.toContain(`/memories/project/${api.key}/clamp.md`);
+});

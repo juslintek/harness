@@ -22,6 +22,7 @@ const WITH_FILE =
 const LESSONS_HEAD =
   "Lessons for this project and org. Your first step, before `task_checkout`, is to read each one with the `memory` tool (`action: view`, `path` as listed) and follow it unless the task says otherwise:";
 
+// A run tied to a project gets hints from that project only; a run with no project keeps all it can read.
 // Path and title only: the body is for the agent to open, and a note could carry instructions.
 // Project and org lessons are rules for all work there, so they are listed by recency, not by topic match.
 function hints(
@@ -43,6 +44,7 @@ function hints(
   const listed = new Set(lessons.map((n) => n.id));
   const found = searchNotes(db, viewer, { text: taskText, anyWord: true, limit: HITS + HITS })
     .filter((n) => !listed.has(n.id))
+    .filter((n) => projectId === null || n.scope !== "project" || n.projectId === projectId)
     .slice(0, HITS);
   const title = (n: NoteSummary): string => n.title.replace(/\s+/g, " ");
   let out = "";
