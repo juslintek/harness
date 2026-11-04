@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { noteSummarySchema } from "../../../shared/memory";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { createApp } from "../../http";
@@ -262,6 +263,25 @@ test("the write feed marks only undoable rows as revertible", async () => {
     feed.map((w: { op: string; canRevert: boolean }) => [w.op, w.canRevert]),
   );
   expect(byOp).toEqual({ update: true, rename: false, outside: false });
+});
+
+test("list, backlinks and link responses carry exactly the public summary keys", async () => {
+  const k = await boot();
+  const put = async (rel: string, body: string) =>
+    (await (await k.call(k.alice, "POST", `${BASE}/notes`, { scope: "org", rel, body })).json())
+      .note.id as string;
+  const target = await put("ref.md", "# Ref");
+  const source = await put("guide.md", "# Guide\n[[ref]]");
+  const json = async (path: string) => (await k.call(k.alice, "GET", path)).json();
+  const lists = [
+    ...(await json(`${BASE}/notes?q=ref`)),
+    ...(await json(`${BASE}/notes`)),
+    ...(await json(`${BASE}/notes/${target}/backlinks`)),
+    await json(`${BASE}/notes/${source}/link?target=ref`),
+  ];
+  expect(lists.length).toBeGreaterThan(3);
+  // zod strips unknown keys, so equality with the parsed value means no internal field leaked.
+  for (const n of lists) expect(n).toEqual(noteSummarySchema.parse(n));
 });
 
 test("a wikilink resolves on the server: same directory first, never another org's note", async () => {

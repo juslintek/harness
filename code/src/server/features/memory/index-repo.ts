@@ -48,6 +48,12 @@ export function toIndexed(r: NoteRow): IndexedNote {
   };
 }
 
+// The public shape: disk and slug are index internals and must not leave the server.
+export function toSummary(n: IndexedNote): NoteSummary {
+  const { disk: _disk, slug: _slug, ...summary } = n;
+  return summary;
+}
+
 export function getIndexed(db: Database, id: string): IndexedNote | null {
   const r = db.query<NoteRow, [string]>("SELECT * FROM notes WHERE id = ?").get(id);
   return r ? toIndexed(r) : null;

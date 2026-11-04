@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { parseBody, parseQuery } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
+import { toSummary } from "./index-repo";
 import { backlinks, facets, resolveWikilink, searchNotes } from "./index-search";
 import { diskToLocated, toDisk } from "./paths";
 import { memoryCtx, memoryError } from "./routes-kit";
@@ -47,17 +48,16 @@ function readRoutes(db: Database, home: string, app: Hono<AuthEnv>): void {
     if (m instanceof Response) return m;
     const q = parseQuery(c, listQuery);
     if (q instanceof Response) return q;
-    return c.json(
-      searchNotes(db, m.viewer, {
-        ...(q.q !== undefined && { text: q.q }),
-        ...(q.scope && { scope: q.scope }),
-        ...(q.type && { type: q.type }),
-        ...(q.tag && { tag: q.tag }),
-        ...(q.source && { sourceAgent: q.source }),
-        ...(q.project && { projectId: q.project }),
-        ...(q.limit !== undefined && { limit: q.limit }),
-      }),
-    );
+    const hits = searchNotes(db, m.viewer, {
+      ...(q.q !== undefined && { text: q.q }),
+      ...(q.scope && { scope: q.scope }),
+      ...(q.type && { type: q.type }),
+      ...(q.tag && { tag: q.tag }),
+      ...(q.source && { sourceAgent: q.source }),
+      ...(q.project && { projectId: q.project }),
+      ...(q.limit !== undefined && { limit: q.limit }),
+    });
+    return c.json(hits.map(toSummary));
   });
   app.get(`${base}/facets`, (c) => {
     const m = memoryCtx(db, c, "viewer");
@@ -71,7 +71,7 @@ function readRoutes(db: Database, home: string, app: Hono<AuthEnv>): void {
     const m = memoryCtx(db, c, "viewer");
     if (m instanceof Response) return m;
     const { note } = locate(db, m.viewer, c.req.param("id"));
-    return c.json(backlinks(db, m.viewer, note.id));
+    return c.json(backlinks(db, m.viewer, note.id).map(toSummary));
   });
   // Resolved here because only the server knows every note this viewer may see; a search hit list
   // can miss the target and has no notion of the source note's directory.
@@ -82,7 +82,7 @@ function readRoutes(db: Database, home: string, app: Hono<AuthEnv>): void {
     if (q instanceof Response) return q;
     const { note } = locate(db, m.viewer, c.req.param("id"));
     const hit = resolveWikilink(db, m.viewer, q.target, note.disk);
-    return hit === null ? c.json({ error: "not_found" }, 404) : c.json(hit);
+    return hit === null ? c.json({ error: "not_found" }, 404) : c.json(toSummary(hit));
   });
 }
 

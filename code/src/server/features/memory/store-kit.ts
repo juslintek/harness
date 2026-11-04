@@ -4,7 +4,13 @@ import { redact } from "../logs/api";
 import { hashText, type NoteMeta } from "./frontmatter";
 import { queueCommit } from "./git-log";
 import { logWrite } from "./index-log";
-import { getIndexed, type IndexedNote, removeIndexed, upsertIndexed } from "./index-repo";
+import {
+  getIndexed,
+  type IndexedNote,
+  removeIndexed,
+  toSummary,
+  upsertIndexed,
+} from "./index-repo";
 import { canRead, canWrite, diskToLocated, type Located, type Viewer } from "./paths";
 import { FileChanged, readNoteFile, removeNoteFile, writeNoteFileAtomic } from "./vault";
 
@@ -57,7 +63,7 @@ export function emitOutside(orgId: string | null, noteId: string): void {
 }
 
 export function toView(n: IndexedNote, body: string, viewer: Viewer): NoteView {
-  const { disk: _disk, slug: _slug, ...summary } = n;
+  const { snippet: _snippet, ...summary } = toSummary(n);
   const loc = diskToLocated(n.disk);
   return { ...summary, body, canWrite: loc !== null && canWrite(viewer, loc) };
 }
