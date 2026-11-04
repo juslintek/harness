@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { startMemory } from "./api";
 import { drainCommits } from "./git-log";
 import { listWrites } from "./index-log";
 import { getIndexedByDisk, upsertIndexed } from "./index-repo";
@@ -98,4 +99,15 @@ test("a row whose file is gone leaves an outside delete audit row", () => {
   const [last] = listWrites(db, "A", { limit: 5 });
   expect(last).toMatchObject({ op: "outside", actor: "outside" });
   expect(last?.afterHash).toBeNull();
+});
+
+test("one file that cannot be indexed is skipped and startMemory still starts", async () => {
+  put("orgs/A/org/bad.md", noteText("# Bad\nkey AKIAIOSFODNN7EXAMPLE"));
+  put("orgs/A/org/good.md", noteText("# Good\nfine"));
+  db.run(`CREATE TRIGGER refuse BEFORE INSERT ON notes WHEN NEW.disk = 'orgs/A/org/bad.md'
+          BEGIN SELECT RAISE(ABORT, 'refused'); END`);
+  expect(reconcile(db, dir)).toEqual({ indexed: 1, removed: 0 });
+  expect(getIndexedByDisk(db, "orgs/A/org/good.md")).not.toBeNull();
+  const stop = startMemory(db, { home: dir });
+  await stop();
 });

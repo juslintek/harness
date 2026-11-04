@@ -33,6 +33,28 @@ function vaultFiles(home: string): string[] {
   return out;
 }
 
+// One bad file is logged and skipped, as the watcher does, so startup never fails on it.
+function syncSafely(db: Database, home: string, disk: string): boolean {
+  try {
+    syncOutside(db, home, disk);
+    return true;
+  } catch (e) {
+    console.error(`memory: reconcile failed for ${disk}: ${(e as Error).message}`);
+    return false;
+  }
+}
+
+function dropMissing(db: Database, home: string, seen: Set<string>): number {
+  let removed = 0;
+  for (const { disk } of db.query<{ disk: string }, []>("SELECT disk FROM notes").all()) {
+    if (seen.has(disk)) continue;
+    // The shared path leaves the outside delete audit row; a row it cannot map is dropped as before.
+    syncSafely(db, home, disk);
+    if (getIndexedByDisk(db, disk) === null || removeIndexed(db, disk) !== null) removed++;
+  }
+  return removed;
+}
+
 // Files are the source of truth: the index follows whatever is on disk, including outside edits.
 export function reconcile(db: Database, home: string): { indexed: number; removed: number } {
   const seen = new Set<string>();
@@ -52,15 +74,8 @@ export function reconcile(db: Database, home: string): { indexed: number; remove
     const text = readNoteFile(home, disk);
     if (text === null) continue;
     if (getIndexedByDisk(db, disk)?.hash === hashText(text)) continue;
-    syncOutside(db, home, disk);
-    indexed++;
+    if (syncSafely(db, home, disk)) indexed++;
   }
-  let removed = 0;
-  for (const { disk } of db.query<{ disk: string }, []>("SELECT disk FROM notes").all()) {
-    if (seen.has(disk)) continue;
-    // The shared path leaves the outside delete audit row; a row it cannot map is dropped as before.
-    syncOutside(db, home, disk);
-    if (getIndexedByDisk(db, disk) === null || removeIndexed(db, disk) !== null) removed++;
-  }
+  const removed = dropMissing(db, home, seen);
   return { indexed, removed };
 }
