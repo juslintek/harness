@@ -97,7 +97,7 @@ pub const Tailer = struct {
         var added: u64 = 0;
         while (try walker.next(t.io)) |entry| {
             // A glob without `dot: true` skips hidden names at every level.
-            if (entry.basename[0] == '.') continue;
+            if (entry.basename.len == 0 or entry.basename[0] == '.') continue;
             switch (entry.kind) {
                 .directory => if (source.name == .codex or entry.depth() < 2) try walker.enter(t.io, entry),
                 .file => {
@@ -240,7 +240,7 @@ pub const Tailer = struct {
         );
         defer stmt.finalize();
         try stmt.bindText(1, args.path);
-        try stmt.bindInt(2, @intCast(args.offset));
+        try stmt.bindInt(2, std.math.cast(i64, args.offset) orelse return error.OffsetOverflow);
         try stmt.bindInt(3, args.mtime);
         _ = try stmt.step();
     }
@@ -748,6 +748,13 @@ test "usage: the run loop picks up new lines on its timer and stops when cancele
     while (waited < 200 and try env.usageEvents() == 0) : (waited += 1) try testing.io.sleep(.fromMilliseconds(10), .awake);
     future.cancel(testing.io);
     try testing.expectEqual(@as(i64, 1), try env.usageEvents());
+}
+
+test "usage: an offset beyond i64 is an error, not a panic" {
+    const fx = try Fixture.create(testing.allocator, testing.io);
+    defer fx.destroy();
+    const args: Tailer.SaveArgs = .{ .path = "/p", .offset = std.math.maxInt(u64), .mtime = 1 };
+    try testing.expectError(error.OffsetOverflow, Tailer.saveOffsetLocked(&args, fx.db));
 }
 
 test "usage: session id and cwd extraction" {
