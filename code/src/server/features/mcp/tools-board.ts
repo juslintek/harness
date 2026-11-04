@@ -18,6 +18,7 @@ import {
 import { findMembersByHandle, projectAccess } from "../orgs/api";
 import { defineTool, fail, handleOf, type ToolCtx, type ToolEnv } from "./tools-kit";
 import { canWrite, project, task, visibleProjects } from "./tools-refs";
+import { recordPlannerEstimate } from "./tools-tracking";
 
 const STATUSES = [
   "backlog",
@@ -111,6 +112,7 @@ function registerReads(server: McpServer, env: ToolEnv): void {
       const detail = taskDetail(ctx.db, task(ctx, a.task, false).id);
       return {
         ...compact(ctx.db, detail.task),
+        ...env.tracking.taskFields(ctx.db, detail.task.id),
         description: detail.task.description,
         deps: detail.deps.map((t) => compact(ctx.db, t)),
         subtasks: detail.subtasks.map((t) => compact(ctx.db, t)),
@@ -163,18 +165,17 @@ function registerWrites(server: McpServer, env: ToolEnv): void {
       const p = project(ctx, a.project);
       if (!canWrite(ctx, p.id)) fail("no write access to this project");
       const assignee = a.assignee === undefined ? null : assigneeId(ctx, a.assignee, p.id);
-      return compact(
-        ctx.db,
-        createTask(ctx.db, {
-          projectId: p.id,
-          title: a.title,
-          createdBy: ctx.memberId,
-          ...(a.description === undefined ? {} : { description: a.description }),
-          ...(a.parent === undefined ? {} : { parentId: task(ctx, a.parent, true).id }),
-          ...(assignee === null ? {} : { assigneeId: assignee }),
-          ...(a.estimateMinutes === undefined ? {} : { estimateMinutes: a.estimateMinutes }),
-        }),
-      );
+      const created = createTask(ctx.db, {
+        projectId: p.id,
+        title: a.title,
+        createdBy: ctx.memberId,
+        ...(a.description === undefined ? {} : { description: a.description }),
+        ...(a.parent === undefined ? {} : { parentId: task(ctx, a.parent, true).id }),
+        ...(assignee === null ? {} : { assigneeId: assignee }),
+        ...(a.estimateMinutes === undefined ? {} : { estimateMinutes: a.estimateMinutes }),
+      });
+      recordPlannerEstimate(env, ctx, created.id, a.estimateMinutes);
+      return compact(ctx.db, created);
     },
   );
   defineTool(

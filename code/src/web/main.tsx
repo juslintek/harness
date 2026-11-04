@@ -8,8 +8,11 @@ import { LoginPage } from "./features/auth/login-page";
 import { canDecideApprovals, me, refreshMe } from "./features/auth/me";
 import { BoardPage } from "./features/board/board-page";
 import { ChatPage } from "./features/chat/chat-page";
+import { DashboardPage } from "./features/dashboard/dashboard-page";
+import { HiringPage } from "./features/hiring/hiring-page";
 import { OrgPage } from "./features/orgs/org-page";
 import { selectedSlug } from "./features/orgs/org-switcher";
+import { PoliciesPage } from "./features/policies/policies-page";
 import { RunPage } from "./features/runs/run-page";
 import { RunsPage } from "./features/runs/runs-page";
 import { SearchPage } from "./features/search/search-page";
@@ -20,6 +23,9 @@ function OrgRoute({ parts }: { parts: string[] }): preact.JSX.Element {
   const slug = parts[1] ?? "";
   if (parts[2] === "chat") return <ChatPage slug={slug} />;
   if (parts[2] === "settings") return <OrgPage slug={slug} />;
+  if (parts[2] === "dashboard") return <DashboardPage slug={slug} />;
+  if (parts[2] === "hiring") return <HiringPage slug={slug} {...(parts[3] && { id: parts[3] })} />;
+  if (parts[2] === "policies") return <PoliciesPage slug={slug} />;
   const taskNumber = Number(parts[4]);
   return (
     <BoardPage

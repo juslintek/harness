@@ -1,14 +1,29 @@
 import type { Database } from "bun:sqlite";
 import { getMember } from "../orgs/api";
 
-export type TokenScope = "report" | "guard_hook" | "board" | "chat" | "approvals_decide";
+export type TokenScope =
+  | "report"
+  | "guard_hook"
+  | "board"
+  | "chat"
+  | "approvals_decide"
+  | "interview"
+  | "hiring"
+  | "profile"
+  | "policy";
 
 export interface RunIdentity {
   runId: string;
   scopes: TokenScope[];
   memberId: string | null;
   orgId: string | null;
+  // Set on an interview run's token: a candidate has no member, so no member tool accepts it.
+  candidateId: string | null;
 }
+
+export type TokenHolder =
+  | { memberId: string; orgId: string }
+  | { candidateId: string; orgId: string };
 
 function sha256Hex(token: string): string {
   return new Bun.CryptoHasher("sha256").update(token).digest("hex");
@@ -18,22 +33,23 @@ export function mint(
   db: Database,
   runId: string,
   scopes: TokenScope[],
-  member?: { memberId: string; orgId: string },
+  holder?: TokenHolder,
 ): string {
-  if (member && getMember(db, member.memberId)?.orgId !== member.orgId) {
+  if (holder && "memberId" in holder && getMember(db, holder.memberId)?.orgId !== holder.orgId) {
     throw new Error("member does not belong to the org");
   }
   const token = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url");
   db.query(
-    `INSERT INTO run_tokens (hash, run_id, scopes, created_at, member_id, org_id)
-     VALUES ($hash, $runId, $scopes, $now, $memberId, $orgId)`,
+    `INSERT INTO run_tokens (hash, run_id, scopes, created_at, member_id, org_id, candidate_id)
+     VALUES ($hash, $runId, $scopes, $now, $memberId, $orgId, $candidateId)`,
   ).run({
     hash: sha256Hex(token),
     runId,
     scopes: JSON.stringify(scopes),
     now: Date.now(),
-    memberId: member?.memberId ?? null,
-    orgId: member?.orgId ?? null,
+    memberId: holder && "memberId" in holder ? holder.memberId : null,
+    orgId: holder?.orgId ?? null,
+    candidateId: holder && "candidateId" in holder ? holder.candidateId : null,
   });
   return token;
 }
@@ -42,9 +58,15 @@ export function mint(
 export function verify(db: Database, token: string): RunIdentity | null {
   const row = db
     .query<
-      { run_id: string; scopes: string; member_id: string | null; org_id: string | null },
+      {
+        run_id: string;
+        scopes: string;
+        member_id: string | null;
+        org_id: string | null;
+        candidate_id: string | null;
+      },
       { hash: string }
-    >("SELECT run_id, scopes, member_id, org_id FROM run_tokens WHERE hash = $hash")
+    >("SELECT run_id, scopes, member_id, org_id, candidate_id FROM run_tokens WHERE hash = $hash")
     .get({ hash: sha256Hex(token) });
   if (!row) return null;
   return {
@@ -52,6 +74,7 @@ export function verify(db: Database, token: string): RunIdentity | null {
     scopes: JSON.parse(row.scopes) as TokenScope[],
     memberId: row.member_id,
     orgId: row.org_id,
+    candidateId: row.candidate_id,
   };
 }
 

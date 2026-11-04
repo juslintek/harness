@@ -15,7 +15,8 @@ import {
 import { mintRunToken, type TokenScope } from "../mcp/api";
 import type { Adapter } from "./adapter";
 import { prepareCodexHome } from "./codex-home";
-import { createWorktree, defaultBranch } from "./worktree";
+import { createScratchCheckout } from "./scratch-checkout";
+import { createWorktree, defaultBranch, reuseWorktree } from "./worktree";
 
 export interface RunDeps {
   home: string;
@@ -38,6 +39,22 @@ export interface RunMember {
   readOnly?: boolean | undefined;
   // The project whose repo the run works in; its org decides the run's approvals.
   projectId?: string | undefined;
+}
+
+// An interview run has no member: its token carries the candidate id and only the interview scope.
+export interface RunCandidate {
+  candidateId: string;
+  orgId: string;
+  // The member whose budgets the run counts against; null when a person without a member asked.
+  chargedTo: string | null;
+}
+
+const CANDIDATE_SCOPES: TokenScope[] = ["report", "guard_hook", "interview"];
+
+function tokenFor(db: Database, runId: string, who: RunMember | RunCandidate | undefined): string {
+  if (!who) return mintRunToken(db, runId, ["report", "guard_hook"]);
+  if ("candidateId" in who) return mintRunToken(db, runId, CANDIDATE_SCOPES, who);
+  return mintRunToken(db, runId, who.scopes, who);
 }
 
 export interface Launch {
@@ -72,52 +89,125 @@ async function worktreeAdminDir(worktree: string): Promise<string> {
   return pointer.slice("gitdir: ".length);
 }
 
+// Only a manager run gets one; an interview run is read-only too but runs nothing.
+async function scratchFor(
+  repo: string,
+  home: string,
+  runId: string,
+  member: RunMember | RunCandidate | undefined,
+): Promise<{ path: string; gitDir: string } | null> {
+  if (member === undefined || "candidateId" in member || member.readOnly !== true) return null;
+  const path = await createScratchCheckout(repo, runId, home);
+  return { path, gitDir: await worktreeAdminDir(path) };
+}
+
+interface RunEnvInput {
+  runDir: string;
+  runId: string;
+  token: string;
+  base: string;
+  codexHome: string | null;
+  treePath: string;
+  branch: string;
+  scratch: { path: string } | null;
+}
+
+function runEnv(deps: RunDeps, i: RunEnvInput): Record<string, string> {
+  const tmp = runTmpDir(i.runDir);
+  return scrubEnv(process.env, {
+    ...deps.agentEnv?.(i.runDir),
+    TMPDIR: tmp,
+    CLAUDE_CODE_TMPDIR: tmp,
+    // The guard treats git log/diff/show as read-only, which only holds while no pager runs; the
+    // env wins over core.pager and pager.<cmd> in any config the run can reach.
+    GIT_PAGER: "cat",
+    PAGER: "cat",
+    ...(i.codexHome === null ? {} : { CODEX_HOME: i.codexHome }),
+    HARNESS_SCOPE_ROOT: i.treePath,
+    HARNESS_DEFAULT_BRANCH: i.branch,
+    HARNESS_HOOK_URL: `${i.base}/api/guard/hook`,
+    HARNESS_RUN_TOKEN: i.token,
+    HARNESS_RUN_ID: i.runId,
+    ...(i.scratch === null ? {} : { HARNESS_SCRATCH: i.scratch.path }),
+  });
+}
+
+interface SettingsInput {
+  spec: AgentSpec;
+  home: string;
+  runDir: string;
+  tree: { path: string; branch: string; gitCommonDir: string };
+  codexHome: string | null;
+  member: RunMember | RunCandidate | undefined;
+  scratch: { path: string; gitDir: string } | null;
+}
+
+async function writeRunSettings(i: SettingsInput): Promise<string> {
+  return writeSrtSettings({
+    runDir: i.runDir,
+    worktree: i.tree.path,
+    gitCommonDir: i.tree.gitCommonDir,
+    gitWorktreeDir: await worktreeAdminDir(i.tree.path),
+    branch: i.tree.branch,
+    agentId: i.spec.id,
+    harnessHome: i.home,
+    agentStateWrite: i.spec.stateWrite,
+    agentEgress: i.spec.egress,
+    preset: "dev",
+    weakerNetworkIsolation: i.spec.weakerNetworkIsolation,
+    codexHome: i.codexHome,
+    readOnlyWorktree:
+      i.member !== undefined && ("candidateId" in i.member || i.member.readOnly === true),
+    ...(i.scratch === null ? {} : { scratch: i.scratch }),
+  });
+}
+
+const treeFor = (
+  repo: string,
+  runId: string,
+  home: string,
+  reuse: { worktree: string; branch: string } | undefined,
+): ReturnType<typeof reuseWorktree> =>
+  reuse ? reuseWorktree(reuse.worktree, reuse.branch) : createWorktree(repo, runId, home);
+
 export async function createLaunch(
   db: Database,
   deps: RunDeps,
   spec: AgentSpec,
   runId: string,
   repo: string,
-  member?: RunMember,
+  member?: RunMember | RunCandidate,
+  reuse?: { worktree: string; branch: string },
 ): Promise<Launch> {
   // srt's sandbox profile matches resolved paths only, so a home behind a symlink (macOS /var)
   // would leave the run's own tmp dir read-only and break heredocs.
   await mkdir(deps.home, { recursive: true });
   const home = await realpath(deps.home);
-  const tree = await createWorktree(repo, runId, home);
+  const tree = await treeFor(repo, runId, home, reuse);
   const branch = await defaultBranch(repo);
+  const scratch = await scratchFor(repo, home, runId, member);
   const runDir = join(home, "runs", runId);
-  const token = member
-    ? mintRunToken(db, runId, member.scopes, member)
-    : mintRunToken(db, runId, ["report", "guard_hook"]);
+  const token = tokenFor(db, runId, member);
   const codexHome = spec.id === "codex" ? await prepareCodexHome(runDir, codexRules()) : null;
-  const settingsPath = await writeSrtSettings({
+  const settingsPath = await writeRunSettings({
+    spec,
+    home,
     runDir,
-    worktree: tree.path,
-    gitCommonDir: tree.gitCommonDir,
-    gitWorktreeDir: await worktreeAdminDir(tree.path),
-    branch: tree.branch,
-    agentId: spec.id,
-    harnessHome: home,
-    agentStateWrite: spec.stateWrite,
-    agentEgress: spec.egress,
-    preset: "dev",
-    weakerNetworkIsolation: spec.weakerNetworkIsolation,
+    tree,
     codexHome,
-    readOnlyWorktree: member?.readOnly === true,
+    member,
+    scratch,
   });
-  const tmp = runTmpDir(runDir);
   const base = `http://127.0.0.1:${deps.port}`;
-  const env = scrubEnv(process.env, {
-    ...deps.agentEnv?.(runDir),
-    TMPDIR: tmp,
-    CLAUDE_CODE_TMPDIR: tmp,
-    ...(codexHome === null ? {} : { CODEX_HOME: codexHome }),
-    HARNESS_SCOPE_ROOT: tree.path,
-    HARNESS_DEFAULT_BRANCH: branch,
-    HARNESS_HOOK_URL: `${base}/api/guard/hook`,
-    HARNESS_RUN_TOKEN: token,
-    HARNESS_RUN_ID: runId,
+  const env = runEnv(deps, {
+    runDir,
+    runId,
+    token,
+    base,
+    codexHome,
+    treePath: tree.path,
+    branch,
+    scratch,
   });
   return {
     worktree: tree.path,

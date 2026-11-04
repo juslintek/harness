@@ -4,6 +4,8 @@ export interface Live {
   abort: AbortController;
   killReason: string | null;
   denied: boolean;
+  // Set when the run itself reported a full quota window, so a later error counts as a rate limit.
+  quotaFull?: boolean;
   agent: string;
   pid: number | null;
 }

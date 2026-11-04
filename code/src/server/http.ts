@@ -4,6 +4,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { z } from "zod";
 import { type Health, healthSchema } from "../shared/health";
 import { searchQuerySchema, usageQuerySchema } from "../shared/query";
+import { quotaBodySchema } from "../shared/router";
 import { agentRoutes } from "./features/agents/routes";
 import {
   hostGuard,
@@ -16,16 +17,25 @@ import {
 import { publicAuthRoutes } from "./features/auth/routes";
 import { accountRoutes } from "./features/auth/routes-account";
 import { boardRoutes } from "./features/board/routes";
+import { budgetGate } from "./features/budgets/api";
+import { budgetsRoutes } from "./features/budgets/routes";
 import { chatRoutes } from "./features/chat/routes";
 import { approvalRoutes } from "./features/guard/routes";
 import { wakeRoutes } from "./features/heartbeat/routes";
+import { hiringRoutes } from "./features/hiring/routes";
 import { appendEvent, searchEvents } from "./features/logs/api";
-import { mcpHandler, verifyRunToken } from "./features/mcp/api";
+import { type McpDeps, mcpHandler, verifyRunToken } from "./features/mcp/api";
 import { orgRoutes } from "./features/orgs/routes";
+import { harnessPolicyRoutes, policiesRoutes } from "./features/policies/routes";
+import { profilesRoutes } from "./features/profiles/routes";
+import { routerRoutes } from "./features/router/routes";
 import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
 import { haltRoutes, runRoutes } from "./features/runtimes/routes";
-import { probeQuota, usageSummary } from "./features/usage/api";
+import { addEstimate, taskTrackingFields } from "./features/tracking/api";
+import { trackingRoutes } from "./features/tracking/routes";
+import { probeQuota, recordQuota, usageSummary } from "./features/usage/api";
 import { wsUpgrade } from "./realtime";
+import { parseBody } from "./route-kit";
 
 // Applied by Bun.serve before any handler runs, so it also covers /mcp and the guard hook.
 export const MAX_REQUEST_BODY_BYTES: number = 1024 * 1024;
@@ -81,12 +91,23 @@ function adminRoutes(deps: AppDeps): Hono {
   const { db } = deps;
   const runDeps = deps.runDeps ?? { home: deps.home, port: deps.port };
   const app = new Hono();
-  for (const path of ["/runs", "/halt", "/agents", "/search", "/usage", "/quota"]) {
+  for (const path of [
+    "/runs",
+    "/halt",
+    "/agents",
+    "/search",
+    "/usage",
+    "/quota",
+    "/router",
+    "/policies",
+  ]) {
     app.use(`${path}/*`, requireInstanceAdmin);
   }
   app.route("/runs", runRoutes(db, runDeps));
   app.route("/approvals", approvalRoutes(db, deps.home));
   app.route("/halt", haltRoutes(db));
+  app.route("/router", routerRoutes(db));
+  app.route("/policies", harnessPolicyRoutes(db));
   app.route("/agents", agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }));
   app.get("/search", (c) => {
     const query = searchQuerySchema.safeParse(c.req.query());
@@ -99,7 +120,49 @@ function adminRoutes(deps: AppDeps): Hono {
     return c.json(usageSummary(db, query.data.by, query.data.since));
   });
   app.get("/quota", async (c) => c.json(await probeQuota(db)));
+  app.post("/quota", async (c) => {
+    const body = await parseBody(c, quotaBodySchema);
+    if (body instanceof Response) return body;
+    recordQuota(db, { ...body, resetsAt: body.resetsAt ?? null, source: "manual" });
+    return c.json({ ok: true });
+  });
   return app;
+}
+
+const trackingPort: McpDeps["tracking"] = {
+  addEstimate,
+  taskFields: taskTrackingFields,
+  budgetState: (d, memberId) => budgetGate(d, memberId).state,
+};
+
+function mountMcp(app: Hono, deps: AppDeps): void {
+  const mcp = mcpHandler(
+    deps.db,
+    {
+      harnessHome: deps.home,
+      tracking: trackingPort,
+      onReport: (runId, text) =>
+        appendEvent(deps.db, { kind: "message", source: "mcp", runId, body: text }),
+    },
+    deps.port,
+  );
+  app.all("/mcp", (c) => mcp(c.req.raw));
+}
+
+function mountSessionRoutes(app: Hono, deps: AppDeps): void {
+  const { db } = deps;
+  app.use("/api/*", sessionMiddleware(db, deps.rp.origin));
+  app.route("/api/auth", accountRoutes(db, deps.rp));
+  app.route("/api", orgRoutes({ db, origin: deps.rp.origin }));
+  app.route("/api", boardRoutes(db));
+  app.route("/api", chatRoutes(db));
+  app.route("/api", wakeRoutes(db));
+  app.route("/api", profilesRoutes(db));
+  app.route("/api", policiesRoutes(db));
+  app.route("/api", hiringRoutes(db));
+  app.route("/api", budgetsRoutes(db));
+  app.route("/api", trackingRoutes(db));
+  app.route("/api", adminRoutes(deps));
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -119,16 +182,7 @@ export function createApp(deps: AppDeps): Hono {
     });
     return c.json(body);
   });
-  const mcp = mcpHandler(
-    db,
-    {
-      harnessHome: deps.home,
-      onReport: (runId, text) =>
-        appendEvent(db, { kind: "message", source: "mcp", runId, body: text }),
-    },
-    deps.port,
-  );
-  app.all("/mcp", (c) => mcp(c.req.raw));
+  mountMcp(app, deps);
   app.route("/api/guard/hook", guardHook(db));
   app.use("/api/*", mutationOriginGuard(deps.rp.origin));
   app.route(
@@ -141,13 +195,7 @@ export function createApp(deps: AppDeps): Hono {
         deps.deliverEmailCode ?? ((email, code) => console.log(`email code for ${email}: ${code}`)),
     }),
   );
-  app.use("/api/*", sessionMiddleware(db, deps.rp.origin));
-  app.route("/api/auth", accountRoutes(db, deps.rp));
-  app.route("/api", orgRoutes({ db, origin: deps.rp.origin }));
-  app.route("/api", boardRoutes(db));
-  app.route("/api", chatRoutes(db));
-  app.route("/api", wakeRoutes(db));
-  app.route("/api", adminRoutes(deps));
+  mountSessionRoutes(app, deps);
   app.use("/ws", sessionMiddleware(db), originGuard(deps.rp.origin));
   app.get("/ws", wsUpgrade(db));
   return app;

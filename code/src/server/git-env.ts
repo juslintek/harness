@@ -20,3 +20,23 @@ export function gitEnv(
   }
   return env;
 }
+
+const GIT_TIMEOUT_MS = 10_000;
+
+// Callers run on the server's hot paths (failover, run finalize), so a stuck git must neither block
+// nor outlive them: the call is async, killed after the timeout, and any failure just yields null.
+export async function gitOutput(cwd: string, args: string[]): Promise<string | null> {
+  try {
+    const proc = Bun.spawn(["git", "-C", cwd, ...args], {
+      env: gitEnv(),
+      stdout: "pipe",
+      stderr: "ignore",
+      timeout: GIT_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+    });
+    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    return code === 0 ? out : null;
+  } catch {
+    return null;
+  }
+}

@@ -60,6 +60,46 @@ export function watchApprovals(db: Database, runId: string): () => void {
   return () => clearInterval(timer);
 }
 
+export interface Leftovers {
+  // One line per approval the script had to decide itself, with the command it was about.
+  decided: string[];
+  stop: () => void;
+}
+
+const LEFTOVER_POLL_MS = 500;
+
+// Approvals belong to managers and policy first; the script only takes what nobody decided within
+// graceMs, so the gate's count shows how much the agents could not settle on their own.
+export function watchLeftovers(db: Database, opts: { graceMs?: number } = {}): Leftovers {
+  const graceMs = opts.graceMs ?? 90_000;
+  const firstSeen = new Map<string, number>();
+  const decided: string[] = [];
+  const timer = setInterval(() => {
+    const now = Date.now();
+    for (const a of listApprovals(db, "pending")) {
+      const since = firstSeen.get(a.id) ?? now;
+      firstSeen.set(a.id, since);
+      if (now - since >= graceMs) settleLeftover(db, a, decided);
+    }
+  }, LEFTOVER_POLL_MS);
+  return { decided, stop: () => clearInterval(timer) };
+}
+
+function settleLeftover(
+  db: Database,
+  a: ReturnType<typeof listApprovals>[number],
+  decided: string[],
+): void {
+  const worktree = readWorktree(db, a.runId);
+  if (worktree === null) return;
+  const action: Pending = JSON.parse(a.action);
+  const ok = approvable(action, JSON.parse(a.l1), worktree);
+  // False means a manager decided it between the listing and now; that one is not ours.
+  if (!decideApproval(db, a.id, ok ? "approve" : "deny", "gate")) return;
+  const what = action.command ?? `${action.kind} ${action.paths.join(" ")}`;
+  decided.push(`${ok ? "approved" : "DENIED"} ${what}`);
+}
+
 export interface Row {
   agent: string;
   state: string;

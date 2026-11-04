@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import { join } from "node:path";
 import { HARNESS_TOOL_NAMES } from "../../../shared/harness-tools";
+import { isReadOnlyGit, plainEnv } from "./git-readonly";
 import { ShellParseError } from "./lexer";
 import { RULES } from "./rules";
 import {
@@ -76,11 +77,20 @@ function runsProgram(argv: string[]): boolean {
   });
 }
 
-function defaultCategory(cmds: Cmd[]): Category {
+// `git` is never read-only as a whole; only the forms isReadOnlyGit knows are.
+function isReadCmd(cmd: Cmd, scope: Scope): boolean {
+  if (!plainEnv(cmd)) return false;
+  if (cmd.argv.length === 0) return true;
+  const name = base(cmd.argv[0]);
+  return name === "git" ? isReadOnlyGit(cmd, scope) : READ_ONLY.has(name);
+}
+
+function defaultCategory(cmds: Cmd[], scope: Scope): Category {
   const names = cmds.map((c) => base(c.argv[0])).filter(Boolean);
   if (names.some((n) => NETWORK.has(n))) return "network";
   if (cmds.some((c) => runsProgram(c.argv))) return "shell";
-  return names.length > 0 && names.every((n) => READ_ONLY.has(n)) ? "read" : "shell";
+  const reads = cmds.filter((c) => !c.mark).every((c) => isReadCmd(c, scope));
+  return names.length > 0 && reads ? "read" : "shell";
 }
 
 // Working directory as the line runs: null once it depends on something unknowable.
@@ -141,7 +151,7 @@ function evaluateShell(command: string | undefined, scope: Scope): L1Result {
       return ask("shell.unparseable", `cannot parse command: ${e.message}`);
     throw e;
   }
-  return strictest(cmds, scope) ?? allow(null, "no rule matched", defaultCategory(cmds));
+  return strictest(cmds, scope) ?? allow(null, "no rule matched", defaultCategory(cmds, scope));
 }
 
 // A symlink inside the skills dir can point anywhere, so compare real paths, not the lexical ones.

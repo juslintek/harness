@@ -7,10 +7,11 @@ import { expireApprovals } from "../guard/api";
 import type { NewEvent } from "../logs/api";
 import { onGrantChanged, onMemberDemoted, onMemberRemoved } from "../orgs/api";
 import { listAcpModels } from "./acp-models";
-import { createProbeLaunch, type RunDeps, type RunMember } from "./launch";
+import { createProbeLaunch, type RunCandidate, type RunDeps, type RunMember } from "./launch";
 import {
   setHalted as halt,
   isHalted as halted,
+  isShuttingDown,
   killRun as kill,
   onRunEvent as onEvent,
   shutdownRuns as shutdown,
@@ -18,15 +19,28 @@ import {
   waitForRun as wait,
 } from "./manager";
 import { reapRuns } from "./orphans";
-import { getRun as get, listRuns as list, type RunRow } from "./runs-repo";
+import { getRun as get, listRuns as list, listLiveRuns, type RunRow } from "./runs-repo";
+import { scratchRepo as scratch } from "./scratch";
+import { sweepScratchCheckouts } from "./scratch-checkout";
+import { defaultBranch as defaultBranchOf } from "./worktree";
 
-export type { RunDeps } from "./launch";
+export type { RunDeps, RunMember } from "./launch";
 export type { RunRow } from "./runs-repo";
 
 export class HaltedError extends Error {
   constructor() {
     super("harness is halted");
     this.name = "HaltedError";
+  }
+}
+
+// A halted harness keeps its work for later, and so does one that is shutting down: callers that
+// already treat HaltedError as "retry later" need no new branch.
+export class ShuttingDownError extends HaltedError {
+  constructor() {
+    super();
+    this.message = "harness is shutting down";
+    this.name = "ShuttingDownError";
   }
 }
 
@@ -47,16 +61,21 @@ export async function startRun(
     model?: string;
     taskId?: string;
     member?: RunMember;
+    candidate?: RunCandidate;
+    reuseWorktreeOf?: string;
+    attempt?: number;
+    batchId?: string;
   },
 ): Promise<string> {
+  if (isShuttingDown(db)) throw new ShuttingDownError();
   if (halted(db)) throw new HaltedError();
   const spec = (deps.resolveSpec ?? getSpec)(input.agentId);
   if (!spec) throw new UnknownAgent(input.agentId);
   return start(db, deps, spec, input);
 }
 
-export function killRun(db: Database, runId: string): boolean {
-  return kill(db, runId);
+export function killRun(db: Database, runId: string, reason?: string): boolean {
+  return kill(db, runId, reason);
 }
 
 // A removed or demoted agent must stop at once: killing the run makes finalize revoke its run token, which
@@ -106,8 +125,16 @@ export function listRuns(db: Database, limit?: number): RunRow[] {
   return list(db, limit);
 }
 
+export function defaultBranch(repo: string): Promise<string> {
+  return defaultBranchOf(repo);
+}
+
 export function getRun(db: Database, id: string): RunRow | null {
   return get(db, id);
+}
+
+export function liveRuns(db: Database): RunRow[] {
+  return listLiveRuns(db);
 }
 
 export function waitForRun(runId: string): Promise<RunRow> {
@@ -127,6 +154,10 @@ export function recoverRuns(db: Database): void {
   expireApprovals(db, Number.MAX_SAFE_INTEGER);
 }
 
+export function sweepStaleScratch(home: string): Promise<void> {
+  return sweepScratchCheckouts(home);
+}
+
 export async function refreshAcpModels(
   deps: RunDeps,
   spec: AgentSpec,
@@ -138,4 +169,8 @@ export async function refreshAcpModels(
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+export function scratchRepo(home: string, orgId: string): string {
+  return scratch(home, orgId);
 }

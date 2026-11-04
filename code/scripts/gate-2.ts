@@ -13,7 +13,7 @@ import type { MemberRow } from "../src/server/features/orgs/api";
 import { listRuns, onRunEvent, shutdownRuns } from "../src/server/features/runtimes/api";
 import { createApp } from "../src/server/http";
 import { build, git, type Scene } from "./gate-2-kit";
-import { sumTokens, watchApprovals } from "./smoke-kit";
+import { sumTokens, watchLeftovers } from "./smoke-kit";
 
 const WAIT_MS = 30 * 60 * 1000;
 const SETTLE_MS = 3 * 60 * 1000;
@@ -181,15 +181,7 @@ async function main(): Promise<void> {
   const { db, home, port, stop } = await boot(root);
   const s = build(db, root);
   const stopTimeline = watchTimeline(s);
-  const seen = new Set<string>();
-  const stopApprovals: Array<() => void> = [];
-  const approvals = setInterval(() => {
-    for (const r of listRuns(db, 100)) {
-      if (seen.has(r.id)) continue;
-      seen.add(r.id);
-      stopApprovals.push(watchApprovals(db, r.id));
-    }
-  }, 500);
+  const leftovers = watchLeftovers(db, { graceMs: 90_000 });
   const stopHeartbeat = startHeartbeat(db, { runDeps: { home, port }, home, tickMs: 5000 });
   try {
     const task = createTask(db, {
@@ -209,14 +201,16 @@ async function main(): Promise<void> {
       await Bun.sleep(2000);
     }
   } finally {
-    clearInterval(approvals);
-    for (const stopWatch of stopApprovals) stopWatch();
-    stopHeartbeat();
+    leftovers.stop();
+    const drained = stopHeartbeat();
     stopTimeline();
     await shutdownRuns(db);
+    await drained;
     await stop();
   }
   report(db, s, home);
+  console.log(`script-decided approvals: ${leftovers.decided.length}`);
+  for (const line of leftovers.decided) console.log(`  ${line}`);
   db.close();
   if (failures.length > 0) {
     console.error(`\n${failures.length} assertion(s) failed:\n- ${failures.join("\n- ")}`);

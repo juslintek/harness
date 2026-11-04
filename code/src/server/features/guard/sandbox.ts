@@ -20,6 +20,9 @@ export interface SandboxInput {
   codexHome: string | null;
   // A manager reviews and delegates; it must not change code, so the worktree and git refs stay read-only.
   readOnlyWorktree?: boolean;
+  // A read-only run still needs somewhere to run tests: a detached checkout of its own, whose admin
+  // dir is the only git state it may write. Refs, objects and the run worktree stay read-only.
+  scratch?: { path: string; gitDir: string };
 }
 
 export type SrtSettings = SandboxRuntimeConfig &
@@ -156,6 +159,13 @@ function gitWritable(input: SandboxInput): string[] {
 const adminPointers = (admin: string): string[] =>
   ["commondir", "gitdir", "config.worktree"].map((name) => join(admin, name));
 
+const scratchWritable = (input: SandboxInput): string[] =>
+  input.scratch ? [input.scratch.path, input.scratch.gitDir] : [];
+
+// Same reasoning as the run worktree: a rewritten pointer makes git read attacker-chosen config.
+const scratchPointers = (input: SandboxInput): string[] =>
+  input.scratch ? [join(input.scratch.path, ".git"), ...adminPointers(input.scratch.gitDir)] : [];
+
 const SCRUB_KEEP = /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|TERM|TMPDIR|LC_.*)$/;
 
 const SRT_BIN = join(import.meta.dir, "../../../../node_modules/.bin/srt");
@@ -205,6 +215,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
   const codex = input.codexHome;
   const allowWrite = unique([
     ...(input.readOnlyWorktree ? [] : [input.worktree, ...gitWritable(input)]),
+    ...scratchWritable(input),
     ...(codex ? [codex] : []),
     ...input.agentStateWrite.map(expand),
     runTmpDir(input.runDir),
@@ -224,9 +235,10 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
         join(input.harnessHome, "secrets.*"),
         join(input.harnessHome, "runs"),
         join(input.harnessHome, "worktrees"),
+        join(input.harnessHome, "scratch-checkouts"),
         ...otherAgentCredentials(input.agentId).map(expand),
       ]),
-      allowRead: [input.runDir, input.worktree],
+      allowRead: [input.runDir, input.worktree, ...(input.scratch ? [input.scratch.path] : [])],
       allowWrite,
       denyWrite: unique([
         ...(git
@@ -239,6 +251,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
             ]
           : []),
         ...(codex ? [join(codex, "rules"), join(codex, "config.toml")] : []),
+        ...scratchPointers(input),
         join(input.worktree, ".claude"),
         join(input.worktree, ".codex"),
         ...DENY_WRITE_HOME.map(expand),

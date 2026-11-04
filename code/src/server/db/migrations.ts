@@ -14,6 +14,15 @@ import chat from "./migrations/012_chat.sql" with { type: "text" };
 import wake from "./migrations/013_wake.sql" with { type: "text" };
 import identity from "./migrations/014_identity.sql" with { type: "text" };
 import wakeSubtask from "./migrations/015_wake_subtask.sql" with { type: "text" };
+import profiles from "./migrations/016_profiles.sql" with { type: "text" };
+import policies from "./migrations/017_policies.sql" with { type: "text" };
+import triageRegistry from "./migrations/018_triage_registry.sql" with { type: "text" };
+import hiring from "./migrations/019_hiring.sql" with { type: "text" };
+import router from "./migrations/020_router.sql" with { type: "text" };
+import budgets from "./migrations/021_budgets.sql" with { type: "text" };
+import tracking from "./migrations/022_tracking.sql" with { type: "text" };
+import wakeReasons from "./migrations/023_wake_reasons.sql" with { type: "text" };
+import runCharge from "./migrations/024_run_charge.sql" with { type: "text" };
 
 export const migrations: readonly Migration[] = [
   { version: 1, sql: instance },
@@ -31,4 +40,13 @@ export const migrations: readonly Migration[] = [
   { version: 13, sql: wake },
   { version: 14, sql: identity },
   { version: 15, sql: wakeSubtask },
+  { version: 16, sql: profiles },
+  { version: 17, sql: policies },
+  { version: 18, sql: triageRegistry },
+  { version: 19, sql: hiring },
+  { version: 20, sql: router },
+  { version: 21, sql: budgets },
+  { version: 22, sql: tracking },
+  { version: 23, sql: wakeReasons },
+  { version: 24, sql: runCharge },
 ];

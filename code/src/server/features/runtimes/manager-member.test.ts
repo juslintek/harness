@@ -48,6 +48,7 @@ test("a run started with a member stores runs.member_id and its token resolves t
     scopes: ["report", "guard_hook", "board"],
     memberId: member.id,
     orgId: org.id,
+    candidateId: null,
   });
 });
 

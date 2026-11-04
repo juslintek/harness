@@ -26,6 +26,8 @@ export interface RunRow {
   createdAt: number;
   startedAt: number | null;
   endedAt: number | null;
+  attempt: number;
+  batchId: string | null;
 }
 
 interface DbRun {
@@ -43,16 +45,21 @@ interface DbRun {
   created_at: number;
   started_at: number | null;
   ended_at: number | null;
+  attempt: number;
+  batch_id: string | null;
 }
 
 export interface NewRun {
   id: string;
   taskId: string | null;
   member?: RunMember | null;
+  chargedTo?: string | null | undefined;
   agentId: string;
   model: string | null;
   repo: string;
   prompt: string;
+  attempt?: number | undefined;
+  batchId?: string | undefined;
 }
 
 function toRow(r: DbRun): RunRow {
@@ -71,12 +78,14 @@ function toRow(r: DbRun): RunRow {
     createdAt: r.created_at,
     startedAt: r.started_at,
     endedAt: r.ended_at,
+    attempt: r.attempt,
+    batchId: r.batch_id,
   };
 }
 
 export function insertRun(db: Database, run: NewRun): void {
   db.run(
-    "INSERT INTO runs (id, task_id, member_id, project_id, agent_id, model, repo, prompt, state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)",
+    "INSERT INTO runs (id, task_id, member_id, project_id, agent_id, model, repo, prompt, state, created_at, attempt, batch_id, charged_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)",
     [
       run.id,
       run.taskId,
@@ -87,8 +96,24 @@ export function insertRun(db: Database, run: NewRun): void {
       run.repo,
       run.prompt,
       Date.now(),
+      run.attempt ?? 1,
+      run.batchId ?? null,
+      run.chargedTo ?? null,
     ],
   );
+}
+
+export function worktreeOf(db: Database, runId: string): { worktree: string; branch: string } {
+  const run = getRun(db, runId);
+  if (!run?.worktree || !run.branch) throw new Error(`run has no worktree to reuse: ${runId}`);
+  return { worktree: run.worktree, branch: run.branch };
+}
+
+export function listLiveRuns(db: Database): RunRow[] {
+  return db
+    .query<DbRun, []>("SELECT * FROM runs WHERE state IN ('queued', 'starting', 'running')")
+    .all()
+    .map(toRow);
 }
 
 export function setStarting(

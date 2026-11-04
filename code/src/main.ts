@@ -5,9 +5,19 @@ import { ensureInstance, migrate, openDb } from "./server/db/db";
 import { migrations } from "./server/db/migrations";
 import { firstRunEnrollment } from "./server/features/auth/api";
 import { wireBoard } from "./server/features/board/api";
+import { startBudgets } from "./server/features/budgets/api";
 import { wireChat } from "./server/features/chat/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
-import { recoverRuns, shutdownRuns, wireRuntimes } from "./server/features/runtimes/api";
+import { startHiring } from "./server/features/hiring/api";
+import { wireHiring } from "./server/features/hiring/wiring";
+import { startRouter } from "./server/features/router/api";
+import {
+  recoverRuns,
+  shutdownRuns,
+  sweepStaleScratch,
+  wireRuntimes,
+} from "./server/features/runtimes/api";
+import { startTracking } from "./server/features/tracking/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
 import { pwaResponse } from "./server/pwa";
@@ -26,6 +36,7 @@ wireChat(db);
 wireRuntimes();
 
 recoverRuns(db);
+await sweepStaleScratch(config.home);
 const app = createApp({
   db,
   home: config.home,
@@ -58,10 +69,14 @@ const server = Bun.serve<WsData>({
 });
 
 wireRealtime(db, server);
-const stopHeartbeat = startHeartbeat(db, {
-  runDeps: { home: config.home, port: config.port },
-  home: config.home,
-});
+const runDeps = { home: config.home, port: config.port };
+const stopHeartbeat = startHeartbeat(db, { runDeps, home: config.home });
+const hiring = wireHiring(db, { runDeps, home: config.home });
+const stopLoops = [
+  ...[startRouter, startBudgets, startTracking].map((start) => start(db)),
+  startHiring(db, hiring.deps),
+  hiring.stop,
+];
 
 console.log(`harness listening on ${server.url}`);
 
@@ -74,8 +89,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     if (stopping) return;
     stopping = true;
-    stopHeartbeat();
+    const drained = stopHeartbeat();
+    for (const stop of stopLoops) stop();
     shutdownRuns(db)
+      .then(() => drained)
       .catch((err: unknown) => console.error("shutdown failed", err))
       .finally(() => {
         server.stop(true);

@@ -9,7 +9,7 @@ export class NotAGitRepo extends Error {
   }
 }
 
-const RUN_ID = /^[0-9a-f-]{36}$/;
+export const RUN_ID: RegExp = /^[0-9a-f-]{36}$/;
 
 interface GitResult {
   code: number;
@@ -32,7 +32,7 @@ async function git(args: string[], cwd: string): Promise<GitResult> {
   return { code, out: out.trim(), err: err.trim() };
 }
 
-async function gitOk(args: string[], cwd: string): Promise<string> {
+export async function gitOk(args: string[], cwd: string): Promise<string> {
   const res = await git(args, cwd);
   if (res.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${res.err}`);
   return res.out;
@@ -55,6 +55,20 @@ export async function createWorktree(
   await gitOk(["worktree", "add", "-b", branch, path, "HEAD"], repo);
   const base = await gitOk(["rev-parse", "HEAD"], repo);
   return { path, branch, gitCommonDir: probe.out, base };
+}
+
+// A failover attempt continues in the tree the earlier attempt left, so a vanished one is an error
+// rather than a reason to start over from HEAD and lose the half-done work.
+export async function reuseWorktree(
+  path: string,
+  branch: string,
+): Promise<{ path: string; branch: string; gitCommonDir: string }> {
+  if (!(await Bun.file(join(path, ".git")).exists())) throw new Error(`worktree is gone: ${path}`);
+  const gitCommonDir = await gitOk(
+    ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    path,
+  );
+  return { path, branch, gitCommonDir };
 }
 
 export async function defaultBranch(repo: string): Promise<string> {

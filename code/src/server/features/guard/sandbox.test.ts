@@ -29,7 +29,9 @@ test("settings snapshot: paths expanded, domains merged without duplicates", () 
   expect(s.filesystem.denyRead).toContain(join(homedir(), ".codex/auth.json"));
   expect(s.filesystem.denyRead).toContain(join(homedir(), ".gemini/oauth_creds.json"));
   expect(s.filesystem.denyRead).not.toContain(join(homedir(), ".claude/.credentials.json"));
-  expect(s.filesystem.denyRead).toEqual(expect.arrayContaining(["/hh/runs", "/hh/worktrees"]));
+  expect(s.filesystem.denyRead).toEqual(
+    expect.arrayContaining(["/hh/runs", "/hh/worktrees", "/hh/scratch-checkouts"]),
+  );
   expect(s.filesystem.allowRead).toEqual(["/runs/r1", "/wt/r1"]);
   expect(s.network.allowLocalBinding).toBe(true);
   expect(s.network.deniedDomains).toEqual([]);
@@ -150,4 +152,25 @@ test("a read-only worktree drops the worktree and git refs from allowWrite", () 
   expect(allowWrite.filter((p) => String(p).startsWith("/repo/.git"))).toEqual([]);
   expect(allowWrite).toContain(runTmpDir("/runs/r1"));
   expect(allowWrite).toContain(join(homedir(), ".claude"));
+});
+
+test("another run's scratch checkout is unreadable, the run's own stays readable", () => {
+  const scratch = { path: "/hh/scratch-checkouts/r1", gitDir: "/repo/.git/worktrees/r11" };
+  const { filesystem } = buildSrtSettings({ ...baseInput, readOnlyWorktree: true, scratch });
+  expect(filesystem.denyRead).toContain("/hh/scratch-checkouts");
+  expect(filesystem.allowRead).toContain(scratch.path);
+});
+
+test("a read-only run's scratch checkout and its admin dir are writable, refs and objects are not", () => {
+  const scratch = { path: "/hh/scratch-checkouts/r1", gitDir: "/repo/.git/worktrees/r11" };
+  const { filesystem } = buildSrtSettings({ ...baseInput, readOnlyWorktree: true, scratch });
+  expect(filesystem.allowWrite).toEqual(expect.arrayContaining([scratch.path, scratch.gitDir]));
+  expect(filesystem.allowWrite).not.toContain("/wt/r1");
+  expect(filesystem.allowWrite).not.toContain("/repo/.git/objects");
+  expect(
+    filesystem.allowWrite.filter((p) => String(p).startsWith("/repo/.git") && p !== scratch.gitDir),
+  ).toEqual([]);
+  expect(filesystem.denyWrite).toEqual(
+    expect.arrayContaining([join(scratch.path, ".git"), join(scratch.gitDir, "commondir")]),
+  );
 });

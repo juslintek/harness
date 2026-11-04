@@ -1,0 +1,74 @@
+import type { Database } from "bun:sqlite";
+import { listAgents } from "../agents/api";
+import { budgetGate } from "../budgets/api";
+import { wakeFor } from "../heartbeat/api";
+import { type RouteDeps, rankEngines, readyRuntimes } from "../router/api";
+import type { HiringDeps } from "./hire";
+import { type InterviewEnv, runInterview } from "./interview";
+
+const READY_REFRESH_MS = 60_000;
+
+// engineReady is read inside synchronous scoring, so it reads the last answer of an async probe.
+function watchReady(
+  db: Database,
+  probe: RouteDeps,
+): { isReady: (runtime: string) => boolean; stop: () => void } {
+  let ready = new Set<string>();
+  let stopped = false;
+  const stoppedMidProbe = new Error("hiring stopped");
+  // readyRuntimes reads the db once the agent list arrives, and a probe that was in flight at stop
+  // may land after the db is closed, so the list is where it is cut off.
+  const routeDeps: RouteDeps = {
+    agents: async () => {
+      const agents = await (probe.agents ?? (() => listAgents(db)))();
+      if (stopped) throw stoppedMidProbe;
+      return agents;
+    },
+  };
+  const refresh = (): void => {
+    readyRuntimes(db, routeDeps).then(
+      (runtimes) => {
+        if (!stopped) ready = runtimes;
+      },
+      (err: unknown) => {
+        if (err !== stoppedMidProbe) console.error("hiring: runtime probe failed", err);
+      },
+    );
+  };
+  refresh();
+  const timer = setInterval(refresh, READY_REFRESH_MS);
+  timer.unref();
+  return {
+    isReady: (runtime) => ready.has(runtime),
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
+}
+
+// Kept apart from hiring/api.ts: it needs runtimes and the router, and the mcp tools that import
+// hiring/api are themselves reachable from runtimes.
+export function wireHiring(
+  db: Database,
+  env: InterviewEnv,
+  probe: RouteDeps = {},
+): { deps: HiringDeps; stop: () => void } {
+  const watch = watchReady(db, probe);
+  const deps: HiringDeps = {
+    // A role has no difficulty of its own; medium keeps the ranking from favouring either extreme.
+    pickEngines: async ({ orgId, spec, max }) =>
+      (
+        await rankEngines(db, { orgId, difficulty: "medium", taskType: spec.taskTypes[0] ?? null })
+      ).slice(0, max),
+    engineReady: (engine) => watch.isReady(engine.runtime),
+    budgetPaused: (memberId) => budgetGate(db, memberId).state === "paused",
+    startInterview: (candidateId, questionIds) => {
+      runInterview(db, env, deps, candidateId, questionIds).catch((err: unknown) =>
+        console.error("hiring: interview crashed", candidateId, err),
+      );
+    },
+    wake: (memberId, reason, detail, causedBy) => wakeFor(db, memberId, reason, detail, causedBy),
+  };
+  return { deps, stop: watch.stop };
+}

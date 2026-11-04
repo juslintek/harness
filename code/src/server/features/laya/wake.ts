@@ -1,13 +1,5 @@
+import { type Specialty, specialties } from "../../../shared/router";
 import { decide, type LayaQuestion } from "./client";
-
-export type Specialty =
-  | "frontend"
-  | "backend"
-  | "database"
-  | "devops"
-  | "security"
-  | "writing"
-  | "mobile";
 
 export interface WakeTriage {
   source: "laya" | "fallback" | "skipped";
@@ -21,15 +13,7 @@ const MAX_TEXT_CHARS = 1500;
 const TIMEOUT_MS = 1500;
 const SPECIALTY_MIN_P = 0.6;
 const CHITCHAT_GATE = 0.8;
-const SPECIALTIES: ReadonlySet<string> = new Set<Specialty>([
-  "frontend",
-  "backend",
-  "database",
-  "devops",
-  "security",
-  "writing",
-  "mobile",
-]);
+const SPECIALTY_SET: ReadonlySet<string> = new Set(specialties);
 
 const QUESTIONS: Record<string, LayaQuestion> = {
   specialty: {
@@ -67,7 +51,7 @@ export async function triageWake(text: string): Promise<WakeTriage> {
   const spec = res.answers.specialty;
   if (chat?.type !== "noul" || spec?.type !== "choice") return FALLBACK;
   const p = spec.probabilities[spec.choice] ?? null;
-  const confident = SPECIALTIES.has(spec.choice) && p !== null && p >= SPECIALTY_MIN_P;
+  const confident = SPECIALTY_SET.has(spec.choice) && p !== null && p >= SPECIALTY_MIN_P;
   const social = chat.noul >= CHITCHAT_GATE;
   return {
     source: "laya",

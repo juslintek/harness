@@ -12,6 +12,7 @@ import {
   listApprovals as list,
   approvalView as toApprovalView,
 } from "./approvals";
+import { applyAutonomy } from "./autonomy";
 import { claudeSettings as buildClaudeSettings, type ClaudeSettings } from "./claude-settings";
 import { codexRules as buildCodexRules } from "./codex-rules";
 import {
@@ -243,7 +244,7 @@ export async function checkAction(
   opts?: CheckOpts,
 ): Promise<GuardOutcome> {
   const command = action.command ?? action.paths.join(" ");
-  const l1 = l1Evaluate(action, run.scope);
+  const l1 = applyAutonomy(db, run.id, l1Evaluate(action, run.scope));
   logLayer(db, run, "L1", l1.verdict, l1.rule, command, l1.reason);
   if (l1.verdict === "deny") {
     return { verdict: "deny", layer: "L1", reason: l1.reason, rule: l1.rule, approvalId: null };

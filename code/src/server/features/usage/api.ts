@@ -5,6 +5,7 @@ import { appendEvent, type NewEvent } from "../logs/api";
 import {
   insertSnapshot,
   latestQuota,
+  onQuotaRecorded,
   type QuotaInput,
   type QuotaView as QuotaViewRow,
 } from "./quota";
@@ -21,6 +22,8 @@ export interface UsageRecord {
   source: "acp" | "agy" | "api" | "tail";
 }
 
+export type { QuotaInput } from "./quota";
+export { onQuotaRecorded };
 export type TailSource = TailSourceRow;
 export type QuotaView = QuotaViewRow;
 
@@ -32,6 +35,13 @@ export interface UsageSummaryRow {
   cacheWriteTokens: number;
   reportedCostUsd: number | null;
   events: number;
+}
+
+const usageListeners = new Set<(runId: string | null) => void>();
+
+export function onUsageRecorded(listener: (runId: string | null) => void): () => void {
+  usageListeners.add(listener);
+  return () => usageListeners.delete(listener);
 }
 
 export function recordUsage(
@@ -65,6 +75,13 @@ export function recordUsage(
     };
     appendEvent(db, event);
   });
+  for (const listener of usageListeners) {
+    try {
+      listener(run.id);
+    } catch (err) {
+      console.error("usage listener failed", err);
+    }
+  }
 }
 
 // usedPercent is 0..100; callers holding a 0..1 fraction multiply first.

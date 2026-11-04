@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { getTask } from "../board/api";
 import { getChannel } from "../chat/api";
 import { directReportsOf, getMember, getOrg, listPositions, type MemberRow } from "../orgs/api";
+import { describeHiring, profileHeader, teamLacksHints } from "./prompt-hiring";
 import type { WakeRow } from "./repo";
 
 const MAX_WAKES = 10;
@@ -25,6 +26,12 @@ function taskLabel(db: Database, taskId: string | null): string {
     : "a task";
 }
 
+const isNudge = (wake: WakeRow): boolean =>
+  (wake.detail as { nudge?: unknown } | null)?.nudge === "delegate";
+
+const taskNumber = (db: Database, taskId: string | null): number | string =>
+  (taskId === null ? null : getTask(db, taskId))?.number ?? "the task";
+
 function channelLabel(db: Database, channelId: string | null): string {
   const channel = channelId === null ? null : getChannel(db, channelId);
   return channel ? `channel ${quote(channel.name)}` : "a channel";
@@ -34,7 +41,9 @@ function describe(db: Database, wake: WakeRow): string {
   const text = quote(excerptOf(wake.detail));
   switch (wake.reason) {
     case "assignment":
-      return `${taskLabel(db, wake.taskId)} was assigned to you.`;
+      return isNudge(wake)
+        ? `You ended without delegating #${taskNumber(db, wake.taskId)}. Delegate it now with task_delegate, or comment why it cannot be split.`
+        : `${taskLabel(db, wake.taskId)} was assigned to you.`;
     case "comment":
       return `New comment on ${taskLabel(db, wake.taskId)}: ${text}`;
     case "mention":
@@ -49,8 +58,23 @@ function describe(db: Database, wake: WakeRow): string {
       return wake.taskId === null
         ? "A person asked you to run now."
         : `A person asked you to run now on ${taskLabel(db, wake.taskId)}.`;
+    case "hire_review":
+    case "hire_decision":
+    case "onboarding":
+    case "approval_resolved":
+      return describeHiring(db, wake);
+    case "policy_review":
+      return `You are asked to review a policy change: ${text}\nCall \`policy_review {proposal, verdict: "approve" | "reject", comment}\` with the proposal id.`;
   }
 }
+
+const MANAGER_WORKFLOW = [
+  "Call `team_roster` to see your reports, their specialties and their open work.",
+  "Split the task into pieces and call `task_delegate` once per piece. If nobody fits the specialty a piece needs, call `hire_request`.",
+  "End your run. You are woken when a subtask moves.",
+  'When a subtask is `in_review`, check out its branch in your scratch checkout (`git -C "$HARNESS_SCRATCH" checkout --detach <branch>`), run the tests there, then call `task_estimate` with kind `reviewer` based on `git diff --stat "$HARNESS_DEFAULT_BRANCH"..<branch>`. Move the subtask to `done`, or back to `in_progress` with a `task_comment` saying what to fix.',
+  "When all subtasks are done, move the parent task to `done`.",
+];
 
 function managerNotice(db: Database, member: MemberRow): string {
   const handles = directReportsOf(db, member.id).flatMap((id) => {
@@ -58,7 +82,8 @@ function managerNotice(db: Database, member: MemberRow): string {
     return report ? [`@${report.handle}`] : [];
   });
   if (handles.length === 0) return "";
-  return `\n\nYou manage ${handles.join(", ")}. You do not write or commit code: your worktree is read-only, and this overrides the instruction below to commit on your branch. For work on a task, create a subtask for one of your reports with \`task_create\` (pass \`parent\` = the task id and \`assignee\` = their handle), tell them in the project channel with an @mention, then wait. When they report back, review their branch with \`git log\` / \`git diff main..<branch>\` and comment. If their subtask is still checked out by them, ask them in the channel to release it. When the work is right, move their subtask to \`done\`, then open its parent with \`task_get\` and move the parent to \`done\` too once all its subtasks are done or cancelled. Do not stop while a task you split is done but its parent is still open.`;
+  const steps = MANAGER_WORKFLOW.map((step, i) => `${i + 1}. ${step}`).join("\n");
+  return `\n\nYou manage ${handles.join(", ")}. You do not write code. Your worktree is read-only on purpose. This overrides the instruction below to commit on your branch. Work like this:\n${steps}`;
 }
 
 export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[]): string {
@@ -71,5 +96,6 @@ export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[]): 
   }.`;
   const shown = wakes.slice(0, MAX_WAKES).map((w) => `- ${describe(db, w)}`);
   if (wakes.length > MAX_WAKES) shown.push(`- and ${wakes.length - MAX_WAKES} more`);
-  return `${who}\n\n${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}${managerNotice(db, member)}\n\n${INSTRUCTION}`;
+  const woken = `${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}${teamLacksHints(db, member, wakes)}`;
+  return `${profileHeader(db, member)}${who}\n\n${woken}${managerNotice(db, member)}\n\n${INSTRUCTION}`;
 }

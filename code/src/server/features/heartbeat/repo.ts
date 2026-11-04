@@ -144,13 +144,34 @@ export function failStartedWakes(db: Database): void {
   );
 }
 
-export function wakesOfRun(db: Database, runId: string): string[] {
+export function startedWakesOf(db: Database, runId: string): WakeRow[] {
   return db
-    .query<{ id: string }, [string]>(
-      "SELECT id FROM wakeups WHERE run_id = ? AND status = 'started'",
+    .query<Raw, [string]>(
+      "SELECT * FROM wakeups WHERE run_id = ? AND status = 'started' ORDER BY created_at, id",
     )
     .all(runId)
-    .map((r) => r.id);
+    .map(wakeRow);
+}
+
+export function hasNudge(db: Database, taskId: string): boolean {
+  return (
+    db
+      .query(
+        "SELECT 1 FROM wakeups WHERE task_id = ? AND json_extract(detail, '$.nudge') = 'delegate' LIMIT 1",
+      )
+      .get(taskId) !== null
+  );
+}
+
+export function hasPolicyWake(db: Database, memberId: string, proposalId: string): boolean {
+  return (
+    db
+      .query(
+        `SELECT 1 FROM wakeups WHERE member_id = ? AND reason = 'policy_review'
+           AND json_extract(detail, '$.proposal') = ? LIMIT 1`,
+      )
+      .get(memberId, proposalId) !== null
+  );
 }
 
 export interface ScheduleDue {

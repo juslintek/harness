@@ -1,14 +1,17 @@
 import type { Database } from "bun:sqlite";
-import type { WakeupView } from "../../../shared/heartbeat";
+import type { WakeReason, WakeupView } from "../../../shared/heartbeat";
 import { getTask, onTaskChange } from "../board/api";
 import { channelAccess, getChannel, onMessage } from "../chat/api";
 import { triageWake } from "../laya/api";
 import { appendEvent } from "../logs/api";
 import { projectAccess } from "../orgs/api";
+import { onProposalChange } from "../policies/api";
 import { isHalted, onRunEvent, type RunDeps } from "../runtimes/api";
-import { type ExecDeps, runPending, settleRun, sweepEnded } from "./executor";
-import { failStartedWakes, listWakeups as list } from "./repo";
-import { dueSchedules, onChat, onTask, runNow } from "./triggers";
+import { runPending, sweepEnded } from "./executor";
+import { onPolicyChange } from "./policy-wakes";
+import { endedStartedRuns, failStartedWakes, listWakeups as list } from "./repo";
+import type { ExecDeps } from "./run-input";
+import { dueSchedules, onChat, onTask, recordWake, runNow } from "./triggers";
 
 export interface HeartbeatDeps extends ExecDeps {
   runDeps: RunDeps;
@@ -19,25 +22,15 @@ export interface HeartbeatDeps extends ExecDeps {
 const DEFAULT_TICK_MS = 60_000;
 const kickers = new Set<() => void>();
 
-export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => void {
-  const triage = deps.triage ?? triageWake;
-  const report = (what: string, err: unknown): void => {
-    console.error(`heartbeat ${what} failed`, err);
-    appendEvent(db, { kind: "error", source: "heartbeat", body: `${what} failed: ${String(err)}` });
-  };
-  failStartedWakes(db);
-  // Serialised so two triggers in a row cannot start two runs for one member.
-  let chain: Promise<void> = Promise.resolve();
-  let deferred = false;
-  const kick = (): void => {
-    chain = chain
-      .then(async () => {
-        deferred = await runPending(db, deps);
-      })
-      .catch((err: unknown) => report("executor", err));
-  };
-  kickers.add(kick);
-  const offs = [
+type Report = (what: string, err: unknown) => void;
+
+function listenForWakes(
+  db: Database,
+  triage: typeof triageWake,
+  kick: () => void,
+  report: Report,
+): Array<() => void> {
+  return [
     onTaskChange((change) => {
       onTask(db, change);
       kick();
@@ -45,19 +38,48 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => void {
     onMessage((event) => {
       onChat(db, event, triage).then(kick, (err: unknown) => report("message trigger", err));
     }),
-    onRunEvent((runId, event) => {
-      if (event.kind !== "run") return;
+    onRunEvent((_runId, event) => {
+      if (event.kind === "run") kick();
+    }),
+    onProposalChange((change) => {
       try {
-        settleRun(db, runId);
+        if (onPolicyChange(db, change)) kick();
       } catch (err) {
-        report("run end", err);
+        report("policy trigger", err);
       }
-      kick();
     }),
   ];
+}
+
+// The returned stop ends the loop at once and resolves when the launch or settle it was in the
+// middle of has finished, so a caller can close the db behind it.
+export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => Promise<void> {
+  const report: Report = (what, err) => {
+    console.error(`heartbeat ${what} failed`, err);
+    appendEvent(db, { kind: "error", source: "heartbeat", body: `${what} failed: ${String(err)}` });
+  };
+  failStartedWakes(db);
+  // Serialised so two triggers in a row cannot start two runs for one member.
+  let chain: Promise<void> = Promise.resolve();
+  let deferred = false;
+  let stopped = false;
+  // Settling runs here, ahead of the next launch, so a member whose run just ended cannot start a
+  // second run while a failover is still starting its replacement.
+  const kick = (): void => {
+    if (stopped) return;
+    chain = chain
+      .then(async () => {
+        if (stopped) return;
+        await sweepEnded(db, deps);
+        deferred = await runPending(db, deps);
+      })
+      .catch((err: unknown) => report("executor", err));
+  };
+  kickers.add(kick);
+  const offs = listenForWakes(db, deps.triage ?? triageWake, kick, report);
   const timer = setInterval(() => {
     try {
-      const swept = sweepEnded(db);
+      const swept = endedStartedRuns(db).length > 0;
       const scheduled = isHalted(db) ? 0 : dueSchedules(db, Date.now());
       if (swept || scheduled > 0 || deferred) kick();
     } catch (err) {
@@ -67,9 +89,11 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => void {
   timer.unref();
   kick();
   return () => {
+    stopped = true;
     clearInterval(timer);
     kickers.delete(kick);
     for (const off of offs) off();
+    return chain;
   };
 }
 
@@ -77,6 +101,19 @@ export function wakeNow(db: Database, memberId: string, causedBy: string, taskId
   const id = runNow(db, memberId, causedBy, taskId);
   for (const kick of kickers) kick();
   return id;
+}
+
+// For wakes that belong to no task or channel, like the hiring ones. Quietly nothing for a human,
+// a paused agent or one over its hourly cap, same as every other trigger.
+export function wakeFor(
+  db: Database,
+  memberId: string,
+  reason: WakeReason,
+  detail: object,
+  causedBy: string,
+): void {
+  recordWake(db, { memberId, reason, detail, causedBy });
+  for (const kick of kickers) kick();
 }
 
 function visibleChannel(db: Database, w: WakeupView, viewerId: string): WakeupView {

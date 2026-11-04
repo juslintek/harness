@@ -7,7 +7,12 @@ export type WakeReason =
   | "laya_mention"
   | "subtask"
   | "schedule"
-  | "run_now";
+  | "run_now"
+  | "hire_review"
+  | "hire_decision"
+  | "onboarding"
+  | "approval_resolved"
+  | "policy_review";
 export type WakeStatus = "pending" | "started" | "done" | "failed" | "skipped";
 
 export interface WakeupView {

@@ -3,6 +3,7 @@ import { basename, posix, resolve } from "node:path";
 import { appendEvent } from "../logs/api";
 import { getMember, getProject, managerPositionsOf, reportsTransitivelyTo } from "../orgs/api";
 import { type ApprovalRow, decideApproval, getApproval, listApprovals } from "./approvals";
+import { type AutonomyView, autonomyOfRun } from "./autonomy";
 import { DENY_EXFILTRATION } from "./l2";
 
 interface ActionContext {
@@ -21,6 +22,8 @@ export interface DecideContext extends ActionContext {
   inSubtree: boolean;
   // False when the run works in a project owned by another org than the manager's.
   ownsProject: boolean;
+  // Anything but full autonomy keeps the decision with a human.
+  autonomy: AutonomyView | null;
 }
 
 // Text that points at the harness itself, its sandbox or its agent config: a manager agent must
@@ -83,6 +86,9 @@ export function managerMayDecide(ctx: DecideContext): string | null {
     return "managers cannot decide their own request";
   if (!ctx.inSubtree) return "the requester does not report to you";
   if (!ctx.ownsProject) return "the run works on another org's project; a human must decide";
+  if (ctx.autonomy && ctx.autonomy.value !== "full") {
+    return `autonomy is ${ctx.autonomy.value} (${ctx.autonomy.layer})`;
+  }
   return actionRefusal(ctx);
 }
 
@@ -154,6 +160,7 @@ function contextFor(
     managerMemberId,
     inSubtree,
     ownsProject,
+    autonomy: autonomyOfRun(db, approval.runId),
   };
 }
 
