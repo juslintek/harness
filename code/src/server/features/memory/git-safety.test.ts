@@ -3,8 +3,10 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
   appendFileSync,
   existsSync,
+  linkSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -135,4 +137,16 @@ test("an objects/info/alternates file is refused", async () => {
   expect(() => startMemory(env.db, { home: env.dir })).toThrow("alternates");
   expect(await writeNoteQuietly()).toContain("alternates");
   expect(await commitCount(vault)).toBe("0\n");
+});
+
+test("a hard-linked .git/logs/HEAD is refused and the outside file stays unchanged", async () => {
+  await ensureVaultRepo(env.dir);
+  const vault = vaultDir(env.dir);
+  const outside = join(env.dir, "outside");
+  writeFileSync(outside, "keep\n");
+  mkdirSync(join(vault, ".git", "logs"), { recursive: true });
+  linkSync(outside, join(vault, ".git", "logs", "HEAD"));
+  expect(() => startMemory(env.db, { home: env.dir })).toThrow("hard-linked");
+  expect(await writeNoteQuietly()).toContain("hard-linked");
+  expect(readFileSync(outside, "utf8")).toBe("keep\n");
 });

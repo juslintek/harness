@@ -1,5 +1,5 @@
 import { lstatSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { gitEnv } from "../../git-env";
 
 // A repo in the vault dir is writable by anyone who can write a note file, and git runs commands
@@ -81,12 +81,22 @@ const REDIRECTS = new Set([
   join(".git", "commondir"),
 ]);
 
+const OBJECTS = join(".git", "objects") + sep;
+
+// A hard link shares the inode with a file outside the vault, so a ref, log or index update
+// would rewrite that file. Objects are immutable and local clones hard-link them legitimately.
+function assertUnshared(vault: string, child: string): void {
+  if (child.startsWith(OBJECTS)) return;
+  if (lstatSync(join(vault, child)).nlink > 1) refuse(`${child} is hard-linked to another file`);
+}
+
 function assertPlainTree(vault: string, rel: string): void {
   for (const e of readdirSync(join(vault, rel), { withFileTypes: true })) {
     const child = join(rel, e.name);
     if (REDIRECTS.has(child)) refuse(`${child} redirects git storage`);
     if (e.isDirectory()) assertPlainTree(vault, child);
     else if (!e.isFile()) refuse(`${child} is not a regular file or directory`);
+    else assertUnshared(vault, child);
   }
 }
 
