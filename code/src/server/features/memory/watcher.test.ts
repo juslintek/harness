@@ -1,7 +1,7 @@
 import "../../test-support/no-git-env";
 import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ensureVaultRepo } from "./git-log";
 import { listWrites } from "./index-log";
@@ -80,4 +80,18 @@ test("writes inside .git and tmp files are ignored", async () => {
   put("orgs/A/org/probe.md", noteText("# Probe"));
   expect(await until(() => getIndexedByDisk(env.db, "orgs/A/org/probe.md") !== null)).toBe(true);
   expect(env.db.query("SELECT count(*) AS n FROM notes").get()).toEqual({ n: 1 });
+});
+
+test("renaming a directory of notes drops the old rows and indexes the new paths", async () => {
+  const dir = (name: string) => `orgs/A/org/${name}`;
+  put(`${dir("old")}/a.md`, noteText("# A"));
+  put(`${dir("old")}/b.md`, noteText("# B"));
+  expect(await until(() => getIndexedByDisk(env.db, `${dir("old")}/b.md`) !== null)).toBe(true);
+  renameSync(join(vaultDir(env.dir), dir("old")), join(vaultDir(env.dir), dir("new")));
+  const moved = () =>
+    getIndexedByDisk(env.db, `${dir("new")}/a.md`) !== null &&
+    getIndexedByDisk(env.db, `${dir("new")}/b.md`) !== null &&
+    getIndexedByDisk(env.db, `${dir("old")}/a.md`) === null &&
+    getIndexedByDisk(env.db, `${dir("old")}/b.md`) === null;
+  expect(await until(moved, 3000)).toBe(true);
 });
