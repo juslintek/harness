@@ -53,7 +53,7 @@ test("accepting writes a lesson note found by search for the same org, and annou
   expect(hit?.path).toContain(
     `/projects/${w.projectId}/lessons/run-bun-run-check-before-pushing.md`,
   );
-  expect(hit?.tags).toEqual(["lesson", `task-${1}`]);
+  expect(hit?.tags).toEqual(["lesson", `task-${1}`, `lesson-${lessons[0]?.id}`]);
   expect(existsSync(join(w.home, "memory", hit?.path as string))).toBe(true);
   expect(dev.id).not.toBe(lead.id);
 });

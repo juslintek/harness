@@ -1,25 +1,22 @@
 import type { Database } from "bun:sqlite";
-import { getTask } from "../board/api";
-import { parseNote } from "./frontmatter";
-import { type IndexedNote, type NoteRow, toIndexed } from "./index-repo";
+import type { LessonView } from "../../../shared/memory";
+import { type NoteRow, toIndexed } from "./index-repo";
 import { getLesson } from "./lessons";
-import { writeNote } from "./lessons-decide";
-import { readNoteFile } from "./vault";
+import { dirOf, writeNote } from "./lessons-decide";
 
-// The note a half-finished accept already wrote: same org, lesson and task tags, same body.
-function existingNote(db: Database, home: string, orgId: string, number: number, body: string) {
-  const rows = db
-    .query<NoteRow, [string, string]>(
+// The note a half-finished accept already wrote. The lesson id tag is unique to this lesson, and
+// the directory pins the scope and project the accept path would have used, so a similar lesson
+// note of the same task is never taken for it.
+function existingNote(db: Database, lesson: LessonView) {
+  const dir = `${dirOf(lesson)}/`;
+  const row = db
+    .query<NoteRow, [string, string, string, string]>(
       `SELECT * FROM notes WHERE org_id = ? AND type = 'lesson'
-       AND EXISTS (SELECT 1 FROM json_each(notes.tags) WHERE value = 'lesson')
-       AND EXISTS (SELECT 1 FROM json_each(notes.tags) WHERE value = ?)`,
+       AND EXISTS (SELECT 1 FROM json_each(notes.tags) WHERE value = ?)
+       AND substr(disk, 1, length(?)) = ?`,
     )
-    .all(orgId, `task-${number}`);
-  return rows
-    .map(toIndexed)
-    .find(
-      (n: IndexedNote) => parseNote(readNoteFile(home, n.disk) ?? "").body.trim() === body.trim(),
-    );
+    .get(lesson.orgId, `lesson-${lesson.id}`, dir, dir);
+  return row === null ? undefined : toIndexed(row);
 }
 
 // A crash between the accept claim and the note write leaves a lesson accepted with no note. The
@@ -34,8 +31,7 @@ export async function finishAcceptedLessons(db: Database, home: string): Promise
     const lesson = getLesson(db, id);
     if (lesson === null) continue;
     try {
-      const number = getTask(db, lesson.taskId)?.number ?? 0;
-      const found = existingNote(db, home, lesson.orgId, number, lesson.body);
+      const found = existingNote(db, lesson);
       const noteId = found?.id ?? (await writeNote(db, home, lesson, lesson.body));
       db.query("UPDATE lessons SET note_id = ? WHERE id = ? AND note_id IS NULL").run(noteId, id);
       console.error(`memory: ${found ? "linked" : "wrote"} the note of accepted lesson ${id}`);

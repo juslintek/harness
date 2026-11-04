@@ -46,3 +46,24 @@ test("a note written before the crash is linked, not written twice", async () =>
   expect(noteCount()).toBe(1);
   expect(noteIdOf(id)).not.toBeNull();
 });
+
+test("another lesson note of the same task is not taken for the unfinished one", async () => {
+  w = world();
+  const dev = w.agent("dev");
+  const lead = w.agent("lead");
+  const task = w.doneTask(dev);
+  const [a, b] = await proposeLessons(w.db, { memberId: dev.id, runId: null, taskId: task.id }, [
+    GOOD,
+    "Pin the bun version in CI because a minor bump changed the test runner output.",
+  ]);
+  const by = { memberId: lead.id, userId: null };
+  await decideLesson(w.db, w.home, a?.id as string, by, "accept", "ok");
+  // Same task and same body, so only the lesson id tag can tell the two notes apart.
+  w.db.query("UPDATE lessons SET body = ? WHERE id = ?").run(GOOD, b?.id as string);
+  w.db
+    .query("UPDATE lessons SET status = 'accepted', reviewer_id = ?, decided_at = 1 WHERE id = ?")
+    .run(lead.id, b?.id as string);
+  await startMemory(w.db, { home: w.home })();
+  expect(noteCount()).toBe(2);
+  expect(noteIdOf(b?.id as string)).not.toBe(noteIdOf(a?.id as string));
+});

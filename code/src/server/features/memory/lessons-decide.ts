@@ -35,7 +35,7 @@ function reviewerOf(db: Database, lesson: LessonView, by: Decider): string {
   return m.id;
 }
 
-function dirOf(lesson: LessonView): string {
+export function dirOf(lesson: LessonView): string {
   const base = `orgs/${lesson.orgId}`;
   if (lesson.scope === "project" && lesson.projectId !== null) {
     return `${base}/projects/${lesson.projectId}/lessons`;
@@ -93,7 +93,7 @@ export async function writeNote(
       const res = await createNote(db, home, ctx, loc, body, {
         type: "lesson",
         confidence: lesson.confidence,
-        tags: ["lesson", `task-${number}`],
+        tags: ["lesson", `task-${number}`, `lesson-${lesson.id}`],
       });
       return res.note.id;
     } catch (e) {
