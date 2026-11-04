@@ -74,7 +74,7 @@ function release(db: Database, id: string, body: string): void {
   ).run(body, id);
 }
 
-async function writeNote(
+export async function writeNote(
   db: Database,
   home: string,
   lesson: LessonView & { confidence: number },

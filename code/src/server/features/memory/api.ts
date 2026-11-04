@@ -12,6 +12,7 @@ import {
   reviewerFor,
 } from "./lessons";
 import { decideLesson } from "./lessons-decide";
+import { finishAcceptedLessons } from "./lessons-recover";
 import type { Located, Viewer } from "./paths";
 import { reconcile } from "./reconcile";
 import { startRetro } from "./retro";
@@ -65,9 +66,12 @@ export function startMemory(db: Database, deps: { home: string }): () => Promise
     console.error(`memory: git init failed: ${e.message}`);
   });
   reconcile(db, deps.home);
+  // A crash between claiming a lesson and writing its note leaves it accepted without a note.
+  const finishing = finishAcceptedLessons(db, deps.home);
   const stopWatch = watchVault(db, deps.home);
   return async () => {
     stopWatch();
+    await finishing;
     await drainCommits();
   };
 }
