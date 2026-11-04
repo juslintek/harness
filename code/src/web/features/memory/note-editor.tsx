@@ -5,28 +5,36 @@ import { ApiError, api } from "../../api";
 import { ErrorLine } from "../auth/error-line";
 import { me } from "../auth/me";
 import { useAction } from "../auth/use-action";
-import { keptAfterReload, memoryBase, writableScopes, writeResultSchema } from "./memory-data";
+import {
+  keptAfterReload,
+  mayDiscard,
+  memoryBase,
+  writableScopes,
+  writeResultSchema,
+} from "./memory-data";
 
-const closeOnEscape = (onClose: () => void) => (e: KeyboardEvent) => {
+const closeOnEscape = (onClose: () => void, dirty: boolean) => (e: KeyboardEvent) => {
   if (e.key === "Escape") {
     e.preventDefault();
-    onClose();
+    if (mayDiscard(dirty, (q) => window.confirm(q))) onClose();
   }
 };
 
 function EditorForm({
   onClose,
   onSubmit,
+  dirty,
   children,
 }: {
   onClose: () => void;
   onSubmit: () => void;
+  dirty: boolean;
   children: preact.ComponentChildren;
 }): preact.JSX.Element {
   return (
     <form
       class="note-editor"
-      onKeyDown={closeOnEscape(onClose)}
+      onKeyDown={closeOnEscape(onClose, dirty)}
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit();
@@ -89,7 +97,7 @@ export function EditNote({
       .catch((err: unknown) => console.error(err));
   };
   return (
-    <EditorForm onClose={onClose} onSubmit={save}>
+    <EditorForm onClose={onClose} onSubmit={save} dirty={draft !== base.body}>
       {conflict && (
         <p class="error" role="alert">
           Changed elsewhere. Your draft is kept.{" "}
@@ -163,7 +171,7 @@ export function NewNote({
       .catch((err: unknown) => console.error(err));
   };
   return (
-    <EditorForm onClose={onClose} onSubmit={create}>
+    <EditorForm onClose={onClose} onSubmit={create} dirty={body !== "" || rel !== ""}>
       <h3>New note</h3>
       <div class="row">
         <label>

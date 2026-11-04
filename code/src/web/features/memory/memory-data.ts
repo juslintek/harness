@@ -56,6 +56,10 @@ export const keptAfterReload = (
   serverBody: string,
 ): string | null => (draft === serverBody ? kept : draft);
 
+// Escape closes the editor, so an edited draft needs a yes first; an untouched one just closes.
+export const mayDiscard = (dirty: boolean, ask: (q: string) => boolean): boolean =>
+  !dirty || ask("Discard your unsaved changes?");
+
 export const memoryBase = (slug: string): string => `/api/orgs/${slug}/memory`;
 
 export const tabOf = (part: string | undefined): Tab => TABS.find((t) => t === part) ?? "notes";

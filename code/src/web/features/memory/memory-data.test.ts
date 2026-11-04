@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { keptAfterReload } from "./memory-data";
+import { keptAfterReload, mayDiscard } from "./memory-data";
 
 test("a second reload without edits keeps the first draft", () => {
   const first = keptAfterReload(null, "my draft", "server v1");
@@ -9,4 +9,12 @@ test("a second reload without edits keeps the first draft", () => {
 
 test("a draft edited after a reload replaces the kept one", () => {
   expect(keptAfterReload("old draft", "newer draft", "server v2")).toBe("newer draft");
+});
+
+test("escape asks before dropping an edited draft", () => {
+  const asked: string[] = [];
+  expect(mayDiscard(false, () => false)).toBe(true);
+  expect(mayDiscard(true, (q) => (asked.push(q), false))).toBe(false);
+  expect(mayDiscard(true, () => true)).toBe(true);
+  expect(asked).toHaveLength(1);
 });
