@@ -89,3 +89,15 @@ test("a commit never stores a secret, whether the scrub throws or is skipped", a
   const log = Bun.spawnSync(["git", "log", "-p"], { cwd: vaultDir(env.dir) }).stdout.toString();
   expect(log).not.toContain(key);
 });
+
+test("a note pasted with another note's id keeps its own id and gets its frontmatter fixed", () => {
+  put("orgs/A/org/one.md", noteText("one", { id: "id-one" }));
+  put("orgs/A/org/two.md", noteText("two", { id: "id-two" }));
+  syncOutside(env.db, env.dir, "orgs/A/org/one.md");
+  syncOutside(env.db, env.dir, "orgs/A/org/two.md");
+  put("orgs/A/org/two.md", noteText("two edited", { id: "id-one" }));
+  expect(syncOutside(env.db, env.dir, "orgs/A/org/two.md")?.id).toBe("id-two");
+  expect(getIndexedByDisk(env.db, "orgs/A/org/one.md")?.id).toBe("id-one");
+  const text = readNoteFile(env.dir, "orgs/A/org/two.md") as string;
+  expect(parseNote(text).meta.id).toBe("id-two");
+});

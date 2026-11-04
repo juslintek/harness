@@ -62,11 +62,12 @@ function epoch(iso: string | undefined, fallback: number): number {
   return Number.isNaN(t) ? fallback : t;
 }
 
-// Two files claiming one id: the row already indexed keeps it and the newcomer gets a fresh one,
-// so audit rows and links written against the id stay with the note they were made for.
-function pickId(db: Database, disk: string, wanted: string): string {
+// Two files claiming one id: the row already indexed keeps it. The other file keeps the id it
+// already had in the index, or gets a fresh one when it is new, so audit rows and links written
+// against an id stay with the note they were made for.
+function pickId(db: Database, disk: string, wanted: string, own: string | undefined): string {
   const taken = db.query("SELECT 1 FROM notes WHERE id = ? AND disk != ?").get(wanted, disk);
-  return taken === null ? wanted : Bun.randomUUIDv7();
+  return taken === null ? wanted : (own ?? Bun.randomUUIDv7());
 }
 
 function replaceFts(db: Database, disk: string, title: string, body: string, tags: string[]): void {
@@ -94,7 +95,7 @@ export function upsertIndexed(db: Database, loc: Located, text: string): Indexed
   db.transaction(() => {
     const prior = getIndexedByDisk(db, loc.disk);
     if (prior) db.run("DELETE FROM note_links WHERE src_id = ?", [prior.id]);
-    const id = pickId(db, loc.disk, meta.id ?? prior?.id ?? Bun.randomUUIDv7());
+    const id = pickId(db, loc.disk, meta.id ?? prior?.id ?? Bun.randomUUIDv7(), prior?.id);
     db.run(
       `INSERT INTO notes (id, disk, scope, org_id, project_id, member_id, type, title, tags,
          source_agent, confidence, created, updated, hash, slug)
