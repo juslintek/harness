@@ -1,4 +1,5 @@
 // Reads and the eight assertions of the Phase 4 gate.
+import { Database } from "bun:sqlite";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getTask } from "../src/server/features/board/api";
@@ -167,6 +168,32 @@ function leakedBefore(db: Db, s: Scene, taskB: string, cutoff: number): string[]
   return out;
 }
 
+// Codex drops a tool whose schema it cannot parse and only says so in its own log database.
+function skippedMcpTools(home: string): string[] {
+  const out: string[] = [];
+  const runs = join(home, "runs");
+  if (!existsSync(runs)) return out;
+  for (const run of readdirSync(runs)) {
+    const dir = join(runs, run, "codex-home");
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir).filter((n) => /^logs_\d+\.sqlite$/.test(n))) {
+      const db = new Database(join(dir, f), { readonly: true });
+      try {
+        const rows = db
+          .query<{ feedback_log_body: string }, []>(
+            "SELECT feedback_log_body FROM logs WHERE feedback_log_body LIKE '%Skipping MCP tool%'",
+          )
+          .all();
+        for (const r of rows)
+          out.push(/Skipping MCP tool '([^']+)'/.exec(r.feedback_log_body)?.[1] ?? "?");
+      } finally {
+        db.close();
+      }
+    }
+  }
+  return [...new Set(out)];
+}
+
 export function assertOutcome(db: Db, s: Scene, home: string, taskA: string, taskB: string): void {
   const lesson = lessons(db, s.orgId).find(
     (l) => l.author_id === s.dev.id && l.status === "accepted",
@@ -203,4 +230,9 @@ export function assertOutcome(db: Db, s: Scene, home: string, taskA: string, tas
     return redact(text) !== text;
   });
   check(dirty.length === 0, `7 no secrets in vault files (${dirty.join(", ") || "clean"})`);
+  const skipped = skippedMcpTools(home);
+  check(
+    skipped.length === 0,
+    `8 codex kept every MCP tool (skipped: ${skipped.join(", ") || "none"})`,
+  );
 }

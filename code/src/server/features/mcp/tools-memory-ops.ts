@@ -34,7 +34,7 @@ export interface MemoryArgs {
     | "search"
     | "backlinks";
   path?: string | undefined;
-  view_range?: [number, number] | undefined;
+  view_range?: number[] | undefined;
   file_text?: string | undefined;
   old_str?: string | undefined;
   new_str?: string | undefined;
@@ -84,9 +84,9 @@ function withNotice(text: string, redacted: boolean): string {
   return redacted ? `${text}\n${REDACTED}` : text;
 }
 
-function numbered(body: string, range: [number, number] | undefined): string {
+function numbered(body: string, range: number[] | undefined): string {
   const lines = body.split("\n");
-  const [from, to] = range ?? [1, lines.length];
+  const [from = 1, to = lines.length] = range ?? [];
   const end = to === -1 ? lines.length : to;
   if (from < 1 || end < from || from > lines.length) return fail("invalid view_range");
   return lines

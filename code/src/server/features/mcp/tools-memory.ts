@@ -17,7 +17,7 @@ const memoryShape = {
     "backlinks",
   ]),
   path: z.string().optional(),
-  view_range: z.tuple([z.number().int(), z.number().int()]).optional(),
+  view_range: z.array(z.number().int()).length(2).optional(),
   file_text: z.string().optional(),
   old_str: z.string().optional(),
   new_str: z.string().optional(),
