@@ -49,6 +49,8 @@ pub const Options = struct {
     throttle: ?policy.Throttle = null,
     /// HARNESS_TRUST_PROXY: the auth rate limit keys on X-Forwarded-For instead of the socket.
     trust_proxy: bool = false,
+    /// Installed by `harness serve`; null leaves the agents routes at 501.
+    agents: ?*@import("../agents/routes.zig").Ctx = null,
     /// The realtime hub behind `/ws`. It must outlive the listener; null leaves `/ws` at 501.
     hub: ?*hub_mod.Hub = null,
     threads: ?u16 = null,
@@ -341,7 +343,7 @@ fn installSignalHandlers() void {
 /// SIGINT or SIGTERM once the listener has stopped and its threads are joined.
 pub fn run(gpa: std.mem.Allocator, io: std.Io, app: *App, health: routes.Health, options: Options, out: *std.Io.Writer) !void {
     stop_requested.store(false, .release);
-    var handler = Server.init(.{ .app = app, .health = health, .hub = options.hub }, io, options);
+    var handler = Server.init(.{ .app = app, .health = health, .hub = options.hub, .agents = options.agents }, io, options);
     var running = try start(gpa, io, &handler, options);
     // Whatever fails after the listener is up, the accept thread must be joined before the server
     // is freed, so stop and deinit live in one defer.
