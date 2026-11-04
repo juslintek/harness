@@ -12,12 +12,16 @@ const IDENT = [
   "user.email=harness@localhost",
   "-c",
   "commit.gpgsign=false",
+  // The vault is the harness's own repo; the user's global hooks must not run on its commits.
+  "-c",
+  "core.hooksPath=/dev/null",
 ];
 
 async function git(cwd: string, args: string[]): Promise<{ code: number; out: string }> {
   const proc = Bun.spawn(["git", ...IDENT, ...args], {
     cwd,
-    env: gitEnv(),
+    // "nothing to commit" is matched below, so the message must not be translated.
+    env: { ...gitEnv(), LC_ALL: "C" },
     stdout: "pipe",
     stderr: "pipe",
     timeout: GIT_TIMEOUT_MS,

@@ -1,5 +1,8 @@
 import "../../test-support/no-git-env";
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { gitOutput } from "../../git-env";
 import { drainCommits, ensureVaultRepo, queueCommit } from "./git-log";
 import { createNote, updateNote } from "./store";
@@ -46,4 +49,27 @@ test("tmp files are never committed", async () => {
   queueCommit(env.dir, "files");
   await drainCommits();
   expect(await gitOutput(vaultDir(env.dir), ["ls-files"])).not.toContain(".tmp");
+});
+
+test("a global core.hooksPath hook does not run on vault commits", async () => {
+  const hooks = mkdtempSync(join(tmpdir(), "harness-hooks-"));
+  const marker = join(hooks, "ran");
+  const hook = join(hooks, "pre-commit");
+  writeFileSync(hook, `#!/bin/sh\ntouch ${marker}\n`);
+  chmodSync(hook, 0o755);
+  const cfg = join(hooks, "gitconfig");
+  writeFileSync(cfg, `[core]\n\thooksPath = ${hooks}\n`);
+  const before = process.env.GIT_CONFIG_GLOBAL;
+  process.env.GIT_CONFIG_GLOBAL = cfg;
+  try {
+    const c = ctx(aliceA);
+    await createNote(env.db, env.dir, c, orgNote, "one");
+    await drainCommits();
+    expect(await log("%s")).toHaveLength(1);
+    expect(existsSync(marker)).toBe(false);
+  } finally {
+    if (before === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+    else process.env.GIT_CONFIG_GLOBAL = before;
+    rmSync(hooks, { recursive: true, force: true });
+  }
 });
