@@ -50,3 +50,20 @@ test("a task moved to done enqueues a retro wake, and a proposal a lesson_review
   await until(() => wakes(k.db, lead.id).some((w) => w.reason === "lesson_review"));
   expect(wakes(k.db, dev.id).filter((w) => w.reason === "retro").length).toBe(1);
 });
+
+test("a retro wake and an assignment wake for one member and project run apart", async () => {
+  const k = setup();
+  const dev = k.agent("dev");
+  const work = k.task("build it");
+  const shipped = k.task("shipped");
+  k.db.query("UPDATE tasks SET assignee_id = ? WHERE id = ?").run(dev.id, work.id);
+  const wake = (reason: "assignment" | "retro", taskId: string): void =>
+    insertWake(k.db, { memberId: dev.id, reason, taskId, detail: { taskId }, causedBy: null });
+  wake("assignment", work.id);
+  wake("retro", shipped.id);
+  stops.push(k.start());
+  await until(() => wakes(k.db, dev.id).every((w) => w.status === "done"));
+  const runs = new Set(wakes(k.db, dev.id).map((w) => w.run_id));
+  expect(runs.size).toBe(2);
+  expect(k.seen.length).toBe(2);
+});

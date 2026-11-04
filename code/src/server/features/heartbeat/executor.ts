@@ -18,9 +18,15 @@ import { type ExecDeps, fail, runMember, wakeProject } from "./run-input";
 import { settleRun } from "./settle";
 import { logBudgetPaused, mayWork, overCap, staleAssignment } from "./triggers";
 
+// Retro and lesson-review wakes carry their own prompt and tool set, so they never share a run
+// with other reasons: a batch is one memory reason or only work wakes.
+function lane(w: WakeRow): string {
+  return w.reason === "retro" || w.reason === "lesson_review" ? w.reason : "work";
+}
+
 // A wake stored before a grant was revoked or lowered must not start a run in that project.
 // One run works in one project's repo and is judged by that project's org, so it takes only the
-// wakes of the oldest wake's project; the others wait for the next batch.
+// wakes of the oldest wake's project and lane; the others wait for the next batch.
 function nextBatch(db: Database, memberId: string): { wakes: WakeRow[]; projectId: string | null } {
   const wakes = pendingWakes(db, memberId);
   if (getMember(db, memberId)?.role === "viewer") {
@@ -50,7 +56,9 @@ function nextBatch(db: Database, memberId: string): { wakes: WakeRow[]; projectI
   const reachable = kept.filter((w) => !stale.includes(w));
   const first = reachable[0];
   const projectId = first ? wakeProject(db, first) : null;
-  return { wakes: reachable.filter((w) => wakeProject(db, w) === projectId), projectId };
+  const same = (w: WakeRow): boolean =>
+    wakeProject(db, w) === projectId && first !== undefined && lane(w) === lane(first);
+  return { wakes: reachable.filter(same), projectId };
 }
 
 interface Batch {
