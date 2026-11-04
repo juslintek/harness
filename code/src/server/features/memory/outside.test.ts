@@ -1,6 +1,6 @@
 import "../../test-support/no-git-env";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseNote } from "./frontmatter";
 import { drainCommits, ensureVaultRepo, queueCommit } from "./git-log";
@@ -116,4 +116,21 @@ test("an indexed note keeps its id when the file claims another unused id, and t
 test("a new file keeps its own valid unused id", () => {
   put("orgs/A/org/fresh.md", noteText("fresh", { id: "my-own-id" }));
   expect(syncOutside(env.db, env.dir, "orgs/A/org/fresh.md")?.id).toBe("my-own-id");
+});
+
+test("a symlink replacing an indexed note drops its row and logs an outside delete", () => {
+  const disk = "orgs/A/org/swap.md";
+  put(disk, noteText("swap me"));
+  const note = syncOutside(env.db, env.dir, disk);
+  const target = join(env.dir, "elsewhere.md");
+  writeFileSync(target, "# not a vault file");
+  const file = join(vaultDir(env.dir), disk);
+  rmSync(file);
+  symlinkSync(target, file);
+  expect(syncOutside(env.db, env.dir, disk)).toBeNull();
+  expect(getIndexedByDisk(env.db, disk)).toBeNull();
+  const fts = env.db.query("SELECT count(*) AS n FROM notes_fts WHERE notes_fts MATCH 'swap'");
+  expect(fts.get()).toEqual({ n: 0 });
+  const del = outsideRows().find((w) => w.noteId === note?.id && w.afterHash === null);
+  expect(del).toBeDefined();
 });

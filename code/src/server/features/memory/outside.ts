@@ -1,5 +1,4 @@
 import type { Database } from "bun:sqlite";
-import { join } from "node:path";
 import { redact } from "../logs/api";
 import { hashText, parseNote, serializeNote } from "./frontmatter";
 import { queueCommit, setOutsideSyncer } from "./git-log";
@@ -7,7 +6,7 @@ import { logWrite } from "./index-log";
 import { getIndexedByDisk, type IndexedNote, removeIndexed, upsertIndexed } from "./index-repo";
 import { diskToLocated, type Located } from "./paths";
 import { emitOutside } from "./store-kit";
-import { FileChanged, isMissingPath, readNoteFile, vaultDir, writeNoteFileAtomic } from "./vault";
+import { FileChanged, readNoteFile, writeNoteFileAtomic } from "./vault";
 
 // What the file held before an outside edit, when one of our own writes produced it.
 function priorText(db: Database, disk: string, hash: string | undefined): string | null {
@@ -87,15 +86,15 @@ export function syncOutside(db: Database, home: string, disk: string): IndexedNo
   if (loc.orgId !== null && db.query("SELECT 1 FROM orgs WHERE id = ?").get(loc.orgId) === null)
     return null;
   const prior = getIndexedByDisk(db, disk);
-  if (isMissingPath(join(vaultDir(home), disk))) {
+  // A symlink, directory, FIFO or unreadable file in place of an indexed note is as gone as a
+  // missing one: leaving its row would keep serving text the vault no longer holds.
+  const read = readNoteFile(home, disk);
+  if (read === null) {
     if (prior === null) return null;
     removeIndexed(db, disk);
     logOutside(db, home, loc, prior.id, priorText(db, disk, prior.hash), null, prior.hash);
     return null;
   }
-  // Symlinks, directories and unreadable files come back null and are never indexed.
-  const read = readNoteFile(home, disk);
-  if (read === null) return null;
   if (prior?.hash === hashText(read)) return prior;
   const text = scrubbed(home, disk, read);
   if (text === null) return prior;
