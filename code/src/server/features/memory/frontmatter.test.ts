@@ -47,3 +47,19 @@ test("invalid known-key values survive a rewrite through extra", () => {
   const second = parseNote(serializeNote(first.meta, first.body));
   expect(second).toEqual(first);
 });
+
+test("extra keys named like Object.prototype members are kept", () => {
+  const text = '---\nconstructor: foo\ntoString: x\nvalueOf: 1\n"__proto__": bar\n---\n\nbody\n';
+  const first = parseNote(text);
+  expect(Object.keys(first.meta.extra).sort()).toEqual([
+    "__proto__",
+    "constructor",
+    "toString",
+    "valueOf",
+  ]);
+  expect(Object.getPrototypeOf(first.meta.extra)).toBe(Object.prototype);
+  const second = parseNote(serializeNote(first.meta, first.body));
+  expect(Object.keys(second.meta.extra).sort()).toEqual(Object.keys(first.meta.extra).sort());
+  expect(Object.getOwnPropertyDescriptor(second.meta.extra, "constructor")?.value).toBe("foo");
+  expect(Object.getOwnPropertyDescriptor(second.meta.extra, "__proto__")?.value).toBe("bar");
+});

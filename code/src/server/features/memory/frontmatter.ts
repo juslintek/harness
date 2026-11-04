@@ -18,11 +18,21 @@ const TYPES: readonly string[] = ["lesson", "fact", "decision", "howto", "refere
 const SCOPES: readonly string[] = ["global", "org", "project", "agent"];
 const FM = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
+// Plain assignment of "__proto__" would change the prototype instead of adding a key.
+function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 function fromRecord(raw: Record<string, unknown>): NoteMeta {
   const meta: NoteMeta = { tags: [], extra: {} };
   // Values that fail validation go to extra, so a rewrite after an outside edit keeps them.
   for (const [k, v] of Object.entries(raw)) {
-    if (!acceptKnown(meta, k, v)) meta.extra[k] = v;
+    if (!acceptKnown(meta, k, v)) setOwn(meta.extra, k, v);
   }
   return meta;
 }
@@ -77,7 +87,7 @@ const SETTERS: Record<string, Setter> = {
 };
 
 function acceptKnown(meta: NoteMeta, key: string, v: unknown): boolean {
-  return SETTERS[key]?.(meta, v) ?? false;
+  return Object.hasOwn(SETTERS, key) && (SETTERS[key]?.(meta, v) ?? false);
 }
 
 export function parseNote(text: string): { meta: NoteMeta; body: string } {
@@ -107,7 +117,7 @@ export function serializeNote(meta: NoteMeta, body: string): string {
   if (meta.created !== undefined) out["created"] = meta.created;
   if (meta.updated !== undefined) out["updated"] = meta.updated;
   if (meta.confidence !== undefined) out["confidence"] = meta.confidence;
-  Object.assign(out, meta.extra);
+  for (const [k, v] of Object.entries(meta.extra)) setOwn(out, k, v);
   const yaml = Bun.YAML.stringify(out, null, 2);
   return `---\n${yaml}\n---\n\n${body.replace(/\n+$/, "")}\n`;
 }
