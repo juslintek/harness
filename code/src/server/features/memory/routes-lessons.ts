@@ -36,12 +36,13 @@ export function writeAndLessonRoutes(db: Database, home: string, app: Hono<AuthE
     const rows = listWrites(db, m.orgId, {
       limit: q.limit ?? 50,
       agentsOnly: q.agentsOnly === "1",
+      includeGlobal: m.viewer.canWriteGlobal,
     });
     const out = [];
     for (const w of rows) {
       const loc = diskToLocated(w.path);
       if (loc === null || !canRead(m.viewer, loc)) continue;
-      const full = getWrite(db, m.orgId, w.id);
+      const full = getWrite(db, m.orgId, w.id, m.viewer.canWriteGlobal);
       out.push({ ...w, before: full?.beforeText ?? null, after: full?.afterText ?? null });
     }
     return c.json(out);

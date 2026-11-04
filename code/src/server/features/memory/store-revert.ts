@@ -23,7 +23,7 @@ export function revertWrite(
   ctx: WriteCtx,
   writeId: string,
 ): WriteResult {
-  const w = getWrite(db, ctx.viewer.orgId, writeId);
+  const w = getWrite(db, ctx.viewer.orgId, writeId, ctx.viewer.canWriteGlobal);
   const loc = w === null ? null : diskToLocated(w.disk);
   if (w === null || loc === null || !canRead(ctx.viewer, loc)) {
     throw new MemoryError("not_found", "write not found");

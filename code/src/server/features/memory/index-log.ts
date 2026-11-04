@@ -57,18 +57,22 @@ interface WriteRaw {
   at: number;
 }
 
+// An outside edit of a global note is logged with no org. Only a viewer who may write global
+// notes (an instance admin) is allowed to see and revert those rows.
+const ORG_OR_GLOBAL = "(org_id = ?1 OR (?2 = 1 AND org_id IS NULL))";
+
 export function listWrites(
   db: Database,
   orgId: string,
-  opts: { limit: number; agentsOnly?: boolean },
+  opts: { limit: number; agentsOnly?: boolean; includeGlobal?: boolean },
 ): NoteWriteView[] {
   // An agent write always carries the run it happened in.
   const agents = opts.agentsOnly ? " AND run_id IS NOT NULL" : "";
   return db
-    .query<WriteRaw, [string, number]>(
-      `SELECT * FROM note_writes WHERE org_id = ?${agents} ORDER BY at DESC, id DESC LIMIT ?`,
+    .query<WriteRaw, [string, number, number]>(
+      `SELECT * FROM note_writes WHERE ${ORG_OR_GLOBAL}${agents} ORDER BY at DESC, id DESC LIMIT ?`,
     )
-    .all(orgId, opts.limit)
+    .all(orgId, opts.includeGlobal ? 1 : 0, opts.limit)
     .map((r) => ({
       id: r.id,
       noteId: r.note_id,
@@ -86,10 +90,13 @@ export function getWrite(
   db: Database,
   orgId: string,
   id: string,
+  includeGlobal = false,
 ): (NoteWriteRow & { id: string; at: number }) | null {
   const r = db
-    .query<WriteRaw, [string, string]>("SELECT * FROM note_writes WHERE id = ? AND org_id = ?")
-    .get(id, orgId);
+    .query<WriteRaw, [string, number, string]>(
+      `SELECT * FROM note_writes WHERE id = ?3 AND ${ORG_OR_GLOBAL}`,
+    )
+    .get(orgId, includeGlobal ? 1 : 0, id);
   if (r === null) return null;
   return {
     id: r.id,
