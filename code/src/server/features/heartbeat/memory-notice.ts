@@ -9,7 +9,7 @@ import {
   searchNotes,
   virtualPathOf,
 } from "../memory/api";
-import { getProject, type MemberRow } from "../orgs/api";
+import type { MemberRow } from "../orgs/api";
 import type { WakeRow } from "./repo";
 import type { ExecDeps } from "./run-input";
 
@@ -120,7 +120,6 @@ export function memoryRun(
 ): { mcp: boolean; index: string | undefined } {
   const mcp = (deps.runDeps.resolveSpec ?? getSpec)(runtime)?.mcp ?? true;
   if (mcp) return { mcp, index: undefined };
-  const slug = projectId === null ? null : (getProject(db, projectId)?.key ?? null);
-  const text = buildMemoryIndex(db, agentViewer(db, member.id), slug, wakeTopic(db, wakes));
+  const text = buildMemoryIndex(db, agentViewer(db, member.id), projectId, wakeTopic(db, wakes));
   return { mcp, index: text === "" ? undefined : text };
 }

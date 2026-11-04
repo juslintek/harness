@@ -60,18 +60,17 @@ function bodyOf(db: Database, noteId: string): string {
 export function buildMemoryIndex(
   db: Database,
   viewer: Viewer,
-  projectSlug: string | null,
+  projectId: string | null,
   taskText: string,
 ): string {
   const slugs = projectSlugs(db, viewer.orgId);
-  const wanted = projectSlug === null ? null : slugs.idOf(projectSlug);
-  const onlyProject = projectSlug === null ? undefined : (wanted ?? "");
+  const wanted = projectId;
   const candidates = [
-    ...ranked(db, viewer, taskText, onlyProject),
+    ...ranked(db, viewer, taskText, projectId ?? undefined),
     ...lessonsOf(db, viewer, wanted),
   ];
   const notes = [...new Map(candidates.map((n) => [n.id, n])).values()].filter(
-    (n) => n.scope !== "project" || projectSlug === null || n.projectId === wanted,
+    (n) => n.scope !== "project" || projectId === null || n.projectId === wanted,
   );
   const parts: string[] = [];
   let size = 0;

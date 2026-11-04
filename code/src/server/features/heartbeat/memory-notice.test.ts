@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 import { agentViewer, createNote, projectSlugs, resolveNotePath } from "../memory/api";
-import { addAgentMember, createOrg, createProject } from "../orgs/api";
+import { addAgentMember, createOrg, createProject, grantProject } from "../orgs/api";
 import { setup } from "./kit";
-import { memoryNotice } from "./memory-notice";
+import { memoryNotice, memoryRun } from "./memory-notice";
+import type { ExecDeps } from "./run-input";
 
 async function put(
   k: ReturnType<typeof setup>,
@@ -194,4 +195,27 @@ test("hints drop project notes of other projects but keep the current project's 
   expect(text).toContain("/memories/project/web/clamp.md");
   expect(text).toContain("/memories/org/clamp.md");
   expect(text).not.toContain(`/memories/project/${api.key}/clamp.md`);
+});
+
+test("a run on another org's granted project gets none of the member org's notes from a same-key project", async () => {
+  const k = setup();
+  const other = createOrg(k.db, {
+    name: "Other",
+    slug: "other",
+    ownerUserId: "u2",
+    ownerName: "O",
+    ownerHandle: "owner2",
+  });
+  createProject(k.db, { orgId: other.id, key: "web", name: "Web" });
+  const eve = addAgentMember(k.db, other.id, {
+    agentId: "fake",
+    handle: "eve",
+    displayName: "eve",
+    specialties: [],
+  });
+  await lesson(k, eve.id, other.id, "own-rule", "Own web rule");
+  grantProject(k.db, k.projectId, other.id, "write", k.human.id);
+  const deps = { runDeps: { resolveSpec: () => ({ mcp: false }) } } as unknown as ExecDeps;
+  const run = memoryRun(k.db, deps, eve, "fake", k.projectId, []);
+  expect(run.index ?? "").not.toContain("Own web rule");
 });
