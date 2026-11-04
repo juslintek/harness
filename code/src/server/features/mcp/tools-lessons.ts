@@ -1,13 +1,16 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { decideLesson, MemoryError, proposeLessons } from "../memory/api";
-import { getMember } from "../orgs/api";
+import { getMember, roleAtLeast } from "../orgs/api";
 import { defineTool, fail, type ToolCtx, type ToolEnv } from "./tools-kit";
 
 // The member row is read on every call and must still belong to the token's org, so a removed or
-// moved member loses the tool at once.
+// moved member loses the tool at once. Both tools write (a proposal row, an accepted note), so a
+// viewer-role member is refused like it is for the memory tool.
 function mustBeMember(ctx: ToolCtx): void {
-  if (getMember(ctx.db, ctx.memberId)?.orgId !== ctx.orgId) fail("token does not match the member");
+  const member = getMember(ctx.db, ctx.memberId);
+  if (member?.orgId !== ctx.orgId) fail("token does not match the member");
+  if (!roleAtLeast(member.role, "member")) fail("you are not allowed to do that here");
 }
 
 async function readable<T>(run: () => Promise<T>): Promise<T> {

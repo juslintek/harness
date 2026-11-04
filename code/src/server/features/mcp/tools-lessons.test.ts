@@ -121,3 +121,30 @@ test("a proposal for a task that is not yours or not done is a readable error", 
   });
   expect(stranger).toEqual({ isError: true, text: "the task is not yours" });
 });
+
+test("a viewer-role agent can neither propose nor review lessons", async () => {
+  const dev = w.agent(w.a.id, "dev");
+  const lead = w.agent(w.a.id, "lead");
+  const task = doneTask(dev.id);
+  await call(server, tokenOf(dev.id, w.a.id), "lesson_propose", {
+    taskId: task.id,
+    lessons: [LESSON],
+  });
+  const lesson = listLessons(db, w.a.id, "pending")[0];
+  db.run("UPDATE members SET role = 'viewer' WHERE id IN (?, ?)", [dev.id, lead.id]);
+  const denied = { isError: true, text: "you are not allowed to do that here" };
+  expect(
+    await call(server, tokenOf(dev.id, w.a.id), "lesson_propose", {
+      taskId: task.id,
+      lessons: [LESSON],
+    }),
+  ).toEqual(denied);
+  expect(
+    await call(server, tokenOf(lead.id, w.a.id), "lesson_review", {
+      lessonId: lesson?.id,
+      decision: "accept",
+      reason: "fine",
+    }),
+  ).toEqual(denied);
+  expect(listLessons(db, w.a.id, "pending")).toHaveLength(1);
+});
