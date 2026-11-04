@@ -153,6 +153,12 @@ fn skipDouble(ctx: *Ctx, src: []const u8, from: usize) Error!usize {
     return ctx.fail("unterminated double quote");
 }
 
+/// TS: `src.indexOf("'", i + 1)` is -1 for an unterminated quote, closeParen stores it in its loop
+/// index and the loop's own increment then restarts the scan at 0 with the depth and the pending
+/// heredocs kept. skipOpaque reports that case with this value; closeParen repeats the restart for
+/// as long as the work budget lasts, which is where the TS loop would not end either.
+const wrap_restart = std.math.maxInt(usize);
+
 // Jumps over quotes, escapes and heredoc bodies; returns i unchanged for any other character.
 fn skipOpaque(ctx: *Ctx, src: []const u8, i: usize, pending: *std.ArrayList(Heredoc)) Error!usize {
     switch (src[i]) {
@@ -162,10 +168,7 @@ fn skipOpaque(ctx: *Ctx, src: []const u8, i: usize, pending: *std.ArrayList(Here
             return i + m.len - 1;
         },
         '\\' => return i + 1,
-        // TS: src.indexOf("'", i + 1) returns -1 here and the caller's loop then restarts at 0 and
-        // never ends. An unterminated quote is a parse error.
-        '\'' => return std.mem.findScalarPos(u8, src, i + 1, '\'') orelse
-            ctx.fail("unterminated substitution"),
+        '\'' => return std.mem.findScalarPos(u8, src, i + 1, '\'') orelse wrap_restart,
         '"' => return skipDouble(ctx, src, i + 1),
         '\n' => {
             var end = i;
@@ -184,9 +187,13 @@ pub fn closeParen(ctx: *Ctx, src: []const u8, from: usize) Error!usize {
     var pending: std.ArrayList(Heredoc) = .empty;
     defer pending.deinit(ctx.scratch);
     var i = from;
-    while (i < src.len) : (i += 1) {
+    while (i < src.len) : (i +%= 1) {
         const next = try skipOpaque(ctx, src, i, &pending);
-        if (next != i) {
+        if (next == wrap_restart) {
+            if (src.len > ctx.bytes_left) return ctx.fail("unterminated substitution");
+            ctx.bytes_left -= src.len;
+            i = wrap_restart;
+        } else if (next != i) {
             i = next;
         } else if (src[i] == '(') {
             depth += 1;

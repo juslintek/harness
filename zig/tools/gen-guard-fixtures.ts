@@ -3,9 +3,9 @@
 // The TS parser loops forever on an unterminated single quote inside `$(...)` (closeParen resets its
 // index to -1 and the loop counter wraps to 0), so every case runs in a child process with a
 // watchdog and a hanging input is left out of the fixtures (the Zig side rejects it by hand-written
-// test instead).
+// test instead). The L1 verdicts (l1.json, l1_actions.json) are dumped from the same inputs.
 import { spawn } from "bun";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -40,7 +40,7 @@ function cmdJson(c: {
 }
 
 // Deterministic generator so reruns produce the same file.
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let s = seed >>> 0;
   return () => {
     s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
@@ -64,14 +64,14 @@ const FRAGMENTS = [
 // GUARD_FUZZ_NOQUOTE=1 leaves it out for large one-off runs.
 const PICK = process.env.GUARD_FUZZ_NOQUOTE ? FRAGMENTS.filter((f) => f !== "'") : FRAGMENTS;
 
-function randomCase(r: () => number): string {
+export function randomCase(r: () => number): string {
   const n = 1 + Math.floor(r() * 14);
   let s = "";
   for (let i = 0; i < n; i++) s += PICK[Math.floor(r() * PICK.length)];
   return s;
 }
 
-const HAND: string[] = [
+export const HAND: string[] = [
   "", " ", "\n", ";", ";;", "&", "&&", "||", "|", "()", "( )", "{ a; }", "a;b", "a\nb", "a & b", "a &b",
   "a|b|c", "a |& b", "a && b || c", "a;;b", "! a", "if a; then b; fi", "while a; do b; done",
   "echo 'a b' \"c d\" e\\ f", 'echo "a\\"b" "$x" "\\$x" "\\\\" "\\z" "a\\\nb"', "echo 'unterminated",
@@ -157,6 +157,24 @@ const HAND: string[] = [
   "echo > a b c", "cat < a b", "cat <a >b 2>&1", "a 2>&1 | b", "a |& b", "a >&2 | b", "a >| b | c",
 ];
 
+// Found by tools/guard-diff.ts: an unterminated quote inside `$(...)` makes the TS closeParen restart
+// at index 0, which ends normally when an earlier `)` closes it. Kept last so the other rows stay put.
+const EXTRA: string[] = [
+  "<npm exec -- )<(${x}-exec '||);  😀--",
+  "a) echo $(echo 'b ; ls",
+  "x ) $(ls 'a) rm -rf /",
+  "echo ) ; echo $(echo ' x ) y",
+  "ls ) <(cat 'a) ; rm x",
+  // RUNS_PROGRAM[name] finds a function on Object.prototype and `.some` on it throws in TS.
+  "constructor x", "toString", "valueOf -a", "ls | hasOwnProperty", "__proto__", "FOO=1 isPrototypeOf",
+  "echo constructor", "bash -c 'constructor a'", "constructor; rm -rf /",
+  // Bracket classes in a path segment: the TS escapes `^`, so `[^x]` never negates.
+  ...[
+    "[^x]", "[^s]", "[\\^x]", "[^]", "[]", "[^a-z]", "[^-x]", "[a-]", "[--a]", "[s-]", "[^^]", "[x^]", "[a-c^]",
+    "[z-a]", "[^z-a]", "[s", "[^", "[a-c-e]", "[\\]]", "[?]", "[*]", "[.]",
+  ].flatMap((c) => [`cat /home/u/.${c}sh/id_rsa`, `cat /home/u/.${c}`]),
+];
+
 const BRACE_WORDS = [
   "{a,b}", "{a,b}{c,d}", "x{a,b}y", "{a,{b,c}}", "{a}", "{}", "{,}", "{a,}", "{,a}", "{1..3}", "{a,b", "a}",
   "}{a,b}", "{{a,b}", "{a,b}}", "{a,b}$x", "{a\\,b,c}", "é{a,b}", "{é,ü}", "{a,b} ", "{😀,x}",
@@ -172,6 +190,100 @@ const BRACE_WORDS = [
   "{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65}",
   "plain", "", "{", "}", ",", "{,", "a b{c,d}", "{a,b} c", "{a,'b'}", '{a,"b"}', "{a,`b`}", "{a,$b}",
 ];
+
+
+// L1 runs under two scopes: the corpus scope, and one with a custom HARNESS_HOME and default branch.
+export const SCOPES = [
+  { root: "/work/wt", home: "/home/u", defaultBranch: "main" },
+  { root: "/work/wt", home: "/home/u", harnessHome: "/data/h", defaultBranch: "trunk" },
+];
+
+type Action = { kind: string; command?: string; paths: string[]; toolName?: string };
+
+function l1Row(
+  evaluateL1: (a: Action, s: unknown) => { verdict: string; rule: string | null; category: string; reason: string },
+  input: Json,
+  action: Action,
+  si: number,
+): Json | null {
+  try {
+    const r = evaluateL1(action, SCOPES[si]);
+    return { ...(input as object), s: si, v: r.verdict, r: r.rule, c: r.category, why: r.reason };
+  } catch (e) {
+    // A RangeError is the JS stack limit, not behaviour to copy; a TypeError is a real TS outcome.
+    if (e instanceof RangeError) return null;
+    return { ...(input as object), s: si, err: "throw" };
+  }
+}
+
+const PATH_FRAGMENTS = [
+  "/work/wt", "/work/wt/", "~", "~/", "$HOME", "${HOME}", "$X", "/home/u", "/home/u/", "/", "..", ".", "./",
+  "/etc", "/tmp", "a", "b.ts", ".ssh", ".SSH", ".aws", ".config/gh", ".gnupg", ".netrc", "Library/Keychains",
+  "[^x]", "[^s]", "[a-z]", "[^a-z]", "[]", "[^]", "[a-]", ".[^x]sh", ".[^s]sh", ".docker/config.json", ".kube", ".git", ".git/hooks", ".git/config", ".gitignore", "hooks", "config", ".env",
+  ".env.local", ".agents/skills", "x/SKILL.md", "*", "?", "[a-z]", ".*", ".s[s]h", ".ss?", "~root", "{a,b}",
+  "`x`", "<stdin>", "/data/h", "secrets.json", "secrets*", "/proc/1/environ", "é", "日本", "\n", "\\", "[", "]",
+  "[a-", "[z-a]", "K", "K", "//", "/./", "/../",
+];
+
+export function randomPaths(r: () => number): string[] {
+  const n = Math.floor(r() * 4);
+  const paths: string[] = [];
+  for (let i = 0; i < n; i++) {
+    let p = "";
+    const parts = 1 + Math.floor(r() * 5);
+    for (let j = 0; j < parts; j++) {
+      p += PATH_FRAGMENTS[Math.floor(r() * PATH_FRAGMENTS.length)];
+      if (r() < 0.6) p += "/";
+    }
+    paths.push(p);
+  }
+  return paths;
+}
+
+async function actionRows(): Promise<Json[]> {
+  const { evaluateL1 } = await import(join(GUARD, "l1.ts"));
+  const { HARNESS_TOOL_NAMES } = await import(join(GUARD, "../../../shared/harness-tools.ts"));
+  const actions: Action[] = [];
+  const kinds = ["read", "edit", "delete"];
+  const hand = [
+    ["/work/wt/src/a.ts"], ["~/.aws/credentials"], ["/etc/hosts"], ["~/.agents/skills/../../.ssh/id_rsa"],
+    ["~/.agents/skills/x/SKILL.md"], [], [""], ["$HOME/.ssh"], ["~root/x"], ["/work/wt/../x"], [".env"],
+    ["/home/u/.env"], ["/work/wt/.env"], ["/home/u/.SSH/id"], ["/home/u/.s[s]h/id"], ["/home/u/.ssh*/id"],
+    ["/home/u/.*/id_rsa"], ["/home/u/.[a-z]sh/x"], ["/work/wt/.git/hooks/pre-commit"], ["/work/wt/.git"],
+    ["/work/wt/.git/config"], ["/work/wt/.gitignore"], ["/work/wt/sub/.git/hooks/x"], ["src/a.ts", "/etc/hosts"],
+    ["/work/wt"], ["/work/wt/"], ["/work/wt/a b"], ["/data/h/secrets.json"], ["/data/h/harness.db"],
+    ["/proc/1/environ"], ["/home/u/Keychains"], ["/home/u/Library/Keychains/x"], ["~/.ssh/id_rsa"],
+    ["/home/u/[.]ssh/id"], ["/home/u/.[s/x"], ["/home/u/.[z-a]sh/x"], ["/home/u/.é/x"],
+  ];
+  for (const k of kinds) for (const paths of hand) actions.push({ kind: k, paths });
+  actions.push({ kind: "fetch", paths: [] }, { kind: "other", paths: [] });
+  actions.push({ kind: "other", paths: [], toolName: "ToolSearch" });
+  actions.push({ kind: "other", paths: [], toolName: "mcp__other__task_move" });
+  actions.push({ kind: "execute", paths: [], toolName: "mcp.other.task_get" });
+  actions.push({ kind: "execute", paths: [] }, { kind: "execute", command: "", paths: [] });
+  actions.push({ kind: "other", paths: ["/work/wt/a"], toolName: "mcp__harness__task_get" });
+  actions.push({ kind: "other", paths: [], toolName: "mcp__harness__task_get anything" });
+  actions.push({ kind: "delete", paths: ["/"], toolName: "mcp.harness.evil anything" });
+  actions.push({ kind: "fetch", paths: [], toolName: "mcp__harness__task_get" });
+  actions.push({ kind: "other", paths: [], command: "ls", toolName: "mcp__harness__task_get" });
+  for (const n of HARNESS_TOOL_NAMES) {
+    for (const prefix of ["mcp__harness__", "mcp.harness."]) {
+      for (const kind of ["other", "execute", "read"]) actions.push({ kind, paths: [], toolName: prefix + n });
+    }
+  }
+  const r = rng(Number(process.env.GUARD_FUZZ_SEED ?? 20260101) + 7);
+  for (let i = 0; i < Number(process.env.GUARD_FUZZ_PATHS ?? 1200); i++) {
+    actions.push({ kind: kinds[Math.floor(r() * 3)] as string, paths: randomPaths(r) });
+  }
+  const rows: Json[] = [];
+  for (const a of actions) {
+    for (let si = 0; si < SCOPES.length; si++) {
+      const row = l1Row(evaluateL1, { a }, a, si);
+      if (row) rows.push(row);
+    }
+  }
+  return rows;
+}
 
 async function main(): Promise<void> {
   if (process.argv[2] === "child") return child();
@@ -192,6 +304,7 @@ async function main(): Promise<void> {
   // GUARD_FUZZ_SEED and GUARD_FUZZ_N widen the random set for a one-off differential run.
   const r = rng(Number(process.env.GUARD_FUZZ_SEED ?? 20260101));
   for (let i = 0; i < Number(process.env.GUARD_FUZZ_N ?? 1500); i++) cmds.add(randomCase(r));
+  for (const c of EXTRA) cmds.add(c);
   const inputs = [...cmds];
 
   const results = await runAll(inputs);
@@ -204,6 +317,8 @@ async function main(): Promise<void> {
   };
   dump("lex.json", kept.map((x) => x?.lex));
   dump("shell.json", kept.map((x) => x?.shell));
+  dump("l1.json", kept.flatMap((x) => (x?.l1 as Json[]).filter((row) => row !== null)));
+  dump("l1_actions.json", await actionRows());
   const argvs = new Map<string, string[]>();
   for (const x of kept) for (const c of x?.argvs ?? []) argvs.set(JSON.stringify(c), c);
   const wl = await derived([...argvs.values()], BRACE_WORDS, kept);
@@ -218,6 +333,18 @@ async function runAll(inputs: string[]): Promise<(Record<string, Json> | null)[]
   const out: (Record<string, Json> | null)[] = new Array(inputs.length).fill(null);
   const file = join(tmpdir(), `guard-inputs-${process.pid}.json`);
   writeFileSync(file, JSON.stringify(inputs));
+  try {
+    return await runChildren(inputs, file, out);
+  } finally {
+    rmSync(file, { force: true });
+  }
+}
+
+async function runChildren(
+  inputs: string[],
+  file: string,
+  out: (Record<string, Json> | null)[],
+): Promise<(Record<string, Json> | null)[]> {
   let from = 0;
   while (from < inputs.length) {
     const p = spawn(["bun", import.meta.path, "child", file, String(from)], { stdout: "pipe" });
@@ -254,6 +381,7 @@ async function child(): Promise<void> {
   const from = Number(process.argv[4]);
   const { lex, ShellParseError } = await import(join(GUARD, "lexer.ts"));
   const { parseCommands } = await import(join(GUARD, "shell.ts"));
+  const { evaluateL1 } = await import(join(GUARD, "l1.ts"));
   const errMsg = (e: unknown): Json => {
     if (e instanceof ShellParseError) return { err: e.message };
     // A RangeError (JS stack overflow) is an engine limit, not behaviour to copy.
@@ -279,7 +407,12 @@ async function child(): Promise<void> {
     } catch (e) {
       shellRow = { in: src, ...(errMsg(e) as object) };
     }
-    writeSync(1, `${JSON.stringify({ lex: lexRow, shell: shellRow, argvs })}\n`);
+    const l1: (Json | null)[] = [];
+    for (let si = 0; si < SCOPES.length; si++) {
+      if (si === 1 && i % 4 !== 0) continue;
+      l1.push(l1Row(evaluateL1, { in: src }, { kind: "execute", command: src, paths: [] }, si));
+    }
+    writeSync(1, `${JSON.stringify({ lex: lexRow, shell: shellRow, argvs, l1 })}\n`);
   }
 }
 
@@ -318,4 +451,4 @@ async function derived(
   return { wrappers, launchers, braces };
 }
 
-await main();
+if (import.meta.main) await main();

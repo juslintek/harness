@@ -104,6 +104,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     const auth_tests = b.addTest(.{ .root_module = auth_mod, .filters = test_filters });
+    // The hook's exit codes are tested on the built binary, whose path the test gets as an option.
+    const hook_e2e_mod = b.createModule(.{
+        .root_source_file = b.path("src/guard/hook_e2e_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const hook_path = b.addOptions();
+    hook_path.addOptionPath("hook_exe", hook.getEmittedBin());
+    hook_e2e_mod.addOptions("build_options", hook_path);
+    const hook_e2e_tests = b.addTest(.{ .root_module = hook_e2e_mod, .filters = test_filters });
     const check = b.step("check", "Compile the code and its tests for errors only");
     check.dependOn(&auth_tests.step);
     check.dependOn(&server_tests.step);
@@ -113,6 +123,7 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&b.addRunArtifact(auth_tests).step);
     test_step.dependOn(&b.addRunArtifact(server_tests).step);
     test_step.dependOn(&b.addRunArtifact(hook_tests).step);
+    test_step.dependOn(&b.addRunArtifact(hook_e2e_tests).step);
     const cookbook_run = b.addRunArtifact(cookbook_tests);
     b.step("cookbook", "Run the compiled cookbook snippets").dependOn(&cookbook_run.step);
     test_step.dependOn(&cookbook_run.step);

@@ -70,7 +70,15 @@ const Lexer = struct {
         const start = lx.i + open.len;
         const backtick = open[0] == '`';
         const end = if (backtick) try scan.closeBacktick(lx.ctx, lx.src, start) else try scan.closeParen(lx.ctx, lx.src, start);
-        const inner = lx.src[start..end];
+        // TS: slice(start, end) is "" when closeParen wrapped around to a `)` before `start`, and
+        // `i = end + 1` then moves back, so the same text can be lexed again. Each such jump is
+        // charged to the work budget; the TS loop has no bound where this one gives up.
+        const back = end < start;
+        if (back) {
+            if (lx.src.len > lx.ctx.bytes_left) return lx.ctx.fail("unterminated substitution");
+            lx.ctx.bytes_left -= lx.src.len;
+        }
+        const inner = if (back) "" else lx.src[start..end];
         try lx.word_subs.append(lx.ctx.scratch, inner);
         try lx.append(open);
         try lx.append(inner);

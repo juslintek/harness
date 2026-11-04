@@ -1,6 +1,7 @@
 const std = @import("std");
 const db_command = @import("db/command.zig");
 const http_boot = @import("http/boot.zig");
+const guard_eval = @import("guard/eval.zig");
 
 pub const Command = enum {
     serve,
@@ -10,7 +11,7 @@ pub const Command = enum {
     @"guard-eval",
 };
 
-const usage = "usage: harness <serve|migrate|enroll|mcp-stdio|guard-eval>\n";
+const usage = "usage: harness <serve|migrate|enroll|mcp-stdio|guard-eval [--json]>\n";
 
 /// Agents get HARNESS_RUN_TOKEN and run under srt (SANDBOX_RUNTIME=1). The only binary meant to run
 /// there is harness-hook; a copy of this one must not serve, migrate or enroll from inside.
@@ -35,7 +36,8 @@ pub fn main(init: std.process.Init) u8 {
     return switch (command) {
         .migrate => db_command.run(init),
         .serve => http_boot.serve(init),
-        .enroll, .@"mcp-stdio", .@"guard-eval" => notImplemented(command),
+        .@"guard-eval" => guard_eval.run(init),
+        .enroll, .@"mcp-stdio" => notImplemented(command),
     };
 }
 
@@ -87,6 +89,8 @@ test {
     _ = @import("board/repo.zig");
     _ = @import("chat/repo.zig");
     _ = @import("guard/lexer.zig");
+    _ = @import("guard/l1.zig");
+    _ = @import("guard/eval.zig");
     _ = @import("heartbeat/triggers.zig");
     _ = @import("laya/client.zig");
     _ = @import("mcp/server.zig");
