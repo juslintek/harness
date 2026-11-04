@@ -12,6 +12,7 @@ const health_body = @import("../health.zig");
 const headers = @import("headers.zig");
 const policy = @import("policy.zig");
 const session_endpoints = @import("../auth/middleware.zig");
+const mcp = @import("../mcp/server.zig");
 const logs_api = @import("../logs/api.zig");
 const usage_routes = @import("../usage/routes.zig");
 const ws = @import("ws.zig");
@@ -32,6 +33,7 @@ pub const Health = struct {
 pub const Services = struct {
     app: *App,
     health: Health,
+    mcp: mcp.Deps = .{},
     /// The realtime hub; null where no WebSocket is served (the `/ws` row then answers 501).
     hub: ?*Hub = null,
 };
@@ -43,6 +45,8 @@ pub const Call = struct {
     req: *httpz.Request,
     res: *httpz.Response,
     actor: ?Actor,
+    /// The port the listener is bound to; `/mcp` accepts only Hosts that name it.
+    port: u16 = 0,
 };
 
 pub const HandlerFn = *const fn (call: *Call) anyerror!void;
@@ -166,6 +170,8 @@ pub const table = [_]Route{
     row(.POST, "/api/tasks/:id/release", .{ .session = true, .origin = true }),
     .{ .method = .GET, .path = "/api/usage", .handler = usage_routes.getUsage, .policy = .{ .session = true, .admin = true } },
     row(.POST, "/api/guard/hook", .{ .public = true, .loopback = true }),
+    .{ .method = .any, .path = "/mcp", .handler = mcp.handle, .policy = .{ .public = true, .loopback = true } },
+    row(.GET, "/ws", .{ .session = true, .origin = true }),
     row(.any, "/mcp", .{ .public = true, .loopback = true }),
     .{ .method = .GET, .path = "/ws", .handler = ws.upgrade, .policy = .{ .session = true, .origin = true } },
 };

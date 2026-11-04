@@ -2,6 +2,7 @@ const std = @import("std");
 const db_command = @import("db/command.zig");
 const http_boot = @import("http/boot.zig");
 const guard_eval = @import("guard/eval.zig");
+const mcp_server = @import("mcp/server.zig");
 
 pub const Command = enum {
     serve,
@@ -37,7 +38,8 @@ pub fn main(init: std.process.Init) u8 {
         .migrate => db_command.run(init),
         .serve => http_boot.serve(init),
         .@"guard-eval" => guard_eval.run(init),
-        .enroll, .@"mcp-stdio" => notImplemented(command),
+        .@"mcp-stdio" => mcp_server.runStdio(init),
+        .enroll => notImplemented(command),
     };
 }
 
