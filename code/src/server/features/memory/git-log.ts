@@ -53,25 +53,23 @@ async function git(cwd: string, args: string[]): Promise<{ code: number; out: st
 // because a later "!" rule must follow the "*" it carves out of.
 const IGNORE_RULES = ["*.tmp", "*", "!*/", "!*.md"];
 
-// lstat, not stat: a symlinked .gitignore would make the write below land on its target outside
-// the vault. Anything that is not a plain file is replaced by a fresh file through a rename, which
-// swaps the entry itself and never follows the link.
+// The file is never written in place: a symlink or a hard link would carry the write to a file
+// outside the vault, so the new content goes to a tmp file that a rename then swaps in for the entry
+// itself. Only a plain file's own rules are kept; for anything else the tmp is a fresh list.
 function writeIgnore(dir: string): void {
   const file = join(dir, ".gitignore");
   const entry = lstatSync(file, { throwIfNoEntry: false });
-  if (entry !== undefined && !entry.isFile()) {
-    const tmp = `${file}.${process.pid}.tmp`;
-    writeFileSync(tmp, `${IGNORE_RULES.join("\n")}\n`);
-    if (entry.isDirectory()) rmSync(file, { recursive: true });
-    renameSync(tmp, file);
-    return;
-  }
-  const current = entry === undefined ? "" : readFileSync(file, "utf8");
+  const current = entry?.isFile() ? readFileSync(file, "utf8") : "";
   const have = new Set(current.split("\n"));
   const missing = IGNORE_RULES.filter((r) => !have.has(r));
-  if (missing.length === 0) return;
+  if (entry?.isFile() && missing.length === 0) return;
   const head = current === "" || current.endsWith("\n") ? current : `${current}\n`;
-  writeFileSync(file, `${head}${missing.join("\n")}\n`);
+  const tmp = `${file}.${process.pid}.tmp`;
+  // "wx" after the rm: a pre-placed symlink at the tmp name is never followed either.
+  rmSync(tmp, { force: true });
+  writeFileSync(tmp, `${head}${missing.join("\n")}\n`, { flag: "wx" });
+  if (entry?.isDirectory()) rmSync(file, { recursive: true });
+  renameSync(tmp, file);
 }
 
 // A .git symlink or "gitdir:" file would point git, and every commit and revert, at a repository

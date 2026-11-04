@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
   chmodSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -130,6 +131,17 @@ test("a symlinked .gitignore is replaced and its outside target is left untouche
   expect(readFileSync(target, "utf8")).toBe("keep me\n");
   expect(lstatSync(join(vault, ".gitignore")).isFile()).toBe(true);
   expect(readFileSync(join(vault, ".gitignore"), "utf8")).toBe("*.tmp\n*\n!*/\n!*.md\n");
+});
+
+test("a hard-linked .gitignore is replaced and the file outside the vault is left untouched", async () => {
+  const vault = vaultDir(env.dir);
+  mkdirSync(vault, { recursive: true });
+  const target = join(env.dir, "outside-target");
+  writeFileSync(target, "keep me\n");
+  linkSync(target, join(vault, ".gitignore"));
+  await ensureVaultRepo(env.dir);
+  expect(readFileSync(target, "utf8")).toBe("keep me\n");
+  expect(readFileSync(join(vault, ".gitignore"), "utf8")).toBe("keep me\n*.tmp\n*\n!*/\n!*.md\n");
 });
 
 test("a .git symlink or gitdir file refuses the vault and is left in place", async () => {
