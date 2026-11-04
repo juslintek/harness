@@ -159,6 +159,9 @@ pub const Tailer = struct {
         // File offset of buf[0]; the buffer holds the unfinished tail of the last chunk first.
         var buf_start = start;
         var discarding = false;
+        // Where the oversized line being skipped starts. It is what gets persisted meanwhile, so a
+        // later sweep meets the line from its start, not from the middle.
+        var skip_from: u64 = 0;
         while (read_pos < size) {
             const want: usize = @intCast(@min(chunk_bytes, size - read_pos));
             const old_len = buf.items.len;
@@ -174,7 +177,7 @@ pub const Tailer = struct {
                 const nl = std.mem.findScalar(u8, buf.items, '\n') orelse {
                     buf.clearRetainingCapacity();
                     buf_start = read_pos;
-                    try t.saveOffset(path, read_pos, mtime);
+                    try t.saveOffset(path, skip_from, mtime);
                     continue;
                 };
                 discarding = false;
@@ -184,6 +187,11 @@ pub const Tailer = struct {
                 if (end - pos <= t.options.max_line_bytes)
                     try lines.append(t.gpa, .{ .text = buf.items[pos..end], .offset = buf_start + pos });
                 pos = end + 1;
+                // Flush as we scan: a chunk of bare newlines must not queue a record per byte.
+                if (lines.items.len >= t.options.batch_lines) {
+                    added += try t.applyBatches(name, path, session_id, lines.items, &arena);
+                    lines.clearRetainingCapacity();
+                }
             }
             added += try t.applyBatches(name, path, session_id, lines.items, &arena);
             const carry_len = buf.items.len - pos;
@@ -191,11 +199,12 @@ pub const Tailer = struct {
             buf.shrinkRetainingCapacity(carry_len);
             buf_start += pos;
             if (carry_len > t.options.max_line_bytes) {
+                skip_from = buf_start;
                 buf.clearRetainingCapacity();
                 buf_start = read_pos;
                 discarding = true;
             }
-            try t.saveOffset(path, buf_start, mtime);
+            try t.saveOffset(path, if (discarding) skip_from else buf_start, mtime);
         }
         return added;
     }
@@ -706,6 +715,40 @@ test "usage: a complete line over the limit is dropped even when it ends inside 
     try out.writer.writeAll(try claudeLine(&b, "after"));
     try env.write(claude_file, out.written());
     try testing.expectEqual(@as(u64, 1), try env.tailer.sweep());
+}
+
+test "usage: an oversized line that is still being written is skipped across sweeps" {
+    const env = try Env.create(.{ .backfill_days = 1e9, .chunk_bytes = 1024, .max_line_bytes = 2000 });
+    defer env.destroy();
+    var spaces: [3000]u8 = undefined;
+    @memset(&spaces, ' ');
+    try env.write(claude_file, &spaces);
+    try testing.expectEqual(@as(u64, 0), try env.tailer.sweep());
+    // The writer finishes the long line with something that would parse as a record on its own.
+    var b1: [512]u8 = undefined;
+    var b2: [512]u8 = undefined;
+    const rest = try std.mem.concat(testing.allocator, u8, &.{ try claudeLine(&b1, "tail_of_big"), try claudeLine(&b2, "after") });
+    defer testing.allocator.free(rest);
+    try env.append(claude_file, rest);
+    try testing.expectEqual(@as(u64, 1), try env.tailer.sweep());
+    try testing.expectEqual(@as(i64, 1), try env.usageEvents());
+}
+
+test "usage: a chunk of bare newlines stays inside a bounded allocator" {
+    var storage: [3 * 1024 * 1024]u8 = undefined;
+    var fba: std.heap.FixedBufferAllocator = .init(&storage);
+    const env = try Env.create(.{ .backfill_days = 1e9 });
+    defer env.destroy();
+    env.tailer.gpa = fba.allocator();
+    const newlines = try testing.allocator.alloc(u8, 1024 * 1024);
+    defer testing.allocator.free(newlines);
+    @memset(newlines, '\n');
+    var b: [512]u8 = undefined;
+    const text = try std.mem.concat(testing.allocator, u8, &.{ newlines, try claudeLine(&b, "after") });
+    defer testing.allocator.free(text);
+    try env.write(claude_file, text);
+    try testing.expectEqual(@as(u64, 1), try env.tailer.sweep());
+    try testing.expectEqual(@as(i64, @intCast(text.len)), try env.scalar("SELECT offset FROM tail_offsets"));
 }
 
 test "usage: a unreadable entry does not stop the sweep" {
