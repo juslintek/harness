@@ -1,8 +1,11 @@
 import type { Database } from "bun:sqlite";
+import { lstatSync } from "node:fs";
+import { join } from "node:path";
 import type { NoteScope, NoteSummary, NoteType } from "../../../shared/memory";
 import { redact } from "../logs/api";
 import { hashText, normKey, noteTitle, parseNote, wikilinks } from "./frontmatter";
 import type { Located } from "./paths";
+import { vaultDir } from "./vault";
 
 export type IndexedNote = NoteSummary & { disk: string; slug: string };
 
@@ -71,10 +74,22 @@ function epoch(iso: string | undefined, fallback: number): number {
 
 // A path already in the index keeps its id whatever the file now claims, so audit rows and links
 // written against it stay with the note; settleId writes that id back into the file. Only a new
-// file may bring its own id, and it gets a fresh one when another path already holds it.
-function pickId(db: Database, wanted: string): string {
-  const taken = db.query("SELECT 1 FROM notes WHERE id = ?").get(wanted);
-  return taken === null ? wanted : Bun.randomUUIDv7();
+// file may bring its own id, and it gets a fresh one when another live path already holds it. A
+// holder whose file is gone is a rename caught mid-crash (new file written, old one removed, old
+// row not yet dropped): the id moves to the new path so audit rows stay attached to the note.
+function pickId(db: Database, wanted: string, home: string | undefined): string {
+  const holder = db
+    .query<{ disk: string }, [string]>("SELECT disk FROM notes WHERE id = ?")
+    .get(wanted);
+  if (holder === null) return wanted;
+  if (
+    home === undefined ||
+    lstatSync(join(vaultDir(home), holder.disk), { throwIfNoEntry: false })
+  ) {
+    return Bun.randomUUIDv7();
+  }
+  removeIndexed(db, holder.disk);
+  return wanted;
 }
 
 function replaceFts(db: Database, disk: string, title: string, body: string, tags: string[]): void {
@@ -91,7 +106,12 @@ function replaceFts(db: Database, disk: string, title: string, body: string, tag
 }
 
 // The location decides scope and owner; frontmatter cannot move a note into another org.
-export function upsertIndexed(db: Database, loc: Located, text: string): IndexedNote {
+export function upsertIndexed(
+  db: Database,
+  loc: Located,
+  text: string,
+  home?: string,
+): IndexedNote {
   // Title, links and full-text come from the redacted text; the hash stays the raw file hash so
   // "disk hash equals index hash" still means no change.
   const { meta, body } = parseNote(redact(text));
@@ -102,7 +122,7 @@ export function upsertIndexed(db: Database, loc: Located, text: string): Indexed
   db.transaction(() => {
     const prior = getIndexedByDisk(db, loc.disk);
     if (prior) db.run("DELETE FROM note_links WHERE src_id = ?", [prior.id]);
-    const id = prior?.id ?? pickId(db, meta.id ?? Bun.randomUUIDv7());
+    const id = prior?.id ?? pickId(db, meta.id ?? Bun.randomUUIDv7(), home);
     db.run(
       `INSERT INTO notes (id, disk, scope, org_id, project_id, member_id, type, title, tags,
          source_agent, confidence, created, updated, hash, slug, title_key)

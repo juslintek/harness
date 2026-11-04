@@ -68,12 +68,12 @@ function scrubbed(home: string, disk: string, text: string): string | null {
 // Two files claiming one id: the indexed row keeps it and the newcomer's frontmatter gets the
 // fresh id, so it survives the next reindex.
 function settleId(db: Database, home: string, loc: Located, text: string): IndexedNote {
-  const note = upsertIndexed(db, loc, text);
+  const note = upsertIndexed(db, loc, text, home);
   const { meta, body } = parseNote(text);
   if (meta.id === undefined || meta.id === note.id) return note;
   const fixed = serializeNote({ ...meta, id: note.id }, body);
   const next = rewriteIfUnchanged(home, loc.disk, text, fixed);
-  return next === null ? note : upsertIndexed(db, loc, next);
+  return next === null ? note : upsertIndexed(db, loc, next, home);
 }
 
 // The one place an on-disk change that did not come through the store enters the index: the

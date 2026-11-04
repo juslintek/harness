@@ -180,7 +180,7 @@ export function persist(
   } catch (e) {
     throw ioError(e);
   }
-  const note = upsertIndexed(db, loc, after);
+  const note = upsertIndexed(db, loc, after, home);
   record(db, home, ctx, { op, loc, noteId: note.id, before, after });
   return note;
 }
@@ -241,7 +241,7 @@ export function moved(
   }
   // The old row goes first, otherwise the shared id would read as a duplicate and be split.
   removeIndexed(db, from.disk);
-  const next = upsertIndexed(db, to, after);
+  const next = upsertIndexed(db, to, after, home);
   record(db, home, ctx, { op: "rename", loc: to, noteId: next.id, before, after });
   return next;
 }

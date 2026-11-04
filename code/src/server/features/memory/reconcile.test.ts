@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { startMemory } from "./api";
 import { drainCommits } from "./git-log";
@@ -125,4 +125,18 @@ test("one file that cannot be indexed is skipped and startMemory still starts", 
   expect(getIndexedByDisk(db, "orgs/A/org/good.md")).not.toBeNull();
   const stop = startMemory(db, { home: dir });
   await stop();
+});
+
+test("a rename caught mid-crash keeps its id on the new path", () => {
+  put("orgs/A/org/old.md", noteText("# Same\nbody", { id: "keep-me" }));
+  reconcile(db, dir);
+  db.run("INSERT INTO note_reads (note_id, via, at) VALUES ('keep-me', 'view', 1)");
+  rmSync(join(dir, "memory/orgs/A/org/old.md"));
+  const moved = noteText("# Same\nbody", { id: "keep-me" });
+  put("orgs/A/org/new.md", moved);
+  reconcile(db, dir);
+  expect(getIndexedByDisk(db, "orgs/A/org/new.md")?.id).toBe("keep-me");
+  expect(getIndexedByDisk(db, "orgs/A/org/old.md")).toBeNull();
+  expect(readFileSync(join(dir, "memory/orgs/A/org/new.md"), "utf8")).toBe(moved);
+  expect(db.query("SELECT 1 FROM notes").all()).toHaveLength(1);
 });
