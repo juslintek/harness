@@ -167,12 +167,26 @@ async function unstageSecrets(dir: string): Promise<void> {
   }
 }
 
+// Anything staged by hand before we got here (git add -f ignores the ignore rules) would ride along
+// in the commit, so a non-note path is unstaged whatever put it in the index.
+async function unstageNonNotes(dir: string): Promise<void> {
+  const staged = await git(dir, ["diff", "--cached", "--name-only", "-z"]);
+  for (const path of staged.out.split("\0")) {
+    if (path === "" || (path.endsWith(".md") && diskToLocated(path) !== null)) continue;
+    await git(dir, ["--literal-pathspecs", "reset", "-q", "--", path]);
+    console.error(`memory: not committing ${path}: it is not a note`);
+  }
+}
+
 async function commitAll(home: string, message: string, db: Database | undefined): Promise<void> {
   try {
     await ensureVaultRepo(home);
     const dir = vaultDir(home);
     if (db !== undefined) scrubOutside(db, home, await changedNotes(dir));
+    // Back to HEAD first: tracked notes keep their history, and only what stageNotes adds is staged.
+    await git(dir, ["reset", "-q"]);
     await stageNotes(dir, await changedNotes(dir));
+    await unstageNonNotes(dir);
     await unstageSecrets(dir);
     const commit = await git(dir, ["commit", "-q", "-m", message]);
     if (commit.code !== 0 && !/nothing (added )?to commit/.test(commit.out))

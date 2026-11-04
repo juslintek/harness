@@ -99,6 +99,19 @@ test("only note files are committed: a dropped credentials file never reaches hi
   expect(stat).not.toContain("keys.env");
 });
 
+test("a file already staged in an existing repo is not swept into the next note commit", async () => {
+  const vault = vaultDir(env.dir);
+  await ensureVaultRepo(env.dir);
+  await Bun.write(join(vault, "credentials.json"), '{"token":"abc"}');
+  await gitOutput(vault, ["add", "-f", "credentials.json"]);
+  await Bun.write(join(vault, orgNote.disk), "# ok");
+  queueCommit(env.dir, "files");
+  await drainCommits();
+  const files = (await gitOutput(vault, ["ls-tree", "-r", "--name-only", "HEAD"])) ?? "";
+  expect(files).toContain(orgNote.disk);
+  expect(files).not.toContain("credentials.json");
+});
+
 test("an existing vault gets the ignore rules and keeps its old entries", async () => {
   const vault = vaultDir(env.dir);
   mkdirSync(vault, { recursive: true });
