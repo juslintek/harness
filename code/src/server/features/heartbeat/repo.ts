@@ -174,6 +174,17 @@ export function hasPolicyWake(db: Database, memberId: string, proposalId: string
   );
 }
 
+export function hasApprovalWake(db: Database, memberId: string, approvalId: string): boolean {
+  return (
+    db
+      .query(
+        `SELECT 1 FROM wakeups WHERE member_id = ? AND reason = 'approval_resolved'
+           AND json_extract(detail, '$.approval') = ? LIMIT 1`,
+      )
+      .get(memberId, approvalId) !== null
+  );
+}
+
 export interface ScheduleDue {
   id: string;
   minutes: number;

@@ -2,12 +2,14 @@ import type { Database } from "bun:sqlite";
 import type { WakeReason, WakeupView } from "../../../shared/heartbeat";
 import { getTask, onTaskChange } from "../board/api";
 import { channelAccess, getChannel, onMessage } from "../chat/api";
+import { onApprovalChange } from "../guard/api";
 import { triageWake } from "../laya/api";
 import { appendEvent } from "../logs/api";
 import { startRetro } from "../memory/api";
 import { projectAccess } from "../orgs/api";
 import { onProposalChange } from "../policies/api";
 import { isHalted, onRunEvent, type RunDeps } from "../runtimes/api";
+import { onApprovalResolved } from "./approval-wakes";
 import { runPending, sweepEnded } from "./executor";
 import { onPolicyChange } from "./policy-wakes";
 import { endedStartedRuns, failStartedWakes, listWakeups as list } from "./repo";
@@ -47,6 +49,13 @@ function listenForWakes(
         if (onPolicyChange(db, change)) kick();
       } catch (err) {
         report("policy trigger", err);
+      }
+    }),
+    onApprovalChange((approval) => {
+      try {
+        if (onApprovalResolved(db, approval)) kick();
+      } catch (err) {
+        report("approval trigger", err);
       }
     }),
   ];
