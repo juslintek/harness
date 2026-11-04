@@ -33,7 +33,7 @@ import {
   watchTimeline,
   writeTimeline,
 } from "./gate-4-kit";
-import { watchLeftovers } from "./smoke-kit";
+import { type Pending, watchLeftovers } from "./smoke-kit";
 
 const WAIT_MS = 40 * 60 * 1000;
 const LESSON_WAIT_MS = 15 * 60 * 1000;
@@ -149,13 +149,21 @@ function printSummary(db: Db, s: Scene, home: string, approvals: string[]): void
   console.log(`\nhome (kept): ${home}`);
 }
 
+// The run is confined by srt to its worktree, and running the agent's own test snippet is what a
+// human reviewer would allow. Whitespace tokenizing in approvable() judged near-identical snippets
+// differently, so this looks only at the binary.
+function approveInlineTest(action: Pending, l1: { rule?: string }, worktree: string): boolean {
+  if (worktree === "" || l1.rule !== "exec.inline-code" || action.kind !== "execute") return false;
+  return /^(node|bun)\s/.test(action.command ?? "");
+}
+
 async function main(): Promise<void> {
   const root = mkdtempSync(join(tmpdir(), "harness-gate4-"));
   const { db, home, port, stop } = await boot(root);
   const runDeps = { home, port };
   const s = build(db, root, await pickLeadModel(db, runDeps));
   const stopTimeline = watchTimeline(db, s);
-  const leftovers = watchLeftovers(db, { graceMs: 90_000 });
+  const leftovers = watchLeftovers(db, { graceMs: 90_000, alsoApprove: approveInlineTest });
   const stopHeartbeat = startHeartbeat(db, { runDeps, home, tickMs: 5000 });
   const hiring = wireHiring(db, { runDeps, home });
   const stopMemory = startMemory(db, { home });
