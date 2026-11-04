@@ -48,15 +48,8 @@ test("assigning a task to agent B creates one assignment wake and one run with m
   expect(wakes(k.db, b.id).map((w) => w.reason)).toEqual(["assignment"]);
   expect(k.seen).toHaveLength(1);
   expect(k.seen[0]).toMatchObject({ memberId: b.id });
-  expect(k.seen[0]?.scopes).toEqual([
-    "report",
-    "guard_hook",
-    "board",
-    "chat",
-    "hiring",
-    "profile",
-    "policy",
-  ]);
+  const scopes = "report guard_hook board chat hiring profile policy memory".split(" ");
+  expect(k.seen[0]?.scopes).toEqual(scopes);
   expect(runsOf(k, b.id)).toBe(1);
 });
 

@@ -12,6 +12,7 @@ test("settings snapshot: paths expanded, domains merged without duplicates", () 
   expect(s.filesystem.denyRead).toContain("/hh/harness.db*");
   expect(s.filesystem.denyRead).toContain("/hh/secret");
   expect(s.filesystem.denyRead).toContain("/hh/secrets.*");
+  expect(s.filesystem.denyRead).toContain("/hh/memory");
   expect(s.filesystem.allowWrite).toEqual(
     expect.arrayContaining([
       "/wt/r1",

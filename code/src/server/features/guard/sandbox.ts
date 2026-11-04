@@ -235,6 +235,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
         join(input.harnessHome, "secrets.*"),
         join(input.harnessHome, "runs"),
         join(input.harnessHome, "worktrees"),
+        join(input.harnessHome, "memory"),
         join(input.harnessHome, "scratch-checkouts"),
         ...otherAgentCredentials(input.agentId).map(expand),
       ]),

@@ -31,6 +31,7 @@ function scopesFor(db: Database, member: MemberRow): TokenScope[] {
     "hiring",
     "profile",
     "policy",
+    "memory",
   ];
   if (managerPositionsOf(db, member.id).length > 0) scopes.push("approvals_decide");
   return scopes;
