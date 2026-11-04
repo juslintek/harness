@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { parseNote } from "./frontmatter";
-import { drainCommits, ensureVaultRepo } from "./git-log";
+import { drainCommits, ensureVaultRepo, queueCommit } from "./git-log";
 import { listWrites } from "./index-log";
 import { getIndexedByDisk } from "./index-repo";
 import { loc, noteText } from "./index-test-kit";
@@ -72,4 +72,20 @@ test("a commit queued by a harness write never snapshots a raw outside edit", as
   expect(log).toContain("typed.md");
   expect(log).not.toContain(key);
   expect(readNoteFile(env.dir, "orgs/A/org/typed.md")).not.toContain(key);
+});
+
+test("a commit never stores a secret, whether the scrub throws or is skipped", async () => {
+  await ensureVaultRepo(env.dir);
+  const key = "AKIAIOSFODNN7EXAMPLE";
+  put("orgs/A/org/raw.md", noteText(`# Raw\nkey ${key}`));
+  // No db: nothing scrubs the file, so only the staged-blob check stands between it and history.
+  queueCommit(env.dir, "no scrub");
+  await drainCommits();
+  put("orgs/A/org/raw2.md", noteText(`# Raw2\nkey ${key}`));
+  // A closed db makes the syncer throw, which must stop the commit rather than skip the check.
+  queueCommit(env.dir, "closed db", env.db);
+  env.db.close();
+  await drainCommits();
+  const log = Bun.spawnSync(["git", "log", "-p"], { cwd: vaultDir(env.dir) }).stdout.toString();
+  expect(log).not.toContain(key);
 });

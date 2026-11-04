@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gitEnv } from "../../git-env";
+import { redact } from "../logs/api";
 import { vaultDir } from "./vault";
 
 const COMMIT_DEBOUNCE_MS = 500;
@@ -88,11 +89,20 @@ export function setOutsideSyncer(fn: Syncer): void {
 async function scrubOutside(db: Database, home: string, dir: string): Promise<void> {
   if (syncer === null) return;
   for (const disk of await changedNotes(dir)) {
-    try {
-      syncer(db, home, disk);
-    } catch (e) {
-      console.error(`memory: scrub before commit failed for ${disk}: ${(e as Error).message}`);
-    }
+    syncer(db, home, disk);
+  }
+}
+
+// Last line of defence: whatever got staged is checked as the blob git will store, and a note that
+// redaction would still change is unstaged, so a failed rewrite can never reach history.
+async function unstageSecrets(dir: string): Promise<void> {
+  const staged = await git(dir, ["diff", "--cached", "--name-only", "-z", "--diff-filter=d"]);
+  for (const path of staged.out.split("\0")) {
+    if (!path.endsWith(".md")) continue;
+    const blob = await git(dir, ["show", `:${path}`]);
+    if (blob.code !== 0 || redact(blob.out) === blob.out) continue;
+    await git(dir, ["reset", "-q", "--", path]);
+    console.error(`memory: not committing ${path}: it still holds a secret`);
   }
 }
 
@@ -103,10 +113,12 @@ async function commitAll(home: string, message: string, db: Database | undefined
     if (db !== undefined) await scrubOutside(db, home, dir);
     const add = await git(dir, ["add", "-A"]);
     if (add.code !== 0) throw new Error(add.out);
+    await unstageSecrets(dir);
     const commit = await git(dir, ["commit", "-q", "-m", message]);
     if (commit.code !== 0 && !commit.out.includes("nothing to commit")) throw new Error(commit.out);
   } catch (e) {
-    // History is a convenience; a failed commit must not break the write that queued it.
+    // History is a convenience; a failed commit must not break the write that queued it. A scrub
+    // that threw lands here too, so unchecked content is never committed.
     console.error(`memory: git commit failed: ${(e as Error).message}`);
   }
 }
