@@ -211,6 +211,10 @@ fn insertReport(args: *const ReportArgs, state: *State) !void {
 /// `report`: `text` is a string of at most 4000 characters. zod 4 counts code points (checked
 /// against SDK 1.32.2: 4000 emoji pass, 4001 fail), not UTF-16 units. Extra keys are ignored.
 fn report(ctx: *Ctx) anyerror!Result {
+    // TS validates first and checks the scope in the handler, so a token without the scope sees a
+    // validation error there. Checking the scope first changes nothing a scoped token sees and
+    // stops the others from probing the argument rules.
+    if (requireScope(ctx)) |refused| return refused;
     const text_value: ?std.json.Value = if (ctx.args) |args| (if (args == .object) args.object.get("text") else null) else null;
     const text = switch (text_value orelse return invalidArguments(ctx.arena, "report", "Invalid input: expected string, received undefined", "text")) {
         .string => |s| s,
@@ -220,7 +224,6 @@ fn report(ctx: *Ctx) anyerror!Result {
     if (chars > max_report_chars) {
         return invalidArguments(ctx.arena, "report", try std.fmt.allocPrint(ctx.arena, "Too big: expected string to have <={d} characters", .{max_report_chars}), "text");
     }
-    if (requireScope(ctx)) |refused| return refused;
     if (ctx.deps.on_report) |on_report| {
         try on_report(ctx.deps.ctx, ctx.identity.run_id, text);
     } else {

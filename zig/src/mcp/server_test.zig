@@ -157,7 +157,9 @@ test "mcp: whoami without a member, and with a member and positions" {
 
 fn reportCall(arena: std.mem.Allocator, text: []const u8) ![]const u8 {
     var out: std.Io.Writer.Allocating = .init(arena);
-    try out.writer.print("{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"report\",\"arguments\":{{\"text\":\"{s}\"}}}}}}", .{text});
+    try out.writer.writeAll("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"report\",\"arguments\":{\"text\":");
+    try std.json.Stringify.encodeJsonString(text, .{}, &out.writer);
+    try out.writer.writeAll("}}}");
     return out.written();
 }
 
@@ -445,12 +447,11 @@ test "mcp: the route answers a run token and refuses everything else with the TS
         try web.expectBody("method not allowed");
         try web.expectHeader("allow", "POST");
     }
-    try revokeAndExpect401(&wire, &token, bearer, &base);
+    try revokeAndExpect401(&wire, "run-1", bearer, &base);
 }
 
-fn revokeAndExpect401(wire: *Wire, token: []const u8, bearer: []const u8, base: []const [2][]const u8) !void {
-    _ = token;
-    try tokens.revoke(&wire.fx.app, "run-1");
+fn revokeAndExpect401(wire: *Wire, run_id: []const u8, bearer: []const u8, base: []const [2][]const u8) !void {
+    try tokens.revoke(&wire.fx.app, run_id);
     var pairs: [4][2][]const u8 = undefined;
     @memcpy(pairs[0..3], base);
     pairs[3] = .{ "authorization", bearer };
@@ -516,4 +517,52 @@ test "mcp: a run token is refused on /api, as a bearer and as a cookie" {
     var web = try wire.call(.GET, "/api/auth/me", &[_][2][]const u8{ .{ "host", "127.0.0.1:4100" }, .{ "authorization", bearer } }, null);
     defer web.deinit();
     try web.expectStatus(403);
+}
+
+test "mcp: Accept must list both media types, not merely contain their text" {
+    var rig = try Rig.init(&.{.report});
+    defer rig.deinit();
+    const ping = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}";
+    const refused = "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32000,\"message\":\"Not Acceptable: Client must accept both application/json and text/event-stream\"},\"id\":null}";
+    for ([_][]const u8{ "application/json-patch+json, text/event-stream-x", "application/jsonx,text/event-streamx", "*/*", "" }) |accept| {
+        try rig.expectRefused(.{ .accept = accept, .content_type = "application/json", .protocol_version = null }, ping, 406, refused);
+    }
+    for ([_][]const u8{ "text/event-stream,application/json", "Application/JSON;q=0.9 , text/event-stream; q=0.1" }) |accept| {
+        try rig.expectRefused(.{ .accept = accept, .content_type = "application/json", .protocol_version = null }, ping, 200, "{\"result\":{},\"jsonrpc\":\"2.0\",\"id\":1}");
+    }
+}
+
+test "mcp: a token without the scope learns nothing about the argument rules" {
+    var rig = try Rig.init(&.{.guard_hook});
+    defer rig.deinit();
+    const refused = "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"token lacks report scope\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":1}";
+    try rig.expectBody("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"report\",\"arguments\":{\"text\":5}}}", refused);
+    const big = try rig.arena.allocator().alloc(u8, 4001);
+    @memset(big, 'x');
+    try rig.expectBody(try reportCall(rig.arena.allocator(), big), refused);
+}
+
+test "mcp: report text with quotes and newlines is stored whole" {
+    var rig = try Rig.init(&.{.report});
+    defer rig.deinit();
+    try rig.expectBody(try reportCall(rig.arena.allocator(), "say \"hi\"\nthen \\ done"), report_ok);
+    const stmt = try rig.fx.db.prepare("SELECT body FROM pending_payloads");
+    defer stmt.finalize();
+    _ = try stmt.step();
+    try testing.expectEqualStrings("say \"hi\"\nthen \\ done", (try stmt.text(0)).?);
+}
+
+test "mcp: stdio answers a line over the buffer with a null-id error and goes on" {
+    const pad: [200]u8 = @splat('x');
+    const input = try std.fmt.allocPrint(testing.allocator, "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{{\"pad\":\"{s}\"}}}}\n{{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}}\n", .{pad});
+    defer testing.allocator.free(input);
+    var source: std.Io.Reader = .fixed(input);
+    var small: [64]u8 = undefined;
+    var limited = source.limited(.unlimited, &small);
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+    var client: std.http.Client = .{ .allocator = testing.allocator, .io = testing.io };
+    defer client.deinit();
+    try server.proxyLines(testing.allocator, &client, "http://127.0.0.1:1/mcp", "tok", &limited.interface, &out.writer);
+    try testing.expectEqualStrings("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32600,\"message\":\"request too long\"},\"id\":null}\n", out.written());
 }

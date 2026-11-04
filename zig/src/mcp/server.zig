@@ -23,6 +23,8 @@ const max_batch = 100;
 /// std.json builds a `Value` recursively, so a megabyte of `[` would overflow the stack of a pool
 /// thread. No message of ours nests deeper than a tool schema (about ten levels).
 const max_json_depth = 128;
+/// The longest stdin line `mcp-stdio` forwards: the HTTP body cap and a newline.
+const max_line_bytes = 1024 * 1024 + 1;
 
 pub const Reply = struct {
     status: u16,
@@ -369,6 +371,18 @@ fn isJsonContentType(header: ?[]const u8) bool {
     return std.ascii.eqlIgnoreCase(essence, "application/json") and std.mem.findScalar(u8, value[end..], ',') == null;
 }
 
+/// One media range of an Accept list, parameters ignored. The SDK only searches the header for the
+/// text, so `application/json-patch+json` would pass there; every real client sends the exact
+/// types, and matching them exactly is the stricter reading.
+fn acceptsMedia(accept: []const u8, comptime media: []const u8) bool {
+    var ranges = std.mem.splitScalar(u8, accept, ',');
+    while (ranges.next()) |range| {
+        const end = std.mem.findScalar(u8, range, ';') orelse range.len;
+        if (std.ascii.eqlIgnoreCase(std.mem.trim(u8, range[0..end], " \t"), media)) return true;
+    }
+    return false;
+}
+
 pub const Headers = struct {
     accept: ?[]const u8,
     content_type: ?[]const u8,
@@ -379,7 +393,7 @@ pub const Headers = struct {
 pub fn post(env: Env, headers: Headers, body: []const u8) !Reply {
     const arena = env.arena;
     const accept = headers.accept orelse "";
-    if (std.mem.find(u8, accept, "application/json") == null or std.mem.find(u8, accept, "text/event-stream") == null) {
+    if (!acceptsMedia(accept, "application/json") or !acceptsMedia(accept, "text/event-stream")) {
         return jsonError(arena, 406, -32000, "Not Acceptable: Client must accept both application/json and text/event-stream");
     }
     if (!isJsonContentType(headers.content_type)) {
@@ -516,9 +530,11 @@ pub fn runStdio(init: std.process.Init) u8 {
         std.debug.print("harness mcp-stdio: only a loopback http URL is allowed\n", .{});
         return 2;
     }
-    var in_buffer: [64 * 1024]u8 = undefined;
+    // One line is one message, so the buffer is the HTTP endpoint's body cap plus the newline.
+    const in_buffer = gpa.alloc(u8, max_line_bytes) catch return 1;
+    defer gpa.free(in_buffer);
     var out_buffer: [4096]u8 = undefined;
-    var stdin = std.Io.File.stdin().reader(init.io, &in_buffer);
+    var stdin = std.Io.File.stdin().reader(init.io, in_buffer);
     var stdout = std.Io.File.stdout().writer(init.io, &out_buffer);
     var client: std.http.Client = .{ .allocator = gpa, .io = init.io };
     defer client.deinit();
@@ -529,13 +545,20 @@ pub fn runStdio(init: std.process.Init) u8 {
     return 0;
 }
 
-fn proxyLines(gpa: std.mem.Allocator, client: *std.http.Client, url: []const u8, token: []const u8, in: *std.Io.Reader, out: *std.Io.Writer) !void {
+pub fn proxyLines(gpa: std.mem.Allocator, client: *std.http.Client, url: []const u8, token: []const u8, in: *std.Io.Reader, out: *std.Io.Writer) !void {
     const authorization = try std.fmt.allocPrint(gpa, "Bearer {s}", .{token});
     defer gpa.free(authorization);
     while (true) {
         const line = in.takeDelimiter('\n') catch |err| switch (err) {
             error.StreamTooLong => {
-                _ = try in.discardDelimiterInclusive('\n');
+                // The id is not known, so the client gets the error with a null id and the line
+                // is dropped up to its newline.
+                _ = in.discardDelimiterInclusive('\n') catch |e| switch (e) {
+                    error.EndOfStream => {},
+                    else => return e,
+                };
+                try out.writeAll("{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32600,\"message\":\"request too long\"},\"id\":null}\n");
+                try out.flush();
                 continue;
             },
             else => |e| return e,
