@@ -68,6 +68,13 @@ export function listLessons(db: Database, orgId: string, status?: LessonStatus):
   return rows.map(view);
 }
 
+export function pendingLessons(db: Database): LessonView[] {
+  return db
+    .query<Raw, []>("SELECT * FROM lessons WHERE status = 'pending' ORDER BY created_at, id")
+    .all()
+    .map(view);
+}
+
 type ProposedListener = (e: { orgId: string; lessons: LessonView[] }) => void;
 const proposed = new Set<ProposedListener>();
 
@@ -203,8 +210,10 @@ export async function proposeLessons(
   for (const fn of proposed) {
     try {
       fn({ orgId: at.orgId, lessons });
-    } catch {
-      // A broken subscriber must not undo a proposal that is already stored.
+    } catch (e) {
+      // A broken subscriber must not undo a proposal that is already stored; the next start re-wakes
+      // the reviewer, so the failure is only logged.
+      console.error(`memory: lesson subscriber failed: ${(e as Error).message}`);
     }
   }
   return lessons;

@@ -1,5 +1,5 @@
 import "../../test-support/no-git-env";
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { moveTask } from "../board/api";
 import { proposeLessons } from "./lessons";
 import { close, GOOD, manage, type World, world } from "./lessons-test-kit";
@@ -22,9 +22,9 @@ function watch(): Sent[] {
       sent.push({ memberId, reason, detail, taskId });
       w.db
         .query(
-          "INSERT INTO wakeups (id, member_id, reason, task_id, status, created_at) VALUES (?, ?, ?, ?, 'pending', 1)",
+          "INSERT INTO wakeups (id, member_id, reason, task_id, detail, status, created_at) VALUES (?, ?, ?, ?, ?, 'pending', 1)",
         )
-        .run(Bun.randomUUIDv7(), memberId, reason, taskId);
+        .run(Bun.randomUUIDv7(), memberId, reason, taskId, JSON.stringify(detail));
     },
   });
   return sent;
@@ -111,4 +111,36 @@ test("stopping removes both listeners", async () => {
   moveTask(w.db, w.task("t", dev).id, "done", w.human.id);
   await proposeLessons(w.db, { memberId: dev.id, runId: null, taskId: w.doneTask(dev).id }, [GOOD]);
   expect(sent).toEqual([]);
+});
+
+test("a proposal whose wake failed gets its wake on the next start, once", async () => {
+  w = world();
+  const dev = w.agent("dev");
+  const lead = w.agent("lead");
+  manage(w, lead, dev);
+  const log = spyOn(console, "error").mockImplementation(() => {});
+  stop = startRetro(w.db, {
+    enqueueWake: () => {
+      throw new Error("insert failed");
+    },
+  });
+  const [lesson] = await proposeLessons(
+    w.db,
+    { memberId: dev.id, runId: null, taskId: w.doneTask(dev).id },
+    [GOOD],
+  );
+  expect(log).toHaveBeenCalled();
+  log.mockRestore();
+  stop();
+  const sent = watch();
+  expect(sent).toEqual([
+    {
+      memberId: lead.id,
+      reason: "lesson_review",
+      detail: { lessonIds: [(lesson as NonNullable<typeof lesson>).id] },
+      taskId: (lesson as NonNullable<typeof lesson>).taskId,
+    },
+  ]);
+  stop();
+  expect(watch()).toEqual([]);
 });
