@@ -12,6 +12,7 @@ const health_body = @import("../health.zig");
 const headers = @import("headers.zig");
 const policy = @import("policy.zig");
 const session_endpoints = @import("../auth/middleware.zig");
+const agents = @import("../agents/routes.zig");
 
 pub const Method = policy.Method;
 pub const Policy = policy.Policy;
@@ -28,6 +29,8 @@ pub const Health = struct {
 pub const Services = struct {
     app: *App,
     health: Health,
+    /// The agents slice's state; null in tests that never reach its routes.
+    agents: ?*agents.Ctx = null,
 };
 
 /// One request as a handler sees it. `actor` is set for every row that went through the session
@@ -66,13 +69,13 @@ pub fn health(call: *Call) anyerror!void {
 
 pub const table = [_]Route{
     .{ .method = .GET, .path = "/api/health", .handler = health, .policy = .{ .public = true, .loopback = true } },
-    row(.GET, "/api/agents", .{ .session = true, .admin = true }),
-    row(.POST, "/api/agents/:id/link", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
-    row(.POST, "/api/agents/:id/login", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
-    row(.POST, "/api/agents/:id/models", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
-    row(.GET, "/api/agents/keys", .{ .session = true, .admin = true }),
-    row(.POST, "/api/agents/keys/:provider", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
-    row(.GET, "/api/agents/ollaya", .{ .session = true, .admin = true }),
+    .{ .method = .GET, .path = "/api/agents", .handler = agents.list, .policy = .{ .session = true, .admin = true } },
+    .{ .method = .POST, .path = "/api/agents/:id/link", .handler = agents.link, .policy = .{ .session = true, .admin = true, .step_up = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/agents/:id/login", .handler = agents.login, .policy = .{ .session = true, .admin = true, .step_up = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/agents/:id/models", .handler = agents.refreshModels, .policy = .{ .session = true, .admin = true, .origin = true } },
+    .{ .method = .GET, .path = "/api/agents/keys", .handler = agents.keyStatus, .policy = .{ .session = true, .admin = true } },
+    .{ .method = .POST, .path = "/api/agents/keys/:provider", .handler = agents.keySave, .policy = .{ .session = true, .admin = true, .step_up = true, .origin = true } },
+    .{ .method = .GET, .path = "/api/agents/ollaya", .handler = agents.ollayaStatus, .policy = .{ .session = true, .admin = true } },
     row(.GET, "/api/approvals", .{ .session = true }),
     row(.POST, "/api/approvals/:id", .{ .session = true, .step_up = true, .origin = true }),
     row(.POST, "/api/auth/email/request", .{ .public = true, .origin = true }),

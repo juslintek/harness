@@ -14,6 +14,7 @@ const sqlite = @import("../db/sqlite.zig");
 const routes = @import("routes.zig");
 const server = @import("server.zig");
 const auth = @import("../auth/middleware.zig");
+const agents = @import("../agents/routes.zig");
 
 /// What a running server owns on disk. On the heap because `app` holds a mutex that must not move.
 pub const Home = struct {
@@ -102,12 +103,18 @@ pub fn serve(init: std.process.Init) u8 {
     var out_buffer: [256]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(init.io, &out_buffer);
     var held: lock.Held = .{};
+    const agents_ctx = agents.Ctx.create(gpa, init.io, settings.home, init.environ_map) catch |err| {
+        std.debug.print("harness: agents setup failed: {t}\n", .{err});
+        return 1;
+    };
+    defer agents_ctx.destroy();
     serveHome(gpa, init.io, settings.home, .{
         .host = settings.host,
         .port = settings.port,
         .origin = settings.origin,
         .ui_dist = init.environ_map.get("HARNESS_UI_DIST"),
         .trust_proxy = settings.trust_proxy,
+        .agents = agents_ctx,
     }, &held, &stdout.interface) catch |err| {
         if (err == error.AlreadyLocked) {
             std.debug.print("Another harness server (pid {d}) is already using {s}\n", .{ held.pid, settings.home });
