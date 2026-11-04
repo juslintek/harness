@@ -5,7 +5,7 @@ import { getMember, getProject, type MemberRow } from "../orgs/api";
 import { route } from "../router/api";
 import { HaltedError, isHalted, scratchRepo, startRun } from "../runtimes/api";
 import { mcpOnly, memoryRun } from "./memory-notice";
-import { buildPrompt } from "./prompt";
+import { buildPrompt, MAX_WAKES } from "./prompt";
 import {
   endedStartedRuns,
   hasLiveWake,
@@ -26,8 +26,13 @@ function lane(w: WakeRow): string {
 
 // A wake stored before a grant was revoked or lowered must not start a run in that project.
 // One run works in one project's repo and is judged by that project's org, so it takes only the
-// wakes of the oldest wake's project and lane; the others wait for the next batch.
-function nextBatch(db: Database, memberId: string): { wakes: WakeRow[]; projectId: string | null } {
+// wakes of the oldest wake's project and lane; the others wait for the next batch. A memory-only
+// prompt lists at most MAX_WAKES wakes, so a larger batch would mark wakes done that the agent
+// was never shown.
+export function nextBatch(
+  db: Database,
+  memberId: string,
+): { wakes: WakeRow[]; projectId: string | null } {
   const wakes = pendingWakes(db, memberId);
   if (getMember(db, memberId)?.role === "viewer") {
     setStatus(
@@ -58,7 +63,9 @@ function nextBatch(db: Database, memberId: string): { wakes: WakeRow[]; projectI
   const projectId = first ? wakeProject(db, first) : null;
   const same = (w: WakeRow): boolean =>
     wakeProject(db, w) === projectId && first !== undefined && lane(w) === lane(first);
-  return { wakes: reachable.filter(same), projectId };
+  const batch = reachable.filter(same);
+  const memoryOnly = first !== undefined && lane(first) !== "work";
+  return { wakes: memoryOnly ? batch.slice(0, MAX_WAKES) : batch, projectId };
 }
 
 interface Batch {

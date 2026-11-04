@@ -7,7 +7,7 @@ import { describeHiring, profileHeader, teamLacksHints } from "./prompt-hiring";
 import { describeMemory } from "./prompt-memory";
 import type { WakeRow } from "./repo";
 
-const MAX_WAKES = 10;
+export const MAX_WAKES = 10;
 const INSTRUCTION =
   "Use the harness MCP tools (`task_get`, `board_list`, `chat_read`, `chat_post`, `task_checkout`, `task_move`, `task_release`, `task_comment`...) to do the work (pass the task id from the prompt when it names one) and report back in the project channel with `chat_post`, @mentioning whoever gave you the task, and also comment on the task. @mention someone only when they need to act; do not post just to acknowledge, and if you were woken about work that is already done, stop without posting. Before you work on a task assigned to you, take it with `task_checkout`; do not just move it to `in_progress`. Do not stop without updating the task status. When you hand a task over for review, move it to `in_review` and then release it with `task_release`, so the reviewer can close it. You work in your own git worktree on the branch `harness/<run>` (see `git branch --show-current`): commit your changes on that branch, do not create or switch branches, and name the branch in your task comment or chat message. To review someone else's branch use `git log` and `git diff main..<branch>` from your worktree, because the repository is shared; you cannot read their worktree directory. For scratch files use `$TMPDIR`; it is the only writable place outside your worktree, and writing anywhere else is denied.";
 const DATA_NOTICE =

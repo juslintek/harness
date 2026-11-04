@@ -1,8 +1,9 @@
 import { afterEach, expect, setDefaultTimeout, test } from "bun:test";
 import { moveTask } from "../board/api";
 import { proposeLessons, reviewerFor } from "../memory/api";
+import { nextBatch } from "./executor";
 import { setup, until, wakes } from "./kit";
-import { buildPrompt } from "./prompt";
+import { buildPrompt, MAX_WAKES } from "./prompt";
 import { insertWake, pendingWakes } from "./repo";
 
 setDefaultTimeout(30_000);
@@ -67,4 +68,22 @@ test("a retro wake and an assignment wake for one member and project run apart",
   const runs = new Set(wakes(k.db, dev.id).map((w) => w.run_id));
   expect(runs.size).toBe(2);
   expect(k.seen.length).toBe(2);
+});
+
+test("a memory-only batch takes at most MAX_WAKES wakes and leaves the rest pending", () => {
+  const k = setup();
+  const dev = k.agent("dev");
+  const task = k.task("shipped");
+  for (let i = 0; i < MAX_WAKES + 2; i++) {
+    insertWake(k.db, {
+      memberId: dev.id,
+      reason: "retro",
+      taskId: task.id,
+      detail: { taskId: task.id },
+      causedBy: null,
+    });
+  }
+  const taken = new Set(nextBatch(k.db, dev.id).wakes.map((w) => w.id));
+  expect(taken.size).toBe(MAX_WAKES);
+  expect(pendingWakes(k.db, dev.id).filter((w) => !taken.has(w.id)).length).toBe(2);
 });
