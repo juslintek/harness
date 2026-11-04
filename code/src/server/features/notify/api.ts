@@ -3,9 +3,17 @@ import type { Channel, Notification, TargetView } from "../../../shared/notify";
 import { createDispatcher, type Dispatcher, type DispatcherDeps } from "./dispatcher";
 import { effectivePrefs, setPref } from "./prefs";
 import { notifyRoutes } from "./routes";
+import { openSlackConnection, postSlackMessage, slackConfigured } from "./slack/client";
 import { deleteTarget, insertTarget, targetsOf, viewOf } from "./targets-repo";
 
-export { effectivePrefs, notifyRoutes, setPref };
+export {
+  effectivePrefs,
+  notifyRoutes,
+  openSlackConnection,
+  postSlackMessage,
+  setPref,
+  slackConfigured,
+};
 
 export interface NotifyDeps extends Partial<Omit<DispatcherDeps, "origin" | "home">> {
   home: string;

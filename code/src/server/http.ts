@@ -17,6 +17,7 @@ import {
 import { publicAuthRoutes } from "./features/auth/routes";
 import { accountRoutes } from "./features/auth/routes-account";
 import { boardRoutes } from "./features/board/routes";
+import { bridgeRoutes } from "./features/bridge/api";
 import { budgetGate } from "./features/budgets/api";
 import { budgetsRoutes } from "./features/budgets/routes";
 import { chatRoutes } from "./features/chat/routes";
@@ -168,6 +169,7 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", memoryRoutes(db, deps.home));
   app.route("/api", logsRoutes(db));
   app.route("/api/notify", notifyRoutes(db, deps.home));
+  app.route("/api/bridge", bridgeRoutes(db));
   app.route("/api", adminRoutes(deps));
 }
 

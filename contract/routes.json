@@ -379,6 +379,62 @@
   },
   {
     "method": "GET",
+    "path": "/api/bridge/links",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/bridge/links",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/bridge/links/:id",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/bridge/users",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
     "path": "/api/channels/:id/members",
     "policy": {
       "admin": false,
