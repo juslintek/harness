@@ -51,8 +51,9 @@ test("accepting writes a lesson note found by search for the same org, and annou
   const hits = searchNotes(w.db, agentViewer(w.db, lead.id), { type: "lesson" });
   const hit = hits.find((n) => n.id === out.noteId);
   expect(hit).toMatchObject({ type: "lesson", sourceAgent: "dev" });
+  const idTail = (lessons[0] as LessonView).id.replaceAll("-", "").slice(-8);
   expect(hit?.path).toContain(
-    `/projects/${w.projectId}/lessons/run-bun-run-check-before-pushing.md`,
+    `/projects/${w.projectId}/lessons/run-bun-run-check-before-pushing-${idTail}.md`,
   );
   expect(hit?.tags).toEqual(["lesson", `task-${1}`, `lesson-${lessons[0]?.id}`]);
   expect(existsSync(join(w.home, "memory", hit?.path as string))).toBe(true);
@@ -178,7 +179,7 @@ test("a failed note write puts the lesson back to pending instead of accepted wi
   expect(out.status).toBe("accepted");
 });
 
-test("lessons with the same opening words get a numbered path", async () => {
+test("lessons with the same opening words get distinct paths", async () => {
   w = world();
   const { lessons } = await pending(2);
   const lead = w.agent("lead");
@@ -190,7 +191,36 @@ test("lessons with the same opening words get a numbered path", async () => {
   const paths = searchNotes(w.db, agentViewer(w.db, lead.id), { type: "lesson" }).map(
     (n) => n.path,
   );
-  expect(paths.some((p) => p.endsWith("-2.md"))).toBe(true);
+  expect(new Set(paths).size).toBe(2);
+});
+
+test("two Chinese lessons and 51 Cyrillic ones each get their own note", async () => {
+  w = world();
+  const dev = w.agent("dev");
+  const lead = w.agent("lead");
+  const bodies = [
+    ...[
+      "始终先运行检查再推送代码，因为持续集成会在最后失败。",
+      "部署之前必须确认迁移已经完成并且可以回滚。",
+    ],
+    ...Array.from(
+      { length: 51 },
+      (_, i) =>
+        `Всегда запускайте проверку перед отправкой, правило ${String.fromCharCode(0x430 + (i % 32), 0x430 + Math.floor(i / 32))}.`,
+    ),
+  ];
+  const ids: string[] = [];
+  for (let i = 0; i < bodies.length; i += 3) {
+    const made = await proposeLessons(
+      w.db,
+      { memberId: dev.id, runId: null, taskId: w.doneTask(dev).id },
+      bodies.slice(i, i + 3),
+    );
+    ids.push(...made.map((l) => l.id));
+  }
+  for (const id of ids) await decideLesson(w.db, w.home, id, asAgent(lead.id), "accept", "ok");
+  const notes = searchNotes(w.db, agentViewer(w.db, lead.id), { type: "lesson", limit: 200 });
+  expect(new Set(notes.map((n) => n.path)).size).toBe(bodies.length);
 });
 
 test("a demoted author's lesson is still written when a reviewer accepts it, sourced to the author", async () => {

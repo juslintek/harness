@@ -16,6 +16,7 @@ export interface Decider {
 
 const MAX_REASON = 500;
 const MAX_CLASH = 50;
+const ID_CHARS = 8;
 
 // An agent reviews as itself, a person as their member row in the lesson's org; the author never
 // reviews their own lesson and another org's agent never reviews at all.
@@ -89,7 +90,9 @@ export async function writeNote(
   // The reviewer already passed reviewerOf, so the write rides on that authority rather than the
   // author's current role; the author stays the viewer's actor and so the note's source_agent.
   const ctx = { viewer: { ...agentViewer(db, lesson.authorId), canWrite: true }, runId: null };
-  const slug = slugOf(body);
+  // Not slug-only: a non-Latin lesson has an empty slug and 51 of them would all be "lesson".
+  // The tail of a v7 id is random, while its head is a timestamp shared by ids made a minute apart.
+  const slug = `${slugOf(body)}-${lesson.id.replaceAll("-", "").slice(-ID_CHARS)}`;
   for (let n = 1; n <= MAX_CLASH; n++) {
     const loc = diskToLocated(`${dir}/${slug}${n === 1 ? "" : `-${n}`}.md`) as Located;
     try {
@@ -104,7 +107,7 @@ export async function writeNote(
       if (!(e instanceof MemoryError && e.code === "exists")) throw e;
     }
   }
-  throw new MemoryError("exists", "too many lessons with the same opening words");
+  throw new MemoryError("exists", "too many lessons share this file name");
 }
 
 export async function decideLesson(
