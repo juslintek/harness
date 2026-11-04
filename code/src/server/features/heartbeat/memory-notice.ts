@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { NoteSummary } from "../../../shared/memory";
 import { getSpec } from "../agents/api";
 import { getTask } from "../board/api";
 import {
@@ -18,14 +19,47 @@ const WITH_TOOL =
 const WITH_FILE =
   "Shared memory notes are in the file named by $HARNESS_MEMORY_FILE; read it before you start.";
 
+const LESSONS_HEAD =
+  "Lessons for this project. Your first step, before `task_checkout`, is to read each one with the `memory` tool (`action: view`, `path` as listed) and follow it unless the task says otherwise:";
+
 // Path and title only: the body is for the agent to open, and a note could carry instructions.
-function hints(db: Database, member: MemberRow, taskText: string): string {
+// Project lessons are rules for all work there, so they are listed by recency, not by topic match.
+function hints(
+  db: Database,
+  member: MemberRow,
+  taskText: string,
+  projectId: string | null,
+): string {
   const viewer = agentViewer(db, member.id);
   const slugs = projectSlugs(db, member.orgId);
-  const found = searchNotes(db, viewer, { text: taskText, anyWord: true, limit: HITS });
-  if (found.length === 0) return "";
-  const lines = found.map((n) => `- ${virtualPathOf(n, slugs)}: ${JSON.stringify(n.title)}`);
-  return `\n\nNotes that may apply:\n${lines.join("\n")}`;
+  const lessons =
+    projectId === null
+      ? []
+      : searchNotes(db, viewer, { type: "lesson", scope: "project", projectId, limit: HITS });
+  const listed = new Set(lessons.map((n) => n.id));
+  const found = searchNotes(db, viewer, { text: taskText, anyWord: true, limit: HITS + HITS })
+    .filter((n) => !listed.has(n.id))
+    .slice(0, HITS);
+  const title = (n: NoteSummary): string => n.title.replace(/\s+/g, " ");
+  let out = "";
+  if (lessons.length > 0) {
+    const lines = lessons.map((n) => `- ${virtualPathOf(n, slugs)} — ${title(n)}`);
+    out += `\n\n${LESSONS_HEAD}\n${lines.join("\n")}`;
+  }
+  if (found.length > 0) {
+    const lines = found.map((n) => `- ${virtualPathOf(n, slugs)}: ${JSON.stringify(n.title)}`);
+    out += `\n\nNotes that may apply:\n${lines.join("\n")}`;
+  }
+  return out;
+}
+
+// Only a wake about a task puts the member in a project's lessons.
+export function wakeTaskProject(db: Database, wakes: WakeRow[]): string | null {
+  for (const w of wakes) {
+    const task = w.taskId === null ? null : getTask(db, w.taskId);
+    if (task) return task.projectId;
+  }
+  return null;
 }
 
 // Starts with a blank line when not empty, like the other prompt sections.
@@ -34,8 +68,9 @@ export function memoryNotice(
   member: MemberRow,
   taskText: string,
   mcp: boolean,
+  projectId: string | null = null,
 ): string {
-  if (mcp) return `\n\n${WITH_TOOL}${hints(db, member, taskText)}`;
+  if (mcp) return `\n\n${WITH_TOOL}${hints(db, member, taskText, projectId)}`;
   const any = searchNotes(db, agentViewer(db, member.id), { limit: 1 }).length > 0;
   return any ? `\n\n${WITH_FILE}` : "";
 }

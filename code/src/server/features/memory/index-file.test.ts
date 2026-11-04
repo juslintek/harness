@@ -71,3 +71,20 @@ test("the index stops at a note boundary under 32 KB and logs a read per include
 test("nothing visible gives an empty index", () => {
   expect(buildMemoryIndex(env.db, alice, null, "anything")).toBe("");
 });
+
+test("project lessons lead the index even when the task text matches nothing in them", () => {
+  env.db.run(
+    "INSERT INTO projects (id, org_id, key, name, created_at) VALUES ('pa', 'A', 'pa', 'Pa', 1)",
+  );
+  upsertIndexed(
+    env.db,
+    loc("orgs/A/projects/pa/rule.md"),
+    noteText("# Header rule\nbegin files with an owner line", { type: "lesson" }),
+  );
+  add("orgs/A/agents/m1/mine.md", "# Mine\nclamp helper tips");
+  const text = buildMemoryIndex(env.db, alice, "pa", "clamp helper");
+  expect(text.startsWith("# Project lessons\n\n## Header rule\n/memories/project/pa/rule.md")).toBe(
+    true,
+  );
+  expect(text.indexOf("# Your notes")).toBeGreaterThan(text.indexOf("# Project lessons"));
+});

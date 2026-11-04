@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { getTask } from "../board/api";
 import { getChannel } from "../chat/api";
 import { directReportsOf, getMember, getOrg, listPositions, type MemberRow } from "../orgs/api";
-import { memoryNotice, wakeTopic } from "./memory-notice";
+import { memoryNotice, wakeTaskProject, wakeTopic } from "./memory-notice";
 import { describeHiring, profileHeader, teamLacksHints } from "./prompt-hiring";
 import { describeMemory } from "./prompt-memory";
 import type { WakeRow } from "./repo";
@@ -102,5 +102,5 @@ export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[], m
   const shown = wakes.slice(0, MAX_WAKES).map((w) => `- ${describe(db, w)}`);
   if (wakes.length > MAX_WAKES) shown.push(`- and ${wakes.length - MAX_WAKES} more`);
   const woken = `${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}${teamLacksHints(db, member, wakes)}`;
-  return `${profileHeader(db, member)}${who}\n\n${woken}${managerNotice(db, member)}${memoryNotice(db, member, wakeTopic(db, wakes), mcp)}\n\n${INSTRUCTION}`;
+  return `${profileHeader(db, member)}${who}\n\n${woken}${managerNotice(db, member)}${memoryNotice(db, member, wakeTopic(db, wakes), mcp, wakeTaskProject(db, wakes))}\n\n${INSTRUCTION}`;
 }

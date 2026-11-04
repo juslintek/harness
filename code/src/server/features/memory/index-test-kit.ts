@@ -31,12 +31,12 @@ export function loc(disk: string): Located {
 
 export function noteText(
   body: string,
-  extra: { id?: string; updated?: string; tags?: string[] } = {},
+  extra: { id?: string; updated?: string; tags?: string[]; type?: "fact" | "lesson" } = {},
 ): string {
   return serializeNote(
     {
       tags: extra.tags ?? [],
-      type: "fact",
+      type: extra.type ?? "fact",
       sourceAgent: "bot",
       ...(extra.id === undefined ? {} : { id: extra.id }),
       ...(extra.updated === undefined ? {} : { updated: extra.updated }),

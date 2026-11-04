@@ -48,9 +48,20 @@ export function buildMemoryIndex(
   );
   const parts: string[] = [];
   let size = 0;
-  for (const [scope, heading] of SCOPES) {
+  // Lessons are cross-cutting rules, so they lead even when the task text matches nothing in them.
+  const isLesson = (n: NoteSummary): boolean =>
+    wanted !== null && n.scope === "project" && n.projectId === wanted && n.type === "lesson";
+  const lessons = notes.filter(isLesson).sort((a, b) => b.updated.localeCompare(a.updated));
+  const groups: Array<[NoteSummary[], string]> = [
+    [lessons, "# Project lessons"],
+    ...SCOPES.map(([scope, heading]): [NoteSummary[], string] => [
+      notes.filter((x) => x.scope === scope && !isLesson(x)),
+      heading,
+    ]),
+  ];
+  for (const [group, heading] of groups) {
     let open = false;
-    for (const n of notes.filter((x) => x.scope === scope)) {
+    for (const n of group) {
       const entry = `## ${n.title}\n${virtualPathOf(n, slugs)}\n\n${bodyOf(db, n.id).trim()}\n\n`;
       const cost = Buffer.byteLength(entry) + (open ? 0 : Buffer.byteLength(heading) + 2);
       if (size + cost > MAX_BYTES) return parts.join("");

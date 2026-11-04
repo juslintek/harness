@@ -77,3 +77,68 @@ test("a note of another org is not listed", async () => {
   expect(memoryNotice(k.db, bob, "deploy", true)).not.toContain("other org");
   expect(memoryNotice(k.db, bob, "deploy", false)).toBe("");
 });
+
+// Written through the memory api as the given member, whose org decides where the slug resolves.
+async function lesson(
+  k: ReturnType<typeof setup>,
+  memberId: string,
+  orgId: string,
+  name: string,
+  title: string,
+): Promise<void> {
+  const viewer = agentViewer(k.db, memberId);
+  const loc = resolveNotePath(
+    `/memories/project/web/${name}.md`,
+    viewer,
+    projectSlugs(k.db, orgId),
+  );
+  if (loc === null || loc === "dir") throw new Error("bad path");
+  await createNote(k.db, k.home, { viewer, runId: null }, loc, `# ${title}\nbody-text-xyz`, {
+    type: "lesson",
+  });
+  await Bun.sleep(3);
+}
+
+test("project lessons are listed with a first-step sentence even when they share no word with the task", async () => {
+  const k = setup();
+  const bob = k.agent("bob");
+  await lesson(k, bob.id, k.orgId, "owner-line", "Owner header line");
+  const text = memoryNotice(k.db, bob, "Add a clamp helper", true, k.projectId);
+  expect(text).toContain("Your first step, before `task_checkout`, is to read each one");
+  expect(text).toContain("- /memories/project/web/owner-line.md — Owner header line");
+  expect(text).not.toContain("body-text-xyz");
+  expect(text).not.toContain("Notes that may apply");
+  expect(memoryNotice(k.db, bob, "Add a clamp helper", true)).not.toContain("Lessons for");
+});
+
+test("at most 5 lessons, newest first, and a lesson is not repeated among the hints", async () => {
+  const k = setup();
+  const bob = k.agent("bob");
+  for (let i = 1; i <= 7; i++) await lesson(k, bob.id, k.orgId, `l${i}`, `Rule number ${i}`);
+  const text = memoryNotice(k.db, bob, "Add a clamp helper", true, k.projectId);
+  const paths = [...text.matchAll(/^- \/memories\/project\/web\/l\d/gm)].map((m) => m[0]);
+  expect(paths).toEqual(["l7", "l6", "l5", "l4", "l3"].map((n) => `- /memories/project/web/${n}`));
+  expect(text).not.toContain("Notes that may apply");
+});
+
+test("a lesson of another org's project with the same slug is not listed", async () => {
+  const k = setup();
+  const other = createOrg(k.db, {
+    name: "Other",
+    slug: "other",
+    ownerUserId: "u2",
+    ownerName: "O",
+    ownerHandle: "owner2",
+  });
+  const theirs = createProject(k.db, { orgId: other.id, key: "web", name: "Web" });
+  const eve = addAgentMember(k.db, other.id, {
+    agentId: "fake",
+    handle: "eve",
+    displayName: "eve",
+    specialties: [],
+  });
+  await lesson(k, eve.id, other.id, "x", "Their rule");
+  const bob = k.agent("bob");
+  expect(memoryNotice(k.db, bob, "Their rule", true, k.projectId)).not.toContain("Their rule");
+  expect(memoryNotice(k.db, bob, "x", true, theirs.id)).not.toContain("Their rule");
+});
