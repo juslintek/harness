@@ -1,3 +1,4 @@
+import type { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { gitEnv } from "../../git-env";
@@ -57,10 +58,49 @@ export function ensureVaultRepo(home: string): Promise<void> {
   return p;
 }
 
-async function commitAll(home: string, message: string): Promise<void> {
+// Changed or untracked notes, as paths inside the vault. Rename entries carry a second path.
+async function changedNotes(dir: string): Promise<string[]> {
+  const res = await git(dir, ["status", "--porcelain", "-z", "--untracked-files=all"]);
+  if (res.code !== 0) return [];
+  const out: string[] = [];
+  const parts = res.out.split("\0");
+  for (let i = 0; i < parts.length; i++) {
+    const entry = parts[i] as string;
+    if (entry.length < 4) continue;
+    if (entry[0] === "R" || entry[0] === "C") i++;
+    const path = entry.slice(3);
+    const inside = !path.startsWith(".git") && !path.split("/").includes("..");
+    if (inside && path.endsWith(".md")) out.push(path);
+  }
+  return out;
+}
+
+// A file edited by hand since the last commit may hold a secret the watcher has not scrubbed yet;
+// syncing it first means only redacted text is ever staged. The syncing function is registered by
+// the outside module, which imports this one and so cannot be imported back.
+type Syncer = (db: Database, home: string, disk: string) => unknown;
+let syncer: Syncer | null = null;
+
+export function setOutsideSyncer(fn: Syncer): void {
+  syncer = fn;
+}
+
+async function scrubOutside(db: Database, home: string, dir: string): Promise<void> {
+  if (syncer === null) return;
+  for (const disk of await changedNotes(dir)) {
+    try {
+      syncer(db, home, disk);
+    } catch (e) {
+      console.error(`memory: scrub before commit failed for ${disk}: ${(e as Error).message}`);
+    }
+  }
+}
+
+async function commitAll(home: string, message: string, db: Database | undefined): Promise<void> {
   try {
     await ensureVaultRepo(home);
     const dir = vaultDir(home);
+    if (db !== undefined) await scrubOutside(db, home, dir);
     const add = await git(dir, ["add", "-A"]);
     if (add.code !== 0) throw new Error(add.out);
     const commit = await git(dir, ["commit", "-q", "-m", message]);
@@ -72,6 +112,7 @@ async function commitAll(home: string, message: string): Promise<void> {
 }
 
 const pending = new Map<string, string[]>();
+const databases = new Map<string, Database>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 let chain: Promise<void> = Promise.resolve();
 
@@ -80,13 +121,15 @@ function flush(): void {
   for (const [home, messages] of pending) {
     const message =
       messages.length === 1 ? (messages[0] as string) : `${messages.length} note changes`;
-    chain = chain.then(() => commitAll(home, message));
+    const db = databases.get(home);
+    chain = chain.then(() => commitAll(home, message, db));
   }
   pending.clear();
 }
 
 // The window starts at the first queued write, so a steady stream of writes still commits.
-export function queueCommit(home: string, message: string): void {
+export function queueCommit(home: string, message: string, db?: Database): void {
+  if (db !== undefined) databases.set(home, db);
   pending.set(home, [...(pending.get(home) ?? []), message]);
   timer ??= setTimeout(flush, COMMIT_DEBOUNCE_MS);
 }

@@ -57,7 +57,10 @@ export function reconcile(db: Database, home: string): { indexed: number; remove
   }
   let removed = 0;
   for (const { disk } of db.query<{ disk: string }, []>("SELECT disk FROM notes").all()) {
-    if (!seen.has(disk) && removeIndexed(db, disk) !== null) removed++;
+    if (seen.has(disk)) continue;
+    // The shared path leaves the outside delete audit row; a row it cannot map is dropped as before.
+    syncOutside(db, home, disk);
+    if (getIndexedByDisk(db, disk) === null || removeIndexed(db, disk) !== null) removed++;
   }
   return { indexed, removed };
 }

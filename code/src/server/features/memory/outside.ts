@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { redact } from "../logs/api";
 import { hashText, parseNote, serializeNote } from "./frontmatter";
-import { queueCommit } from "./git-log";
+import { queueCommit, setOutsideSyncer } from "./git-log";
 import { logWrite } from "./index-log";
 import { getIndexedByDisk, type IndexedNote, removeIndexed, upsertIndexed } from "./index-repo";
 import { diskToLocated, type Located } from "./paths";
@@ -42,7 +42,7 @@ function logOutside(
     beforeHash: beforeHash ?? null,
     afterHash: after === null ? null : hashText(after),
   });
-  queueCommit(home, `outside ${loc.disk}`);
+  queueCommit(home, `outside ${loc.disk}`, db);
   emitOutside(loc.orgId, noteId);
 }
 
@@ -99,3 +99,5 @@ export function syncOutside(db: Database, home: string, disk: string): IndexedNo
   logOutside(db, home, loc, note.id, priorText(db, disk, prior?.hash), after, prior?.hash);
   return note;
 }
+
+setOutsideSyncer(syncOutside);

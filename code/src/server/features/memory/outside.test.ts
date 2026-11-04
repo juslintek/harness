@@ -60,3 +60,16 @@ test("a read that finds the file deleted leaves one outside row and drops the no
   expect(outsideRows()).toHaveLength(1);
   expect(getIndexedByDisk(env.db, loc(orgNote.disk).disk)).toBeNull();
 });
+
+test("a commit queued by a harness write never snapshots a raw outside edit", async () => {
+  await ensureVaultRepo(env.dir);
+  const key = "AKIAIOSFODNN7EXAMPLE";
+  await createNote(env.db, env.dir, ctx(aliceA), orgNote, "# Deploy\nsteps");
+  put("orgs/A/org/typed.md", noteText(`# Typed\nkey ${key}`));
+  await createNote(env.db, env.dir, ctx(aliceA), loc("orgs/A/org/two.md"), "# Two\nx");
+  await drainCommits();
+  const log = Bun.spawnSync(["git", "log", "-p"], { cwd: vaultDir(env.dir) }).stdout.toString();
+  expect(log).toContain("typed.md");
+  expect(log).not.toContain(key);
+  expect(readNoteFile(env.dir, "orgs/A/org/typed.md")).not.toContain(key);
+});

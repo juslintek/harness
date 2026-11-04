@@ -2,6 +2,8 @@ import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { drainCommits } from "./git-log";
+import { listWrites } from "./index-log";
 import { getIndexedByDisk, upsertIndexed } from "./index-repo";
 import { loc, noteText, testDb } from "./index-test-kit";
 import { reconcile } from "./reconcile";
@@ -11,7 +13,8 @@ let dir: string;
 beforeEach(() => {
   ({ db, dir } = testDb());
 });
-afterEach(() => {
+afterEach(async () => {
+  await drainCommits();
   db.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -85,4 +88,14 @@ test("a read error throws and leaves the index intact", () => {
 
 test("a missing vault root is an empty vault", () => {
   expect(reconcile(db, dir)).toEqual({ indexed: 0, removed: 0 });
+});
+
+test("a row whose file is gone leaves an outside delete audit row", () => {
+  put("orgs/A/org/a.md", noteText("# A\nhello"));
+  reconcile(db, dir);
+  rmSync(join(dir, "memory/orgs/A/org/a.md"));
+  expect(reconcile(db, dir)).toEqual({ indexed: 0, removed: 1 });
+  const [last] = listWrites(db, "A", { limit: 5 });
+  expect(last).toMatchObject({ op: "outside", actor: "outside" });
+  expect(last?.afterHash).toBeNull();
 });

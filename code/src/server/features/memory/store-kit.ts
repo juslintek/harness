@@ -142,7 +142,7 @@ function record(db: Database, home: string, ctx: WriteCtx, c: Change): void {
     beforeHash: c.before === null ? null : hashText(c.before),
     afterHash: c.after === null ? null : hashText(c.after),
   });
-  queueCommit(home, `${c.op} ${c.loc.disk}`);
+  queueCommit(home, `${c.op} ${c.loc.disk}`, db);
   emit(c.loc.orgId ?? ctx.viewer.orgId, c.noteId);
 }
 
