@@ -1,5 +1,4 @@
 import type { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
 import { drainCommits, ensureVaultRepo } from "./git-log";
 import { buildMemoryIndex } from "./index-file";
 import { logRead } from "./index-log";
@@ -19,7 +18,7 @@ import { startRetro } from "./retro";
 import { createNote, deleteNote, readNote, renameNote, updateNote } from "./store";
 import { MemoryError, onMemoryChange, type WriteCtx } from "./store-kit";
 import { revertWrite } from "./store-revert";
-import { vaultDir } from "./vault";
+import { securePrivateVault } from "./vault";
 import {
   agentViewer,
   type ProjectSlugs,
@@ -61,7 +60,7 @@ export {
 };
 
 export function startMemory(db: Database, deps: { home: string }): () => Promise<void> {
-  mkdirSync(vaultDir(deps.home), { recursive: true, mode: 0o700 });
+  securePrivateVault(deps.home);
   ensureVaultRepo(deps.home).catch((e: Error) => {
     console.error(`memory: git init failed: ${e.message}`);
   });

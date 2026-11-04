@@ -42,6 +42,21 @@ function checked(home: string, disk: string): string {
   return join(vaultDir(home), disk);
 }
 
+// Notes can hold what agents learned about customers, so the vault must be private to this user.
+// lstat first: chmod follows links and would loosen or tighten whatever the link points at.
+export function securePrivateVault(home: string): void {
+  const dir = vaultDir(home);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const fail = (why: string): never => {
+    throw new Error(`memory vault ${dir} is not usable: ${why}`);
+  };
+  const before = lstatSync(dir);
+  if (before.isSymbolicLink() || !before.isDirectory()) fail("not a real directory");
+  if (before.uid !== process.getuid?.()) fail("owned by another user");
+  chmodSync(dir, 0o700);
+  if ((lstatSync(dir).mode & 0o777) !== 0o700) fail("mode is not 0700 after chmod");
+}
+
 export function readNoteFile(home: string, disk: string): string | null {
   if (diskToLocated(disk) === null || hasSymlink(home, disk)) return null;
   try {

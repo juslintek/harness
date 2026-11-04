@@ -1,6 +1,15 @@
 import "../../test-support/no-git-env";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { gitOutput } from "../../git-env";
 import { startMemory } from "./api";
@@ -32,4 +41,23 @@ test("startMemory reconciles existing files, and stop commits an outside edit", 
   expect(await gitOutput(vaultDir(env.dir), ["log", "--format=%s"])).toBe(
     "outside orgs/A/org/a.md\n",
   );
+});
+
+test("startMemory tightens a 0755 vault to 0700 and refuses a symlinked one", async () => {
+  mkdirSync(vaultDir(env.dir), { recursive: true, mode: 0o755 });
+  chmodSync(vaultDir(env.dir), 0o755);
+  const stop = startMemory(env.db, { home: env.dir });
+  await stop();
+  expect(statSync(vaultDir(env.dir)).mode & 0o777).toBe(0o700);
+
+  const other = mkdtempSync(join(tmpdir(), "harness-vault-link-"));
+  const home = mkdtempSync(join(tmpdir(), "harness-vault-home-"));
+  try {
+    symlinkSync(other, vaultDir(home));
+    expect(() => startMemory(env.db, { home })).toThrow(/not usable: not a real directory/);
+    expect(statSync(other).mode & 0o777).not.toBe(0o000);
+  } finally {
+    rmSync(other, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
 });
