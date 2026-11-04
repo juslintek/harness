@@ -83,3 +83,25 @@ test("quotes and wildcards in the text do not throw", () => {
   }
   expect(searchOrgEvents(db, "A", { text: '"hi"' })).toHaveLength(1);
 });
+
+test("events sharing a millisecond page through with a (ts, rowid) cursor", () => {
+  for (let i = 0; i < 5; i++) add("runA", `deploy same ${i}`, 10);
+  const seen: number[] = [];
+  let cursor: { before?: number; beforeRowid?: number } = {};
+  for (let page = 0; page < 5; page++) {
+    const hits = searchOrgEvents(db, "A", { text: "deploy", limit: 2, ...cursor });
+    seen.push(...hits.map((h) => h.rowid));
+    const last = hits.at(-1);
+    if (!last) break;
+    cursor = { before: last.ts, beforeRowid: last.rowid };
+  }
+  expect(seen).toHaveLength(5);
+  expect(new Set(seen).size).toBe(5);
+});
+
+test("another org's matches cannot crowd this org's hit out of the candidate cap", () => {
+  add("runA", "deploy ".concat("filler ".repeat(30)), 1);
+  for (let i = 0; i < 6; i++) add("runB", "deploy", 10 + i);
+  const hits = searchOrgEvents(db, "A", { text: "deploy" }, 3);
+  expect(hits.map((h) => h.ts)).toEqual([1]);
+});

@@ -19,19 +19,23 @@ export function LogsPage({ slug }: { slug: string }): preact.JSX.Element {
   const [text, setText] = useState("");
   const [kind, setKind] = useState("");
   const [member, setMember] = useState("");
+  const [sent, setSent] = useState({ text: "", kind: "", member: "" });
   const [hits, setHits] = useState<OrgLogHit[] | null>(null);
   const [more, setMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const admin = me.value?.user.instanceAdmin === true;
 
-  const run = async (before?: number): Promise<void> => {
-    const qs = new URLSearchParams({ q: text });
-    if (kind) qs.set("kind", kind);
-    if (member) qs.set("member", member);
-    if (before !== undefined) qs.set("before", String(before));
+  const run = async (f: typeof sent, after?: OrgLogHit): Promise<void> => {
+    const qs = new URLSearchParams({ q: f.text });
+    if (f.kind) qs.set("kind", f.kind);
+    if (f.member) qs.set("member", f.member);
+    if (after) {
+      qs.set("before", String(after.ts));
+      qs.set("beforeRowid", String(after.rowid));
+    }
     try {
       const page = await api(`/api/orgs/${slug}/logs/search?${qs}`, orgLogHitsSchema);
-      setHits(before === undefined ? page : [...(hits ?? []), ...page]);
+      setHits(after === undefined ? page : [...(hits ?? []), ...page]);
       setMore(page.length >= PAGE);
       setError(null);
     } catch (err) {
@@ -46,7 +50,9 @@ export function LogsPage({ slug }: { slug: string }): preact.JSX.Element {
         class="row"
         onSubmit={(e) => {
           e.preventDefault();
-          void run();
+          const f = { text, kind, member };
+          setSent(f);
+          void run(f);
         }}
       >
         <label>
@@ -111,7 +117,7 @@ export function LogsPage({ slug }: { slug: string }): preact.JSX.Element {
         </table>
       )}
       {more && last && (
-        <button type="button" onClick={() => void run(last.ts)}>
+        <button type="button" onClick={() => void run(sent, last)}>
           Older
         </button>
       )}
