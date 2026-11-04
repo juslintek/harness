@@ -61,6 +61,15 @@ export function toView(n: IndexedNote, body: string): NoteView {
   return { ...summary, body };
 }
 
+function cleanDeep(value: unknown, clean: (s: string) => string): unknown {
+  if (typeof value === "string") return clean(value);
+  if (Array.isArray(value)) return value.map((v) => cleanDeep(v, clean));
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, cleanDeep(v, clean)]));
+  }
+  return value;
+}
+
 export function scrub(
   meta: NoteMeta,
   body: string,
@@ -74,9 +83,7 @@ export function scrub(
   const next: NoteMeta = {
     ...meta,
     tags: meta.tags.map(clean),
-    extra: Object.fromEntries(
-      Object.entries(meta.extra).map(([k, v]) => [k, typeof v === "string" ? clean(v) : v]),
-    ),
+    extra: cleanDeep(meta.extra, clean) as Record<string, unknown>,
   };
   if (meta.sourceAgent !== undefined) next.sourceAgent = clean(meta.sourceAgent);
   return { meta: next, body: clean(body), redacted };

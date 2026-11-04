@@ -1,8 +1,8 @@
 import "../../test-support/no-git-env";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { hashText } from "./frontmatter";
+import { hashText, serializeNote } from "./frontmatter";
 import { listWrites } from "./index-log";
 import { getIndexedByDisk } from "./index-repo";
 import { searchNotes } from "./index-search";
@@ -95,4 +95,18 @@ test("update over a human-written secret and revert of redacted text report reda
   expect(back.note.body).not.toContain(AWS);
   const next = updateNote(env.db, env.dir, c, back.note.id, back.note.hash, "# D\nagain");
   expect(next.redacted).toBe(false);
+});
+
+test("a secret nested in frontmatter extra is not written back by a later update", () => {
+  const raw = serializeNote(
+    { tags: [], type: "fact", sourceAgent: "bot", extra: { creds: { token: GH, list: [AWS] } } },
+    "# D\nbody",
+  );
+  const file = put(raw);
+  reconcile(env.db, env.dir);
+  const note = getIndexedByDisk(env.db, orgNote.disk);
+  updateNote(env.db, env.dir, ctx(aliceA), note?.id as string, note?.hash as string, "# D\nnew");
+  const text = readFileSync(file, "utf8");
+  expect(text).not.toContain(GH);
+  expect(text).not.toContain(AWS);
 });
