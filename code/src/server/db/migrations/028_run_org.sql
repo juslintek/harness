@@ -5,9 +5,6 @@ ALTER TABLE runs ADD COLUMN org_id TEXT;
 UPDATE runs SET org_id = (SELECT m.org_id FROM members m WHERE m.id = runs.member_id)
   WHERE member_id IS NOT NULL;
 
--- Only for runs whose member row is already gone: the project's org is the best guess left.
-UPDATE runs SET org_id = (SELECT p.org_id FROM projects p WHERE p.id = runs.project_id)
-  WHERE org_id IS NULL AND member_id IS NOT NULL AND project_id IS NOT NULL
-    AND NOT EXISTS (SELECT 1 FROM members m WHERE m.id = runs.member_id);
-
+-- A run whose member row is already gone keeps a NULL org: guessing the project's org would hand a
+-- grantee org's run to the owner org. Org log search skips NULL-org runs; the instance admin still sees them.
 CREATE INDEX runs_org ON runs (org_id);

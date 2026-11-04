@@ -22,7 +22,7 @@ test("insertRun stores the org of the member that starts the run", () => {
   expect(orgOf(db, "r1")).toBe("A");
 });
 
-test("the migration backfills the member's org, then the project's org only for removed members", () => {
+test("the migration backfills the member's org and leaves runs of removed members without one", () => {
   const db = openDb(":memory:");
   migrate(db, migrations.slice(0, 27));
   for (const o of ["A", "B"]) {
@@ -43,5 +43,5 @@ test("the migration backfills the member's org, then the project's org only for 
   run("gone", "mX", "P");
   run("unknown", "mX", null);
   migrate(db, migrations);
-  expect([orgOf(db, "live"), orgOf(db, "gone"), orgOf(db, "unknown")]).toEqual(["A", "B", null]);
+  expect([orgOf(db, "live"), orgOf(db, "gone"), orgOf(db, "unknown")]).toEqual(["A", null, null]);
 });
