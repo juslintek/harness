@@ -21,6 +21,22 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
 
+  ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      # the e2e fixture starts the TS server from ../code
+      - run: bun install --frozen-lockfile
+        working-directory: code
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run e2e
+
   conformance:
     # the stub agent runs inside the real srt sandbox, which needs macOS sandbox-exec
     runs-on: macos-latest
@@ -51,6 +67,12 @@ jobs:
         uses: mlugg/setup-zig@v2
         with:
           version: 0.17.0
+      # the runtimes tests spawn bun running code/scripts/fake-acp-agent.ts
+      - if: steps.has.outputs.yes == 'true'
+        uses: oven-sh/setup-bun@v2
+      - if: steps.has.outputs.yes == 'true'
+        working-directory: code
+        run: bun install --frozen-lockfile
       - if: steps.has.outputs.yes == 'true'
         working-directory: zig
         run: |

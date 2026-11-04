@@ -1,0 +1,29 @@
+{
+  "name": "harness-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "cd ../code && HARNESS_ORIGIN=http://localhost:5173 bun src/main.ts",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit -p .",
+    "e2e": "vite build && playwright test",
+    "test": "bun test src",
+    "check": "bun run lint && bun run typecheck && bun test src && bun run build"
+  },
+  "dependencies": {
+    "solid-js": "1.9.18",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@playwright/test": "1.64.1",
+    "@types/bun": "1.4.4",
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3",
+    "vite": "8.3.5",
+    "vite-plugin-solid": "2.11.15"
+  }
+}
