@@ -34,6 +34,8 @@ export interface NoteSummary {
 
 export interface NoteView extends Omit<NoteSummary, "snippet"> {
   body: string;
+  // Whether the viewer may edit this note; computed by the server so the UI does not guess from scopes.
+  canWrite: boolean;
 }
 
 const noteFields = {
@@ -57,7 +59,11 @@ export const noteSummarySchema: z.ZodType<NoteSummary> = z.object({
   ...noteFields,
   snippet: z.string().optional(),
 });
-export const noteViewSchema: z.ZodType<NoteView> = z.object({ ...noteFields, body: z.string() });
+export const noteViewSchema: z.ZodType<NoteView> = z.object({
+  ...noteFields,
+  body: z.string(),
+  canWrite: z.boolean(),
+});
 
 export interface NoteWriteView {
   id: string;

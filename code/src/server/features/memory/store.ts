@@ -68,7 +68,7 @@ export async function createNote(
   );
   const text = serializeNote(clean.meta, clean.body);
   const note = persist(db, home, ctx, "create", loc, null, text);
-  return { note: toView(note, clean.body), redacted: clean.redacted };
+  return { note: toView(note, clean.body, ctx.viewer), redacted: clean.redacted };
 }
 
 function merged(old: NoteMeta, id: string, loc: Located, patch: Patch, now: string): NoteMeta {
@@ -98,7 +98,10 @@ export function updateNote(
   const clean = scrub(next, nextBody);
   const after = serializeNote(clean.meta, clean.body);
   const saved = persist(db, home, ctx, "update", loc, before, after);
-  return { note: toView(saved, clean.body), redacted: clean.redacted || redact(before) !== before };
+  return {
+    note: toView(saved, clean.body, ctx.viewer),
+    redacted: clean.redacted || redact(before) !== before,
+  };
 }
 
 export function deleteNote(
@@ -136,7 +139,7 @@ export function renameNote(
   const clean = scrub(merged(parsed.meta, note.id, to, {}, new Date().toISOString()), parsed.body);
   const after = serializeNote(clean.meta, clean.body);
   const next = moved(db, home, ctx, loc, to, before, after);
-  return toView(next, clean.body);
+  return toView(next, clean.body, ctx.viewer);
 }
 
 export function readNote(db: Database, home: string, viewer: Viewer, id: string): NoteView {
@@ -146,8 +149,8 @@ export function readNote(db: Database, home: string, viewer: Viewer, id: string)
     syncOutside(db, home, loc.disk);
     throw new MemoryError("not_found", "note file is missing");
   }
-  if (note.hash === hashText(text)) return toView(note, parseNote(redact(text)).body);
+  if (note.hash === hashText(text)) return toView(note, parseNote(redact(text)).body, viewer);
   // Same path as the watcher, so a read that gets there first still leaves the audit row.
   const fresh = syncOutside(db, home, loc.disk) ?? note;
-  return toView(fresh, parseNote(redact(readNoteFile(home, loc.disk) ?? text)).body);
+  return toView(fresh, parseNote(redact(readNoteFile(home, loc.disk) ?? text)).body, viewer);
 }

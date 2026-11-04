@@ -41,13 +41,13 @@ export function revertWrite(
     const note = getIndexed(db, w.noteId);
     if (note === null || current === null) throw new MemoryError("not_found", "note not found");
     drop(db, home, ctx, "revert", note.id, loc, current);
-    return { note: toView(note, parseNote(current).body), redacted: false };
+    return { note: toView(note, parseNote(current).body, ctx.viewer), redacted: false };
   }
   // Stored text is already redacted, so a secret in the original shows up only as a hash mismatch.
   const restored = redact(w.beforeText);
   const note = persist(db, home, ctx, "revert", loc, current, restored);
   return {
-    note: toView(note, parseNote(restored).body),
+    note: toView(note, parseNote(restored).body, ctx.viewer),
     redacted: hashText(restored) !== w.beforeHash,
   };
 }

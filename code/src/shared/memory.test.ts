@@ -37,7 +37,7 @@ const summary: NoteSummary = {
 };
 
 test("the memory schemas accept their views and reject a bad confidence", () => {
-  const view: NoteView = { ...summary, body: "text" };
+  const view: NoteView = { ...summary, body: "text", canWrite: true };
   expect(noteSummarySchema.parse(summary)).toEqual(summary);
   expect(noteViewSchema.parse(view)).toEqual(view);
   expect(noteViewSchema.safeParse({ ...view, confidence: 2 }).success).toBe(false);

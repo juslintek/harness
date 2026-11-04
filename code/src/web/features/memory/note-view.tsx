@@ -4,7 +4,6 @@ import type { OrgDetail } from "../../../shared/orgs";
 import { api, useLoad } from "../../api";
 import { errorText } from "../../format";
 import { ErrorLine } from "../auth/error-line";
-import { me } from "../auth/me";
 import {
   memoryBase,
   noteListSchema,
@@ -12,7 +11,6 @@ import {
   pickLinkTarget,
   shownPath,
   splitLinks,
-  writableScopes,
 } from "./memory-data";
 import { EditNote } from "./note-editor";
 
@@ -76,11 +74,6 @@ export function NoteView({
   useEffect(() => article.current?.scrollIntoView({ block: "nearest" }), [n?.id]);
   if (!n)
     return note.error ? <ErrorLine message="Note not found." /> : <p class="muted">Loading...</p>;
-  const canEdit = writableScopes(
-    detail.me.role,
-    me.value?.user.instanceAdmin === true,
-    true,
-  ).includes(n.scope);
   return (
     <article class="note-view" ref={article}>
       <h3>{n.title}</h3>
@@ -102,7 +95,7 @@ export function NoteView({
       ) : (
         <>
           <Body slug={slug} text={n.body} />
-          {canEdit && (
+          {n.canWrite && (
             <button type="button" onClick={() => setEditing(true)}>
               Edit
             </button>

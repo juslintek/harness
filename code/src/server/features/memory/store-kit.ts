@@ -56,9 +56,10 @@ export function emitOutside(orgId: string | null, noteId: string): void {
   emit(orgId, noteId);
 }
 
-export function toView(n: IndexedNote, body: string): NoteView {
+export function toView(n: IndexedNote, body: string, viewer: Viewer): NoteView {
   const { disk: _disk, slug: _slug, ...summary } = n;
-  return { ...summary, body };
+  const loc = diskToLocated(n.disk);
+  return { ...summary, body, canWrite: loc !== null && canWrite(viewer, loc) };
 }
 
 function cleanDeep(value: unknown, clean: (s: string) => string): unknown {

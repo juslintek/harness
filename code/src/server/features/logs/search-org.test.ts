@@ -189,7 +189,7 @@ test("a run with no project is hidden from a member and shown to an admin", () =
   for (const [id, user, role] of [
     ["hm", "u3", "member"],
     ["ha", "u4", "admin"],
-  ]) {
+  ] as const) {
     db.run(
       `INSERT INTO members (id, org_id, kind, user_id, handle, display_name, role, created_at)
        VALUES (?, 'A', 'human', ?, ?, ?, ?, 1)`,
