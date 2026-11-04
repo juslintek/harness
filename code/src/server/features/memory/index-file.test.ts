@@ -105,3 +105,18 @@ test("an old lesson still reaches the index behind more than 100 newer notes", (
   const text = buildMemoryIndex(env.db, alice, null, "unrelated words");
   expect(text).toContain("# Project and org lessons\n\n## Rule");
 });
+
+test("project notes of another project cannot crowd the run's own note out of the cap", () => {
+  const other = viewer("A", "m1", ["pa", "pb"]);
+  for (const key of ["pa", "pb"]) {
+    env.db.run(
+      "INSERT INTO projects (id, org_id, key, name, created_at) VALUES (?, 'A', ?, ?, 1)",
+      [key, key, key],
+    );
+  }
+  add("orgs/A/projects/pa/mine.md", "# Mine\nold but relevant", "2019-01-01T00:00:00Z");
+  for (let i = 0; i < 120; i++) {
+    add(`orgs/A/projects/pb/n${i}.md`, `# N${i}\nfiller`, "2024-01-01T00:00:00Z");
+  }
+  expect(buildMemoryIndex(env.db, other, "pa", "")).toContain("## Mine");
+});

@@ -12,6 +12,8 @@ export interface NoteQuery {
   tag?: string;
   sourceAgent?: string;
   projectId?: string;
+  // Drops project-scoped notes of any other project; agent, org and global notes stay.
+  onlyProject?: string;
   // Disk path prefix (a folder, with its trailing slash); matched literally, not as a pattern.
   pathPrefix?: string;
   // Task text is long and its words rarely all occur in one note, so a prompt query ranks by bm25
@@ -48,6 +50,10 @@ function filters(viewer: Viewer, q: NoteQuery): { where: string[]; params: Param
     if (val === undefined) continue;
     where.push(`${col} = ?`);
     params.push(val);
+  }
+  if (q.onlyProject !== undefined) {
+    where.push("(n.scope != 'project' OR n.project_id = ?)");
+    params.push(q.onlyProject);
   }
   if (q.pathPrefix !== undefined) {
     where.push("n.disk LIKE ? ESCAPE '\\'");

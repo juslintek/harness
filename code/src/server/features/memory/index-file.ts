@@ -15,13 +15,23 @@ const SCOPES: Array<[NoteScope, string]> = [
 ];
 
 // Relevant notes (full-text match on the task) first, then the rest newest first.
-function ranked(db: Database, viewer: Viewer, taskText: string): NoteSummary[] {
+// The project restriction is part of the query because the FETCH cap would otherwise fill with
+// other projects' notes and push the run's own out before the filter in buildMemoryIndex.
+function ranked(
+  db: Database,
+  viewer: Viewer,
+  taskText: string,
+  onlyProject: string | undefined,
+): NoteSummary[] {
   const hits =
     taskText.trim() === ""
       ? []
-      : searchNotes(db, viewer, { text: taskText, anyWord: true, limit: FETCH });
+      : searchNotes(db, viewer, { text: taskText, anyWord: true, limit: FETCH, onlyProject });
   const seen = new Set(hits.map((n) => n.id));
-  return [...hits, ...searchNotes(db, viewer, { limit: FETCH }).filter((n) => !seen.has(n.id))];
+  return [
+    ...hits,
+    ...searchNotes(db, viewer, { limit: FETCH, onlyProject }).filter((n) => !seen.has(n.id)),
+  ];
 }
 
 // Lessons are fetched by their own query: the capped candidates above are the newest notes, and an
@@ -55,7 +65,11 @@ export function buildMemoryIndex(
 ): string {
   const slugs = projectSlugs(db, viewer.orgId);
   const wanted = projectSlug === null ? null : slugs.idOf(projectSlug);
-  const candidates = [...ranked(db, viewer, taskText), ...lessonsOf(db, viewer, wanted)];
+  const onlyProject = projectSlug === null ? undefined : (wanted ?? "");
+  const candidates = [
+    ...ranked(db, viewer, taskText, onlyProject),
+    ...lessonsOf(db, viewer, wanted),
+  ];
   const notes = [...new Map(candidates.map((n) => [n.id, n])).values()].filter(
     (n) => n.scope !== "project" || projectSlug === null || n.projectId === wanted,
   );
