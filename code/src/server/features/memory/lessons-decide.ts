@@ -97,6 +97,7 @@ export async function writeNote(
   home: string,
   lesson: LessonView & { confidence: number },
   body: string,
+  runId: string | null = null,
 ): Promise<string> {
   const author = lesson.authorId === null ? null : getMember(db, lesson.authorId);
   const dir = dirOf(lesson);
@@ -105,7 +106,7 @@ export async function writeNote(
     throw new MemoryError("not_found", "the author is gone");
   }
   const number = getTask(db, lesson.taskId)?.number ?? 0;
-  const ctx = { viewer: writer(db, lesson, author !== null), runId: null };
+  const ctx = { viewer: writer(db, lesson, author !== null), runId };
   // Not slug-only: a non-Latin lesson has an empty slug and 51 of them would all be "lesson".
   // The tail of a v7 id is random, while its head is a timestamp shared by ids made a minute apart.
   const slug = `${slugOf(body)}-${lesson.id.replaceAll("-", "").slice(-ID_CHARS)}`;
@@ -134,6 +135,7 @@ export async function decideLesson(
   decision: "accept" | "reject",
   reason: string,
   editedBody?: string,
+  runId: string | null = null,
 ): Promise<LessonView> {
   const lesson = getLesson(db, lessonId);
   if (lesson === null) throw new MemoryError("not_found", "no such lesson");
@@ -148,7 +150,7 @@ export async function decideLesson(
     claim(db, lesson.id, "accepted", reviewerId, why, body);
     let noteId: string;
     try {
-      noteId = await writeNote(db, home, lesson, body);
+      noteId = await writeNote(db, home, lesson, body, runId);
     } catch (e) {
       release(db, lesson.id, lesson.body);
       throw e;

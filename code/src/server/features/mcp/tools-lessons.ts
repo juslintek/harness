@@ -64,7 +64,16 @@ export function registerLessonTools(server: McpServer, env: ToolEnv): void {
       mustBeMember(ctx);
       const by = { memberId: ctx.memberId, userId: null };
       const out = await readable(() =>
-        decideLesson(ctx.db, ctx.harnessHome, a.lessonId, by, a.decision, a.reason, a.body),
+        decideLesson(
+          ctx.db,
+          ctx.harnessHome,
+          a.lessonId,
+          by,
+          a.decision,
+          a.reason,
+          a.body,
+          ctx.runId,
+        ),
       );
       return `${out.status} lesson ${out.id}`;
     },

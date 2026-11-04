@@ -88,6 +88,29 @@ test("lesson_propose then lesson_review by a teammate accepts into a note", asyn
   expect(events).toEqual(["proposed 1", "accepted"]);
 });
 
+test("an accepted lesson's note write carries the reviewer's run id", async () => {
+  const dev = w.agent(w.a.id, "dev");
+  const lead = w.agent(w.a.id, "lead");
+  await call(server, tokenOf(dev.id, w.a.id), "lesson_propose", {
+    taskId: doneTask(dev.id).id,
+    lessons: [LESSON],
+  });
+  const lesson = listLessons(db, w.a.id, "pending")[0];
+  await call(server, tokenOf(lead.id, w.a.id), "lesson_review", {
+    lessonId: lesson?.id,
+    decision: "accept",
+    reason: "correct and specific",
+  });
+  // The agents-only feed is the writes with a run id.
+  const rows = db
+    .query<{ op: string; run_id: string }, []>(
+      "SELECT op, run_id FROM note_writes WHERE run_id IS NOT NULL",
+    )
+    .all();
+  expect(rows).toHaveLength(1);
+  expect(rows[0]?.op).toBe("create");
+});
+
 test("another org's agent cannot review, and a token without memory scope is refused", async () => {
   const dev = w.agent(w.a.id, "dev");
   const outsider = w.agent(w.b.id, "outsider");
