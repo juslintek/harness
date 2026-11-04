@@ -83,7 +83,9 @@ export async function writeNote(
   const author = getMember(db, lesson.authorId);
   if (author === null) throw new MemoryError("not_found", "the author is gone");
   const number = getTask(db, lesson.taskId)?.number ?? 0;
-  const ctx = { viewer: agentViewer(db, lesson.authorId), runId: null };
+  // The reviewer already passed reviewerOf, so the write rides on that authority rather than the
+  // author's current role; the author stays the viewer's actor and so the note's source_agent.
+  const ctx = { viewer: { ...agentViewer(db, lesson.authorId), canWrite: true }, runId: null };
   const dir = dirOf(lesson);
   const slug = slugOf(body);
   for (let n = 1; n <= MAX_CLASH; n++) {

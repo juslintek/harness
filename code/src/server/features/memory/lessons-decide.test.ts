@@ -2,7 +2,7 @@ import "../../test-support/no-git-env";
 import { afterEach, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { createProject } from "../orgs/api";
+import { createProject, updateMember } from "../orgs/api";
 import { searchNotes } from "./index-search";
 import { onLessonDecided, proposeLessons } from "./lessons";
 import { decideLesson } from "./lessons-decide";
@@ -190,4 +190,23 @@ test("lessons with the same opening words get a numbered path", async () => {
     (n) => n.path,
   );
   expect(paths.some((p) => p.endsWith("-2.md"))).toBe(true);
+});
+
+test("a demoted author's lesson is still written when a reviewer accepts it, sourced to the author", async () => {
+  w = world();
+  const { dev, lessons } = await pending();
+  const lead = w.agent("lead");
+  updateMember(w.db, dev.id, { role: "viewer" });
+  const out = await decideLesson(
+    w.db,
+    w.home,
+    lessons[0]?.id as string,
+    asAgent(lead.id),
+    "accept",
+    "still good",
+  );
+  const hit = searchNotes(w.db, agentViewer(w.db, lead.id), { type: "lesson" }).find(
+    (n) => n.id === out.noteId,
+  );
+  expect(hit).toMatchObject({ sourceAgent: "dev" });
 });
