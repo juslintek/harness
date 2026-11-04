@@ -24,7 +24,7 @@ type NoteScope = "global" | "org" | "project" | "agent";
 type NoteType = "lesson" | "fact" | "decision" | "howto" | "reference";
 
 export interface MemoryArgs {
-  command:
+  action:
     | "view"
     | "create"
     | "str_replace"
@@ -223,17 +223,16 @@ function links(op: Op, a: MemoryArgs): string {
   return hits.map((n) => `${virtualPathOf(n, op.slugs)} — ${n.title}`).join("\n");
 }
 
-const COMMANDS: Record<MemoryArgs["command"], (op: Op, a: MemoryArgs) => string | Promise<string>> =
-  {
-    view,
-    create,
-    str_replace: strReplace,
-    insert,
-    delete: remove,
-    rename,
-    search,
-    backlinks: links,
-  };
+const ACTIONS: Record<MemoryArgs["action"], (op: Op, a: MemoryArgs) => string | Promise<string>> = {
+  view,
+  create,
+  str_replace: strReplace,
+  insert,
+  delete: remove,
+  rename,
+  search,
+  backlinks: links,
+};
 
 const CODE_MESSAGES: Record<string, string> = {
   conflict: "the note changed since you read it; view it again",
@@ -244,7 +243,7 @@ const CODE_MESSAGES: Record<string, string> = {
 
 export async function runCommand(op: Op, a: MemoryArgs): Promise<string> {
   try {
-    return await COMMANDS[a.command](op, a);
+    return await ACTIONS[a.action](op, a);
   } catch (e) {
     if (e instanceof MemoryError) return fail(CODE_MESSAGES[e.code] ?? e.message);
     throw e;

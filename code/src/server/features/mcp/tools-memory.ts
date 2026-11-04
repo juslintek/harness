@@ -6,7 +6,7 @@ import { defineTool, fail, type ToolCtx, type ToolEnv } from "./tools-kit";
 import { type Op, runCommand } from "./tools-memory-ops";
 
 const memoryShape = {
-  command: z.enum([
+  action: z.enum([
     "view",
     "create",
     "str_replace",

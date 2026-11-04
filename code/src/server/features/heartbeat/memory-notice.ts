@@ -14,7 +14,7 @@ import type { ExecDeps } from "./run-input";
 
 const HITS = 5;
 const WITH_TOOL =
-  "Shared memory: the `memory` tool reads and writes notes under `/memories` (`agent` is yours, `project/<slug>` and `org` are shared with your org). Before you start a task, search it (`command: search`) for the task's topic and read (`view`) the notes that apply; follow them unless the task says otherwise. Save durable facts you learn with `create`.";
+  "Shared memory: the `memory` tool reads and writes notes under `/memories` (`agent` is yours, `project/<slug>` and `org` are shared with your org). Before you start a task, search it (`action: search`) for the task's topic and read (`view`) the notes that apply; follow them unless the task says otherwise. Save durable facts you learn with `create`.";
 const WITH_FILE =
   "Shared memory notes are in the file named by $HARNESS_MEMORY_FILE; read it before you start.";
 
