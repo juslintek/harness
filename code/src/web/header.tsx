@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { haltBody } from "../shared/runs";
 import { api } from "./api";
-import { canDecideApprovals, me } from "./features/auth/me";
+import { canDecideApprovals, isViewerIn, me } from "./features/auth/me";
 import { OrgSwitcher, selectedSlug } from "./features/orgs/org-switcher";
 import { errorText } from "./format";
 
@@ -70,7 +70,7 @@ export function Header(): preact.JSX.Element {
                 <a href={`#/o/${slug}/hiring`}>Hiring</a>
                 <a href={`#/o/${slug}/policies`}>Policies</a>
                 <a href={`#/o/${slug}/memory`}>Memory</a>
-                <a href={`#/o/${slug}/logs`}>Logs</a>
+                {!isViewerIn(me.value, slug) && <a href={`#/o/${slug}/logs`}>Logs</a>}
                 <a href={`#/o/${slug}/settings`}>Settings</a>
               </>
             )}

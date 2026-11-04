@@ -2,7 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import { LOG_KINDS, type OrgLogHit, orgLogHitsSchema } from "../../../shared/logs";
 import { api } from "../../api";
 import { errorText, fmtTime } from "../../format";
-import { me } from "../auth/me";
+import { isViewerIn, me } from "../auth/me";
 import { useOrg } from "../orgs/org-data";
 import { latestGuard } from "./latest";
 
@@ -52,7 +52,7 @@ function HitsTable({
   );
 }
 
-export function LogsPage({ slug }: { slug: string }): preact.JSX.Element {
+function LogsSearch({ slug }: { slug: string }): preact.JSX.Element {
   const org = useOrg(slug);
   const [text, setText] = useState("");
   const [kind, setKind] = useState("");
@@ -139,4 +139,16 @@ export function LogsPage({ slug }: { slug: string }): preact.JSX.Element {
       )}
     </section>
   );
+}
+
+export function LogsPage({ slug }: { slug: string }): preact.JSX.Element {
+  if (isViewerIn(me.value, slug)) {
+    return (
+      <section class="logs-page">
+        <h2>Logs</h2>
+        <p class="muted">Logs are not available for viewers.</p>
+      </section>
+    );
+  }
+  return <LogsSearch slug={slug} />;
 }
