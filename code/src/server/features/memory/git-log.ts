@@ -60,8 +60,9 @@ async function must(dir: string, args: string[]): Promise<string> {
 }
 
 // Everything but folders and notes is ignored, so a stray credentials file in the vault is never
-// picked up by a broad `git add`. Existing entries stay; the missing ones are appended in order
-// because a later "!" rule must follow the "*" it carves out of.
+// picked up by a broad `git add`. The rules are always the last lines: gitignore is last match wins,
+// so a user's "*.md" after them would otherwise hide every note, and a later "!" rule must follow
+// the "*" it carves out of. The user's other lines stay above them.
 const IGNORE_RULES = ["*.tmp", "*", "!*/", "!*.md"];
 
 // The file is never written in place: a symlink or a hard link would carry the write to a file
@@ -71,14 +72,14 @@ function writeIgnore(dir: string): void {
   const file = join(dir, ".gitignore");
   const entry = lstatSync(file, { throwIfNoEntry: false });
   const current = entry?.isFile() ? readFileSync(file, "utf8") : "";
-  const have = new Set(current.split("\n"));
-  const missing = IGNORE_RULES.filter((r) => !have.has(r));
-  if (entry?.isFile() && missing.length === 0) return;
-  const head = current === "" || current.endsWith("\n") ? current : `${current}\n`;
+  const kept = current.split("\n").filter((l) => !IGNORE_RULES.includes(l));
+  while (kept.at(-1) === "") kept.pop();
+  const next = `${[...kept, ...IGNORE_RULES].join("\n")}\n`;
+  if (entry?.isFile() && next === current) return;
   const tmp = `${file}.${process.pid}.tmp`;
   // "wx" after the rm: a pre-placed symlink at the tmp name is never followed either.
   rmSync(tmp, { force: true });
-  writeFileSync(tmp, `${head}${missing.join("\n")}\n`, { flag: "wx" });
+  writeFileSync(tmp, next, { flag: "wx" });
   if (entry?.isDirectory()) rmSync(file, { recursive: true });
   renameSync(tmp, file);
 }

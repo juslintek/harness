@@ -124,7 +124,21 @@ test("an existing vault gets the ignore rules and keeps its old entries", async 
   mkdirSync(vault, { recursive: true });
   writeFileSync(join(vault, ".gitignore"), "*.tmp\ncustom\n");
   await ensureVaultRepo(env.dir);
-  expect(readFileSync(join(vault, ".gitignore"), "utf8")).toBe("*.tmp\ncustom\n*\n!*/\n!*.md\n");
+  expect(readFileSync(join(vault, ".gitignore"), "utf8")).toBe("custom\n*.tmp\n*\n!*/\n!*.md\n");
+});
+
+test("a user rule after the harness rules is moved above them so notes are still committed", async () => {
+  const vault = vaultDir(env.dir);
+  mkdirSync(vault, { recursive: true });
+  writeFileSync(join(vault, ".gitignore"), "*.tmp\n*\n!*/\n!*.md\n*.md\n");
+  await ensureVaultRepo(env.dir);
+  expect(readFileSync(join(vault, ".gitignore"), "utf8")).toBe("*.md\n*.tmp\n*\n!*/\n!*.md\n");
+  await Bun.write(join(vault, orgNote.disk), "# ok");
+  queueCommit(env.dir, "files");
+  await drainCommits();
+  expect((await gitOutput(vault, ["ls-tree", "-r", "--name-only", "HEAD"])) ?? "").toContain(
+    orgNote.disk,
+  );
 });
 
 test("a symlinked .gitignore is replaced and its outside target is left untouched", async () => {
