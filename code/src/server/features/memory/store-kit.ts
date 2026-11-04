@@ -1,0 +1,201 @@
+import type { Database } from "bun:sqlite";
+import type { NoteView } from "../../../shared/memory";
+import { redact } from "../logs/api";
+import { hashText, type NoteMeta } from "./frontmatter";
+import { queueCommit } from "./git-log";
+import { logWrite } from "./index-log";
+import { getIndexed, type IndexedNote, removeIndexed, upsertIndexed } from "./index-repo";
+import { canRead, canWrite, diskToLocated, type Located, type Viewer } from "./paths";
+import { readNoteFile, removeNoteFile, writeNoteFileAtomic } from "./vault";
+
+export type MemoryErrorCode = "not_found" | "conflict" | "forbidden" | "invalid" | "exists";
+
+export class MemoryError extends Error {
+  readonly code: MemoryErrorCode;
+  constructor(code: MemoryErrorCode, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+export interface WriteCtx {
+  viewer: Viewer;
+  runId: string | null;
+  classify?: (
+    body: string,
+    allowed: NoteView["scope"][],
+  ) => Promise<{ type: NoteView["type"]; scope: NoteView["scope"]; confidence: number }>;
+}
+
+export interface WriteResult {
+  note: NoteView;
+  redacted: boolean;
+}
+
+type Listener = (e: { orgId: string | null; noteId: string }) => void;
+const listeners = new Set<Listener>();
+
+export function onMemoryChange(fn: Listener): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+function emit(orgId: string | null, noteId: string): void {
+  for (const fn of listeners) {
+    try {
+      fn({ orgId, noteId });
+    } catch {
+      // A broken subscriber must not undo a write that already happened.
+    }
+  }
+}
+
+export function emitOutside(orgId: string | null, noteId: string): void {
+  emit(orgId, noteId);
+}
+
+export function toView(n: IndexedNote, body: string): NoteView {
+  const { disk: _disk, slug: _slug, ...summary } = n;
+  return { ...summary, body };
+}
+
+export function scrub(
+  meta: NoteMeta,
+  body: string,
+): { meta: NoteMeta; body: string; redacted: boolean } {
+  let redacted = false;
+  const clean = (s: string): string => {
+    const out = redact(s);
+    if (out !== s) redacted = true;
+    return out;
+  };
+  const next: NoteMeta = {
+    ...meta,
+    tags: meta.tags.map(clean),
+    extra: Object.fromEntries(
+      Object.entries(meta.extra).map(([k, v]) => [k, typeof v === "string" ? clean(v) : v]),
+    ),
+  };
+  if (meta.sourceAgent !== undefined) next.sourceAgent = clean(meta.sourceAgent);
+  return { meta: next, body: clean(body), redacted };
+}
+
+// An id outside the viewer's reach looks the same as a missing one, so ids do not leak across orgs.
+export function locate(
+  db: Database,
+  viewer: Viewer,
+  id: string,
+): { note: IndexedNote; loc: Located } {
+  const note = getIndexed(db, id);
+  const loc = note === null ? null : diskToLocated(note.disk);
+  if (note === null || loc === null || !canRead(viewer, loc)) {
+    throw new MemoryError("not_found", "note not found");
+  }
+  return { note, loc };
+}
+
+export function needWrite(viewer: Viewer, loc: Located): void {
+  if (!canWrite(viewer, loc)) throw new MemoryError("forbidden", "not allowed to write this note");
+}
+
+export function checkBase(text: string, baseHash: string): void {
+  if (hashText(text) !== baseHash) {
+    throw new MemoryError("conflict", "note changed since it was read");
+  }
+}
+
+export function diskText(home: string, disk: string): string {
+  const text = readNoteFile(home, disk);
+  if (text === null) throw new MemoryError("not_found", "note file is missing");
+  return text;
+}
+
+interface Change {
+  op: "create" | "update" | "delete" | "rename" | "revert";
+  loc: Located;
+  noteId: string;
+  before: string | null;
+  after: string | null;
+}
+
+// Global writes are logged under the writer's org, otherwise nobody could review or revert them.
+function record(db: Database, home: string, ctx: WriteCtx, c: Change): void {
+  logWrite(db, {
+    noteId: c.noteId,
+    disk: c.loc.disk,
+    orgId: c.loc.orgId ?? ctx.viewer.orgId,
+    op: c.op,
+    actor: ctx.viewer.actor,
+    memberId: ctx.viewer.memberId,
+    runId: ctx.runId,
+    beforeText: c.before,
+    afterText: c.after,
+    beforeHash: c.before === null ? null : hashText(c.before),
+    afterHash: c.after === null ? null : hashText(c.after),
+  });
+  queueCommit(home, `${c.op} ${c.loc.disk}`);
+  emit(c.loc.orgId ?? ctx.viewer.orgId, c.noteId);
+}
+
+// Must stay synchronous: callers have just checked the base hash and nothing may run between
+// that check and the rename.
+export function persist(
+  db: Database,
+  home: string,
+  ctx: WriteCtx,
+  op: "create" | "update" | "revert",
+  loc: Located,
+  before: string | null,
+  after: string,
+): IndexedNote {
+  try {
+    writeNoteFileAtomic(home, loc.disk, after);
+  } catch (e) {
+    throw new MemoryError("invalid", (e as Error).message);
+  }
+  const note = upsertIndexed(db, loc, after);
+  record(db, home, ctx, { op, loc, noteId: note.id, before, after });
+  return note;
+}
+
+export function drop(
+  db: Database,
+  home: string,
+  ctx: WriteCtx,
+  op: "delete" | "revert",
+  noteId: string,
+  loc: Located,
+  before: string,
+): void {
+  try {
+    removeNoteFile(home, loc.disk);
+  } catch (e) {
+    throw new MemoryError("invalid", (e as Error).message);
+  }
+  removeIndexed(db, loc.disk);
+  record(db, home, ctx, { op, loc, noteId, before, after: null });
+}
+
+export function moved(
+  db: Database,
+  home: string,
+  ctx: WriteCtx,
+  from: Located,
+  to: Located,
+  before: string,
+  after: string,
+): IndexedNote {
+  try {
+    writeNoteFileAtomic(home, to.disk, after);
+    removeNoteFile(home, from.disk);
+  } catch (e) {
+    throw new MemoryError("invalid", (e as Error).message);
+  }
+  // The old row goes first, otherwise the shared id would read as a duplicate and be split.
+  removeIndexed(db, from.disk);
+  const next = upsertIndexed(db, to, after);
+  record(db, home, ctx, { op: "rename", loc: to, noteId: next.id, before, after });
+  return next;
+}
