@@ -73,8 +73,20 @@ function writeIgnore(dir: string): void {
   writeFileSync(file, `${head}${missing.join("\n")}\n`);
 }
 
+// A .git symlink or "gitdir:" file would point git, and every commit and revert, at a repository
+// outside the vault. Nothing is deleted: the operator has to look at it.
+export function assertVaultGit(home: string): void {
+  const entry = lstatSync(join(vaultDir(home), ".git"), { throwIfNoEntry: false });
+  if (entry === undefined || entry.isDirectory()) return;
+  throw new Error(
+    `memory vault .git is a ${entry.isSymbolicLink() ? "symlink" : "file"}, not a directory; ` +
+      "remove it or replace it with a real repository, then restart",
+  );
+}
+
 async function initRepo(home: string): Promise<void> {
   const dir = vaultDir(home);
+  assertVaultGit(home);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   writeIgnore(dir);
   if (existsSync(join(dir, ".git"))) return;

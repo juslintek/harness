@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gitOutput } from "../../git-env";
-import { drainCommits, ensureVaultRepo, queueCommit } from "./git-log";
+import { assertVaultGit, drainCommits, ensureVaultRepo, queueCommit } from "./git-log";
 import { createNote, updateNote } from "./store";
 import { aliceA, ctx, type Env, orgNote, setup, teardown } from "./store-test-kit";
 import { vaultDir } from "./vault";
@@ -117,4 +117,22 @@ test("a symlinked .gitignore is replaced and its outside target is left untouche
   expect(readFileSync(target, "utf8")).toBe("keep me\n");
   expect(lstatSync(join(vault, ".gitignore")).isFile()).toBe(true);
   expect(readFileSync(join(vault, ".gitignore"), "utf8")).toBe("*.tmp\n*\n!*/\n!*.md\n");
+});
+
+test("a .git symlink or gitdir file refuses the vault and is left in place", async () => {
+  const vault = vaultDir(env.dir);
+  mkdirSync(vault, { recursive: true });
+  const outside = mkdtempSync(join(tmpdir(), "harness-outside-git-"));
+  try {
+    symlinkSync(outside, join(vault, ".git"));
+    await expect(ensureVaultRepo(env.dir)).rejects.toThrow("symlink");
+    expect(() => assertVaultGit(env.dir)).toThrow("not a directory");
+    expect(lstatSync(join(vault, ".git")).isSymbolicLink()).toBe(true);
+    rmSync(join(vault, ".git"));
+    writeFileSync(join(vault, ".git"), `gitdir: ${outside}\n`);
+    expect(() => assertVaultGit(env.dir)).toThrow("file");
+    expect(readFileSync(join(vault, ".git"), "utf8")).toContain("gitdir:");
+  } finally {
+    rmSync(outside, { recursive: true, force: true });
+  }
 });
