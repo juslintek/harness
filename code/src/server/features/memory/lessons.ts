@@ -152,6 +152,12 @@ function insertAll(
   );
   const now = Date.now();
   db.transaction(() => {
+    // Inside the transaction so two racing calls cannot both pass: the cap is per task and author.
+    const earlier = db
+      .query("SELECT 1 FROM lessons WHERE task_id = ? AND author_id = ? LIMIT 1")
+      .get(ctx.taskId, ctx.memberId);
+    if (earlier !== null)
+      throw new MemoryError("conflict", "lessons for this task were already proposed");
     for (const r of rows) {
       insert.run(
         r.id,

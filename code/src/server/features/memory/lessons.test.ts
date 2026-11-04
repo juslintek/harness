@@ -82,3 +82,24 @@ test("reviewerFor prefers the manager, then a teammate, never the author, null f
   updateMember(w.db, lead.id, { paused: true });
   expect(reviewerFor(w.db, lesson)).toBe(peer.id);
 });
+
+test("the 1 to 3 cap holds per task and author, also for two racing calls", async () => {
+  w = world();
+  const dev = w.agent("dev");
+  const t = ctxOf(dev.id, w.doneTask(dev).id);
+  await proposeLessons(w.db, t, [GOOD]);
+  await expect(proposeLessons(w.db, t, [`${GOOD} Again.`])).rejects.toMatchObject({
+    code: "conflict",
+  });
+  const other = ctxOf(dev.id, w.doneTask(dev, "second").id);
+  const seen: number[] = [];
+  const off = onLessonProposed((e) => seen.push(e.lessons.length));
+  const res = await Promise.allSettled([
+    proposeLessons(w.db, other, [GOOD]),
+    proposeLessons(w.db, other, [`${GOOD} Racing.`]),
+  ]);
+  off();
+  expect(res.filter((r) => r.status === "fulfilled").length).toBe(1);
+  expect(seen).toEqual([1]);
+  expect(listLessons(w.db, w.orgId).length).toBe(2);
+});

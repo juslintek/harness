@@ -261,7 +261,7 @@ test("an assignment wake whose task was reassigned or finished meanwhile is skip
     { reason: "stale" },
   ]);
   expect(
-    k.seen.filter((s) => s.memberId === bob.id && s.prompt.includes("assigned to you")),
+    k.seen.filter((s) => s.memberId === bob.id && s.prompt.includes("was assigned to you.")),
   ).toHaveLength(0);
 });
 
