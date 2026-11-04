@@ -61,18 +61,38 @@ interface WriteRaw {
 // notes (an instance admin) is allowed to see and revert those rows.
 const ORG_OR_GLOBAL = "(org_id = ?1 OR (?2 = 1 AND org_id IS NULL))";
 
+interface WriteViewer {
+  projectIds: string[];
+  memberId: string | null;
+}
+
+// Mirrors canRead on the disk layout so the limit applies to rows the viewer may see; filtering
+// after the limit would let a busy project they cannot read push every visible write off the page.
+function visibleDisk(orgId: string, v: WriteViewer): { sql: string; params: string[] } {
+  const prefix = (rest: string): string => `orgs/${orgId}/${rest}/`;
+  const prefixes = [
+    "global/",
+    prefix("org"),
+    ...v.projectIds.map((p) => prefix(`projects/${p}`)),
+    prefix(v.memberId === null ? "agents" : `agents/${v.memberId}`),
+  ];
+  const sql = prefixes.map(() => "substr(disk, 1, length(?)) = ?").join(" OR ");
+  return { sql: ` AND (${sql})`, params: prefixes.flatMap((x) => [x, x]) };
+}
+
 export function listWrites(
   db: Database,
   orgId: string,
-  opts: { limit: number; agentsOnly?: boolean; includeGlobal?: boolean },
+  opts: { limit: number; agentsOnly?: boolean; includeGlobal?: boolean; viewer?: WriteViewer },
 ): NoteWriteView[] {
   // An agent write always carries the run it happened in.
   const agents = opts.agentsOnly ? " AND run_id IS NOT NULL" : "";
+  const vis = opts.viewer ? visibleDisk(orgId, opts.viewer) : { sql: "", params: [] };
   return db
-    .query<WriteRaw, [string, number, number]>(
-      `SELECT * FROM note_writes WHERE ${ORG_OR_GLOBAL}${agents} ORDER BY at DESC, id DESC LIMIT ?`,
+    .query<WriteRaw, Array<string | number>>(
+      `SELECT * FROM note_writes WHERE ${ORG_OR_GLOBAL}${agents}${vis.sql} ORDER BY at DESC, id DESC LIMIT ?`,
     )
-    .all(orgId, opts.includeGlobal ? 1 : 0, opts.limit)
+    .all(orgId, opts.includeGlobal ? 1 : 0, ...vis.params, opts.limit)
     .map((r) => ({
       id: r.id,
       noteId: r.note_id,

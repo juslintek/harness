@@ -15,6 +15,7 @@ import {
   grantProject,
 } from "../orgs/api";
 import { drainCommits } from "./git-log";
+import { logWrite } from "./index-log";
 
 const ORIGIN = "http://localhost:4100";
 let home: string;
@@ -216,4 +217,23 @@ test("lesson decide is admin-only and an accepted lesson becomes a note", async 
   const decided = await res.json();
   expect(decided.status).toBe("accepted");
   expect((await k.call(k.alice, "GET", `${BASE}/notes/${decided.noteId}`)).status).toBe(200);
+});
+
+test("the write feed fills its limit with visible writes when newer ones sit in an inaccessible project", async () => {
+  const k = await boot();
+  const base = { noteId: "n", orgId: k.acme.id, op: "update" as const, actor: "x", memberId: null };
+  const row = (disk: string) =>
+    logWrite(k.db, {
+      ...base,
+      disk,
+      runId: null,
+      beforeText: null,
+      afterText: "t",
+      beforeHash: null,
+      afterHash: null,
+    });
+  for (let i = 0; i < 3; i++) row(`orgs/${k.acme.id}/org/visible-${i}.md`);
+  for (let i = 0; i < 60; i++) row(`orgs/${k.acme.id}/projects/hidden/h-${i}.md`);
+  const feed = await (await k.call(k.alice, "GET", `${BASE}/writes?limit=50`)).json();
+  expect(feed).toHaveLength(3);
 });

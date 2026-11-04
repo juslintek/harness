@@ -37,6 +37,7 @@ export function writeAndLessonRoutes(db: Database, home: string, app: Hono<AuthE
       limit: q.limit ?? 50,
       agentsOnly: q.agentsOnly === "1",
       includeGlobal: m.viewer.canWriteGlobal,
+      viewer: m.viewer,
     });
     const out = [];
     for (const w of rows) {
