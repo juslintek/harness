@@ -184,6 +184,20 @@ async function unstageNonNotes(dir: string): Promise<void> {
   }
 }
 
+// `git add` stages a symlink as mode 120000 and a nested repo as a gitlink (160000), and neither
+// is note text, so only regular blobs may reach the commit. Deletions (mode 000000) stay.
+async function unstageNonFiles(dir: string): Promise<void> {
+  const raw = await git(dir, ["diff", "--cached", "--raw", "--no-renames", "-z"]);
+  const parts = raw.out.split("\0");
+  for (let i = 0; i + 1 < parts.length; i += 2) {
+    const newMode = (parts[i] as string).split(" ")[1];
+    const path = parts[i + 1] as string;
+    if (newMode === "100644" || newMode === "100755" || newMode === "000000") continue;
+    await git(dir, ["--literal-pathspecs", "reset", "-q", "--", path]);
+    console.error(`memory: not committing ${path}: it is not a regular file`);
+  }
+}
+
 async function commitAll(home: string, message: string, db: Database | undefined): Promise<void> {
   try {
     await ensureVaultRepo(home);
@@ -193,6 +207,7 @@ async function commitAll(home: string, message: string, db: Database | undefined
     await git(dir, ["reset", "-q"]);
     await stageNotes(dir, await changedNotes(dir));
     await unstageNonNotes(dir);
+    await unstageNonFiles(dir);
     await unstageSecrets(dir);
     const commit = await git(dir, ["commit", "-q", "-m", message]);
     if (commit.code !== 0 && !/nothing (added )?to commit/.test(commit.out))

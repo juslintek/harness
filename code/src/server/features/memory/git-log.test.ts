@@ -161,3 +161,26 @@ test("a .git symlink or gitdir file refuses the vault and is left in place", asy
     rmSync(outside, { recursive: true, force: true });
   }
 });
+
+test("a symlink at a valid note path is never committed", async () => {
+  const vault = vaultDir(env.dir);
+  await ensureVaultRepo(env.dir);
+  const target = join(env.dir, "outside.txt");
+  writeFileSync(target, "secret");
+  mkdirSync(join(vault, "orgs", "o1", "org"), { recursive: true });
+  symlinkSync(target, join(vault, "orgs", "o1", "org", "link.md"));
+  await Bun.write(join(vault, orgNote.disk), "# ok");
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (...a: unknown[]) => errors.push(a.join(" "));
+  try {
+    queueCommit(env.dir, "files");
+    await drainCommits();
+  } finally {
+    console.error = original;
+  }
+  const tree = (await gitOutput(vault, ["ls-tree", "-r", "HEAD"])) ?? "";
+  expect(tree).toContain(orgNote.disk);
+  expect(tree).not.toContain("link.md");
+  expect(errors.join("\n")).toContain("link.md");
+});
