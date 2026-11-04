@@ -83,6 +83,19 @@ test("reviewerFor prefers the manager, then a teammate, never the author, null f
   expect(reviewerFor(w.db, lesson)).toBe(peer.id);
 });
 
+test("reviewerFor skips viewer agents, since heartbeat refuses to run them", () => {
+  w = world();
+  const dev = w.agent("dev");
+  const peer = w.agent("peer");
+  const lead = w.agent("lead");
+  mate(w, dev, peer);
+  manage(w, lead, dev);
+  updateMember(w.db, lead.id, { role: "viewer" });
+  expect(reviewerFor(w.db, { authorId: dev.id, orgId: w.orgId })).toBe(peer.id);
+  updateMember(w.db, peer.id, { role: "viewer" });
+  expect(reviewerFor(w.db, { authorId: dev.id, orgId: w.orgId })).toBeNull();
+});
+
 test("the 1 to 3 cap holds per task and author, also for two racing calls", async () => {
   w = world();
   const dev = w.agent("dev");

@@ -203,7 +203,7 @@ export async function proposeLessons(
 
 function usable(db: Database, id: string, authorId: string): boolean {
   const m = getMember(db, id);
-  return m?.kind === "agent" && !m.paused && m.id !== authorId;
+  return m?.kind === "agent" && !m.paused && m.role !== "viewer" && m.id !== authorId;
 }
 
 // The author's manager chain first, since a manager knows what the team needs; otherwise a teammate.
