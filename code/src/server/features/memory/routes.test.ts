@@ -2,8 +2,10 @@ import { expect, test } from "bun:test";
 import { lessonViewSchema } from "../../../shared/memory";
 import { createTask } from "../board/api";
 import { addAgentMember, addHumanMember, createProject, grantProject } from "../orgs/api";
+import { hashText } from "./frontmatter";
 import { logWrite } from "./index-log";
 import { BASE, boot, useHome } from "./routes-test-kit";
+import { readNoteFile } from "./vault";
 
 useHome();
 
@@ -201,4 +203,31 @@ test("the write feed marks only undoable rows as revertible", async () => {
     feed.map((w: { op: string; canRevert: boolean }) => [w.op, w.canRevert]),
   );
   expect(byOp).toEqual({ update: true, rename: false, outside: false });
+});
+
+test("revert refuses an outside edit and leaves the file alone", async () => {
+  const k = await boot();
+  const made = await (await k.call(k.alice, "POST", `${BASE}/notes`, note)).json();
+  const disk = (
+    k.db.query("SELECT disk FROM notes WHERE id = ?").get(made.note.id) as { disk: string }
+  ).disk;
+  const current = readNoteFile(k.home, disk) as string;
+  logWrite(k.db, {
+    noteId: made.note.id,
+    orgId: k.acme.id,
+    op: "outside",
+    actor: "x",
+    memberId: null,
+    disk,
+    runId: null,
+    beforeText: "# Old\nearlier",
+    afterText: current,
+    beforeHash: hashText("# Old\nearlier"),
+    afterHash: hashText(current),
+  });
+  const writes = await (await k.call(k.alice, "GET", `${BASE}/writes`)).json();
+  expect(writes[0].op).toBe("outside");
+  const rev = await k.call(k.alice, "POST", `${BASE}/writes/${writes[0].id}/revert`);
+  expect(rev.status).toBe(400);
+  expect(readNoteFile(k.home, disk)).toBe(current);
 });

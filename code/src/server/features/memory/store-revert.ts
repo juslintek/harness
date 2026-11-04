@@ -30,6 +30,8 @@ export function revertWrite(
   }
   needWrite(ctx.viewer, loc);
   if (w.op === "rename") throw new MemoryError("invalid", "rename back instead of reverting");
+  // An outside edit is the disk's own state; the feed already marks it canRevert: false.
+  if (w.op === "outside") throw new MemoryError("invalid", "outside edits cannot be reverted");
   const current = readNoteFile(home, w.disk);
   if ((current === null ? null : hashText(current)) !== w.afterHash) {
     throw new MemoryError("conflict", "note changed since that write");
