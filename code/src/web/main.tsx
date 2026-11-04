@@ -29,7 +29,8 @@ function OrgRoute({ parts }: { parts: string[] }): preact.JSX.Element {
   if (parts[2] === "hiring") return <HiringPage slug={slug} {...(parts[3] && { id: parts[3] })} />;
   if (parts[2] === "policies") return <PoliciesPage slug={slug} />;
   if (parts[2] === "memory") return <MemoryPage slug={slug} />;
-  if (parts[2] === "logs") return <LogsPage slug={slug} />;
+  // Keyed so switching org remounts the page: its results, filters and in-flight guard belong to one org.
+  if (parts[2] === "logs") return <LogsPage key={slug} slug={slug} />;
   const taskNumber = Number(parts[4]);
   return (
     <BoardPage
