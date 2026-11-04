@@ -1,5 +1,13 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { gitEnv } from "../../git-env";
 import { redact } from "../logs/api";
@@ -44,9 +52,20 @@ async function git(cwd: string, args: string[]): Promise<{ code: number; out: st
 // because a later "!" rule must follow the "*" it carves out of.
 const IGNORE_RULES = ["*.tmp", "*", "!*/", "!*.md"];
 
+// lstat, not stat: a symlinked .gitignore would make the write below land on its target outside
+// the vault. Anything that is not a plain file is replaced by a fresh file through a rename, which
+// swaps the entry itself and never follows the link.
 function writeIgnore(dir: string): void {
   const file = join(dir, ".gitignore");
-  const current = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const entry = lstatSync(file, { throwIfNoEntry: false });
+  if (entry !== undefined && !entry.isFile()) {
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, `${IGNORE_RULES.join("\n")}\n`);
+    if (entry.isDirectory()) rmSync(file, { recursive: true });
+    renameSync(tmp, file);
+    return;
+  }
+  const current = entry === undefined ? "" : readFileSync(file, "utf8");
   const have = new Set(current.split("\n"));
   const missing = IGNORE_RULES.filter((r) => !have.has(r));
   if (missing.length === 0) return;

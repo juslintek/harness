@@ -3,10 +3,12 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
   chmodSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -103,4 +105,16 @@ test("an existing vault gets the ignore rules and keeps its old entries", async 
   writeFileSync(join(vault, ".gitignore"), "*.tmp\ncustom\n");
   await ensureVaultRepo(env.dir);
   expect(readFileSync(join(vault, ".gitignore"), "utf8")).toBe("*.tmp\ncustom\n*\n!*/\n!*.md\n");
+});
+
+test("a symlinked .gitignore is replaced and its outside target is left untouched", async () => {
+  const vault = vaultDir(env.dir);
+  mkdirSync(vault, { recursive: true });
+  const target = join(env.dir, "outside-target");
+  writeFileSync(target, "keep me\n");
+  symlinkSync(target, join(vault, ".gitignore"));
+  await ensureVaultRepo(env.dir);
+  expect(readFileSync(target, "utf8")).toBe("keep me\n");
+  expect(lstatSync(join(vault, ".gitignore")).isFile()).toBe(true);
+  expect(readFileSync(join(vault, ".gitignore"), "utf8")).toBe("*.tmp\n*\n!*/\n!*.md\n");
 });
