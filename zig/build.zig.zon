@@ -1,0 +1,13 @@
+.{
+    .name = .harness,
+    .version = "0.0.0",
+    .fingerprint = 0x3d7431e4894871b2,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        .httpz = .{
+            .url = "https://github.com/karlseguin/http.zig/archive/1bb71ff.tar.gz",
+            .hash = "httpz-0.0.0-PNVzrFNMCQBySpfunggKlQQoD_FvF3yADlqg3xfbdX8p",
+        },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "src", "tools", "vendor" },
+}

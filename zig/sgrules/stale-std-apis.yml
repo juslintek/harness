@@ -1,0 +1,77 @@
+# Pre-0.16 std APIs that no longer exist in 0.17.0. Each was checked by grepping the installed std.
+id: stale-std-io-stdout
+language: zig
+severity: error
+message: std.io.getStdOut is gone; write through std.Io.File.stdout() or std.debug.print.
+rule:
+  pattern: std.io.$FN()
+---
+id: stale-general-purpose-allocator
+language: zig
+severity: error
+message: GeneralPurposeAllocator is gone; use std.heap.DebugAllocator in Debug builds and std.heap.c_allocator in production.
+rule:
+  pattern: std.heap.GeneralPurposeAllocator
+---
+id: stale-time-timestamps
+language: zig
+severity: error
+message: std.time.milliTimestamp, nanoTimestamp and timestamp are gone; use std.Io.Clock.real.now(io).
+rule:
+  any:
+    - pattern: std.time.milliTimestamp()
+    - pattern: std.time.nanoTimestamp()
+    - pattern: std.time.timestamp()
+---
+id: stale-time-sleep
+language: zig
+severity: error
+message: std.time.sleep is gone; use io.sleep.
+rule:
+  pattern: std.time.sleep($$$ARGS)
+---
+id: stale-thread-sync
+language: zig
+severity: error
+message: std.Thread.Mutex and std.Thread.Condition are gone; use std.Io.Mutex or the app state lock.
+rule:
+  any:
+    - pattern: std.Thread.Mutex
+    - pattern: std.Thread.Condition
+---
+id: stale-process-env-args
+language: zig
+severity: error
+message: argsAlloc and getEnvVarOwned are gone; use std.process.Init (init.minimal.args, init.environ_map).
+rule:
+  any:
+    - pattern: std.process.argsAlloc($$$ARGS)
+    - pattern: std.process.getEnvVarOwned($$$ARGS)
+---
+id: stale-fs-cwd
+language: zig
+severity: error
+message: std.fs.cwd is gone; use std.Io.Dir.cwd() and pass io explicitly.
+rule:
+  pattern: std.fs.cwd()
+---
+id: stale-crypto-random
+language: zig
+severity: error
+message: std.crypto.random is gone; secrets must come from io.randomSecure.
+rule:
+  pattern: std.crypto.random
+---
+id: stale-buffered-writer
+language: zig
+severity: error
+message: std.io.bufferedWriter is gone; use a std.Io.Writer with an explicit buffer.
+rule:
+  pattern: std.io.bufferedWriter($$$ARGS)
+---
+id: stale-cimport
+language: zig
+severity: error
+message: "@cImport is gone; declare the extern functions by hand (see src/db/c.zig)."
+rule:
+  pattern: "@cImport($$$ARGS)"
