@@ -56,7 +56,8 @@ pub const Store = struct {
     migrate_mutex: Io.Mutex = .init,
     migrated: bool = false,
     left: [providers.len]bool = @splat(false),
-    warned: [providers.len]bool = @splat(false),
+    /// Read and set from pool threads, so only through `claimWarning`.
+    warned: [providers.len]std.atomic.Value(bool) = @splat(.init(false)),
 
     const Entries = std.StringArrayHashMapUnmanaged([]const u8);
 
@@ -161,7 +162,9 @@ pub const Store = struct {
     }
 
     fn readLegacy(self: *Store, arena: std.mem.Allocator, provider: Provider) !?[]const u8 {
-        const out = self.run(arena, &.{ "security", "find-generic-password", "-s", legacy_service, "-a", @tagName(provider), "-w" });
+        // Raw bytes: the line reader would trim the value and drop a blank one, and the original
+        // is deleted from the Keychain once the stored copy matches.
+        const out = self.run(arena, true, &.{ "security", "find-generic-password", "-s", legacy_service, "-a", @tagName(provider), "-w" });
         if (out.code != 0) return null;
         // `replace(/\n$/, "")`: one newline, not all of them.
         const value = if (std.mem.endsWith(u8, out.stdout, "\n")) out.stdout[0 .. out.stdout.len - 1] else out.stdout;
@@ -170,8 +173,9 @@ pub const Store = struct {
 
     /// `spawnBounded`: a locked Keychain can prompt forever, so every call is bounded and a
     /// missing `security` reads as "no key".
-    fn run(self: *Store, arena: std.mem.Allocator, argv: []const []const u8) runner_mod.Out {
-        return self.runner.run(arena, argv, self.probe_timeout_ms, &.{}) catch |err| switch (err) {
+    fn run(self: *Store, arena: std.mem.Allocator, raw: bool, argv: []const []const u8) runner_mod.Out {
+        const runner = if (raw) &Runner.runRaw else &Runner.run;
+        return runner(self.runner, arena, argv, self.probe_timeout_ms, &.{}) catch |err| switch (err) {
             error.TimedOut => .{ .code = runner_mod.timed_out_code, .stdout = "", .stderr = "" },
             else => .{ .code = runner_mod.not_found_code, .stdout = "", .stderr = "" },
         };
@@ -197,7 +201,7 @@ pub const Store = struct {
                 left[index] = true;
                 continue;
             }
-            const deleted = self.run(arena, &.{ "security", "delete-generic-password", "-s", legacy_service, "-a", @tagName(provider) });
+            const deleted = self.run(arena, false, &.{ "security", "delete-generic-password", "-s", legacy_service, "-a", @tagName(provider) });
             if (deleted.code != 0) left[index] = true;
         }
         return left;
@@ -214,6 +218,10 @@ pub const Store = struct {
         return self.left;
     }
 
+    fn claimWarning(self: *Store, index: usize) bool {
+        return !self.warned[index].swap(true, .acq_rel);
+    }
+
     fn fromEnv(self: *const Store, provider: Provider) ?[]const u8 {
         const value = self.env.get(envName(provider)) orelse return null;
         return if (value.len > 0) value else null;
@@ -228,10 +236,9 @@ pub const Store = struct {
     /// `keyStatus`. An old Keychain item that is still there is logged once per process.
     pub fn status(self: *Store, arena: std.mem.Allocator, diag: *Diag) ![]const Status {
         const left = try self.ready(arena, diag);
-        for (providers, left, &self.warned) |provider, still_there, *warned| {
-            if (!still_there or warned.*) continue;
+        for (providers, left, 0..) |provider, still_there, index| {
+            if (!still_there or !self.claimWarning(index)) continue;
             if (!builtin.is_test) std.log.warn("keys: {t} an old key is still in the login keychain: delete it by hand", .{provider});
-            warned.* = true;
         }
         const result = try arena.alloc(Status, providers.len);
         var stored: ?Entries = null;
@@ -523,6 +530,50 @@ test "agents: only one trailing newline of the security output is dropped, like 
     var diag: Diag = .{};
     _ = try fx.store.status(arena.allocator(), &diag);
     try testing.expectEqualStrings("{\"gemini\":\"key\\n\"}", try fx.secrets(arena.allocator()));
+}
+
+test "agents: a legacy value with edge whitespace is migrated byte for byte, a blank one too" {
+    const fx = try Fx.create(&.{});
+    defer fx.destroy();
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    fx.tools.legacy[@backingInt(Provider.openai)] = "  pad\t ";
+    fx.tools.legacy[@backingInt(Provider.gemini)] = "   ";
+    var diag: Diag = .{};
+    const status = try fx.store.status(arena.allocator(), &diag);
+    try testing.expect(!status[1].legacy_left and !status[2].legacy_left);
+    try testing.expectEqualStrings("{\"openai\":\"  pad\\t \",\"gemini\":\"   \"}", try fx.secrets(arena.allocator()));
+    try testing.expectEqual(@as(usize, 2), fx.tools.deletes);
+}
+
+test "agents: a legacy item is deleted only when the stored copy equals the raw value" {
+    const fx = try Fx.create(&.{});
+    defer fx.destroy();
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    try fx.write("{\"openai\":\"pad\"}");
+    fx.tools.legacy[@backingInt(Provider.openai)] = " pad ";
+    var diag: Diag = .{};
+    const status = try fx.store.status(arena.allocator(), &diag);
+    try testing.expect(status[1].legacy_left);
+    try testing.expectEqual(@as(usize, 0), fx.tools.deletes);
+}
+
+test "agents: the keychain warning is claimed once per provider across threads" {
+    const fx = try Fx.create(&.{});
+    defer fx.destroy();
+    var claimed: std.atomic.Value(u32) = .init(0);
+    const Worker = struct {
+        fn run(store: *Store, count: *std.atomic.Value(u32)) void {
+            for (0..providers.len) |index| if (store.claimWarning(index)) {
+                _ = count.fetchAdd(1, .monotonic);
+            };
+        }
+    };
+    var threads: [8]std.Thread = undefined;
+    for (&threads) |*thread| thread.* = try std.Thread.spawn(.{}, Worker.run, .{ &fx.store, &claimed });
+    for (threads) |thread| thread.join();
+    try testing.expectEqual(@as(u32, providers.len), claimed.load(.monotonic));
 }
 
 test "agents: control characters are refused" {

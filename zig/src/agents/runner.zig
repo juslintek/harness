@@ -37,6 +37,26 @@ pub const Runner = struct {
         timeout_ms: i64,
         env: []const specs.EnvPair,
     ) Error!Out,
+    /// Same, but stdout is every byte the command wrote. Without it `runRaw` falls back to
+    /// `run_fn`, which suits test doubles that already return exact text.
+    run_raw_fn: ?*const fn (
+        ctx: *anyopaque,
+        arena: std.mem.Allocator,
+        argv: []const []const u8,
+        timeout_ms: i64,
+        env: []const specs.EnvPair,
+    ) Error!Out = null,
+
+    pub fn runRaw(
+        runner: Runner,
+        arena: std.mem.Allocator,
+        argv: []const []const u8,
+        timeout_ms: i64,
+        env: []const specs.EnvPair,
+    ) Error!Out {
+        const raw = runner.run_raw_fn orelse return runner.run_fn(runner.ctx, arena, argv, timeout_ms, env);
+        return raw(runner.ctx, arena, argv, timeout_ms, env);
+    }
 
     /// `env` is added to the server's environment for this one command.
     pub fn run(
@@ -59,7 +79,100 @@ pub const ProcessRunner = struct {
     grace_ms: i64 = kill_grace_ms,
 
     pub fn runner(self: *ProcessRunner) Runner {
-        return .{ .ctx = self, .run_fn = runOne };
+        return .{ .ctx = self, .run_fn = runOne, .run_raw_fn = runRawOne };
+    }
+
+    fn runRawOne(ctx: *anyopaque, arena: std.mem.Allocator, argv: []const []const u8, timeout_ms: i64, extra: []const specs.EnvPair) Error!Out {
+        const self: *ProcessRunner = @ptrCast(@alignCast(ctx));
+        return self.executeRaw(arena, argv, timeout_ms, extra);
+    }
+
+    const RawEvent = union(enum) {
+        done: std.process.Child.WaitError!std.process.Child.Term,
+        timeout: Io.Cancelable!void,
+        grace: Io.Cancelable!void,
+    };
+
+    /// Reads stdout to its end, then reaps: `Child.wait` closes the pipe, so it must come second.
+    fn readThenWait(gpa: std.mem.Allocator, io: Io, child: *std.process.Child, captured: *?[]u8) std.process.Child.WaitError!std.process.Child.Term {
+        var buffer: [4096]u8 = undefined;
+        var reader = child.stdout.?.reader(io, &buffer);
+        // A failed or oversized read leaves what the command printed unknown; the wait still ends.
+        captured.* = reader.interface.allocRemaining(gpa, .limited(max_line_bytes)) catch null;
+        return child.wait(io);
+    }
+
+    /// Like `execute`, but stdout is the exact bytes and stderr is dropped. The command's whole
+    /// group is ended on a timeout or a cancel, with the same grace.
+    fn executeRaw(self: *ProcessRunner, arena: std.mem.Allocator, argv: []const []const u8, timeout_ms: i64, extra: []const specs.EnvPair) Error!Out {
+        const io = self.io;
+        var env = try self.base_env.clone(self.gpa);
+        defer env.deinit();
+        for (extra) |pair| try env.put(pair.name, pair.value);
+        var child = std.process.spawn(io, .{
+            .argv = argv,
+            .environ_map = &env,
+            .stdin = .ignore,
+            .stdout = .pipe,
+            .stderr = .ignore,
+            .pgid = 0,
+        }) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            else => return .{ .code = not_found_code, .stdout = "", .stderr = @errorName(err) },
+        };
+        const pgid = child.id.?;
+        var captured: ?[]u8 = null;
+        defer if (captured) |bytes| self.gpa.free(bytes);
+
+        var buffer: [3]RawEvent = undefined;
+        var select: Io.Select(RawEvent) = .init(io, &buffer);
+        defer select.cancelDiscard();
+        // The reader goes last: if it cannot start, the child is untouched and is ended here.
+        select.concurrent(.timeout, sleepMs, .{ io, timeout_ms }) catch return rawNotStarted(io, &child, pgid);
+        select.concurrent(.done, readThenWait, .{ self.gpa, io, &child, &captured }) catch return rawNotStarted(io, &child, pgid);
+
+        var term: ?std.process.Child.Term = null;
+        var over_time = false;
+        while (term == null) {
+            const event = select.await() catch return abortRaw(io, &select, pgid);
+            switch (event) {
+                .done => |result| term = result catch return .{ .code = not_found_code, .stdout = "", .stderr = "wait failed" },
+                .timeout => |result| {
+                    result catch return abortRaw(io, &select, pgid);
+                    over_time = true;
+                    process_mod.signalGroup(pgid, .TERM);
+                    select.concurrent(.grace, sleepMs, .{ io, self.grace_ms }) catch process_mod.signalGroup(pgid, .KILL);
+                },
+                .grace => |result| {
+                    result catch return abortRaw(io, &select, pgid);
+                    process_mod.signalGroup(pgid, .KILL);
+                },
+            }
+        }
+        if (process_mod.groupExists(pgid)) process_mod.signalGroup(pgid, .KILL);
+        const code: i32 = switch (term.?) {
+            .signal => return error.TimedOut,
+            .exited => |exit_code| exit_code,
+            .stopped, .unknown => 1,
+        };
+        if (over_time) return error.TimedOut;
+        return .{ .code = code, .stdout = try arena.dupe(u8, captured orelse ""), .stderr = "" };
+    }
+
+    fn rawNotStarted(io: Io, child: *std.process.Child, pgid: std.posix.pid_t) Error {
+        process_mod.signalGroup(pgid, .KILL);
+        child.kill(io);
+        return error.Canceled;
+    }
+
+    fn abortRaw(io: Io, select: *Io.Select(RawEvent), pgid: std.posix.pid_t) Error {
+        const previous = io.swapCancelProtection(.blocked);
+        defer _ = io.swapCancelProtection(previous);
+        process_mod.signalGroup(pgid, .KILL);
+        while (true) switch (select.await() catch return error.Canceled) {
+            .done => return error.Canceled,
+            else => {},
+        };
     }
 
     fn runOne(ctx: *anyopaque, arena: std.mem.Allocator, argv: []const []const u8, timeout_ms: i64, extra: []const specs.EnvPair) Error!Out {
@@ -249,6 +362,37 @@ test "agents: a command's output and exit status come back" {
     try testing.expectEqual(@as(i32, 3), out.code);
     try testing.expectEqualStrings("1.2.3\n", out.stdout);
     try testing.expectEqualStrings("oops\n", out.stderr);
+}
+
+test "agents: a raw capture keeps every byte, blank lines and edge whitespace included" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    var env = try testEnv();
+    defer env.deinit();
+    var runner: ProcessRunner = .{ .gpa = testing.allocator, .io = testing.io, .base_env = &env };
+    const out = try runner.runner().runRaw(arena.allocator(), &.{ "/bin/sh", "-c", "printf '\\n  a b \\t\\n\\n'; exit 2" }, 5000, &.{});
+    try testing.expectEqual(@as(i32, 2), out.code);
+    try testing.expectEqualStrings("\n  a b \t\n\n", out.stdout);
+    const unterminated = try runner.runner().runRaw(arena.allocator(), &.{ "/bin/sh", "-c", "printf 'tail'" }, 5000, &.{});
+    try testing.expectEqualStrings("tail", unterminated.stdout);
+    const missing = try runner.runner().runRaw(arena.allocator(), &.{"definitely-not-installed-xyz"}, 5000, &.{});
+    try testing.expectEqual(not_found_code, missing.code);
+}
+
+test "agents: a raw capture that times out ends the whole group" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    var env = try testEnv();
+    defer env.deinit();
+    var dir_buf: [Io.Dir.max_path_bytes]u8 = undefined;
+    const dir_path = dir_buf[0..try tmp.dir.realPath(testing.io, &dir_buf)];
+    try env.put("DIR", dir_path);
+    var runner: ProcessRunner = .{ .gpa = testing.allocator, .io = testing.io, .base_env = &env, .grace_ms = 100 };
+    const script = "trap '' TERM; sh -c 'trap \"\" TERM; echo $$ > \"$DIR/pid\"; exec sleep 30' & wait";
+    try testing.expectError(error.TimedOut, runner.runner().runRaw(arena.allocator(), &.{ "/bin/sh", "-c", script }, 300, &.{}));
+    try expectGone(try readPid(arena.allocator(), tmp.dir));
 }
 
 test "agents: a missing executable is code 127 and a closed stdin ends cat" {

@@ -346,6 +346,25 @@ test "agents: the version is the first x.y.z with its non-space tail" {
     try testing.expect(parseVersion("") == null);
 }
 
+test "agents: repeated concurrent passes over one allocator leak and corrupt nothing" {
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const table = try specs_mod.builtin(arena.allocator(), .{ .adapter_dir = "/a", .home = "/h" });
+    var fake: Fake = .{ .replies = &.{
+        .{ "claude --version", .{ .stdout = "2.1.316" } },
+        .{ "which claude", .{ .stdout = "/bin/claude\n" } },
+        .{ "claude auth status", .{ .stdout = "\"loggedIn\": true" } },
+        .{ "codex --version", .{ .stdout = "0.1.0" } },
+        .{ "which codex", .{ .stdout = "/bin/codex\n" } },
+    }, .record = false };
+    for (0..25) |_| {
+        var snapshot = try discoverAll(testing.allocator, testing.io, .{ .runner = fake.runner(), .gemini_key = true }, table, 1);
+        defer snapshot.deinit();
+        try testing.expectEqualStrings("/bin/claude", snapshot.items[0].path.?);
+        try testing.expectEqualStrings("0.1.0", snapshot.items[1].version.?);
+    }
+}
+
 test "agents: all specs are probed and the snapshot outlives the probes" {
     var arena: std.heap.ArenaAllocator = .init(testing.allocator);
     defer arena.deinit();
