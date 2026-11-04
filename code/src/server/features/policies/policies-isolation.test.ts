@@ -4,7 +4,7 @@ import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { bootApi } from "../../test-support/api-kit";
 import { createTask } from "../board/api";
-import { addAgentMember, createOrg, createProject, listTeams } from "../orgs/api";
+import { addAgentMember, createOrg, createProject, grantProject, listTeams } from "../orgs/api";
 import { decideProposal, getProposal, propose, review, setPolicy } from "./api";
 
 const policyRows = (db: Database): number =>
@@ -156,4 +156,35 @@ test("review refuses a same-org member who was not invited and stores nothing", 
   expect(getProposal(db, proposal.id)?.reviews).toEqual([
     { reviewerId: invited.id, verdict: "approve", comment: "ok" },
   ]);
+});
+
+test("a task of org A assigned to a member of org B stays org A's: only A's admin reaches its policy", async () => {
+  const k = bootApi();
+  const adminA = await k.user({ stepUp: true });
+  const adminB = await k.user({ stepUp: true });
+  const a = k.org(adminA, "alpha");
+  const b = k.org(adminB, "beta");
+  const dev = addAgentMember(k.db, b.id, {
+    agentId: "claude",
+    handle: "dev",
+    displayName: "dev",
+    specialties: [],
+  });
+  const project = createProject(k.db, { orgId: a.id, key: "P", name: "P" });
+  grantProject(k.db, project.id, b.id, "write", a.owner.id);
+  const task = createTask(k.db, { projectId: project.id, title: "t", createdBy: a.owner.id });
+  k.db.query("UPDATE tasks SET assignee_id = ? WHERE id = ?").run(dev.id, task.id);
+
+  const body = { layer: "task", targetId: task.id, key: "router.failover", value: false };
+  const qs = `layer=task&targetId=${task.id}&key=router.failover`;
+  expect((await k.call(adminB, "PUT", "/api/orgs/beta/policies", body)).status).toBe(404);
+  expect((await k.call(adminB, "DELETE", `/api/orgs/beta/policies?${qs}`)).status).toBe(404);
+  expect((await k.call(adminB, "GET", `/api/orgs/beta/policies?task=${task.id}`)).status).toBe(404);
+  expect(policyRows(k.db)).toBe(0);
+
+  expect((await k.call(adminA, "PUT", "/api/orgs/alpha/policies", body)).status).toBe(200);
+  expect((await k.call(adminA, "GET", `/api/orgs/alpha/policies?task=${task.id}`)).status).toBe(
+    200,
+  );
+  expect((await k.call(adminA, "DELETE", `/api/orgs/alpha/policies?${qs}`)).status).toBe(200);
 });

@@ -101,7 +101,9 @@ function contextForTask(db: Database, taskId: string): PolicyContext | null {
     )
     .get(taskId);
   if (!task) return null;
-  if (task.assignee_id) return contextForMember(db, task.assignee_id, taskId);
+  // A project grant lets a member of another org take the task; the task's own org still owns it.
+  const assignee = task.assignee_id ? contextForMember(db, task.assignee_id, taskId) : null;
+  if (assignee?.orgId === task.org_id) return assignee;
   const teamId = teamOfTask(db, taskId);
   return { orgId: task.org_id, taskId, ...(teamId ? { teamId } : {}) };
 }
