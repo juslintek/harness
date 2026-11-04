@@ -1,0 +1,73 @@
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { rmSync } from "node:fs";
+import { buildMemoryIndex } from "./index-file";
+import { upsertIndexed } from "./index-repo";
+import { loc, noteText, testDb, viewer } from "./index-test-kit";
+
+let env: ReturnType<typeof testDb>;
+beforeEach(() => {
+  env = testDb();
+});
+afterEach(() => {
+  env.db.close();
+  rmSync(env.dir, { recursive: true, force: true });
+});
+
+const add = (disk: string, body: string, updated?: string): void => {
+  upsertIndexed(env.db, loc(disk), noteText(body, updated === undefined ? {} : { updated }));
+};
+const alice = viewer("A", "m1", ["pa"]);
+
+test("each scope gets a heading and each note its title, virtual path and body", () => {
+  add("orgs/A/org/deploy.md", "# Deploy\nrun the script");
+  add("orgs/A/projects/pa/api.md", "# API\nuse v2");
+  add("orgs/A/agents/m1/mine.md", "# Mine\nprefer small diffs");
+  const text = buildMemoryIndex(env.db, alice, null, "");
+  expect(text).toContain(
+    "# Org notes\n\n## Deploy\n/memories/org/deploy.md\n\n# Deploy\nrun the script",
+  );
+  expect(text).toContain("## API\n/memories/project/pa/api.md");
+  expect(text).toContain("## Mine\n/memories/agent/mine.md");
+  expect(text.indexOf("# Your notes")).toBeLessThan(text.indexOf("# Project notes"));
+});
+
+test("a note matching the task comes first, the rest follow newest first", () => {
+  add("orgs/A/org/old.md", "# Old\nnothing relevant", "2020-01-01T00:00:00Z");
+  add("orgs/A/org/new.md", "# New\nnothing relevant", "2024-01-01T00:00:00Z");
+  add("orgs/A/org/hit.md", "# Hit\nrollback procedure", "2019-01-01T00:00:00Z");
+  const text = buildMemoryIndex(env.db, alice, null, "how to rollback");
+  const at = (t: string): number => text.indexOf(`## ${t}`);
+  expect(at("Hit")).toBeLessThan(at("New"));
+  expect(at("New")).toBeLessThan(at("Old"));
+});
+
+test("notes of another org never appear", () => {
+  add("orgs/B/org/theirs.md", "# Theirs\ncross-org-secret");
+  add("orgs/B/projects/pa/theirs2.md", "# Theirs2\ncross-org-secret");
+  add("orgs/A/org/ours.md", "# Ours\nfine");
+  const text = buildMemoryIndex(env.db, alice, null, "cross-org-secret");
+  expect(text).not.toContain("cross-org-secret");
+  expect(text).toContain("## Ours");
+});
+
+test("the index stops at a note boundary under 32 KB and logs a read per included note", () => {
+  const chunk = "x".repeat(10_000);
+  for (const n of ["a", "b", "c", "d"]) add(`orgs/A/org/${n}.md`, `# ${n}\n${chunk}`);
+  const text = buildMemoryIndex(env.db, alice, null, "");
+  expect(Buffer.byteLength(text)).toBeLessThanOrEqual(32 * 1024);
+  const included = text.match(/^## /gm)?.length ?? 0;
+  expect(included).toBe(3);
+  const reads = env.db
+    .query<{ via: string; run_id: string | null; member_id: string | null }, []>(
+      "SELECT via, run_id, member_id FROM note_reads",
+    )
+    .all();
+  expect(reads).toHaveLength(3);
+  expect(reads.every((r) => r.via === "index" && r.run_id === null && r.member_id === "m1")).toBe(
+    true,
+  );
+});
+
+test("nothing visible gives an empty index", () => {
+  expect(buildMemoryIndex(env.db, alice, null, "anything")).toBe("");
+});

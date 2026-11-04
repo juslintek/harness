@@ -31,6 +31,7 @@ const spec: AgentSpec = {
   stateWrite: [],
   weakerNetworkIsolation: false,
   claudeMeta: false,
+  mcp: true,
 };
 
 export const specFor = (id: string): AgentSpec => ({ ...spec, id });

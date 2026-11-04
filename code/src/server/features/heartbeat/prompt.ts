@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { getTask } from "../board/api";
 import { getChannel } from "../chat/api";
 import { directReportsOf, getMember, getOrg, listPositions, type MemberRow } from "../orgs/api";
+import { memoryNotice, wakeTopic } from "./memory-notice";
 import { describeHiring, profileHeader, teamLacksHints } from "./prompt-hiring";
 import type { WakeRow } from "./repo";
 
@@ -90,7 +91,7 @@ function managerNotice(db: Database, member: MemberRow): string {
   return `\n\nYou manage ${handles.join(", ")}. You do not write code. Your worktree is read-only on purpose. This overrides the instruction below to commit on your branch. Work like this:\n${steps}`;
 }
 
-export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[]): string {
+export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[], mcp = true): string {
   const org = getOrg(db, member.orgId);
   const titles = listPositions(db, member.orgId)
     .filter((p) => p.memberId === member.id)
@@ -101,5 +102,5 @@ export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[]): 
   const shown = wakes.slice(0, MAX_WAKES).map((w) => `- ${describe(db, w)}`);
   if (wakes.length > MAX_WAKES) shown.push(`- and ${wakes.length - MAX_WAKES} more`);
   const woken = `${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}${teamLacksHints(db, member, wakes)}`;
-  return `${profileHeader(db, member)}${who}\n\n${woken}${managerNotice(db, member)}\n\n${INSTRUCTION}`;
+  return `${profileHeader(db, member)}${who}\n\n${woken}${managerNotice(db, member)}${memoryNotice(db, member, wakeTopic(db, wakes), mcp)}\n\n${INSTRUCTION}`;
 }

@@ -69,6 +69,7 @@ const fakeSpec: AgentSpec = {
   stateWrite: [],
   weakerNetworkIsolation: false,
   claudeMeta: false,
+  mcp: true,
 };
 
 // Inside srt only the run's tmp dir is writable, so the pid file lives there.

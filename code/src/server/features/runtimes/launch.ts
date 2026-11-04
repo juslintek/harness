@@ -15,6 +15,7 @@ import {
 import { mintRunToken, type TokenScope } from "../mcp/api";
 import type { Adapter } from "./adapter";
 import { prepareCodexHome } from "./codex-home";
+import { memoryFileEnv } from "./memory-file";
 import { createScratchCheckout } from "./scratch-checkout";
 import { createWorktree, defaultBranch, reuseWorktree } from "./worktree";
 
@@ -39,6 +40,8 @@ export interface RunMember {
   readOnly?: boolean | undefined;
   // The project whose repo the run works in; its org decides the run's approvals.
   projectId?: string | undefined;
+  // Notes for an engine without MCP; written to the run dir and named by HARNESS_MEMORY_FILE.
+  memoryIndex?: string | undefined;
 }
 
 // An interview run has no member: its token carries the candidate id and only the interview scope.
@@ -199,6 +202,7 @@ export async function createLaunch(
     scratch,
   });
   const base = `http://127.0.0.1:${deps.port}`;
+  const index = member === undefined || "candidateId" in member ? undefined : member.memoryIndex;
   const env = runEnv(deps, {
     runDir,
     runId,
@@ -209,6 +213,7 @@ export async function createLaunch(
     branch,
     scratch,
   });
+  Object.assign(env, await memoryFileEnv(runDir, index));
   return {
     worktree: tree.path,
     branch: tree.branch,

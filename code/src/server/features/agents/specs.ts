@@ -23,6 +23,8 @@ export interface AgentSpec {
   /** Opens com.apple.trustd.agent in srt; needed by Go and Rust TLS clients (codex, agy). */
   weakerNetworkIsolation: boolean;
   claudeMeta: boolean;
+  /** Whether the CLI can call the harness MCP server; without it memory arrives as a file. */
+  mcp: boolean;
 }
 
 const adapterBin = (name: string): string =>
@@ -46,6 +48,7 @@ export const agentSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.claude", "/private/tmp/claude-<uid>", "/private/tmp/claude-*-cwd"],
     weakerNetworkIsolation: false,
     claudeMeta: true,
+    mcp: true,
   },
   {
     id: "codex",
@@ -67,6 +70,7 @@ export const agentSpecs: readonly AgentSpec[] = [
     stateWrite: [],
     weakerNetworkIsolation: true,
     claudeMeta: false,
+    mcp: true,
   },
   {
     id: "junie",
@@ -82,6 +86,7 @@ export const agentSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.junie"],
     weakerNetworkIsolation: false,
     claudeMeta: false,
+    mcp: true,
   },
   {
     id: "copilot",
@@ -97,6 +102,7 @@ export const agentSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.copilot"],
     weakerNetworkIsolation: false,
     claudeMeta: false,
+    mcp: true,
   },
   {
     id: "cursor",
@@ -112,6 +118,7 @@ export const agentSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.cursor"],
     weakerNetworkIsolation: false,
     claudeMeta: false,
+    mcp: true,
   },
   {
     id: "gemini",
@@ -127,6 +134,7 @@ export const agentSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.gemini"],
     weakerNetworkIsolation: false,
     claudeMeta: false,
+    mcp: true,
   },
   {
     id: "agy",
@@ -142,5 +150,6 @@ export const agentSpecs: readonly AgentSpec[] = [
     stateWrite: ["~/.gemini"],
     weakerNetworkIsolation: true,
     claudeMeta: false,
+    mcp: false,
   },
 ];

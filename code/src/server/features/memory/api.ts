@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { drainCommits, ensureVaultRepo } from "./git-log";
+import { buildMemoryIndex } from "./index-file";
 import { logRead } from "./index-log";
 import { getIndexedByDisk } from "./index-repo";
 import { backlinks, searchNotes } from "./index-search";
@@ -25,6 +26,7 @@ export type { Located, ProjectSlugs, Viewer, WriteCtx };
 export {
   agentViewer,
   backlinks,
+  buildMemoryIndex,
   createNote,
   deleteNote,
   getIndexedByDisk,

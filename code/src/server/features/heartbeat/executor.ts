@@ -4,6 +4,7 @@ import { budgetGate } from "../budgets/api";
 import { getMember, getProject, type MemberRow } from "../orgs/api";
 import { route } from "../router/api";
 import { HaltedError, isHalted, scratchRepo, startRun } from "../runtimes/api";
+import { memoryRun } from "./memory-notice";
 import { buildPrompt } from "./prompt";
 import {
   endedStartedRuns,
@@ -73,13 +74,14 @@ async function startFirst(
   }
   const { runtime, model } = choice.engine;
   const repo = batch.projectId === null ? null : (getProject(db, batch.projectId)?.repo ?? null);
+  const mem = memoryRun(db, deps, member, runtime, batch.projectId, batch.wakes);
   return startRun(db, deps.runDeps, {
     agentId: runtime,
     ...(model === null ? {} : { model }),
     repo: repo ?? scratchRepo(deps.home, member.orgId),
-    prompt: buildPrompt(db, member, batch.wakes),
+    prompt: buildPrompt(db, member, batch.wakes, mem.mcp),
     ...(taskId == null ? {} : { taskId }),
-    member: runMember(db, member, batch.projectId),
+    member: runMember(db, member, batch.projectId, mem.index),
     attempt: 1,
     batchId: batch.ids[0] as string,
   });

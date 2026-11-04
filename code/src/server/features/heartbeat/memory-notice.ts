@@ -1,0 +1,68 @@
+import type { Database } from "bun:sqlite";
+import { getSpec } from "../agents/api";
+import { getTask } from "../board/api";
+import {
+  agentViewer,
+  buildMemoryIndex,
+  projectSlugs,
+  searchNotes,
+  virtualPathOf,
+} from "../memory/api";
+import { getProject, type MemberRow } from "../orgs/api";
+import type { WakeRow } from "./repo";
+import type { ExecDeps } from "./run-input";
+
+const HITS = 5;
+const WITH_TOOL =
+  "Shared memory: the `memory` tool reads and writes notes under `/memories` (`agent` is yours, `project/<slug>` and `org` are shared with your org). Before you start a task, search it (`command: search`) for the task's topic and read (`view`) the notes that apply; follow them unless the task says otherwise. Save durable facts you learn with `create`.";
+const WITH_FILE =
+  "Shared memory notes are in the file named by $HARNESS_MEMORY_FILE; read it before you start.";
+
+// Path and title only: the body is for the agent to open, and a note could carry instructions.
+function hints(db: Database, member: MemberRow, taskText: string): string {
+  const viewer = agentViewer(db, member.id);
+  const slugs = projectSlugs(db, member.orgId);
+  const found = searchNotes(db, viewer, { text: taskText, anyWord: true, limit: HITS });
+  if (found.length === 0) return "";
+  const lines = found.map((n) => `- ${virtualPathOf(n, slugs)}: ${JSON.stringify(n.title)}`);
+  return `\n\nNotes that may apply:\n${lines.join("\n")}`;
+}
+
+// Starts with a blank line when not empty, like the other prompt sections.
+export function memoryNotice(
+  db: Database,
+  member: MemberRow,
+  taskText: string,
+  mcp: boolean,
+): string {
+  if (mcp) return `\n\n${WITH_TOOL}${hints(db, member, taskText)}`;
+  const any = searchNotes(db, agentViewer(db, member.id), { limit: 1 }).length > 0;
+  return any ? `\n\n${WITH_FILE}` : "";
+}
+
+// Task titles and wake excerpts are what the work is about, so they are the search text.
+export function wakeTopic(db: Database, wakes: WakeRow[]): string {
+  return wakes
+    .map((w) => {
+      const title = (w.taskId === null ? null : getTask(db, w.taskId))?.title ?? "";
+      const excerpt = (w.detail as { excerpt?: unknown } | null)?.excerpt;
+      return `${title} ${typeof excerpt === "string" ? excerpt : ""}`;
+    })
+    .join(" ");
+}
+
+// An engine without MCP cannot call the memory tool, so it gets the notes as a file instead.
+export function memoryRun(
+  db: Database,
+  deps: ExecDeps,
+  member: MemberRow,
+  runtime: string,
+  projectId: string | null,
+  wakes: WakeRow[],
+): { mcp: boolean; index: string | undefined } {
+  const mcp = (deps.runDeps.resolveSpec ?? getSpec)(runtime)?.mcp ?? true;
+  if (mcp) return { mcp, index: undefined };
+  const slug = projectId === null ? null : (getProject(db, projectId)?.key ?? null);
+  const text = buildMemoryIndex(db, agentViewer(db, member.id), slug, wakeTopic(db, wakes));
+  return { mcp, index: text === "" ? undefined : text };
+}

@@ -51,6 +51,7 @@ const specOf = (id: string): AgentSpec => ({
   stateWrite: [],
   weakerNetworkIsolation: false,
   claudeMeta: false,
+  mcp: true,
 });
 
 export const outcome = (over: Partial<RunOutcome>): RunOutcome => ({

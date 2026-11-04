@@ -11,6 +11,9 @@ export interface NoteQuery {
   tag?: string;
   sourceAgent?: string;
   projectId?: string;
+  // Task text is long and its words rarely all occur in one note, so a prompt query ranks by bm25
+  // over any word instead of requiring every word.
+  anyWord?: boolean;
   limit?: number;
 }
 
@@ -47,9 +50,18 @@ function filters(viewer: Viewer, q: NoteQuery): { where: string[]; params: Param
   return { where, params };
 }
 
-function ftsQuery(text: string): string | null {
+const MAX_ANY_WORDS = 16;
+
+function ftsQuery(text: string, anyWord: boolean): string | null {
   const words = text.match(/[\p{L}\p{N}]+/gu) ?? [];
-  return words.length === 0 ? null : words.map((w) => `"${w}"`).join(" ");
+  if (!anyWord) return words.length === 0 ? null : words.map((w) => `"${w}"`).join(" ");
+  const long = [...new Set(words.filter((w) => w.length >= 3).map((w) => w.toLowerCase()))];
+  return long.length === 0
+    ? null
+    : long
+        .slice(0, MAX_ANY_WORDS)
+        .map((w) => `"${w}"`)
+        .join(" OR ");
 }
 
 export function searchNotes(db: Database, viewer: Viewer, q: NoteQuery): NoteSummary[] {
@@ -63,7 +75,7 @@ export function searchNotes(db: Database, viewer: Viewer, q: NoteQuery): NoteSum
       .all(...params, limit)
       .map(toIndexed);
   }
-  const match = ftsQuery(text);
+  const match = ftsQuery(text, q.anyWord === true);
   if (match === null) return [];
   const sql = `SELECT n.*, snippet(notes_fts, 1, '[', ']', '…', 12) AS snippet
     FROM notes_fts JOIN notes n ON n.rowid = notes_fts.rowid

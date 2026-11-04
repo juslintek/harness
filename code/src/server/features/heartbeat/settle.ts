@@ -4,6 +4,7 @@ import { appendEvent } from "../logs/api";
 import { getMember } from "../orgs/api";
 import { linkHandoff, type NextAttempt, nextAttempt } from "../router/api";
 import { getRun, type RunRow, ShuttingDownError, startRun } from "../runtimes/api";
+import { memoryRun } from "./memory-notice";
 import { nudgeUndelegated } from "./nudge";
 import { buildPrompt } from "./prompt";
 import { setStatus, startedWakesOf, type WakeRow } from "./repo";
@@ -38,13 +39,14 @@ async function startNext(
   if (!member) throw new Error("member is gone");
   const [first] = wakes;
   const projectId = first ? wakeProject(db, first) : null;
+  const mem = memoryRun(db, deps, member, next.engine.runtime, projectId, wakes);
   const runId = await startRun(db, deps.runDeps, {
     agentId: next.engine.runtime,
     ...(next.engine.model === null ? {} : { model: next.engine.model }),
     repo: run.repo,
-    prompt: `${next.summary}\n\n${buildPrompt(db, member, wakes)}`,
+    prompt: `${next.summary}\n\n${buildPrompt(db, member, wakes, mem.mcp)}`,
     ...(run.taskId === null ? {} : { taskId: run.taskId }),
-    member: runMember(db, member, projectId),
+    member: runMember(db, member, projectId, mem.index),
     reuseWorktreeOf: next.reuseWorktreeOf,
     attempt: run.attempt + 1,
     batchId: run.batchId ?? run.id,
