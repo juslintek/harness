@@ -118,6 +118,10 @@ function runEnv(deps: RunDeps, i: RunEnvInput): Record<string, string> {
     ...deps.agentEnv?.(i.runDir),
     TMPDIR: tmp,
     CLAUDE_CODE_TMPDIR: tmp,
+    // The guard treats git log/diff/show as read-only, which only holds while no pager runs; the
+    // env wins over core.pager and pager.<cmd> in any config the run can reach.
+    GIT_PAGER: "cat",
+    PAGER: "cat",
     ...(i.codexHome === null ? {} : { CODEX_HOME: i.codexHome }),
     HARNESS_SCOPE_ROOT: i.treePath,
     HARNESS_DEFAULT_BRANCH: i.branch,
