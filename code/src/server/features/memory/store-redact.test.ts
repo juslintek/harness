@@ -59,7 +59,8 @@ test("reverting an outside edit with unknown previous text is invalid and keeps 
     expect(() => revertWrite(env.db, env.dir, ctx(aliceA), w?.id as string)).toThrow(
       expect.objectContaining({ code: "invalid" }),
     );
-    expect(await Bun.file(file).text()).toBe(edited);
+    // The sync adds the note's id to a file that had none; nothing else may change.
+    expect((await Bun.file(file).text()).replace(/^id: .*\n/m, "")).toBe(edited);
   })();
 });
 

@@ -39,6 +39,18 @@ test("a newcomer claiming a taken id gets a fresh id written into its own file",
   expect(env.db.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
+test("an outside note without an id gets one written, so a later outside rename keeps it", () => {
+  put("orgs/A/org/plain.md", noteText("plain"));
+  const raw = readNoteFile(env.dir, "orgs/A/org/plain.md") as string;
+  const made = syncOutside(env.db, env.dir, "orgs/A/org/plain.md");
+  const written = readNoteFile(env.dir, "orgs/A/org/plain.md") as string;
+  expect(parseNote(raw).meta.id).toBeUndefined();
+  expect(parseNote(written).meta.id).toBe(made?.id as string);
+  rmSync(join(vaultDir(env.dir), "orgs/A/org/plain.md"));
+  put("orgs/A/org/renamed.md", written);
+  expect(syncOutside(env.db, env.dir, "orgs/A/org/renamed.md")?.id).toBe(made?.id as string);
+});
+
 test("a read before the watcher leaves exactly one outside row and a commit", async () => {
   await ensureVaultRepo(env.dir);
   const made = (await createNote(env.db, env.dir, ctx(aliceA), orgNote, "# Deploy\nsteps")).note;
