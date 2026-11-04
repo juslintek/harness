@@ -1,5 +1,8 @@
+-- seq is the explicit rowid: VACUUM may renumber an implicit one and then notes_fts would point at
+-- other notes' text.
 CREATE TABLE notes (
-  id TEXT PRIMARY KEY,
+  seq INTEGER PRIMARY KEY,
+  id TEXT NOT NULL UNIQUE,
   disk TEXT NOT NULL UNIQUE,
   scope TEXT NOT NULL CHECK (scope IN ('global', 'org', 'project', 'agent')),
   org_id TEXT REFERENCES orgs(id) ON DELETE CASCADE,

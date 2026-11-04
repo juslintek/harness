@@ -168,3 +168,15 @@ test("write and read logs round trip", () => {
   logRead(db, "n", "r1", "m1", "view");
   expect(db.query("SELECT via FROM note_reads").all()).toEqual([{ via: "view" }]);
 });
+
+test("after VACUUM an org B search still returns only org B text", () => {
+  upsertIndexed(db, loc("orgs/A/org/gone.md"), noteText("# Gone\nneedle gone"));
+  upsertIndexed(db, loc("orgs/A/org/secret.md"), noteText("# Secret\nneedle a-secret"));
+  const b = upsertIndexed(db, loc("orgs/B/org/open.md"), noteText("# Open\nneedle b-open"));
+  removeIndexed(db, "orgs/A/org/gone.md");
+  db.run("VACUUM");
+  const hits = searchNotes(db, viewer("B", null, []), { text: "needle" });
+  expect(hits.map((h) => h.id)).toEqual([b.id]);
+  expect(hits[0]?.snippet).toContain("b-open");
+  expect(hits[0]?.snippet).not.toContain("a-secret");
+});

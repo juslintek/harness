@@ -81,8 +81,8 @@ function pickId(db: Database, disk: string, wanted: string, updated: number): st
 
 function replaceFts(db: Database, disk: string, title: string, body: string, tags: string[]): void {
   const rowid = db
-    .query<{ rowid: number }, [string]>("SELECT rowid FROM notes WHERE disk = ?")
-    .get(disk)?.rowid as number;
+    .query<{ seq: number }, [string]>("SELECT seq FROM notes WHERE disk = ?")
+    .get(disk)?.seq as number;
   db.run("DELETE FROM notes_fts WHERE rowid = ?", [rowid]);
   db.run("INSERT INTO notes_fts (rowid, title, body, tags) VALUES (?, ?, ?, ?)", [
     rowid,
@@ -143,11 +143,11 @@ export function upsertIndexed(db: Database, loc: Located, text: string): Indexed
 
 export function removeIndexed(db: Database, disk: string): string | null {
   const row = db
-    .query<{ id: string; rowid: number }, [string]>("SELECT id, rowid FROM notes WHERE disk = ?")
+    .query<{ id: string; seq: number }, [string]>("SELECT id, seq FROM notes WHERE disk = ?")
     .get(disk);
   if (row === null) return null;
   db.transaction(() => {
-    db.run("DELETE FROM notes_fts WHERE rowid = ?", [row.rowid]);
+    db.run("DELETE FROM notes_fts WHERE rowid = ?", [row.seq]);
     db.run("DELETE FROM notes WHERE disk = ?", [disk]);
   })();
   return row.id;

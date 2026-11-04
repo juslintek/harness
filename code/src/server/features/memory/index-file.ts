@@ -28,7 +28,7 @@ function ranked(db: Database, viewer: Viewer, taskText: string): NoteSummary[] {
 function bodyOf(db: Database, noteId: string): string {
   const row = db
     .query<{ body: string }, [string]>(
-      "SELECT f.body FROM notes_fts f JOIN notes n ON n.rowid = f.rowid WHERE n.id = ?",
+      "SELECT f.body FROM notes_fts f JOIN notes n ON n.seq = f.rowid WHERE n.id = ?",
     )
     .get(noteId);
   return row?.body ?? "";

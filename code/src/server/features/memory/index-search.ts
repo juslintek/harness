@@ -78,7 +78,7 @@ export function searchNotes(db: Database, viewer: Viewer, q: NoteQuery): NoteSum
   const match = ftsQuery(text, q.anyWord === true);
   if (match === null) return [];
   const sql = `SELECT n.*, snippet(notes_fts, 1, '[', ']', '…', 12) AS snippet
-    FROM notes_fts JOIN notes n ON n.rowid = notes_fts.rowid
+    FROM notes_fts JOIN notes n ON n.seq = notes_fts.rowid
     WHERE notes_fts MATCH ? AND ${where.join(" AND ")}
     ORDER BY bm25(notes_fts), n.updated DESC LIMIT ?`;
   return db
