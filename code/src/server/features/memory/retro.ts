@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { onTaskChange } from "../board/api";
-import { getMember } from "../orgs/api";
+import { getMember, getProject } from "../orgs/api";
 import { onLessonProposed, reviewerFor } from "./lessons";
 
 export interface RetroDeps {
@@ -26,6 +26,9 @@ export function startRetro(db: Database, deps: RetroDeps): () => void {
     if (task.assigneeId === null) return;
     const assignee = getMember(db, task.assigneeId);
     if (assignee?.kind !== "agent" || assignee.paused || retroSent(db, task.id)) return;
+    // A grantee org's agent can hold a task of the owner org; its retro lesson would land in an
+    // org that does not own the task, so it gets no wake.
+    if (assignee.orgId !== getProject(db, task.projectId)?.orgId) return;
     deps.enqueueWake(
       assignee.id,
       "retro",

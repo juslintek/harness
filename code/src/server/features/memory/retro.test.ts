@@ -65,6 +65,15 @@ test("a human assignee, no assignee and a paused agent get no retro", () => {
   expect(sent).toEqual([]);
 });
 
+test("an assignee from another org (a grantee) gets no retro", () => {
+  w = world();
+  const sent = watch();
+  const task = w.task("granted out", w.agent("dev"));
+  w.db.query("UPDATE tasks SET assignee_id = ? WHERE id = ?").run(w.other.agent.id, task.id);
+  moveTask(w.db, task.id, "done", w.human.id);
+  expect(sent).toEqual([]);
+});
+
 test("a proposal wakes the author's manager for lesson_review, one wake per batch", async () => {
   w = world();
   const dev = w.agent("dev");
