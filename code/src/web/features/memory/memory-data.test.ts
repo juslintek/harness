@@ -44,8 +44,9 @@ test("a viewer only gets the notes tab and a direct writes link falls back to it
   expect(tabOf("writes", tabsFor("member"))).toBe("writes");
 });
 
-test("a failed reload hides the cached note, a successful one shows it", () => {
+test("only a 404 hides the cached note", () => {
   expect(shownNote({ id: "n1" }, null)).toEqual({ id: "n1" });
-  expect(shownNote({ id: "n1" }, "Error: 404")).toBeNull();
+  expect(shownNote({ id: "n1" }, 404)).toBeNull();
+  expect(shownNote({ id: "n1" }, 500)).toEqual({ id: "n1" });
   expect(shownNote(null, null)).toBeNull();
 });

@@ -101,7 +101,7 @@ export function splitLinks(body: string): BodyPart[] {
   return parts;
 }
 
-// useLoad keeps the last data when a reload fails. For an open note that stale copy would stay
-// readable and editable after the note was deleted, so a failed load hides it.
-export const shownNote = <T>(data: T | null, error: string | null): T | null =>
-  error === null ? data : null;
+// useLoad keeps the last data when a reload fails. Only a 404 means the note was deleted, so only
+// then is the stale copy hidden; a timeout or 500 must not make a note vanish.
+export const shownNote = <T>(data: T | null, errorStatus: number | null): T | null =>
+  errorStatus === 404 ? null : data;

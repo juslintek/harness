@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { noteSummarySchema, noteViewSchema } from "../../../shared/memory";
 import type { OrgDetail } from "../../../shared/orgs";
-import { ApiError, api, useLoad } from "../../api";
+import { ApiError, api, type Loaded, useLoad } from "../../api";
 import { errorText } from "../../format";
 import { ErrorLine } from "../auth/error-line";
 import {
@@ -52,6 +52,29 @@ function Body({ slug, id, text }: { slug: string; id: string; text: string }): p
   );
 }
 
+function RefreshFailed({ onRetry }: { onRetry: () => void }): preact.JSX.Element {
+  return (
+    <p class="muted">
+      Could not refresh this note.{" "}
+      <button type="button" onClick={onRetry}>
+        Retry
+      </button>
+    </p>
+  );
+}
+
+function LoadFailed({ note }: { note: Loaded<unknown> }): preact.JSX.Element {
+  if (note.errorStatus === 404) return <ErrorLine message="Note not found." />;
+  return (
+    <>
+      <ErrorLine message="Could not load the note." />
+      <button type="button" onClick={note.reload}>
+        Retry
+      </button>
+    </>
+  );
+}
+
 export function NoteView({
   detail,
   id,
@@ -71,14 +94,14 @@ export function NoteView({
     () => api(`${memoryBase(slug)}/notes/${id}/backlinks`, noteListSchema),
     [slug, id, version],
   );
-  const n = shownNote(note.data, note.error);
+  const n = shownNote(note.data, note.errorStatus);
   const article = useRef<HTMLElement>(null);
   // On a phone the list is stacked above the note, so a tapped note would open off screen.
   useEffect(() => article.current?.scrollIntoView({ block: "nearest" }), [n?.id]);
-  if (!n)
-    return note.error ? <ErrorLine message="Note not found." /> : <p class="muted">Loading...</p>;
+  if (!n) return note.error ? <LoadFailed note={note} /> : <p class="muted">Loading...</p>;
   return (
     <article class="note-view" ref={article}>
+      {note.error && <RefreshFailed onRetry={note.reload} />}
       <h3>{n.title}</h3>
       <p class="muted">
         {shownPath(n.path)} · {n.scope} · <span class="badge">{n.type}</span> · {n.sourceAgent} ·
