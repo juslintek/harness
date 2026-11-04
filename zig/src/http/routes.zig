@@ -12,6 +12,7 @@ const health_body = @import("../health.zig");
 const headers = @import("headers.zig");
 const policy = @import("policy.zig");
 const session_endpoints = @import("../auth/middleware.zig");
+const usage_routes = @import("../usage/routes.zig");
 
 pub const Method = policy.Method;
 pub const Policy = policy.Policy;
@@ -140,8 +141,8 @@ pub const table = [_]Route{
     row(.GET, "/api/projects/:id/members", .{ .session = true }),
     row(.GET, "/api/projects/:id/tasks", .{ .session = true }),
     row(.POST, "/api/projects/:id/tasks", .{ .session = true, .origin = true }),
-    row(.GET, "/api/quota", .{ .session = true, .admin = true }),
-    row(.POST, "/api/quota", .{ .session = true, .admin = true, .origin = true }),
+    .{ .method = .GET, .path = "/api/quota", .handler = usage_routes.getQuota, .policy = .{ .session = true, .admin = true } },
+    .{ .method = .POST, .path = "/api/quota", .handler = usage_routes.postQuota, .policy = .{ .session = true, .admin = true, .origin = true } },
     row(.GET, "/api/router/registry", .{ .session = true, .admin = true }),
     row(.POST, "/api/router/registry/refresh", .{ .session = true, .admin = true, .origin = true }),
     row(.GET, "/api/router/route", .{ .session = true, .admin = true }),
@@ -158,7 +159,7 @@ pub const table = [_]Route{
     row(.POST, "/api/tasks/:id/deps", .{ .session = true, .origin = true }),
     row(.POST, "/api/tasks/:id/move", .{ .session = true, .origin = true }),
     row(.POST, "/api/tasks/:id/release", .{ .session = true, .origin = true }),
-    row(.GET, "/api/usage", .{ .session = true, .admin = true }),
+    .{ .method = .GET, .path = "/api/usage", .handler = usage_routes.getUsage, .policy = .{ .session = true, .admin = true } },
     row(.POST, "/api/guard/hook", .{ .public = true, .loopback = true }),
     row(.any, "/mcp", .{ .public = true, .loopback = true }),
     row(.GET, "/ws", .{ .session = true, .origin = true }),
