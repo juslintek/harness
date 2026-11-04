@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { startStub, stopStubs } from "../../test-support/stub-server";
-import { resetLayaCircuit } from "../laya/client";
+import { resetLayaCircuit } from "../laya/api";
 import { proposeLessons } from "./lessons";
 import { close, type World, world } from "./lessons-test-kit";
 import { BASE, boot, useHome } from "./routes-test-kit";

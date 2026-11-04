@@ -8,7 +8,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { startStub, stopStubs } from "../../test-support/stub-server";
-import { resetLayaCircuit } from "../laya/client";
+import { resetLayaCircuit } from "../laya/api";
 import {
   agentViewer,
   getIndexedByDisk,
