@@ -57,8 +57,9 @@ test("a retro wake and an assignment wake for one member and project run apart",
   const work = k.task("build it");
   const shipped = k.task("shipped");
   k.db.query("UPDATE tasks SET assignee_id = ? WHERE id = ?").run(dev.id, work.id);
-  const wake = (reason: "assignment" | "retro", taskId: string): void =>
+  const wake = (reason: "assignment" | "retro", taskId: string): void => {
     insertWake(k.db, { memberId: dev.id, reason, taskId, detail: { taskId }, causedBy: null });
+  };
   wake("assignment", work.id);
   wake("retro", shipped.id);
   stops.push(k.start());

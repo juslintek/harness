@@ -13,7 +13,7 @@ export interface NoteQuery {
   sourceAgent?: string;
   projectId?: string;
   // Drops project-scoped notes of any other project; agent, org and global notes stay.
-  onlyProject?: string;
+  onlyProject?: string | undefined;
   // Disk path prefix (a folder, with its trailing slash); matched literally, not as a pattern.
   pathPrefix?: string;
   // Task text is long and its words rarely all occur in one note, so a prompt query ranks by bm25
