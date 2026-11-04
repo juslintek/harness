@@ -211,6 +211,8 @@ async function commitAll(
   try {
     await ensureVaultRepo(home);
     const dir = vaultDir(home);
+    // A rule appended after start (a hand-edited "*.md") would hide every note until restart.
+    writeIgnore(dir);
     if (db !== undefined) scrubOutside(db, home, await changedNotes(dir));
     // Back to HEAD first: tracked notes keep their history, and only what stageNotes adds is staged.
     await must(dir, ["reset", "-q"]);

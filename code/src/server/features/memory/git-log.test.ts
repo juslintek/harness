@@ -141,6 +141,21 @@ test("a user rule after the harness rules is moved above them so notes are still
   );
 });
 
+test("a rule appended to .gitignore after start does not hide a note from the next commit", async () => {
+  const vault = vaultDir(env.dir);
+  await ensureVaultRepo(env.dir);
+  writeFileSync(
+    join(vault, ".gitignore"),
+    `${readFileSync(join(vault, ".gitignore"), "utf8")}*.md\n`,
+  );
+  await createNote(env.db, env.dir, ctx(aliceA), orgNote, "late rule");
+  await drainCommits();
+  expect(readFileSync(join(vault, ".gitignore"), "utf8")).toBe("*.md\n*.tmp\n*\n!*/\n!*.md\n");
+  expect((await gitOutput(vault, ["ls-tree", "-r", "--name-only", "HEAD"])) ?? "").toContain(
+    orgNote.disk,
+  );
+});
+
 test("a symlinked .gitignore is replaced and its outside target is left untouched", async () => {
   const vault = vaultDir(env.dir);
   mkdirSync(vault, { recursive: true });
