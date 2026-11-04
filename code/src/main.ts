@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { loadConfig } from "./server/config";
-import { ensureInstance, migrate, openDb } from "./server/db/db";
+import { ensureInstance, lockHome, migrate, openDb } from "./server/db/db";
 import { migrations } from "./server/db/migrations";
 import { firstRunEnrollment } from "./server/features/auth/api";
 import { wireBoard } from "./server/features/board/api";
@@ -20,13 +20,15 @@ import {
 import { startTracking } from "./server/features/tracking/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
-import { pwaResponse } from "./server/pwa";
 import { type WsData, websocket, wireRealtime } from "./server/realtime";
+import { staticResponse } from "./server/ui-dist";
 import indexHtml from "./web/index.html";
 
 const ENROLLMENT_TTL_MS = 24 * 60 * 60 * 1000;
 const config = loadConfig();
+const uiDist = process.env.HARNESS_UI_DIST;
 mkdirSync(config.home, { recursive: true });
+lockHome(config.home);
 
 const db = openDb(join(config.home, "harness.db"));
 migrate(db, migrations);
@@ -37,28 +39,20 @@ wireRuntimes();
 
 recoverRuns(db);
 await sweepStaleScratch(config.home);
-const app = createApp({
-  db,
-  home: config.home,
-  port: config.port,
-  rp: config.rp,
-  trustProxy: config.trustProxy,
-  instanceId,
-  version: "0.0.0",
-});
-startTailers(db, 60000, defaultTailSources(join(config.home, "worktrees")));
 
+// With HARNESS_PORT=0 the real port is only known after binding, and the origin and run deps derive from it.
+let app: ReturnType<typeof createApp>;
 const server = Bun.serve<WsData>({
   hostname: config.host,
   port: config.port,
   // The bundle lives on its own path so "/" can still reach the app and redirect the loopback IP.
-  routes: { "/_app": indexHtml },
-  fetch: (req, srv) => {
+  routes: uiDist ? {} : { "/_app": indexHtml },
+  fetch: async (req, srv) => {
     const { pathname } = new URL(req.url);
-    const pwa = pwaResponse(pathname);
-    if (pwa) return pwa;
+    const asset = await staticResponse(uiDist, req.method, pathname);
+    if (asset) return asset;
     const entry = pathname === "/";
-    if (entry && req.headers.get("host") !== `127.0.0.1:${config.port}`) {
+    if (entry && req.headers.get("host") !== `127.0.0.1:${srv.port}`) {
       return fetch(new URL("/_app", srv.url));
     }
     return app.fetch(req, { server: srv });
@@ -68,8 +62,21 @@ const server = Bun.serve<WsData>({
   development: process.env.NODE_ENV !== "production",
 });
 
+const bound =
+  config.port === 0 ? loadConfig({ ...process.env, HARNESS_PORT: `${server.port}` }) : config;
+app = createApp({
+  db,
+  home: bound.home,
+  port: bound.port,
+  rp: bound.rp,
+  trustProxy: bound.trustProxy,
+  instanceId,
+  version: "0.0.0",
+});
+startTailers(db, 60000, defaultTailSources(join(config.home, "worktrees")));
+
 wireRealtime(db, server);
-const runDeps = { home: config.home, port: config.port };
+const runDeps = { home: bound.home, port: bound.port };
 const stopHeartbeat = startHeartbeat(db, { runDeps, home: config.home });
 const hiring = wireHiring(db, { runDeps, home: config.home });
 const stopLoops = [
@@ -81,7 +88,7 @@ const stopLoops = [
 console.log(`harness listening on ${server.url}`);
 
 const firstRun = firstRunEnrollment(db, ENROLLMENT_TTL_MS);
-if (firstRun) console.log(`first-run enrollment: ${config.rp.origin}/#/enroll/${firstRun}`);
+if (firstRun) console.log(`first-run enrollment: ${bound.rp.origin}/#/enroll/${firstRun}`);
 
 // Agent groups are detached, so the terminal's Ctrl-C does not reach them.
 let stopping = false;

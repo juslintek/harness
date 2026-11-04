@@ -1,0 +1,274 @@
+{
+  "budgetBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "monthlyUsd": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "scopeId": {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        "scopeKind": {
+          "enum": [
+            "org",
+            "team",
+            "member"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "scopeKind",
+        "scopeId",
+        "monthlyUsd"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "monthlyUsd": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "scopeId": {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        "scopeKind": {
+          "enum": [
+            "org",
+            "team",
+            "member"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "scopeKind",
+        "scopeId",
+        "monthlyUsd"
+      ],
+      "type": "object"
+    }
+  },
+  "budgetListSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "monthlyUsd": {
+            "type": "number"
+          },
+          "ratio": {
+            "type": "number"
+          },
+          "scopeId": {
+            "type": "string"
+          },
+          "scopeKind": {
+            "enum": [
+              "org",
+              "team",
+              "member"
+            ],
+            "type": "string"
+          },
+          "spentUsd": {
+            "type": "number"
+          },
+          "state": {
+            "enum": [
+              "ok",
+              "warn",
+              "paused"
+            ],
+            "type": "string"
+          },
+          "unpriced": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "scopeKind",
+          "scopeId",
+          "monthlyUsd",
+          "spentUsd",
+          "ratio",
+          "state",
+          "unpriced"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "monthlyUsd": {
+            "type": "number"
+          },
+          "ratio": {
+            "type": "number"
+          },
+          "scopeId": {
+            "type": "string"
+          },
+          "scopeKind": {
+            "enum": [
+              "org",
+              "team",
+              "member"
+            ],
+            "type": "string"
+          },
+          "spentUsd": {
+            "type": "number"
+          },
+          "state": {
+            "enum": [
+              "ok",
+              "warn",
+              "paused"
+            ],
+            "type": "string"
+          },
+          "unpriced": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "scopeKind",
+          "scopeId",
+          "monthlyUsd",
+          "spentUsd",
+          "ratio",
+          "state",
+          "unpriced"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "budgetViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "monthlyUsd": {
+          "type": "number"
+        },
+        "ratio": {
+          "type": "number"
+        },
+        "scopeId": {
+          "type": "string"
+        },
+        "scopeKind": {
+          "enum": [
+            "org",
+            "team",
+            "member"
+          ],
+          "type": "string"
+        },
+        "spentUsd": {
+          "type": "number"
+        },
+        "state": {
+          "enum": [
+            "ok",
+            "warn",
+            "paused"
+          ],
+          "type": "string"
+        },
+        "unpriced": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "scopeKind",
+        "scopeId",
+        "monthlyUsd",
+        "spentUsd",
+        "ratio",
+        "state",
+        "unpriced"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "monthlyUsd": {
+          "type": "number"
+        },
+        "ratio": {
+          "type": "number"
+        },
+        "scopeId": {
+          "type": "string"
+        },
+        "scopeKind": {
+          "enum": [
+            "org",
+            "team",
+            "member"
+          ],
+          "type": "string"
+        },
+        "spentUsd": {
+          "type": "number"
+        },
+        "state": {
+          "enum": [
+            "ok",
+            "warn",
+            "paused"
+          ],
+          "type": "string"
+        },
+        "unpriced": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "scopeKind",
+        "scopeId",
+        "monthlyUsd",
+        "spentUsd",
+        "ratio",
+        "state",
+        "unpriced"
+      ],
+      "type": "object"
+    }
+  }
+}

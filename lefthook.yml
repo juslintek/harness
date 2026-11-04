@@ -4,32 +4,40 @@ pre-commit:
       root: "code/"
       glob: "*.{ts,tsx,js,cjs,json,css}"
       run: bunx biome check --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
-    typecheck:
-      root: "code/"
-      run: bun run typecheck
 
+# Each check starts with scripts/changed.sh, which exits 0 (skip) only when nothing under code/
+# changed against origin/main and fails closed on any git error.
 pre-push:
   commands:
     # The repo-local hooksPath hides the global hooks, so keep the global mainline push guard.
     protected-branches:
       run: "$HOME/.config/git/hooks/pre-push {1} {2}"
       use_stdin: true
+    typecheck:
+      root: "code/"
+      use_stdin: true
+      run: scripts/changed.sh code || bun run typecheck
     # git exports GIT_DIR and friends to hooks; tests that spawn git would then act on this repo.
     test:
       root: "code/"
-      run: env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_COMMON_DIR -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE bun run test
+      use_stdin: true
+      run: scripts/changed.sh code || env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX -u GIT_COMMON_DIR -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES -u GIT_NAMESPACE bun run test
     knip:
       root: "code/"
-      run: bun run knip
+      use_stdin: true
+      run: scripts/changed.sh code || bun run knip
     deps:
       root: "code/"
-      run: bun run deps
+      use_stdin: true
+      run: scripts/changed.sh code || bun run deps
     dup:
       root: "code/"
-      run: bun run dup
+      use_stdin: true
+      run: scripts/changed.sh code || bun run dup
     size:
       root: "code/"
-      run: bun run size
+      use_stdin: true
+      run: scripts/changed.sh code || bun run size
 
 commit-msg:
   commands:

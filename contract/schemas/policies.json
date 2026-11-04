@@ -1,0 +1,673 @@
+{
+  "effectiveListSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "properties": {
+          "chain": {
+            "items": {
+              "properties": {
+                "layer": {
+                  "enum": [
+                    "harness",
+                    "org",
+                    "team",
+                    "agent",
+                    "task"
+                  ],
+                  "type": "string"
+                },
+                "targetId": {
+                  "type": "string"
+                },
+                "value": {}
+              },
+              "required": [
+                "layer",
+                "targetId",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "key": {
+            "enum": [
+              "autonomy",
+              "hiring.decision",
+              "hiring.autoMinScore",
+              "router.allowedRuntimes",
+              "router.failover",
+              "heartbeat.maxRunsPerHour"
+            ],
+            "type": "string"
+          },
+          "layer": {
+            "enum": [
+              "harness",
+              "org",
+              "team",
+              "agent",
+              "task",
+              "default"
+            ],
+            "type": "string"
+          },
+          "setBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {}
+        },
+        "required": [
+          "key",
+          "value",
+          "layer",
+          "targetId",
+          "setBy",
+          "chain"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "chain": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "layer": {
+                  "enum": [
+                    "harness",
+                    "org",
+                    "team",
+                    "agent",
+                    "task"
+                  ],
+                  "type": "string"
+                },
+                "targetId": {
+                  "type": "string"
+                },
+                "value": {}
+              },
+              "required": [
+                "layer",
+                "targetId",
+                "value"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "key": {
+            "enum": [
+              "autonomy",
+              "hiring.decision",
+              "hiring.autoMinScore",
+              "router.allowedRuntimes",
+              "router.failover",
+              "heartbeat.maxRunsPerHour"
+            ],
+            "type": "string"
+          },
+          "layer": {
+            "enum": [
+              "harness",
+              "org",
+              "team",
+              "agent",
+              "task",
+              "default"
+            ],
+            "type": "string"
+          },
+          "setBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {}
+        },
+        "required": [
+          "key",
+          "value",
+          "layer",
+          "targetId",
+          "setBy",
+          "chain"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "harnessPolicyBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "enum": [
+            "autonomy",
+            "hiring.decision",
+            "hiring.autoMinScore",
+            "router.allowedRuntimes",
+            "router.failover",
+            "heartbeat.maxRunsPerHour"
+          ],
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "enum": [
+            "autonomy",
+            "hiring.decision",
+            "hiring.autoMinScore",
+            "router.allowedRuntimes",
+            "router.failover",
+            "heartbeat.maxRunsPerHour"
+          ],
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
+  "policyClearQuery": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "enum": [
+            "autonomy",
+            "hiring.decision",
+            "hiring.autoMinScore",
+            "router.allowedRuntimes",
+            "router.failover",
+            "heartbeat.maxRunsPerHour"
+          ],
+          "type": "string"
+        },
+        "layer": {
+          "enum": [
+            "org",
+            "team",
+            "agent",
+            "task"
+          ],
+          "type": "string"
+        },
+        "targetId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "layer",
+        "targetId",
+        "key"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "enum": [
+            "autonomy",
+            "hiring.decision",
+            "hiring.autoMinScore",
+            "router.allowedRuntimes",
+            "router.failover",
+            "heartbeat.maxRunsPerHour"
+          ],
+          "type": "string"
+        },
+        "layer": {
+          "enum": [
+            "org",
+            "team",
+            "agent",
+            "task"
+          ],
+          "type": "string"
+        },
+        "targetId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "layer",
+        "targetId",
+        "key"
+      ],
+      "type": "object"
+    }
+  },
+  "policyDecideBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "approve",
+            "reject"
+          ],
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "maxLength": 2000,
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "approve",
+            "reject"
+          ],
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "maxLength": 2000,
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision",
+        "reason"
+      ],
+      "type": "object"
+    }
+  },
+  "policyExplainQuery": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "member": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "task": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "team": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "member": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "task": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "team": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "policyWriteBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "enum": [
+            "autonomy",
+            "hiring.decision",
+            "hiring.autoMinScore",
+            "router.allowedRuntimes",
+            "router.failover",
+            "heartbeat.maxRunsPerHour"
+          ],
+          "type": "string"
+        },
+        "layer": {
+          "enum": [
+            "org",
+            "team",
+            "agent",
+            "task"
+          ],
+          "type": "string"
+        },
+        "targetId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "layer",
+        "targetId",
+        "key",
+        "value"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "enum": [
+            "autonomy",
+            "hiring.decision",
+            "hiring.autoMinScore",
+            "router.allowedRuntimes",
+            "router.failover",
+            "heartbeat.maxRunsPerHour"
+          ],
+          "type": "string"
+        },
+        "layer": {
+          "enum": [
+            "org",
+            "team",
+            "agent",
+            "task"
+          ],
+          "type": "string"
+        },
+        "targetId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "value": {}
+      },
+      "required": [
+        "layer",
+        "targetId",
+        "key",
+        "value"
+      ],
+      "type": "object"
+    }
+  },
+  "proposalListQuery": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "open",
+            "approved",
+            "rejected",
+            "withdrawn"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "open",
+            "approved",
+            "rejected",
+            "withdrawn"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "proposalListSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "properties": {
+          "createdAt": {
+            "type": "number"
+          },
+          "decisionReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "key": {
+            "enum": [
+              "autonomy",
+              "hiring.decision",
+              "hiring.autoMinScore",
+              "router.allowedRuntimes",
+              "router.failover",
+              "heartbeat.maxRunsPerHour"
+            ],
+            "type": "string"
+          },
+          "proposedBy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reviews": {
+            "items": {
+              "properties": {
+                "comment": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reviewerId": {
+                  "type": "string"
+                },
+                "verdict": {
+                  "enum": [
+                    "approve",
+                    "reject"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reviewerId",
+                "verdict",
+                "comment"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "id",
+          "targetId",
+          "key",
+          "value",
+          "reason",
+          "proposedBy",
+          "status",
+          "decisionReason",
+          "createdAt",
+          "reviews"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "type": "number"
+          },
+          "decisionReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "key": {
+            "enum": [
+              "autonomy",
+              "hiring.decision",
+              "hiring.autoMinScore",
+              "router.allowedRuntimes",
+              "router.failover",
+              "heartbeat.maxRunsPerHour"
+            ],
+            "type": "string"
+          },
+          "proposedBy": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reviews": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "comment": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "reviewerId": {
+                  "type": "string"
+                },
+                "verdict": {
+                  "enum": [
+                    "approve",
+                    "reject"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reviewerId",
+                "verdict",
+                "comment"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "type": "string"
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "value": {}
+        },
+        "required": [
+          "id",
+          "targetId",
+          "key",
+          "value",
+          "reason",
+          "proposedBy",
+          "status",
+          "decisionReason",
+          "createdAt",
+          "reviews"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  }
+}

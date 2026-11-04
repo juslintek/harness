@@ -1,0 +1,642 @@
+{
+  "profileInputSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "fallbacks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "model": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "runtime": {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "runtime",
+              "model"
+            ],
+            "type": "object"
+          },
+          "maxItems": 3,
+          "type": "array"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "persona": {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        "runtime": {
+          "maxLength": 40,
+          "minLength": 1,
+          "type": "string"
+        },
+        "scope": {
+          "additionalProperties": false,
+          "properties": {
+            "readOnly": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "skills": {
+          "items": {
+            "maxLength": 60,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        }
+      },
+      "required": [
+        "runtime",
+        "model",
+        "persona",
+        "skills",
+        "scope",
+        "fallbacks"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "fallbacks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "model": {
+                "anyOf": [
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "runtime": {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "runtime",
+              "model"
+            ],
+            "type": "object"
+          },
+          "maxItems": 3,
+          "type": "array"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "persona": {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        "runtime": {
+          "maxLength": 40,
+          "minLength": 1,
+          "type": "string"
+        },
+        "scope": {
+          "additionalProperties": false,
+          "properties": {
+            "readOnly": {
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "readOnly"
+          ],
+          "type": "object"
+        },
+        "skills": {
+          "items": {
+            "maxLength": 60,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        }
+      },
+      "required": [
+        "runtime",
+        "model",
+        "persona",
+        "skills",
+        "scope",
+        "fallbacks"
+      ],
+      "type": "object"
+    }
+  },
+  "profileViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "card": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "limits": {
+                  "items": {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "preferredTaskTypes": {
+                  "items": {
+                    "enum": [
+                      "feature",
+                      "bugfix",
+                      "refactor",
+                      "test",
+                      "docs",
+                      "review",
+                      "ops",
+                      "research"
+                    ],
+                    "type": "string"
+                  },
+                  "maxItems": 4,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "specialties": {
+                  "items": {
+                    "enum": [
+                      "frontend",
+                      "backend",
+                      "database",
+                      "devops",
+                      "security",
+                      "writing",
+                      "mobile"
+                    ],
+                    "type": "string"
+                  },
+                  "maxItems": 4,
+                  "type": "array"
+                },
+                "strengths": {
+                  "items": {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "type": "array"
+                },
+                "summary": {
+                  "maxLength": 280,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "summary",
+                "specialties",
+                "strengths",
+                "limits",
+                "preferredTaskTypes"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cardAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "fallbacks": {
+          "items": {
+            "properties": {
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "runtime": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "runtime",
+              "model"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "persona": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "scope": {
+          "properties": {
+            "readOnly": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "readOnly"
+          ],
+          "type": "object"
+        },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "orgId",
+        "runtime",
+        "model",
+        "persona",
+        "skills",
+        "scope",
+        "fallbacks",
+        "card",
+        "cardAt"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "card": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "limits": {
+                  "items": {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "preferredTaskTypes": {
+                  "items": {
+                    "enum": [
+                      "feature",
+                      "bugfix",
+                      "refactor",
+                      "test",
+                      "docs",
+                      "review",
+                      "ops",
+                      "research"
+                    ],
+                    "type": "string"
+                  },
+                  "maxItems": 4,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "specialties": {
+                  "items": {
+                    "enum": [
+                      "frontend",
+                      "backend",
+                      "database",
+                      "devops",
+                      "security",
+                      "writing",
+                      "mobile"
+                    ],
+                    "type": "string"
+                  },
+                  "maxItems": 4,
+                  "type": "array"
+                },
+                "strengths": {
+                  "items": {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "type": "array"
+                },
+                "summary": {
+                  "maxLength": 280,
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "summary",
+                "specialties",
+                "strengths",
+                "limits",
+                "preferredTaskTypes"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cardAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "fallbacks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "runtime": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "runtime",
+              "model"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "persona": {
+          "type": "string"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "scope": {
+          "additionalProperties": false,
+          "properties": {
+            "readOnly": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "readOnly"
+          ],
+          "type": "object"
+        },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "orgId",
+        "runtime",
+        "model",
+        "persona",
+        "skills",
+        "scope",
+        "fallbacks",
+        "card",
+        "cardAt"
+      ],
+      "type": "object"
+    }
+  },
+  "selfCardSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "limits": {
+          "items": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array"
+        },
+        "preferredTaskTypes": {
+          "items": {
+            "enum": [
+              "feature",
+              "bugfix",
+              "refactor",
+              "test",
+              "docs",
+              "review",
+              "ops",
+              "research"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array"
+        },
+        "specialties": {
+          "items": {
+            "enum": [
+              "frontend",
+              "backend",
+              "database",
+              "devops",
+              "security",
+              "writing",
+              "mobile"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "type": "array"
+        },
+        "strengths": {
+          "items": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "type": "array"
+        },
+        "summary": {
+          "maxLength": 280,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "specialties",
+        "strengths",
+        "limits",
+        "preferredTaskTypes"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "limits": {
+          "items": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array"
+        },
+        "preferredTaskTypes": {
+          "items": {
+            "enum": [
+              "feature",
+              "bugfix",
+              "refactor",
+              "test",
+              "docs",
+              "review",
+              "ops",
+              "research"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "type": "array"
+        },
+        "specialties": {
+          "items": {
+            "enum": [
+              "frontend",
+              "backend",
+              "database",
+              "devops",
+              "security",
+              "writing",
+              "mobile"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "type": "array"
+        },
+        "strengths": {
+          "items": {
+            "maxLength": 80,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 8,
+          "type": "array"
+        },
+        "summary": {
+          "maxLength": 280,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "specialties",
+        "strengths",
+        "limits",
+        "preferredTaskTypes"
+      ],
+      "type": "object"
+    }
+  }
+}

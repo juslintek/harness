@@ -1,0 +1,2001 @@
+{
+  "commentBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "createTaskBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "assigneeId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 20000,
+          "type": "string"
+        },
+        "estimateMinutes": {
+          "maximum": 525600,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parentId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "assigneeId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 20000,
+          "type": "string"
+        },
+        "estimateMinutes": {
+          "maximum": 525600,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parentId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  "depBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "dependsOn": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "dependsOn"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "dependsOn": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "dependsOn"
+      ],
+      "type": "object"
+    }
+  },
+  "moveBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "beforeId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "to": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "to"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "beforeId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "to": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "to"
+      ],
+      "type": "object"
+    }
+  },
+  "moveFailureSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "anyOf": [
+        {
+          "properties": {
+            "holderId": {
+              "type": "string"
+            },
+            "ok": {
+              "const": false,
+              "type": "boolean"
+            },
+            "reason": {
+              "const": "held",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ok",
+            "reason",
+            "holderId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "ok": {
+              "const": false,
+              "type": "boolean"
+            },
+            "open": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "reason": {
+              "enum": [
+                "deps_open",
+                "children_open"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "ok",
+            "reason",
+            "open"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "ok": {
+              "const": false,
+              "type": "boolean"
+            },
+            "reason": {
+              "const": "not_found",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ok",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "holderId": {
+              "type": "string"
+            },
+            "ok": {
+              "const": false,
+              "type": "boolean"
+            },
+            "reason": {
+              "const": "held",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ok",
+            "reason",
+            "holderId"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "ok": {
+              "const": false,
+              "type": "boolean"
+            },
+            "open": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "reason": {
+              "enum": [
+                "deps_open",
+                "children_open"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "ok",
+            "reason",
+            "open"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "ok": {
+              "const": false,
+              "type": "boolean"
+            },
+            "reason": {
+              "const": "not_found",
+              "type": "string"
+            }
+          },
+          "required": [
+            "ok",
+            "reason"
+          ],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "projectMemberSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "human",
+            "agent"
+          ],
+          "type": "string"
+        },
+        "orgName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "handle",
+        "displayName",
+        "kind",
+        "orgName"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "human",
+            "agent"
+          ],
+          "type": "string"
+        },
+        "orgName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "handle",
+        "displayName",
+        "kind",
+        "orgName"
+      ],
+      "type": "object"
+    }
+  },
+  "taskDetailSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "comments": {
+          "items": {
+            "properties": {
+              "author": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "human",
+                          "agent"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "displayName",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "authorId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "body": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "id": {
+                "type": "string"
+              },
+              "taskId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "taskId",
+              "authorId",
+              "author",
+              "body",
+              "createdAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "deps": {
+          "items": {
+            "properties": {
+              "assignee": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "human",
+                          "agent"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "displayName",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "assigneeId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "checkedOutAt": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "createdBy": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "estimateMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "holder": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "human",
+                          "agent"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "displayName",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "holderId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "number": {
+                "type": "number"
+              },
+              "orgId": {
+                "type": "string"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "rank": {
+                "type": "number"
+              },
+              "status": {
+                "enum": [
+                  "backlog",
+                  "todo",
+                  "in_progress",
+                  "in_review",
+                  "done",
+                  "blocked",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "orgId",
+              "projectId",
+              "number",
+              "parentId",
+              "title",
+              "description",
+              "status",
+              "rank",
+              "assigneeId",
+              "holderId",
+              "assignee",
+              "holder",
+              "checkedOutAt",
+              "estimateMinutes",
+              "createdBy",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "subtasks": {
+          "items": {
+            "properties": {
+              "assignee": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "human",
+                          "agent"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "displayName",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "assigneeId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "checkedOutAt": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "createdBy": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "estimateMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "holder": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "human",
+                          "agent"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "displayName",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "holderId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "number": {
+                "type": "number"
+              },
+              "orgId": {
+                "type": "string"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "rank": {
+                "type": "number"
+              },
+              "status": {
+                "enum": [
+                  "backlog",
+                  "todo",
+                  "in_progress",
+                  "in_review",
+                  "done",
+                  "blocked",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "orgId",
+              "projectId",
+              "number",
+              "parentId",
+              "title",
+              "description",
+              "status",
+              "rank",
+              "assigneeId",
+              "holderId",
+              "assignee",
+              "holder",
+              "checkedOutAt",
+              "estimateMinutes",
+              "createdBy",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "task": {
+          "properties": {
+            "assignee": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "handle": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "human",
+                        "agent"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "assigneeId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "checkedOutAt": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "createdAt": {
+              "type": "number"
+            },
+            "createdBy": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "estimateMinutes": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "holder": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "handle": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "human",
+                        "agent"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "holderId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "number": {
+              "type": "number"
+            },
+            "orgId": {
+              "type": "string"
+            },
+            "parentId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "rank": {
+              "type": "number"
+            },
+            "status": {
+              "enum": [
+                "backlog",
+                "todo",
+                "in_progress",
+                "in_review",
+                "done",
+                "blocked",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "id",
+            "orgId",
+            "projectId",
+            "number",
+            "parentId",
+            "title",
+            "description",
+            "status",
+            "rank",
+            "assigneeId",
+            "holderId",
+            "assignee",
+            "holder",
+            "checkedOutAt",
+            "estimateMinutes",
+            "createdBy",
+            "createdAt",
+            "updatedAt"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "task",
+        "deps",
+        "subtasks",
+        "comments"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "comments": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "author": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "human",
+                          "agent"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "displayName",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "authorId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "body": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "id": {
+                "type": "string"
+              },
+              "taskId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "taskId",
+              "authorId",
+              "author",
+              "body",
+              "createdAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "deps": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "assignee": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "human",
+                          "agent"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "displayName",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "assigneeId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "checkedOutAt": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "createdBy": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "estimateMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "holder": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "human",
+                          "agent"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "displayName",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "holderId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "number": {
+                "type": "number"
+              },
+              "orgId": {
+                "type": "string"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "rank": {
+                "type": "number"
+              },
+              "status": {
+                "enum": [
+                  "backlog",
+                  "todo",
+                  "in_progress",
+                  "in_review",
+                  "done",
+                  "blocked",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "orgId",
+              "projectId",
+              "number",
+              "parentId",
+              "title",
+              "description",
+              "status",
+              "rank",
+              "assigneeId",
+              "holderId",
+              "assignee",
+              "holder",
+              "checkedOutAt",
+              "estimateMinutes",
+              "createdBy",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "subtasks": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "assignee": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "human",
+                          "agent"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "displayName",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "assigneeId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "checkedOutAt": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "createdBy": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "estimateMinutes": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "holder": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "displayName": {
+                        "type": "string"
+                      },
+                      "handle": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "human",
+                          "agent"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "handle",
+                      "displayName",
+                      "kind"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "holderId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "number": {
+                "type": "number"
+              },
+              "orgId": {
+                "type": "string"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "projectId": {
+                "type": "string"
+              },
+              "rank": {
+                "type": "number"
+              },
+              "status": {
+                "enum": [
+                  "backlog",
+                  "todo",
+                  "in_progress",
+                  "in_review",
+                  "done",
+                  "blocked",
+                  "cancelled"
+                ],
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "updatedAt": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "orgId",
+              "projectId",
+              "number",
+              "parentId",
+              "title",
+              "description",
+              "status",
+              "rank",
+              "assigneeId",
+              "holderId",
+              "assignee",
+              "holder",
+              "checkedOutAt",
+              "estimateMinutes",
+              "createdBy",
+              "createdAt",
+              "updatedAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "task": {
+          "additionalProperties": false,
+          "properties": {
+            "assignee": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "handle": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "human",
+                        "agent"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "assigneeId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "checkedOutAt": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "createdAt": {
+              "type": "number"
+            },
+            "createdBy": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "estimateMinutes": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "holder": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "handle": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "enum": [
+                        "human",
+                        "agent"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "holderId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "number": {
+              "type": "number"
+            },
+            "orgId": {
+              "type": "string"
+            },
+            "parentId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "projectId": {
+              "type": "string"
+            },
+            "rank": {
+              "type": "number"
+            },
+            "status": {
+              "enum": [
+                "backlog",
+                "todo",
+                "in_progress",
+                "in_review",
+                "done",
+                "blocked",
+                "cancelled"
+              ],
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "updatedAt": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "id",
+            "orgId",
+            "projectId",
+            "number",
+            "parentId",
+            "title",
+            "description",
+            "status",
+            "rank",
+            "assigneeId",
+            "holderId",
+            "assignee",
+            "holder",
+            "checkedOutAt",
+            "estimateMinutes",
+            "createdBy",
+            "createdAt",
+            "updatedAt"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "task",
+        "deps",
+        "subtasks",
+        "comments"
+      ],
+      "type": "object"
+    }
+  },
+  "taskListQuery": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "assigneeId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "assigneeId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "taskPatchBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "assigneeId": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "maxLength": 20000,
+          "type": "string"
+        },
+        "estimateMinutes": {
+          "anyOf": [
+            {
+              "maximum": 525600,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "assigneeId": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "maxLength": 20000,
+          "type": "string"
+        },
+        "estimateMinutes": {
+          "anyOf": [
+            {
+              "maximum": 525600,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "taskViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "assignee": {
+          "anyOf": [
+            {
+              "properties": {
+                "displayName": {
+                  "type": "string"
+                },
+                "handle": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "human",
+                    "agent"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "handle",
+                "displayName",
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assigneeId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkedOutAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "createdBy": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "estimateMinutes": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "holder": {
+          "anyOf": [
+            {
+              "properties": {
+                "displayName": {
+                  "type": "string"
+                },
+                "handle": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "human",
+                    "agent"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "handle",
+                "displayName",
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "holderId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "number": {
+          "type": "number"
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "parentId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "number"
+        },
+        "status": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "orgId",
+        "projectId",
+        "number",
+        "parentId",
+        "title",
+        "description",
+        "status",
+        "rank",
+        "assigneeId",
+        "holderId",
+        "assignee",
+        "holder",
+        "checkedOutAt",
+        "estimateMinutes",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "assignee": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "displayName": {
+                  "type": "string"
+                },
+                "handle": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "human",
+                    "agent"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "handle",
+                "displayName",
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assigneeId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "checkedOutAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "createdBy": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "estimateMinutes": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "holder": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "displayName": {
+                  "type": "string"
+                },
+                "handle": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "human",
+                    "agent"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "handle",
+                "displayName",
+                "kind"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "holderId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "number": {
+          "type": "number"
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "parentId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "projectId": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "number"
+        },
+        "status": {
+          "enum": [
+            "backlog",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "blocked",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "orgId",
+        "projectId",
+        "number",
+        "parentId",
+        "title",
+        "description",
+        "status",
+        "rank",
+        "assigneeId",
+        "holderId",
+        "assignee",
+        "holder",
+        "checkedOutAt",
+        "estimateMinutes",
+        "createdBy",
+        "createdAt",
+        "updatedAt"
+      ],
+      "type": "object"
+    }
+  }
+}

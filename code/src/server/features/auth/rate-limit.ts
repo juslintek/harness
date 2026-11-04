@@ -17,7 +17,7 @@ function clientKey(c: Context, trustProxy: boolean): string {
 // In memory on purpose: a restart resets the counters, and the throttle only has to slow guessing.
 export function rateLimit(limit: number, windowMs: number, trustProxy = false): MiddlewareHandler {
   const hits = new Map<string, { count: number; resetAt: number }>();
-  return async (c, next) => {
+  return async function rateLimit(c, next) {
     const address = clientKey(c, trustProxy);
     const now = Date.now();
     if (hits.size > MAX_TRACKED) {

@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
+import { withRealpaths } from "./real-paths";
 
 export interface SandboxInput {
   runDir: string;
@@ -228,7 +229,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
       allowLocalBinding: true,
     },
     filesystem: {
-      denyRead: unique([
+      denyRead: withRealpaths([
         ...DENY_READ_HOME.map(expand),
         join(input.harnessHome, "harness.db*"),
         join(input.harnessHome, "secret"),
@@ -240,7 +241,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
       ]),
       allowRead: [input.runDir, input.worktree, ...(input.scratch ? [input.scratch.path] : [])],
       allowWrite,
-      denyWrite: unique([
+      denyWrite: withRealpaths([
         ...(git
           ? [
               join(git, "hooks"),
@@ -254,6 +255,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
         ...scratchPointers(input),
         join(input.worktree, ".claude"),
         join(input.worktree, ".codex"),
+        join(input.worktree, ".mcp.json"),
         ...DENY_WRITE_HOME.map(expand),
       ]),
     },

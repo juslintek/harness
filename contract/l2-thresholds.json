@@ -1,0 +1,8 @@
+{
+  "askDestructive": 0.95,
+  "denyExfiltration": 0.9,
+  "guardTimeoutMs": 1500,
+  "maxCommandChars": 1000,
+  "maxRequestChars": 500,
+  "minCommandChars": 15
+}

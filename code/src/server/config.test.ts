@@ -47,8 +47,9 @@ test("bad port throws", () => {
   expect(() => loadConfig({ HARNESS_PORT: "nope" })).toThrow();
 });
 
-test("port 0 is rejected because the host check needs the real port", () => {
-  expect(() => loadConfig({ HARNESS_PORT: "0" })).toThrow();
+test("port 0 asks the OS for a free port, which main.ts re-reads after binding", () => {
+  expect(loadConfig({ HARNESS_PORT: "0" }).port).toBe(0);
+  expect(() => loadConfig({ HARNESS_PORT: "65536" })).toThrow();
 });
 
 test("HARNESS_TRUST_PROXY defaults to false and accepts true", () => {

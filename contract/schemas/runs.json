@@ -1,0 +1,1099 @@
+{
+  "agentRowSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "canLogin": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "loggedIn": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "models": {
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "installed",
+        "version",
+        "loggedIn",
+        "error",
+        "canLogin",
+        "enabled",
+        "models"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "canLogin": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "loggedIn": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "models": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "installed",
+        "version",
+        "loggedIn",
+        "error",
+        "canLogin",
+        "enabled",
+        "models"
+      ],
+      "type": "object"
+    }
+  },
+  "approvalViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "decidedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "decidedBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expiresAt": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runId": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "approved",
+            "denied",
+            "expired"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "command",
+        "reason",
+        "status",
+        "decidedBy",
+        "createdAt",
+        "expiresAt",
+        "decidedAt"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "decidedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "decidedBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expiresAt": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runId": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "approved",
+            "denied",
+            "expired"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "command",
+        "reason",
+        "status",
+        "decidedBy",
+        "createdAt",
+        "expiresAt",
+        "decidedAt"
+      ],
+      "type": "object"
+    }
+  },
+  "decisionBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "decision": {
+          "enum": [
+            "approve",
+            "deny"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "approve",
+            "deny"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision"
+      ],
+      "type": "object"
+    }
+  },
+  "haltBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "halted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "halted"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "halted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "halted"
+      ],
+      "type": "object"
+    }
+  },
+  "keyStatusSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "legacyLeft": {
+          "type": "boolean"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "env",
+                "file"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "provider",
+        "source",
+        "legacyLeft"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "legacyLeft": {
+          "type": "boolean"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "env",
+                "file"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "provider",
+        "source",
+        "legacyLeft"
+      ],
+      "type": "object"
+    }
+  },
+  "ollayaStatusSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "up": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "up",
+        "version"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "up": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "up",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  "runDetailSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "events": {
+          "items": {
+            "properties": {
+              "body": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "command": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "exitCode": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "guardLayer": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "guardRule": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "guardVerdict": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string"
+              },
+              "rowid": {
+                "type": "number"
+              },
+              "toolName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ts": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "rowid",
+              "ts",
+              "kind",
+              "toolName",
+              "command",
+              "exitCode",
+              "guardLayer",
+              "guardVerdict",
+              "guardRule",
+              "body"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "run": {
+          "properties": {
+            "agentId": {
+              "type": "string"
+            },
+            "branch": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "createdAt": {
+              "type": "number"
+            },
+            "endedAt": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "inputTokens": {
+              "type": "number"
+            },
+            "memberId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "outputTokens": {
+              "type": "number"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "repo": {
+              "type": "string"
+            },
+            "startedAt": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "starting",
+                "running",
+                "completed",
+                "failed",
+                "blocked",
+                "cancelled",
+                "killed"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "memberId",
+            "agentId",
+            "model",
+            "repo",
+            "branch",
+            "prompt",
+            "state",
+            "reason",
+            "createdAt",
+            "startedAt",
+            "endedAt",
+            "inputTokens",
+            "outputTokens"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "run",
+        "events"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "body": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "command": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "exitCode": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "guardLayer": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "guardRule": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "guardVerdict": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string"
+              },
+              "rowid": {
+                "type": "number"
+              },
+              "toolName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ts": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "rowid",
+              "ts",
+              "kind",
+              "toolName",
+              "command",
+              "exitCode",
+              "guardLayer",
+              "guardVerdict",
+              "guardRule",
+              "body"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "run": {
+          "additionalProperties": false,
+          "properties": {
+            "agentId": {
+              "type": "string"
+            },
+            "branch": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "createdAt": {
+              "type": "number"
+            },
+            "endedAt": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "inputTokens": {
+              "type": "number"
+            },
+            "memberId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "outputTokens": {
+              "type": "number"
+            },
+            "prompt": {
+              "type": "string"
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "repo": {
+              "type": "string"
+            },
+            "startedAt": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "state": {
+              "enum": [
+                "queued",
+                "starting",
+                "running",
+                "completed",
+                "failed",
+                "blocked",
+                "cancelled",
+                "killed"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "memberId",
+            "agentId",
+            "model",
+            "repo",
+            "branch",
+            "prompt",
+            "state",
+            "reason",
+            "createdAt",
+            "startedAt",
+            "endedAt",
+            "inputTokens",
+            "outputTokens"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "run",
+        "events"
+      ],
+      "type": "object"
+    }
+  },
+  "runViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "agentId": {
+          "type": "string"
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "endedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "inputTokens": {
+          "type": "number"
+        },
+        "memberId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "outputTokens": {
+          "type": "number"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "state": {
+          "enum": [
+            "queued",
+            "starting",
+            "running",
+            "completed",
+            "failed",
+            "blocked",
+            "cancelled",
+            "killed"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "memberId",
+        "agentId",
+        "model",
+        "repo",
+        "branch",
+        "prompt",
+        "state",
+        "reason",
+        "createdAt",
+        "startedAt",
+        "endedAt",
+        "inputTokens",
+        "outputTokens"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "type": "string"
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "endedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "inputTokens": {
+          "type": "number"
+        },
+        "memberId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "outputTokens": {
+          "type": "number"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "state": {
+          "enum": [
+            "queued",
+            "starting",
+            "running",
+            "completed",
+            "failed",
+            "blocked",
+            "cancelled",
+            "killed"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "memberId",
+        "agentId",
+        "model",
+        "repo",
+        "branch",
+        "prompt",
+        "state",
+        "reason",
+        "createdAt",
+        "startedAt",
+        "endedAt",
+        "inputTokens",
+        "outputTokens"
+      ],
+      "type": "object"
+    }
+  },
+  "searchHitSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "rowid": {
+          "type": "number"
+        },
+        "runId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "snippet": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "rowid",
+        "runId",
+        "kind",
+        "ts",
+        "snippet"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "rowid": {
+          "type": "number"
+        },
+        "runId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "snippet": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "rowid",
+        "runId",
+        "kind",
+        "ts",
+        "snippet"
+      ],
+      "type": "object"
+    }
+  },
+  "startRunBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "agentId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "model": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "prompt": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repo": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "pattern": "^\\/",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId",
+        "repo",
+        "prompt"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "agentId": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "model": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "prompt": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "repo": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "pattern": "^\\/",
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId",
+        "repo",
+        "prompt"
+      ],
+      "type": "object"
+    }
+  }
+}

@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
+import { loadConfig } from "../src/server/config";
 import { migrate, openDb } from "../src/server/db/db";
 import { migrations } from "../src/server/db/migrations";
 import { findUserByEmail, redeemEnrollment } from "../src/server/features/auth/api";
-import { enrollLink } from "./enroll";
+import { enrollLink, linkOrigin } from "./enroll";
 
 test("a new email gets a named account, an existing one keeps theirs, and the link redeems", () => {
   const db = openDb(":memory:");
@@ -27,4 +28,12 @@ test("a re-issued link for an existing user kills the earlier unused one", () =>
   const profile = { email: "x@example.com", name: "X" };
   expect(redeemEnrollment(db, first, profile)).toBeNull();
   expect(redeemEnrollment(db, second, profile)).toBe(findUserByEmail(db, who.email)?.id ?? "");
+});
+
+test("port 0 is refused without an explicit origin", () => {
+  const zero = { HARNESS_PORT: "0" };
+  expect(() => linkOrigin(loadConfig(zero), zero)).toThrow(/HARNESS_ORIGIN/);
+  const withOrigin = { ...zero, HARNESS_ORIGIN: "https://h.example.com" };
+  expect(linkOrigin(loadConfig(withOrigin), withOrigin)).toBe("https://h.example.com");
+  expect(linkOrigin(loadConfig({}), {})).toBe("http://localhost:4100");
 });

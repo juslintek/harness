@@ -12,6 +12,7 @@
     "deps": "depcruise src",
     "dup": "jscpd",
     "size": "bun scripts/check-file-size.ts",
+    "contract:dump": "bun scripts/contract-dump.ts",
     "smoke": "bun scripts/smoke.ts",
     "gate2": "bun scripts/gate-2.ts",
     "gate3": "bun scripts/gate-3.ts",

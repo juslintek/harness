@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod";
 
 export interface AgentSpec {
   id: string;
@@ -28,7 +29,7 @@ export interface AgentSpec {
 const adapterBin = (name: string): string =>
   join(import.meta.dir, "../../../../node_modules/.bin", name);
 
-export const agentSpecs: readonly AgentSpec[] = [
+const builtinSpecs: readonly AgentSpec[] = [
   {
     id: "claude",
     name: "Claude Code",
@@ -144,3 +145,35 @@ export const agentSpecs: readonly AgentSpec[] = [
     claudeMeta: false,
   },
 ];
+
+const specSchema: z.ZodType<AgentSpec> = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  lane: z.enum(["acp", "agy", "api"]),
+  bin: z.string().min(1),
+  args: z.array(z.string()),
+  versionArgs: z.array(z.string()),
+  loginProbe: z
+    .object({
+      args: z.array(z.string()),
+      loggedInWhen: z.union([z.literal("exit0"), z.object({ stdoutIncludes: z.string() })]),
+      env: z.exactOptional(z.record(z.string(), z.string())),
+    })
+    .nullable(),
+  loginArgs: z.array(z.string()).nullable(),
+  modeOption: z.object({ configId: z.string(), value: z.string() }).nullable(),
+  egress: z.array(z.string()),
+  stateWrite: z.array(z.string()),
+  weakerNetworkIsolation: z.boolean(),
+  claudeMeta: z.boolean(),
+});
+
+// The black-box suite swaps in a stub agent this way. Outside HARNESS_TEST=1 the variable is
+// ignored, so a stray value in a real environment cannot replace the installed agents.
+export function loadAgentSpecs(env: Record<string, string | undefined>): readonly AgentSpec[] {
+  const override = env.HARNESS_TEST === "1" ? env.HARNESS_TEST_AGENTS : undefined;
+  if (!override) return builtinSpecs;
+  return z.array(specSchema).parse(JSON.parse(override));
+}
+
+export const agentSpecs: readonly AgentSpec[] = loadAgentSpecs(process.env);

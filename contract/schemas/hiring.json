@@ -1,0 +1,2143 @@
+{
+  "createHireBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "maxCandidates": {
+          "default": 2,
+          "maximum": 3,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "spec": {
+          "additionalProperties": false,
+          "properties": {
+            "mustHave": {
+              "items": {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 6,
+              "type": "array"
+            },
+            "specialty": {
+              "enum": [
+                "frontend",
+                "backend",
+                "database",
+                "devops",
+                "security",
+                "writing",
+                "mobile"
+              ],
+              "type": "string"
+            },
+            "summary": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "taskTypes": {
+              "items": {
+                "enum": [
+                  "feature",
+                  "bugfix",
+                  "refactor",
+                  "test",
+                  "docs",
+                  "review",
+                  "ops",
+                  "research"
+                ],
+                "type": "string"
+              },
+              "maxItems": 4,
+              "minItems": 1,
+              "type": "array"
+            },
+            "title": {
+              "maxLength": 60,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "specialty",
+            "summary",
+            "mustHave",
+            "taskTypes"
+          ],
+          "type": "object"
+        },
+        "teamId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "teamId",
+        "spec"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "maxCandidates": {
+          "default": 2,
+          "maximum": 3,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "spec": {
+          "additionalProperties": false,
+          "properties": {
+            "mustHave": {
+              "items": {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 6,
+              "type": "array"
+            },
+            "specialty": {
+              "enum": [
+                "frontend",
+                "backend",
+                "database",
+                "devops",
+                "security",
+                "writing",
+                "mobile"
+              ],
+              "type": "string"
+            },
+            "summary": {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            "taskTypes": {
+              "items": {
+                "enum": [
+                  "feature",
+                  "bugfix",
+                  "refactor",
+                  "test",
+                  "docs",
+                  "review",
+                  "ops",
+                  "research"
+                ],
+                "type": "string"
+              },
+              "maxItems": 4,
+              "minItems": 1,
+              "type": "array"
+            },
+            "title": {
+              "maxLength": 60,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "specialty",
+            "summary",
+            "mustHave",
+            "taskTypes"
+          ],
+          "type": "object"
+        },
+        "teamId": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "teamId",
+        "spec",
+        "maxCandidates"
+      ],
+      "type": "object"
+    }
+  },
+  "decideBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "candidateId": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "default": "",
+          "maxLength": 500,
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidateId"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "candidateId": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "default": "",
+          "maxLength": 500,
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidateId",
+        "reason"
+      ],
+      "type": "object"
+    }
+  },
+  "hireListSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "properties": {
+                "answers": {
+                  "items": {
+                    "properties": {
+                      "body": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "questionId": {
+                        "type": "string"
+                      },
+                      "runId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "questionId",
+                      "body",
+                      "runId",
+                      "createdAt"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "profile": {
+                  "properties": {
+                    "card": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "limits": {
+                              "items": {
+                                "maxLength": 80,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "maxItems": 8,
+                              "minItems": 1,
+                              "type": "array"
+                            },
+                            "preferredTaskTypes": {
+                              "items": {
+                                "enum": [
+                                  "feature",
+                                  "bugfix",
+                                  "refactor",
+                                  "test",
+                                  "docs",
+                                  "review",
+                                  "ops",
+                                  "research"
+                                ],
+                                "type": "string"
+                              },
+                              "maxItems": 4,
+                              "minItems": 1,
+                              "type": "array"
+                            },
+                            "specialties": {
+                              "items": {
+                                "enum": [
+                                  "frontend",
+                                  "backend",
+                                  "database",
+                                  "devops",
+                                  "security",
+                                  "writing",
+                                  "mobile"
+                                ],
+                                "type": "string"
+                              },
+                              "maxItems": 4,
+                              "type": "array"
+                            },
+                            "strengths": {
+                              "items": {
+                                "maxLength": 80,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "maxItems": 8,
+                              "type": "array"
+                            },
+                            "summary": {
+                              "maxLength": 280,
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "summary",
+                            "specialties",
+                            "strengths",
+                            "limits",
+                            "preferredTaskTypes"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cardAt": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "fallbacks": {
+                      "items": {
+                        "properties": {
+                          "model": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "runtime": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "runtime",
+                          "model"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "orgId": {
+                      "type": "string"
+                    },
+                    "persona": {
+                      "type": "string"
+                    },
+                    "runtime": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "properties": {
+                        "readOnly": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "readOnly"
+                      ],
+                      "type": "object"
+                    },
+                    "skills": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "orgId",
+                    "runtime",
+                    "model",
+                    "persona",
+                    "skills",
+                    "scope",
+                    "fallbacks",
+                    "card",
+                    "cardAt"
+                  ],
+                  "type": "object"
+                },
+                "scorecards": {
+                  "items": {
+                    "properties": {
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "depth": {
+                        "type": "number"
+                      },
+                      "fit": {
+                        "type": "number"
+                      },
+                      "honesty": {
+                        "type": "number"
+                      },
+                      "notes": {
+                        "type": "string"
+                      },
+                      "scorerId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "scorerId",
+                      "fit",
+                      "depth",
+                      "honesty",
+                      "notes",
+                      "createdAt"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "status": {
+                  "enum": [
+                    "pending",
+                    "interviewing",
+                    "answered",
+                    "failed",
+                    "hired",
+                    "rejected"
+                  ],
+                  "type": "string"
+                },
+                "systemScore": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "total": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "systemScore",
+                "total",
+                "profile",
+                "answers",
+                "scorecards"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "createdAt": {
+            "type": "number"
+          },
+          "decidedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decisionReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hiredMemberId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "onboarding": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "orgId": {
+            "type": "string"
+          },
+          "phaseStartedAt": {
+            "type": "number"
+          },
+          "questions": {
+            "items": {
+              "properties": {
+                "askedBy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "body": {
+                  "type": "string"
+                },
+                "candidateId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "base",
+                    "followup"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "candidateId",
+                "askedBy",
+                "kind",
+                "body",
+                "createdAt"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "requestedBy": {
+            "type": "string"
+          },
+          "reviewers": {
+            "items": {
+              "properties": {
+                "asked": {
+                  "type": "boolean"
+                },
+                "memberId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "memberId",
+                "asked"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "spec": {
+            "properties": {
+              "mustHave": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "specialty": {
+                "enum": [
+                  "frontend",
+                  "backend",
+                  "database",
+                  "devops",
+                  "security",
+                  "writing",
+                  "mobile"
+                ],
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "taskTypes": {
+                "items": {
+                  "enum": [
+                    "feature",
+                    "bugfix",
+                    "refactor",
+                    "test",
+                    "docs",
+                    "review",
+                    "ops",
+                    "research"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "specialty",
+              "summary",
+              "mustHave",
+              "taskTypes"
+            ],
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "interviewing",
+              "followups",
+              "answering",
+              "scoring",
+              "deciding",
+              "hired",
+              "rejected",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "teamId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "teamId",
+          "requestedBy",
+          "spec",
+          "status",
+          "phaseStartedAt",
+          "decidedBy",
+          "decisionReason",
+          "hiredMemberId",
+          "onboarding",
+          "createdAt",
+          "candidates",
+          "questions",
+          "reviewers"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "candidates": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "answers": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "body": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "questionId": {
+                        "type": "string"
+                      },
+                      "runId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "questionId",
+                      "body",
+                      "runId",
+                      "createdAt"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "profile": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "card": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "limits": {
+                              "items": {
+                                "maxLength": 80,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "maxItems": 8,
+                              "minItems": 1,
+                              "type": "array"
+                            },
+                            "preferredTaskTypes": {
+                              "items": {
+                                "enum": [
+                                  "feature",
+                                  "bugfix",
+                                  "refactor",
+                                  "test",
+                                  "docs",
+                                  "review",
+                                  "ops",
+                                  "research"
+                                ],
+                                "type": "string"
+                              },
+                              "maxItems": 4,
+                              "minItems": 1,
+                              "type": "array"
+                            },
+                            "specialties": {
+                              "items": {
+                                "enum": [
+                                  "frontend",
+                                  "backend",
+                                  "database",
+                                  "devops",
+                                  "security",
+                                  "writing",
+                                  "mobile"
+                                ],
+                                "type": "string"
+                              },
+                              "maxItems": 4,
+                              "type": "array"
+                            },
+                            "strengths": {
+                              "items": {
+                                "maxLength": 80,
+                                "minLength": 1,
+                                "type": "string"
+                              },
+                              "maxItems": 8,
+                              "type": "array"
+                            },
+                            "summary": {
+                              "maxLength": 280,
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "summary",
+                            "specialties",
+                            "strengths",
+                            "limits",
+                            "preferredTaskTypes"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cardAt": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "fallbacks": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "model": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "runtime": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "runtime",
+                          "model"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "orgId": {
+                      "type": "string"
+                    },
+                    "persona": {
+                      "type": "string"
+                    },
+                    "runtime": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "readOnly": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "readOnly"
+                      ],
+                      "type": "object"
+                    },
+                    "skills": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "orgId",
+                    "runtime",
+                    "model",
+                    "persona",
+                    "skills",
+                    "scope",
+                    "fallbacks",
+                    "card",
+                    "cardAt"
+                  ],
+                  "type": "object"
+                },
+                "scorecards": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "createdAt": {
+                        "type": "number"
+                      },
+                      "depth": {
+                        "type": "number"
+                      },
+                      "fit": {
+                        "type": "number"
+                      },
+                      "honesty": {
+                        "type": "number"
+                      },
+                      "notes": {
+                        "type": "string"
+                      },
+                      "scorerId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "scorerId",
+                      "fit",
+                      "depth",
+                      "honesty",
+                      "notes",
+                      "createdAt"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "status": {
+                  "enum": [
+                    "pending",
+                    "interviewing",
+                    "answered",
+                    "failed",
+                    "hired",
+                    "rejected"
+                  ],
+                  "type": "string"
+                },
+                "systemScore": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "total": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "systemScore",
+                "total",
+                "profile",
+                "answers",
+                "scorecards"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "createdAt": {
+            "type": "number"
+          },
+          "decidedBy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decisionReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hiredMemberId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "onboarding": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "orgId": {
+            "type": "string"
+          },
+          "phaseStartedAt": {
+            "type": "number"
+          },
+          "questions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "askedBy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "body": {
+                  "type": "string"
+                },
+                "candidateId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "number"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "base",
+                    "followup"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "candidateId",
+                "askedBy",
+                "kind",
+                "body",
+                "createdAt"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "requestedBy": {
+            "type": "string"
+          },
+          "reviewers": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "asked": {
+                  "type": "boolean"
+                },
+                "memberId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "memberId",
+                "asked"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "spec": {
+            "additionalProperties": false,
+            "properties": {
+              "mustHave": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "specialty": {
+                "enum": [
+                  "frontend",
+                  "backend",
+                  "database",
+                  "devops",
+                  "security",
+                  "writing",
+                  "mobile"
+                ],
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "taskTypes": {
+                "items": {
+                  "enum": [
+                    "feature",
+                    "bugfix",
+                    "refactor",
+                    "test",
+                    "docs",
+                    "review",
+                    "ops",
+                    "research"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "title",
+              "specialty",
+              "summary",
+              "mustHave",
+              "taskTypes"
+            ],
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "interviewing",
+              "followups",
+              "answering",
+              "scoring",
+              "deciding",
+              "hired",
+              "rejected",
+              "cancelled"
+            ],
+            "type": "string"
+          },
+          "teamId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "teamId",
+          "requestedBy",
+          "spec",
+          "status",
+          "phaseStartedAt",
+          "decidedBy",
+          "decisionReason",
+          "hiredMemberId",
+          "onboarding",
+          "createdAt",
+          "candidates",
+          "questions",
+          "reviewers"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "hireViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "candidates": {
+          "items": {
+            "properties": {
+              "answers": {
+                "items": {
+                  "properties": {
+                    "body": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "questionId": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "questionId",
+                    "body",
+                    "runId",
+                    "createdAt"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "profile": {
+                "properties": {
+                  "card": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "limits": {
+                            "items": {
+                              "maxLength": 80,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 8,
+                            "minItems": 1,
+                            "type": "array"
+                          },
+                          "preferredTaskTypes": {
+                            "items": {
+                              "enum": [
+                                "feature",
+                                "bugfix",
+                                "refactor",
+                                "test",
+                                "docs",
+                                "review",
+                                "ops",
+                                "research"
+                              ],
+                              "type": "string"
+                            },
+                            "maxItems": 4,
+                            "minItems": 1,
+                            "type": "array"
+                          },
+                          "specialties": {
+                            "items": {
+                              "enum": [
+                                "frontend",
+                                "backend",
+                                "database",
+                                "devops",
+                                "security",
+                                "writing",
+                                "mobile"
+                              ],
+                              "type": "string"
+                            },
+                            "maxItems": 4,
+                            "type": "array"
+                          },
+                          "strengths": {
+                            "items": {
+                              "maxLength": 80,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 8,
+                            "type": "array"
+                          },
+                          "summary": {
+                            "maxLength": 280,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "summary",
+                          "specialties",
+                          "strengths",
+                          "limits",
+                          "preferredTaskTypes"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cardAt": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "fallbacks": {
+                    "items": {
+                      "properties": {
+                        "model": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "runtime": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "runtime",
+                        "model"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "orgId": {
+                    "type": "string"
+                  },
+                  "persona": {
+                    "type": "string"
+                  },
+                  "runtime": {
+                    "type": "string"
+                  },
+                  "scope": {
+                    "properties": {
+                      "readOnly": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "readOnly"
+                    ],
+                    "type": "object"
+                  },
+                  "skills": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "id",
+                  "orgId",
+                  "runtime",
+                  "model",
+                  "persona",
+                  "skills",
+                  "scope",
+                  "fallbacks",
+                  "card",
+                  "cardAt"
+                ],
+                "type": "object"
+              },
+              "scorecards": {
+                "items": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "depth": {
+                      "type": "number"
+                    },
+                    "fit": {
+                      "type": "number"
+                    },
+                    "honesty": {
+                      "type": "number"
+                    },
+                    "notes": {
+                      "type": "string"
+                    },
+                    "scorerId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "scorerId",
+                    "fit",
+                    "depth",
+                    "honesty",
+                    "notes",
+                    "createdAt"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "interviewing",
+                  "answered",
+                  "failed",
+                  "hired",
+                  "rejected"
+                ],
+                "type": "string"
+              },
+              "systemScore": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "total": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "systemScore",
+              "total",
+              "profile",
+              "answers",
+              "scorecards"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "decidedBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decisionReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hiredMemberId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "onboarding": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "phaseStartedAt": {
+          "type": "number"
+        },
+        "questions": {
+          "items": {
+            "properties": {
+              "askedBy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "body": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "base",
+                  "followup"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "candidateId",
+              "askedBy",
+              "kind",
+              "body",
+              "createdAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "requestedBy": {
+          "type": "string"
+        },
+        "reviewers": {
+          "items": {
+            "properties": {
+              "asked": {
+                "type": "boolean"
+              },
+              "memberId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "memberId",
+              "asked"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "spec": {
+          "properties": {
+            "mustHave": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "specialty": {
+              "enum": [
+                "frontend",
+                "backend",
+                "database",
+                "devops",
+                "security",
+                "writing",
+                "mobile"
+              ],
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "taskTypes": {
+              "items": {
+                "enum": [
+                  "feature",
+                  "bugfix",
+                  "refactor",
+                  "test",
+                  "docs",
+                  "review",
+                  "ops",
+                  "research"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "specialty",
+            "summary",
+            "mustHave",
+            "taskTypes"
+          ],
+          "type": "object"
+        },
+        "status": {
+          "enum": [
+            "interviewing",
+            "followups",
+            "answering",
+            "scoring",
+            "deciding",
+            "hired",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "teamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "orgId",
+        "teamId",
+        "requestedBy",
+        "spec",
+        "status",
+        "phaseStartedAt",
+        "decidedBy",
+        "decisionReason",
+        "hiredMemberId",
+        "onboarding",
+        "createdAt",
+        "candidates",
+        "questions",
+        "reviewers"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "answers": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "body": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "questionId": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "questionId",
+                    "body",
+                    "runId",
+                    "createdAt"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "profile": {
+                "additionalProperties": false,
+                "properties": {
+                  "card": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "limits": {
+                            "items": {
+                              "maxLength": 80,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 8,
+                            "minItems": 1,
+                            "type": "array"
+                          },
+                          "preferredTaskTypes": {
+                            "items": {
+                              "enum": [
+                                "feature",
+                                "bugfix",
+                                "refactor",
+                                "test",
+                                "docs",
+                                "review",
+                                "ops",
+                                "research"
+                              ],
+                              "type": "string"
+                            },
+                            "maxItems": 4,
+                            "minItems": 1,
+                            "type": "array"
+                          },
+                          "specialties": {
+                            "items": {
+                              "enum": [
+                                "frontend",
+                                "backend",
+                                "database",
+                                "devops",
+                                "security",
+                                "writing",
+                                "mobile"
+                              ],
+                              "type": "string"
+                            },
+                            "maxItems": 4,
+                            "type": "array"
+                          },
+                          "strengths": {
+                            "items": {
+                              "maxLength": 80,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "maxItems": 8,
+                            "type": "array"
+                          },
+                          "summary": {
+                            "maxLength": 280,
+                            "minLength": 1,
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "summary",
+                          "specialties",
+                          "strengths",
+                          "limits",
+                          "preferredTaskTypes"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "cardAt": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "fallbacks": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "model": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "runtime": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "runtime",
+                        "model"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "orgId": {
+                    "type": "string"
+                  },
+                  "persona": {
+                    "type": "string"
+                  },
+                  "runtime": {
+                    "type": "string"
+                  },
+                  "scope": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "readOnly": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "readOnly"
+                    ],
+                    "type": "object"
+                  },
+                  "skills": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "id",
+                  "orgId",
+                  "runtime",
+                  "model",
+                  "persona",
+                  "skills",
+                  "scope",
+                  "fallbacks",
+                  "card",
+                  "cardAt"
+                ],
+                "type": "object"
+              },
+              "scorecards": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "createdAt": {
+                      "type": "number"
+                    },
+                    "depth": {
+                      "type": "number"
+                    },
+                    "fit": {
+                      "type": "number"
+                    },
+                    "honesty": {
+                      "type": "number"
+                    },
+                    "notes": {
+                      "type": "string"
+                    },
+                    "scorerId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "scorerId",
+                    "fit",
+                    "depth",
+                    "honesty",
+                    "notes",
+                    "createdAt"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "status": {
+                "enum": [
+                  "pending",
+                  "interviewing",
+                  "answered",
+                  "failed",
+                  "hired",
+                  "rejected"
+                ],
+                "type": "string"
+              },
+              "systemScore": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "total": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "systemScore",
+              "total",
+              "profile",
+              "answers",
+              "scorecards"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "decidedBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decisionReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hiredMemberId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "onboarding": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "phaseStartedAt": {
+          "type": "number"
+        },
+        "questions": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "askedBy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "body": {
+                "type": "string"
+              },
+              "candidateId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "createdAt": {
+                "type": "number"
+              },
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "base",
+                  "followup"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "candidateId",
+              "askedBy",
+              "kind",
+              "body",
+              "createdAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "requestedBy": {
+          "type": "string"
+        },
+        "reviewers": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "asked": {
+                "type": "boolean"
+              },
+              "memberId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "memberId",
+              "asked"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "spec": {
+          "additionalProperties": false,
+          "properties": {
+            "mustHave": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "specialty": {
+              "enum": [
+                "frontend",
+                "backend",
+                "database",
+                "devops",
+                "security",
+                "writing",
+                "mobile"
+              ],
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "taskTypes": {
+              "items": {
+                "enum": [
+                  "feature",
+                  "bugfix",
+                  "refactor",
+                  "test",
+                  "docs",
+                  "review",
+                  "ops",
+                  "research"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "specialty",
+            "summary",
+            "mustHave",
+            "taskTypes"
+          ],
+          "type": "object"
+        },
+        "status": {
+          "enum": [
+            "interviewing",
+            "followups",
+            "answering",
+            "scoring",
+            "deciding",
+            "hired",
+            "rejected",
+            "cancelled"
+          ],
+          "type": "string"
+        },
+        "teamId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "orgId",
+        "teamId",
+        "requestedBy",
+        "spec",
+        "status",
+        "phaseStartedAt",
+        "decidedBy",
+        "decisionReason",
+        "hiredMemberId",
+        "onboarding",
+        "createdAt",
+        "candidates",
+        "questions",
+        "reviewers"
+      ],
+      "type": "object"
+    }
+  },
+  "scoreBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "depth": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "fit": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "honesty": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "notes": {
+          "default": "",
+          "maxLength": 1000,
+          "type": "string"
+        }
+      },
+      "required": [
+        "fit",
+        "depth",
+        "honesty"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "depth": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "fit": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "honesty": {
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "notes": {
+          "default": "",
+          "maxLength": 1000,
+          "type": "string"
+        }
+      },
+      "required": [
+        "fit",
+        "depth",
+        "honesty",
+        "notes"
+      ],
+      "type": "object"
+    }
+  }
+}

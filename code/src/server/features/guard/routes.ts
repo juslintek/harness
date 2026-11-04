@@ -49,7 +49,7 @@ function mayDecide(
 export function approvalRoutes(db: Database, harnessHome: string): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
   // Someone who administers no org has nothing to do here, whatever they send.
-  app.use("*", async (c, next) => {
+  app.use("*", async function requireOrgAdmin(c, next) {
     const actor = c.get("actor");
     if (!actor.instanceAdmin && administeredOrgs(db, actor.userId).size === 0) return forbidden(c);
     await next();
