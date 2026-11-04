@@ -1,5 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, symlinkSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readNoteFile, removeNoteFile, vaultDir, writeNoteFileAtomic } from "./vault";
@@ -45,4 +54,28 @@ test("non-vault paths are refused and remove deletes the file", () => {
   removeNoteFile(h, "global/a.md");
   expect(readNoteFile(h, "global/a.md")).toBeNull();
   removeNoteFile(h, "global/a.md");
+});
+
+test("a symlinked leaf pointing outside the vault is never read or modified", () => {
+  const h = home();
+  const outside = join(home(), "secret.md");
+  writeFileSync(outside, "outside");
+  mkdirSync(join(vaultDir(h), "global"), { recursive: true });
+  symlinkSync(outside, join(vaultDir(h), "global/a.md"));
+  expect(readNoteFile(h, "global/a.md")).toBeNull();
+  expect(() => writeNoteFileAtomic(h, "global/a.md", "x")).toThrow();
+  expect(() => removeNoteFile(h, "global/a.md")).toThrow();
+  expect(readFileSync(outside, "utf8")).toBe("outside");
+});
+
+test("a symlinked vault root is refused", () => {
+  const h = home();
+  const real = home();
+  mkdirSync(join(real, "global"));
+  writeFileSync(join(real, "global/a.md"), "x");
+  symlinkSync(real, vaultDir(h));
+  expect(readNoteFile(h, "global/a.md")).toBeNull();
+  expect(() => writeNoteFileAtomic(h, "global/b.md", "x")).toThrow();
+  expect(() => removeNoteFile(h, "global/a.md")).toThrow();
+  expect(readdirSync(join(real, "global"))).toEqual(["a.md"]);
 });

@@ -17,37 +17,67 @@ export interface NoteMeta {
 const TYPES: readonly string[] = ["lesson", "fact", "decision", "howto", "reference"];
 const SCOPES: readonly string[] = ["global", "org", "project", "agent"];
 const FM = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
-const KNOWN = new Set([
-  "id",
-  "type",
-  "scope",
-  "tags",
-  "source_agent",
-  "created",
-  "updated",
-  "confidence",
-]);
-
-function str(v: unknown): string | undefined {
-  return typeof v === "string" ? v : undefined;
-}
 
 function fromRecord(raw: Record<string, unknown>): NoteMeta {
-  const meta: NoteMeta = {
-    tags: Array.isArray(raw["tags"]) ? raw["tags"].map(String) : [],
-    extra: {},
-  };
-  const type = str(raw["type"]);
-  const scope = str(raw["scope"]);
-  if (str(raw["id"]) !== undefined) meta.id = str(raw["id"]) as string;
-  if (type !== undefined && TYPES.includes(type)) meta.type = type as NoteType;
-  if (scope !== undefined && SCOPES.includes(scope)) meta.scope = scope as NoteScope;
-  if (str(raw["source_agent"]) !== undefined) meta.sourceAgent = str(raw["source_agent"]) as string;
-  if (str(raw["created"]) !== undefined) meta.created = str(raw["created"]) as string;
-  if (str(raw["updated"]) !== undefined) meta.updated = str(raw["updated"]) as string;
-  if (typeof raw["confidence"] === "number") meta.confidence = raw["confidence"];
-  for (const [k, v] of Object.entries(raw)) if (!KNOWN.has(k)) meta.extra[k] = v;
+  const meta: NoteMeta = { tags: [], extra: {} };
+  // Values that fail validation go to extra, so a rewrite after an outside edit keeps them.
+  for (const [k, v] of Object.entries(raw)) {
+    if (!acceptKnown(meta, k, v)) meta.extra[k] = v;
+  }
   return meta;
+}
+
+type Setter = (meta: NoteMeta, v: unknown) => boolean;
+
+function strSetter(set: (meta: NoteMeta, v: string) => void): Setter {
+  return (meta, v) => {
+    if (typeof v !== "string") return false;
+    set(meta, v);
+    return true;
+  };
+}
+
+function enumSetter(allowed: readonly string[], set: (meta: NoteMeta, v: string) => void): Setter {
+  return (meta, v) => {
+    if (typeof v !== "string" || !allowed.includes(v)) return false;
+    set(meta, v);
+    return true;
+  };
+}
+
+const SETTERS: Record<string, Setter> = {
+  id: strSetter((m, v) => {
+    m.id = v;
+  }),
+  source_agent: strSetter((m, v) => {
+    m.sourceAgent = v;
+  }),
+  created: strSetter((m, v) => {
+    m.created = v;
+  }),
+  updated: strSetter((m, v) => {
+    m.updated = v;
+  }),
+  type: enumSetter(TYPES, (m, v) => {
+    m.type = v as NoteType;
+  }),
+  scope: enumSetter(SCOPES, (m, v) => {
+    m.scope = v as NoteScope;
+  }),
+  tags: (m, v) => {
+    if (!Array.isArray(v) || !v.every((t) => typeof t === "string")) return false;
+    m.tags = v;
+    return true;
+  },
+  confidence: (m, v) => {
+    if (typeof v !== "number") return false;
+    m.confidence = v;
+    return true;
+  },
+};
+
+function acceptKnown(meta: NoteMeta, key: string, v: unknown): boolean {
+  return SETTERS[key]?.(meta, v) ?? false;
 }
 
 export function parseNote(text: string): { meta: NoteMeta; body: string } {

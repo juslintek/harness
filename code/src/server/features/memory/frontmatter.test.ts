@@ -38,3 +38,12 @@ test("title falls back to the file name; hash is sha256 hex", () => {
   expect(noteTitle("no heading", "a/deploy-notes.md")).toBe("deploy-notes");
   expect(hashText("")).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 });
+
+test("invalid known-key values survive a rewrite through extra", () => {
+  const text = '---\nid: 5\ntype: note\ntags: foo\nconfidence: "0.8"\nscope: org\n---\n\nbody\n';
+  const first = parseNote(text);
+  expect(first.meta.scope).toBe("org");
+  expect(first.meta.extra).toEqual({ id: 5, type: "note", tags: "foo", confidence: "0.8" });
+  const second = parseNote(serializeNote(first.meta, first.body));
+  expect(second).toEqual(first);
+});
