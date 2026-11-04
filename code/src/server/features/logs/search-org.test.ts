@@ -51,7 +51,7 @@ test("an org B run's events never appear in org A results, and runless events ar
   add("runA", "deploy alpha", 10);
   add("runB", "deploy beta", 11);
   add(undefined, "deploy orphan", 12);
-  const hits = searchOrgEvents(db, "A", { text: "deploy" });
+  const hits = searchOrgEvents(db, "A", { userId: "u", text: "deploy" });
   expect(hits.map((h) => h.snippet)).toEqual(["deploy alpha"]);
   expect(hits[0]).toMatchObject({ memberHandle: "bot-A", runId: "runA", taskId: null });
 });
@@ -59,19 +59,24 @@ test("an org B run's events never appear in org A results, and runless events ar
 test("kind and member filters narrow the results", () => {
   add("runA", "deploy one", 10, "message");
   add("runA", "deploy two", 11, "error");
-  expect(searchOrgEvents(db, "A", { text: "deploy", kind: "error" }).map((h) => h.ts)).toEqual([
-    11,
-  ]);
-  expect(searchOrgEvents(db, "A", { text: "deploy", memberId: "mB" })).toEqual([]);
-  expect(searchOrgEvents(db, "A", { text: "deploy", memberId: "mA" })).toHaveLength(2);
+  expect(
+    searchOrgEvents(db, "A", { userId: "u", text: "deploy", kind: "error" }).map((h) => h.ts),
+  ).toEqual([11]);
+  expect(searchOrgEvents(db, "A", { userId: "u", text: "deploy", memberId: "mB" })).toEqual([]);
+  expect(searchOrgEvents(db, "A", { userId: "u", text: "deploy", memberId: "mA" })).toHaveLength(2);
 });
 
 test("the before cursor returns the next page without overlap", () => {
   for (let i = 1; i <= 5; i++) add("runA", `deploy ${i}`, i * 10);
-  const first = searchOrgEvents(db, "A", { text: "deploy", limit: 2 });
+  const first = searchOrgEvents(db, "A", { userId: "u", text: "deploy", limit: 2 });
   const last = first.at(-1);
   if (!last) throw new Error("empty page");
-  const second = searchOrgEvents(db, "A", { text: "deploy", limit: 2, before: last.ts });
+  const second = searchOrgEvents(db, "A", {
+    userId: "u",
+    text: "deploy",
+    limit: 2,
+    before: last.ts,
+  });
   expect(first.map((h) => h.ts)).toEqual([50, 40]);
   expect(second.map((h) => h.ts)).toEqual([30, 20]);
 });
@@ -79,9 +84,9 @@ test("the before cursor returns the next page without overlap", () => {
 test("quotes and wildcards in the text do not throw", () => {
   add("runA", 'say "hi" now', 10);
   for (const text of ['"', 'say "hi', "*", "dep*", "a AND", "(", "-"]) {
-    expect(() => searchOrgEvents(db, "A", { text })).not.toThrow();
+    expect(() => searchOrgEvents(db, "A", { userId: "u", text })).not.toThrow();
   }
-  expect(searchOrgEvents(db, "A", { text: '"hi"' })).toHaveLength(1);
+  expect(searchOrgEvents(db, "A", { userId: "u", text: '"hi"' })).toHaveLength(1);
 });
 
 test("events sharing a millisecond page through with a (ts, rowid) cursor", () => {
@@ -89,7 +94,7 @@ test("events sharing a millisecond page through with a (ts, rowid) cursor", () =
   const seen: number[] = [];
   let cursor: { before?: number; beforeRowid?: number } = {};
   for (let page = 0; page < 5; page++) {
-    const hits = searchOrgEvents(db, "A", { text: "deploy", limit: 2, ...cursor });
+    const hits = searchOrgEvents(db, "A", { userId: "u", text: "deploy", limit: 2, ...cursor });
     seen.push(...hits.map((h) => h.rowid));
     const last = hits.at(-1);
     if (!last) break;
@@ -102,6 +107,21 @@ test("events sharing a millisecond page through with a (ts, rowid) cursor", () =
 test("another org's matches cannot crowd this org's hit out of the candidate cap", () => {
   add("runA", "deploy ".concat("filler ".repeat(30)), 1);
   for (let i = 0; i < 6; i++) add("runB", "deploy", 10 + i);
-  const hits = searchOrgEvents(db, "A", { text: "deploy" }, 3);
+  const hits = searchOrgEvents(db, "A", { userId: "u", text: "deploy" }, 3);
   expect(hits.map((h) => h.ts)).toEqual([1]);
+});
+
+test("a run in a project the user cannot open is hidden until the org is granted access", () => {
+  db.run("INSERT INTO projects (id, org_id, key, name, created_at) VALUES ('P', 'B', 'P', 'P', 1)");
+  db.run(
+    `INSERT INTO members (id, org_id, kind, user_id, handle, display_name, role, created_at)
+     VALUES ('hu', 'A', 'human', 'u1', 'hu', 'hu', 'member', 1)`,
+  );
+  db.run("UPDATE runs SET project_id = 'P' WHERE id = 'runA'");
+  add("runA", "deploy secret", 10);
+  expect(searchOrgEvents(db, "A", { userId: "u1", text: "deploy" })).toEqual([]);
+  db.run(
+    "INSERT INTO grants (id, project_id, org_id, permission, granted_by, created_at) VALUES ('g', 'P', 'A', 'read', 'x', 1)",
+  );
+  expect(searchOrgEvents(db, "A", { userId: "u1", text: "deploy" })).toHaveLength(1);
 });

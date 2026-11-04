@@ -18,7 +18,7 @@ function intParam(raw: string | undefined): number | undefined | null {
   return Number.isSafeInteger(n) ? n : null;
 }
 
-function parseQuery(c: Context<AuthEnv>): OrgSearchQuery | string {
+function parseQuery(c: Context<AuthEnv>): Omit<OrgSearchQuery, "userId"> | string {
   const kind = c.req.query("kind");
   const memberId = c.req.query("member");
   const before = intParam(c.req.query("before"));
@@ -46,7 +46,7 @@ export function logsRoutes(db: Database): Hono<AuthEnv> {
     if (!roleAtLeast(me.role, "member")) return forbidden(c);
     const query = parseQuery(c);
     if (typeof query === "string") return c.json({ error: query }, 400);
-    return c.json(searchOrgEvents(db, org.id, query));
+    return c.json(searchOrgEvents(db, org.id, { ...query, userId: c.get("actor").userId }));
   });
   return app;
 }

@@ -1,9 +1,11 @@
 import type { Database } from "bun:sqlite";
 import type { OrgLogHit } from "../../../shared/logs";
+import { projectAccess } from "../orgs/api";
 import { type EventKind, readBody, snippetFor } from "./api";
 import { matchRowids, type RowidScope } from "./repo";
 
 export interface OrgSearchQuery {
+  userId: string;
   text: string;
   kind?: EventKind;
   memberId?: string;
@@ -29,9 +31,28 @@ interface Raw {
   task_number: number | null;
 }
 
-function scopeOf(orgId: string, q: OrgSearchQuery): RowidScope {
-  const where = ["m.org_id = ?"];
-  const params: Array<string | number> = [orgId];
+// Runs tied to a project are visible only to people who can open that project; the check is done
+// per distinct project here so the FTS cap applies after it.
+function openableProjects(db: Database, orgId: string, userId: string): string[] {
+  return db
+    .query<{ project_id: string }, [string]>(
+      `SELECT DISTINCT r.project_id FROM runs r JOIN members m ON m.id = r.member_id
+       WHERE m.org_id = ? AND r.project_id IS NOT NULL`,
+    )
+    .all(orgId)
+    .map((r) => r.project_id)
+    .filter((id) => projectAccess(db, userId, id) !== "none");
+}
+
+function scopeOf(db: Database, orgId: string, q: OrgSearchQuery): RowidScope {
+  const where = [
+    "m.org_id = ?",
+    "(r.project_id IS NULL OR r.project_id IN (SELECT value FROM json_each(?)))",
+  ];
+  const params: Array<string | number> = [
+    orgId,
+    JSON.stringify(openableProjects(db, orgId, q.userId)),
+  ];
   if (q.kind !== undefined) {
     where.push("e.kind = ?");
     params.push(q.kind);
@@ -62,7 +83,7 @@ export function searchOrgEvents(
   q: OrgSearchQuery,
   cap: number = CANDIDATES,
 ): OrgLogHit[] {
-  const scope = scopeOf(orgId, q);
+  const scope = scopeOf(db, orgId, q);
   const rowids = matchRowids(db, q.text, cap, scope);
   if (rowids.length === 0) return [];
   const limit = Math.min(Math.max(Math.trunc(q.limit ?? DEFAULT_LIMIT), 1), MAX_LIMIT);
