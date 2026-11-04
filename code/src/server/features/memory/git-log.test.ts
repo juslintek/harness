@@ -247,3 +247,18 @@ test("a failed reset abandons the attempt, so a hand-staged file is never commit
   errors.mockRestore();
   expect(await log("%s")).toEqual([]);
 });
+
+test("a failed git status at startup still queues a commit instead of reading as no changes", async () => {
+  await ensureVaultRepo(env.dir);
+  await Bun.write(join(vaultDir(env.dir), orgNote.disk), "# left behind");
+  const real = Bun.spawn;
+  const spy = spyOn(Bun, "spawn").mockImplementation(((cmd: string[], opts: object) =>
+    real(
+      cmd.map((a) => (a === "status" ? "status-broken" : a)),
+      opts,
+    )) as typeof Bun.spawn);
+  await queueUncommitted(env.dir, env.db);
+  spy.mockRestore();
+  await drainCommits();
+  expect(await log("%s")).toEqual(["commit notes left uncommitted"]);
+});

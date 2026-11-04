@@ -126,12 +126,12 @@ export function ensureVaultRepo(home: string): Promise<void> {
   return p;
 }
 
-// Changed or untracked notes, as paths inside the vault. Rename entries carry a second path.
+// Changed or untracked notes, as paths inside the vault. Rename entries carry a second path. A
+// failed status throws: an empty list would read as "nothing changed" and skip the commit.
 async function changedNotes(dir: string): Promise<string[]> {
-  const res = await git(dir, ["status", "--porcelain", "-z", "--untracked-files=all"]);
-  if (res.code !== 0) return [];
+  const status = await must(dir, ["status", "--porcelain", "-z", "--untracked-files=all"]);
   const out: string[] = [];
-  const parts = res.out.split("\0");
+  const parts = status.split("\0");
   for (let i = 0; i < parts.length; i++) {
     const entry = parts[i] as string;
     if (entry.length < 4) continue;
@@ -275,9 +275,12 @@ export function queueCommit(home: string, message: string, db?: Database): void 
 // Covers a crash, or retries that ran out, since neither leaves a queued commit behind.
 export async function queueUncommitted(home: string, db: Database): Promise<void> {
   await ensureVaultRepo(home);
-  if ((await changedNotes(vaultDir(home))).length > 0) {
-    queueCommit(home, "commit notes left uncommitted", db);
-  }
+  const changed = await changedNotes(vaultDir(home)).then(
+    (notes) => notes.length > 0,
+    // Unknown state: queue anyway, so the commit path's own retries look again.
+    () => true,
+  );
+  if (changed) queueCommit(home, "commit notes left uncommitted", db);
 }
 
 // Stopping gives a waiting commit or retry one last immediate attempt; whatever still fails is
