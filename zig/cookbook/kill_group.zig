@@ -24,8 +24,17 @@ fn signalGroup(pgid: std.posix.pid_t, sig: std.posix.SIG) void {
     };
 }
 
-/// SIGTERM to the group, then SIGKILL if the leader is still alive after `grace_ms`. Returns how the
-/// leader ended. Consumes the child: it is waited on exactly once.
+fn processExists(pid: std.posix.pid_t) bool {
+    std.posix.kill(pid, @fromBackingInt(0)) catch |err| return err != error.ProcessNotFound;
+    return true;
+}
+
+const poll_ms = 10;
+
+/// SIGTERM to the group, then SIGKILL if the group is still alive after `grace_ms`. The leader
+/// exiting is not the end: a grandchild may ignore SIGTERM, so once the leader is reaped the group
+/// is probed with signal 0 (ESRCH means empty) for up to `grace_ms` more before the SIGKILL.
+/// Returns how the leader ended. Consumes the child: it is waited on exactly once.
 pub fn terminateGroup(io: std.Io, child: *std.process.Child, grace_ms: i64) !std.process.Child.Term {
     const pgid = child.id.?;
     var buffer: [2]Event = undefined;
@@ -35,15 +44,25 @@ pub fn terminateGroup(io: std.Io, child: *std.process.Child, grace_ms: i64) !std
     try select.concurrent(.grace_over, grace, .{ io, grace_ms });
 
     signalGroup(pgid, .TERM);
-    while (true) switch (try select.await()) {
-        .exited => |term| return term,
-        .grace_over => signalGroup(pgid, .KILL),
+    var killed = false;
+    const term = while (true) switch (try select.await()) {
+        .exited => |result| break try result,
+        .grace_over => {
+            signalGroup(pgid, .KILL);
+            killed = true;
+        },
     };
-}
+    if (killed) return term;
 
-fn processExists(pid: std.posix.pid_t) bool {
-    std.posix.kill(pid, @fromBackingInt(0)) catch |err| return err != error.ProcessNotFound;
-    return true;
+    var waited: i64 = 0;
+    while (processExists(-pgid)) : (waited += poll_ms) {
+        if (waited >= grace_ms) {
+            signalGroup(pgid, .KILL);
+            break;
+        }
+        try io.sleep(.fromMilliseconds(poll_ms), .awake);
+    }
+    return term;
 }
 
 test "kill_group: SIGTERM ends a cooperative child and its grandchild" {
@@ -75,4 +94,24 @@ test "kill_group: a child that ignores SIGTERM is killed after the grace period"
 
     const term = try terminateGroup(io, &child, 100);
     try std.testing.expectEqual(std.posix.SIG.KILL, term.signal);
+}
+
+test "kill_group: a grandchild that ignores SIGTERM outlives the leader and still gets SIGKILL" {
+    const io = std.testing.io;
+    var child = try spawn.spawnShell(io, "sh -c 'trap \"\" TERM; exec sleep 30' & echo $!; wait");
+    defer child.kill(io);
+
+    var buffer: [64]u8 = undefined;
+    var reader = child.stdout.?.reader(io, &buffer);
+    const grandchild = try std.fmt.parseInt(std.posix.pid_t, (try reader.interface.takeDelimiter('\n')).?, 10);
+    const pgid = child.id.?;
+    try io.sleep(.fromMilliseconds(100), .awake);
+    try std.testing.expect(processExists(grandchild));
+
+    const term = try terminateGroup(io, &child, 300);
+    try std.testing.expectEqual(std.posix.SIG.TERM, term.signal);
+    for (0..100) |_| {
+        if (!processExists(-pgid) and !processExists(grandchild)) break;
+        try io.sleep(.fromMilliseconds(10), .awake);
+    } else return error.GroupSurvived;
 }

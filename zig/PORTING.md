@@ -38,11 +38,17 @@ Notes the table cannot hold:
 - `req.json(T)` in httpz parses with default options, so a duplicate key is an error there. Parse
   `req.body()` yourself as shown, or call `json.parse` from `src/json.zig`.
 - A `*websocket.Conn` may be written and closed from any thread, but the pointer is dead after the
-  handler's `close`. Clear it under the same mutex that guards writes.
+  handler's `close`. Clear it under the same mutex that guards writes, and only when it still equals
+  the closing connection: a newer client may already have replaced it.
 - `std.json` rejects invalid UTF-8 and unknown enum names with an error, as zod does. It does not
   count UTF-16 length: use `jsLength` for any limit TS enforces with `.max(n)`.
 - `std.mem.trim` with an ASCII set leaves U+00A0, U+3000 and U+FEFF; JS `trim()` removes them.
   `jsTrim` in the cookbook has the exact set.
+- Known JS-parity divergence: `std.json` rejects a lone surrogate escape such as `{"title":"\uD800"}`
+  with `error.SyntaxError` (the scanner forbids unpaired halves, see the header comment of
+  `std/json/Scanner.zig`), while `JSON.parse` and zod accept it. `json_parity.zig` pins the current
+  rejection in a test so a std change is noticed. Decide at K0: a compatibility pre-pass or a
+  contract ruling in `working-docs/zig-decisions.md`.
 
 ## 2. 0.17 changes and traps
 
@@ -126,7 +132,7 @@ zig build check -fincremental --watch                    # errors only, fast; in
 zig build test -Dtest-filter="<slice>: " --summary failures   # one slice; test names start with "<slice>: "
 zig build cookbook                                        # only the cookbook
 zig fmt --check --exclude zig-pkg .
-ast-grep scan src cookbook                                # stale-API rules, expect no output
+ast-grep scan src cookbook cookbook.zig build.zig tools   # stale-API rules, expect no output
 ast-grep test --skip-snapshot-tests                       # the rules against their own samples
 zig build test -Doptimize=ReleaseSafe --summary all       # the gate
 ```

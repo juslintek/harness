@@ -17,7 +17,9 @@ pub fn listFiles(gpa: std.mem.Allocator, io: std.Io, dir: std.Io.Dir) ![][]u8 {
     var it = dir.iterate();
     while (try it.next(io)) |entry| {
         if (entry.kind != .file) continue;
-        try names.append(gpa, try gpa.dupe(u8, entry.name));
+        const name = try gpa.dupe(u8, entry.name);
+        errdefer gpa.free(name);
+        try names.append(gpa, name);
     }
     std.mem.sort([]u8, names.items, {}, struct {
         fn lessThan(_: void, a: []u8, b: []u8) bool {
@@ -58,6 +60,23 @@ test "fs_io: list files, skipping directories" {
     try std.testing.expectEqual(@as(usize, 2), names.len);
     try std.testing.expectEqualStrings("a.json", names[0]);
     try std.testing.expectEqualStrings("b.json", names[1]);
+}
+
+test "fs_io: listFiles frees every allocation when an allocation fails" {
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(io, .{ .sub_path = "a.json", .data = "{}" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "b.json", .data = "{}" });
+
+    for (0..6) |fail_index| {
+        var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = fail_index });
+        const gpa = failing.allocator();
+        if (listFiles(gpa, io, tmp.dir)) |names| {
+            for (names) |name| gpa.free(name);
+            gpa.free(names);
+        } else |err| try std.testing.expectEqual(error.OutOfMemory, err);
+    }
 }
 
 test "fs_io: line by line through a File.Reader" {

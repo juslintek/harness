@@ -1,4 +1,7 @@
 //! TS: JSON.parse then zod, `s.length`, `s.trim()`. Where Zig differs from JS and how to match.
+//! Known divergence, not matched here: std.json rejects a lone surrogate escape (`"\uD800"`) because
+//! the scanner forbids unpaired halves (std/json/Scanner.zig, header comment), while JSON.parse and
+//! zod accept it. The last test pins the rejection; the ruling is a K0 item (see PORTING.md).
 const std = @import("std");
 
 const Body = struct {
@@ -65,6 +68,14 @@ test "json: the default options reject duplicate keys" {
 
 test "json: a number where a string is expected is a type error" {
     try std.testing.expectError(error.UnexpectedToken, parseBody(std.testing.allocator, "{\"id\":1,\"title\":5}"));
+}
+
+test "json: a lone surrogate escape is rejected, unlike JSON.parse (known divergence)" {
+    try std.testing.expectError(error.SyntaxError, parseBody(std.testing.allocator, "{\"id\":1,\"title\":\"\\uD800\"}"));
+    try std.testing.expectError(error.SyntaxError, parseBody(std.testing.allocator, "{\"id\":1,\"title\":\"\\uDC00\"}"));
+    const pair = try parseBody(std.testing.allocator, "{\"id\":1,\"title\":\"\\uD83D\\uDE00\"}");
+    defer pair.deinit();
+    try std.testing.expectEqualStrings("\u{1F600}", pair.value.title);
 }
 
 test "json: length is UTF-16 code units like JS" {

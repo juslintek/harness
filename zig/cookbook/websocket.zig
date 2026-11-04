@@ -1,7 +1,8 @@
 //! TS: Bun's `server.upgrade(req)` plus `ws.send(...)` from anywhere. httpz upgrades a normal route
 //! with httpz.upgradeWebsocket; the Conn pointer is kept so a plain HTTP route (another worker
 //! thread) can push to it. Concurrent `conn.write` and `conn.close` are allowed by websocket.zig.
-//! The pointer itself is shared state, so it sits behind a mutex and `close` clears it.
+//! The pointer itself is shared state, so it sits behind a mutex and `close` clears it only when it
+//! still points at the closing connection (a newer client may have replaced it).
 const std = @import("std");
 const httpz = @import("httpz");
 const http_route = @import("http_route.zig");
@@ -61,7 +62,8 @@ const Client = struct {
     pub fn close(client: *Client) void {
         client.hub.mutex.lockUncancelable(client.hub.io);
         defer client.hub.mutex.unlock(client.hub.io);
-        client.hub.live = null;
+        // A newer connection may have replaced this one; only clear our own entry.
+        if (client.hub.live == client.conn) client.hub.live = null;
     }
 };
 
@@ -137,6 +139,21 @@ test "websocket: upgrade, echo, and a push from another worker thread" {
     const result = try http_client.fetch(.{ .location = .{ .url = url }, .method = .POST, .payload = "pushed" });
     try std.testing.expectEqual(std.http.Status.ok, result.status);
     try std.testing.expectEqualStrings("pushed", try readTextFrame(r, &frame));
+}
+
+test "websocket: closing an older connection keeps the newer one live" {
+    var hub: Hub = .{ .io = std.testing.io };
+    // The Conn values are only compared by address, never used.
+    var conn_a: websocket.Conn = undefined;
+    var conn_b: websocket.Conn = undefined;
+    var a = try Client.init(&conn_a, &hub);
+    var b = try Client.init(&conn_b, &hub);
+    try std.testing.expectEqual(&conn_b, hub.live.?);
+
+    a.close();
+    try std.testing.expectEqual(&conn_b, hub.live.?);
+    b.close();
+    try std.testing.expectEqual(@as(?*websocket.Conn, null), hub.live);
 }
 
 test "websocket: a push with no connection is a 404 and does not crash" {

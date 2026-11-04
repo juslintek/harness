@@ -28,7 +28,10 @@ pub fn sumEvents(gpa: std.mem.Allocator, io: std.Io, file: std.Io.File, max_line
         const maybe_line = reader.interface.takeDelimiter('\n') catch |err| switch (err) {
             error.StreamTooLong => {
                 _ = reader.interface.discardDelimiterInclusive('\n') catch |discard_err| switch (discard_err) {
-                    error.EndOfStream => break,
+                    error.EndOfStream => {
+                        skipped += 1;
+                        break;
+                    },
                     error.ReadFailed => return error.ReadFailed,
                 };
                 skipped += 1;
@@ -68,6 +71,17 @@ test "spawn_ndjson: an oversized line is skipped and the next line still arrives
 
     const result = try sumEvents(std.testing.allocator, io, child.stdout.?, 64);
     try std.testing.expectEqual(@as(i64, 9), result.sum);
+    try std.testing.expectEqual(@as(usize, 1), result.skipped);
+    _ = try child.wait(io);
+}
+
+test "spawn_ndjson: an oversized unterminated final record counts as skipped" {
+    const io = std.testing.io;
+    var child = try spawnShell(io, "printf '{\"n\":5}\\n'; head -c 500 /dev/zero | tr '\\0' x");
+    defer child.kill(io);
+
+    const result = try sumEvents(std.testing.allocator, io, child.stdout.?, 64);
+    try std.testing.expectEqual(@as(i64, 5), result.sum);
     try std.testing.expectEqual(@as(usize, 1), result.skipped);
     _ = try child.wait(io);
 }
