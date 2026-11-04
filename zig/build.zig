@@ -79,17 +79,15 @@ pub fn build(b: *std.Build) void {
     run.addPassthruArgs();
     b.step("run", "Run the harness server binary (arguments after --)").dependOn(&run.step);
 
-    // Neither installed nor run: only the compiler's diagnostics, for `zig build check -fincremental --watch`.
-    const check_server = b.addExecutable(.{ .name = "harness", .root_module = server_mod });
-    const check_hook = b.addExecutable(.{ .name = "harness-hook", .root_module = hook_mod });
-    const check = b.step("check", "Compile for errors only, without emitting binaries");
-    check.dependOn(&check_server.step);
-    check.dependOn(&check_hook.step);
-
     b.step("hook", "Build the harness-hook binary").dependOn(&b.addInstallArtifact(hook, .{}).step);
 
     const server_tests = b.addTest(.{ .root_module = server_mod, .filters = test_filters });
     const hook_tests = b.addTest(.{ .root_module = hook_mod, .filters = test_filters });
+    // The slice modules are imported only from `test` blocks, so the diagnostics loop compiles the
+    // test artifacts (never run, never installed): `zig build check -fincremental --watch`.
+    const check = b.step("check", "Compile the code and its tests for errors only");
+    check.dependOn(&server_tests.step);
+    check.dependOn(&hook_tests.step);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&b.addRunArtifact(server_tests).step);
     test_step.dependOn(&b.addRunArtifact(hook_tests).step);

@@ -10,7 +10,17 @@ pub const Command = enum {
 
 const usage = "usage: harness <serve|migrate|enroll|mcp-stdio|guard-eval>\n";
 
+/// Agents get HARNESS_RUN_TOKEN and run under srt (SANDBOX_RUNTIME=1). The only binary meant to run
+/// there is harness-hook; a copy of this one must not serve, migrate or enroll from inside.
+fn inAgentSandbox(env: *const std.process.Environ.Map) bool {
+    return env.get("HARNESS_RUN_TOKEN") != null or env.get("SANDBOX_RUNTIME") != null;
+}
+
 pub fn main(init: std.process.Init) u8 {
+    if (inAgentSandbox(init.environ_map)) {
+        std.debug.print("harness: refusing to run inside an agent sandbox\n", .{});
+        return 2;
+    }
     const args = init.minimal.args.toSlice(init.arena.allocator()) catch return 1;
     if (args.len < 2) {
         std.debug.print(usage, .{});
@@ -28,6 +38,17 @@ pub fn main(init: std.process.Init) u8 {
 fn notImplemented(command: Command) u8 {
     std.debug.print("not implemented: {s}\n", .{@tagName(command)});
     return 2;
+}
+
+test "main: agent sandbox markers are detected" {
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try std.testing.expect(!inAgentSandbox(&env));
+    try env.put("SANDBOX_RUNTIME", "1");
+    try std.testing.expect(inAgentSandbox(&env));
+    _ = env.swapRemove("SANDBOX_RUNTIME");
+    try env.put("HARNESS_RUN_TOKEN", "t");
+    try std.testing.expect(inAgentSandbox(&env));
 }
 
 test "main: subcommand names resolve" {
