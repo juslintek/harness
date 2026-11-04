@@ -6,7 +6,7 @@ import { queueCommit } from "./git-log";
 import { logWrite } from "./index-log";
 import { getIndexed, type IndexedNote, removeIndexed, upsertIndexed } from "./index-repo";
 import { canRead, canWrite, diskToLocated, type Located, type Viewer } from "./paths";
-import { readNoteFile, removeNoteFile, writeNoteFileAtomic } from "./vault";
+import { FileChanged, readNoteFile, removeNoteFile, writeNoteFileAtomic } from "./vault";
 
 export type MemoryErrorCode = "not_found" | "conflict" | "forbidden" | "invalid" | "exists";
 
@@ -147,6 +147,13 @@ function record(db: Database, home: string, ctx: WriteCtx, c: Change): void {
   emit(c.loc.orgId, c.noteId);
 }
 
+function ioError(e: unknown): MemoryError {
+  if (e instanceof FileChanged) return new MemoryError("conflict", e.message);
+  return new MemoryError("invalid", (e as Error).message);
+}
+
+const hashOrNull = (text: string | null): string | null => (text === null ? null : hashText(text));
+
 // Must stay synchronous: callers have just checked the base hash and nothing may run between
 // that check and the rename.
 export function persist(
@@ -159,9 +166,9 @@ export function persist(
   after: string,
 ): IndexedNote {
   try {
-    writeNoteFileAtomic(home, loc.disk, after);
+    writeNoteFileAtomic(home, loc.disk, after, hashOrNull(before));
   } catch (e) {
-    throw new MemoryError("invalid", (e as Error).message);
+    throw ioError(e);
   }
   const note = upsertIndexed(db, loc, after);
   record(db, home, ctx, { op, loc, noteId: note.id, before, after });
@@ -178,9 +185,9 @@ export function drop(
   before: string,
 ): void {
   try {
-    removeNoteFile(home, loc.disk);
+    removeNoteFile(home, loc.disk, hashText(before));
   } catch (e) {
-    throw new MemoryError("invalid", (e as Error).message);
+    throw ioError(e);
   }
   removeIndexed(db, loc.disk);
   record(db, home, ctx, { op, loc, noteId, before, after: null });
@@ -188,12 +195,18 @@ export function drop(
 
 // A rename is write-new then remove-old. If the removal fails the old file still has the index
 // row, so the new copy has to go or the same note would live in two files.
-function undoCopyOnFailure(home: string, from: Located, to: Located): void {
+function undoCopyOnFailure(
+  home: string,
+  from: Located,
+  to: Located,
+  before: string,
+  after: string,
+): void {
   try {
-    removeNoteFile(home, from.disk);
+    removeNoteFile(home, from.disk, hashText(before));
   } catch (e) {
     try {
-      removeNoteFile(home, to.disk);
+      removeNoteFile(home, to.disk, hashText(after));
     } catch {
       // Best effort: the failure of the first removal is the one worth reporting.
     }
@@ -211,10 +224,10 @@ export function moved(
   after: string,
 ): IndexedNote {
   try {
-    writeNoteFileAtomic(home, to.disk, after);
-    undoCopyOnFailure(home, from, to);
+    writeNoteFileAtomic(home, to.disk, after, null);
+    undoCopyOnFailure(home, from, to, before, after);
   } catch (e) {
-    throw new MemoryError("invalid", (e as Error).message);
+    throw ioError(e);
   }
   // The old row goes first, otherwise the shared id would read as a duplicate and be split.
   removeIndexed(db, from.disk);

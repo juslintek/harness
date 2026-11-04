@@ -12,7 +12,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readNoteFile, removeNoteFile, vaultDir, writeNoteFileAtomic } from "./vault";
+import { hashText } from "./frontmatter";
+import { FileChanged, readNoteFile, removeNoteFile, vaultDir, writeNoteFileAtomic } from "./vault";
 
 const homes: string[] = [];
 function home(): string {
@@ -27,8 +28,8 @@ afterEach(() => {
 test("atomic write then read, private modes, no tmp left behind", () => {
   const h = home();
   const disk = "orgs/o1/org/sub/a.md";
-  writeNoteFileAtomic(h, disk, "one");
-  writeNoteFileAtomic(h, disk, "two");
+  writeNoteFileAtomic(h, disk, "one", null);
+  writeNoteFileAtomic(h, disk, "two", hashText("one"));
   expect(readNoteFile(h, disk)).toBe("two");
   expect(statSync(join(vaultDir(h), disk)).mode & 0o777).toBe(0o600);
   expect(statSync(join(vaultDir(h), "orgs/o1/org/sub")).mode & 0o777).toBe(0o700);
@@ -41,20 +42,20 @@ test("a symlinked directory component blocks write, read and remove", () => {
   const outside = home();
   mkdirSync(join(vaultDir(h), "orgs/o1"), { recursive: true });
   symlinkSync(outside, join(vaultDir(h), "orgs/o1/org"));
-  expect(() => writeNoteFileAtomic(h, "orgs/o1/org/a.md", "x")).toThrow();
+  expect(() => writeNoteFileAtomic(h, "orgs/o1/org/a.md", "x", null)).toThrow();
   expect(readdirSync(outside)).toEqual([]);
   expect(readNoteFile(h, "orgs/o1/org/a.md")).toBeNull();
-  expect(() => removeNoteFile(h, "orgs/o1/org/a.md")).toThrow();
+  expect(() => removeNoteFile(h, "orgs/o1/org/a.md", hashText("x"))).toThrow();
 });
 
 test("non-vault paths are refused and remove deletes the file", () => {
   const h = home();
-  expect(() => writeNoteFileAtomic(h, ".git/config", "x")).toThrow();
-  expect(() => writeNoteFileAtomic(h, "global/../../x.md", "x")).toThrow();
-  writeNoteFileAtomic(h, "global/a.md", "x");
-  removeNoteFile(h, "global/a.md");
+  expect(() => writeNoteFileAtomic(h, ".git/config", "x", null)).toThrow();
+  expect(() => writeNoteFileAtomic(h, "global/../../x.md", "x", null)).toThrow();
+  writeNoteFileAtomic(h, "global/a.md", "x", null);
+  removeNoteFile(h, "global/a.md", hashText("x"));
   expect(readNoteFile(h, "global/a.md")).toBeNull();
-  removeNoteFile(h, "global/a.md");
+  expect(() => removeNoteFile(h, "global/a.md", hashText("x"))).toThrow(FileChanged);
 });
 
 test("a symlinked leaf pointing outside the vault is never read or modified", () => {
@@ -64,8 +65,8 @@ test("a symlinked leaf pointing outside the vault is never read or modified", ()
   mkdirSync(join(vaultDir(h), "global"), { recursive: true });
   symlinkSync(outside, join(vaultDir(h), "global/a.md"));
   expect(readNoteFile(h, "global/a.md")).toBeNull();
-  expect(() => writeNoteFileAtomic(h, "global/a.md", "x")).toThrow();
-  expect(() => removeNoteFile(h, "global/a.md")).toThrow();
+  expect(() => writeNoteFileAtomic(h, "global/a.md", "x", null)).toThrow();
+  expect(() => removeNoteFile(h, "global/a.md", hashText("x"))).toThrow();
   expect(readFileSync(outside, "utf8")).toBe("outside");
 });
 
@@ -76,8 +77,8 @@ test("a symlinked vault root is refused", () => {
   writeFileSync(join(real, "global/a.md"), "x");
   symlinkSync(real, vaultDir(h));
   expect(readNoteFile(h, "global/a.md")).toBeNull();
-  expect(() => writeNoteFileAtomic(h, "global/b.md", "x")).toThrow();
-  expect(() => removeNoteFile(h, "global/a.md")).toThrow();
+  expect(() => writeNoteFileAtomic(h, "global/b.md", "x", null)).toThrow();
+  expect(() => removeNoteFile(h, "global/a.md", hashText("x"))).toThrow();
   expect(readdirSync(join(real, "global"))).toEqual(["a.md"]);
 });
 
@@ -95,7 +96,7 @@ test("an lstat error other than a missing path refuses the write as unsafe", () 
   mkdirSync(dir, { recursive: true });
   chmodSync(dir, 0o000);
   try {
-    expect(() => writeNoteFileAtomic(h, "global/a.md", "x")).toThrow(/symlink in note path/);
+    expect(() => writeNoteFileAtomic(h, "global/a.md", "x", null)).toThrow(/symlink in note path/);
   } finally {
     chmodSync(dir, 0o700);
   }

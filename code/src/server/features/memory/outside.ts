@@ -7,7 +7,7 @@ import { logWrite } from "./index-log";
 import { getIndexedByDisk, type IndexedNote, removeIndexed, upsertIndexed } from "./index-repo";
 import { diskToLocated, type Located } from "./paths";
 import { emitOutside } from "./store-kit";
-import { isMissingPath, readNoteFile, vaultDir, writeNoteFileAtomic } from "./vault";
+import { FileChanged, isMissingPath, readNoteFile, vaultDir, writeNoteFileAtomic } from "./vault";
 
 // What the file held before an outside edit, when one of our own writes produced it.
 function priorText(db: Database, disk: string, hash: string | undefined): string | null {
@@ -50,7 +50,12 @@ function logOutside(
 // disk and its own event will be handled, so null tells the caller to stop.
 function rewriteIfUnchanged(home: string, disk: string, read: string, next: string): string | null {
   if (readNoteFile(home, disk) !== read) return null;
-  writeNoteFileAtomic(home, disk, next);
+  try {
+    writeNoteFileAtomic(home, disk, next, hashText(read));
+  } catch (e) {
+    if (e instanceof FileChanged) return null;
+    throw e;
+  }
   return next;
 }
 

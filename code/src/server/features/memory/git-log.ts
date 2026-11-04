@@ -143,7 +143,8 @@ async function commitAll(home: string, message: string, db: Database | undefined
     await stageNotes(dir, await changedNotes(dir));
     await unstageSecrets(dir);
     const commit = await git(dir, ["commit", "-q", "-m", message]);
-    if (commit.code !== 0 && !commit.out.includes("nothing to commit")) throw new Error(commit.out);
+    if (commit.code !== 0 && !/nothing (added )?to commit/.test(commit.out))
+      throw new Error(commit.out);
   } catch (e) {
     // History is a convenience; a failed commit must not break the write that queued it. A scrub
     // that threw lands here too, so unchecked content is never committed.
