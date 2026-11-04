@@ -21,6 +21,18 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
 
+  conformance:
+    # the stub agent runs inside the real srt sandbox, which needs macOS sandbox-exec
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: code
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: HARNESS_TARGET=ts bun run conformance
+
   zig:
     strategy:
       fail-fast: false

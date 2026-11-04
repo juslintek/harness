@@ -1,7 +1,13 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["src/web/main.tsx", "scripts/*.ts", "src/**/*.test.ts"],
-  "project": ["src/**/*.{ts,tsx}", "scripts/*.ts"],
+  "entry": [
+    "src/web/main.tsx",
+    "scripts/*.ts",
+    "src/**/*.test.ts",
+    "conformance/**/*.test.ts",
+    "conformance/*.ts"
+  ],
+  "project": ["src/**/*.{ts,tsx}", "scripts/*.ts", "conformance/**/*.ts"],
   "ignoreDependencies": [
     "lefthook",
     "@commitlint/cli",

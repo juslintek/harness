@@ -25,6 +25,21 @@ module.exports = {
       },
     },
     {
+      name: "conformance-black-box",
+      comment:
+        "The suite reaches a server only over the wire, so it may not import server internals",
+      severity: "error",
+      from: { path: "^conformance" },
+      to: {
+        path: "^(src|scripts)/",
+        pathNot: [
+          "^src/shared/",
+          "^scripts/fake-acp-agent\\.ts$",
+          "^src/server/test-support/soft-authenticator\\.ts$",
+        ],
+      },
+    },
+    {
       name: "no-orphans",
       severity: "error",
       from: {
@@ -36,6 +51,7 @@ module.exports = {
           "^src/main\\.ts$",
           "^src/server/test-support/no-git-env\\.ts$",
           "^scripts/",
+          "^conformance/(differential|fake-agent)\\.ts$",
           "\\.d\\.ts$",
           "^src/web/pwa/sw\\.js$",
         ],
