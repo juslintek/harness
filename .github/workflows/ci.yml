@@ -51,6 +51,12 @@ jobs:
         uses: mlugg/setup-zig@v2
         with:
           version: 0.17.0
+      # the runtimes tests spawn bun running code/scripts/fake-acp-agent.ts
+      - if: steps.has.outputs.yes == 'true'
+        uses: oven-sh/setup-bun@v2
+      - if: steps.has.outputs.yes == 'true'
+        working-directory: code
+        run: bun install --frozen-lockfile
       - if: steps.has.outputs.yes == 'true'
         working-directory: zig
         run: |
