@@ -2,14 +2,14 @@ import type { Database } from "bun:sqlite";
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { NoteWriteFeedItem } from "../../../shared/memory";
-import { parseBody, parseQuery } from "../../route-kit";
+import { parseQuery } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
 import { getTask } from "../board/api";
 import { getWrite, listWrites } from "./index-log";
 import { listLessons } from "./lessons";
 import { decideLesson } from "./lessons-decide";
 import { canRead, canWrite, diskToLocated, type Viewer } from "./paths";
-import { memoryCtx } from "./routes-kit";
+import { memoryBody, memoryCtx } from "./routes-kit";
 import { MemoryError } from "./store-kit";
 import { revertWrite } from "./store-revert";
 
@@ -80,10 +80,9 @@ export function writeAndLessonRoutes(db: Database, home: string, app: Hono<AuthE
     );
   });
   app.post(`${base}/lessons/:id`, async (c) => {
-    const m = memoryCtx(db, c, "admin");
-    if (m instanceof Response) return m;
-    const b = await parseBody(c, decideBody);
-    if (b instanceof Response) return b;
+    const r = await memoryBody(db, c, "admin", decideBody);
+    if (r instanceof Response) return r;
+    const { m, b } = r;
     const id = c.req.param("id");
     // The lesson must belong to this org, or an admin of org A could decide org B's.
     if (!listLessons(db, m.orgId).some((l) => l.id === id)) {

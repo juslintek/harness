@@ -1,7 +1,8 @@
 import type { Database } from "bun:sqlite";
 import type { Context } from "hono";
+import type { z } from "zod";
 import type { Role } from "../../../shared/orgs";
-import { forbidden, notFound, routeError } from "../../route-kit";
+import { forbidden, notFound, parseBody, routeError } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
 import { classifyNote } from "../laya/api";
 import { getOrgBySlug, memberForUser, roleAtLeast } from "../orgs/api";
@@ -55,4 +56,20 @@ export function memoryCtx(db: Database, c: Context<AuthEnv>, min: Role): MemoryC
       },
     },
   };
+}
+
+// The role is checked again once the body has been read: parsing can take as long as the client
+// likes to stream it, and a member demoted in that time must not write with the old role.
+export async function memoryBody<T>(
+  db: Database,
+  c: Context<AuthEnv>,
+  min: Role,
+  schema: z.ZodType<T>,
+): Promise<{ m: MemoryCtx; b: T } | Response> {
+  const early = memoryCtx(db, c, min);
+  if (early instanceof Response) return early;
+  const b = await parseBody(c, schema);
+  if (b instanceof Response) return b;
+  const m = memoryCtx(db, c, min);
+  return m instanceof Response ? m : { m, b };
 }

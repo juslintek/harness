@@ -31,6 +31,7 @@ export function useHome(): void {
 type Who = { headers: Record<string, string>; userId: string };
 
 export interface Kit {
+  app: ReturnType<typeof createApp>;
   db: Database;
   home: string;
   call: (
@@ -83,7 +84,7 @@ export async function boot(): Promise<Kit> {
   const [alice, bob, carol] = [await user(), await user(), await user()] as const;
   const acme = org("acme", alice);
   const beta = org("beta", bob);
-  return { db, home, call, alice, bob, carol, acme, beta, user };
+  return { app, db, home, call, alice, bob, carol, acme, beta, user };
 }
 
 export const BASE = "/api/orgs/acme/memory";

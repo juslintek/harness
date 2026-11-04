@@ -1,12 +1,12 @@
 import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
 import { z } from "zod";
-import { parseBody, parseQuery } from "../../route-kit";
+import { parseQuery } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
 import { toSummary } from "./index-repo";
 import { backlinks, facets, resolveWikilink, searchNotes } from "./index-search";
 import { diskToLocated, toDisk } from "./paths";
-import { memoryCtx, memoryError } from "./routes-kit";
+import { memoryBody, memoryCtx, memoryError } from "./routes-kit";
 import { writeAndLessonRoutes } from "./routes-lessons";
 import { createNote, deleteNote, readNote, updateNote } from "./store";
 import { locate, MemoryError } from "./store-kit";
@@ -88,10 +88,9 @@ function readRoutes(db: Database, home: string, app: Hono<AuthEnv>): void {
 
 function writeRoutes(db: Database, home: string, app: Hono<AuthEnv>): void {
   app.post(`${base}/notes`, async (c) => {
-    const m = memoryCtx(db, c, "member");
-    if (m instanceof Response) return m;
-    const b = await parseBody(c, createBody);
-    if (b instanceof Response) return b;
+    const r = await memoryBody(db, c, "member", createBody);
+    if (r instanceof Response) return r;
+    const { m, b } = r;
     const loc = diskToLocated(
       toDisk({
         scope: b.scope,
@@ -106,10 +105,9 @@ function writeRoutes(db: Database, home: string, app: Hono<AuthEnv>): void {
     return c.json(await createNote(db, home, m.write, loc, b.body, meta), 201);
   });
   app.put(`${base}/notes/:id`, async (c) => {
-    const m = memoryCtx(db, c, "member");
-    if (m instanceof Response) return m;
-    const b = await parseBody(c, updateBody);
-    if (b instanceof Response) return b;
+    const r = await memoryBody(db, c, "member", updateBody);
+    if (r instanceof Response) return r;
+    const { m, b } = r;
     const id = c.req.param("id");
     const meta = { ...(b.type && { type: b.type }), ...(b.tags && { tags: b.tags }) };
     try {
