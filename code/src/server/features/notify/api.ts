@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { Channel, Notification, TargetView } from "../../../shared/notify";
 import { createDispatcher, type Dispatcher, type DispatcherDeps } from "./dispatcher";
 import { emailCodeSender } from "./email/adapter";
+import { subscribeEvents } from "./events";
 import { effectivePrefs, setPref } from "./prefs";
 import { notifyRoutes } from "./routes";
 import { openSlackConnection, postSlackMessage, slackConfigured } from "./slack/client";
@@ -28,7 +29,9 @@ const active = new WeakMap<Database, Dispatcher>();
 export function startNotify(db: Database, deps: NotifyDeps): () => Promise<void> {
   const dispatcher = createDispatcher(db, deps);
   active.set(db, dispatcher);
+  const unsubscribe = subscribeEvents(db, dispatcher.notify);
   return async () => {
+    unsubscribe();
     active.delete(db);
     await dispatcher.stop();
   };
