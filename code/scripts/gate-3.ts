@@ -277,10 +277,11 @@ async function main(): Promise<void> {
     stopTimeline();
     await shutdownRuns(db);
     await drained;
+    // No API write can arrive once the server is down, so the memory drain sees the last one.
+    await stop();
     await stopMemory();
   }
   const view = await dashboard(db, s, app, port);
-  await stop();
   assertOutcome(db, s, view);
   printSpend(db, s, view);
   console.log(`\nscript-decided approvals: ${leftovers.decided.length}`);

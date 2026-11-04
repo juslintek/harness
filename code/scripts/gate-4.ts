@@ -189,9 +189,10 @@ async function main(): Promise<void> {
     stopTimeline();
     await shutdownRuns(db);
     await drained;
+    // No API write can arrive once the server is down, so the memory drain sees the last one.
+    await stop();
     await stopMemory();
   }
-  await stop();
   if (taskB !== null) assertOutcome(db, s, home, taskA, taskB);
   check(claudeSpendUsd(db) <= MAX_CLAUDE_USD, `8 Claude spend is at most ${MAX_CLAUDE_USD} USD`);
   printSummary(db, s, home, leftovers.decided);
