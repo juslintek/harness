@@ -1,0 +1,131 @@
+{
+  "orgLogHitsSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "memberHandle": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rowid": {
+            "type": "number"
+          },
+          "runId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "taskNumber": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "ts": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "rowid",
+          "id",
+          "runId",
+          "kind",
+          "ts",
+          "snippet",
+          "memberHandle",
+          "taskId",
+          "projectId",
+          "taskNumber"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "memberHandle": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rowid": {
+            "type": "number"
+          },
+          "runId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "taskNumber": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "ts": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "rowid",
+          "id",
+          "runId",
+          "kind",
+          "ts",
+          "snippet",
+          "memberHandle",
+          "taskId",
+          "projectId",
+          "taskNumber"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    }
+  }
+}

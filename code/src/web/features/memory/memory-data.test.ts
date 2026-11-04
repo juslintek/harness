@@ -14,7 +14,12 @@ test("a draft edited after a reload replaces the kept one", () => {
 test("escape asks before dropping an edited draft", () => {
   const asked: string[] = [];
   expect(mayDiscard(false, () => false)).toBe(true);
-  expect(mayDiscard(true, (q) => (asked.push(q), false))).toBe(false);
+  expect(
+    mayDiscard(true, (q) => {
+      asked.push(q);
+      return false;
+    }),
+  ).toBe(false);
   expect(mayDiscard(true, () => true)).toBe(true);
   expect(asked).toHaveLength(1);
 });

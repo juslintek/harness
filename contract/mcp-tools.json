@@ -420,6 +420,162 @@
     "scope": "hiring"
   },
   {
+    "description": "After a task you did is done: propose 1 to 3 short, self-contained lessons a teammate will need in a later task. A reviewer accepts or rejects them. Never include secrets.",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "lessons": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "type": "array"
+        },
+        "taskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "taskId",
+        "lessons"
+      ],
+      "type": "object"
+    },
+    "name": "lesson_propose",
+    "scope": "memory"
+  },
+  {
+    "description": "Accept or reject a proposed lesson of a teammate, with a short reason. You may pass `body` to tighten the wording when accepting.",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "decision": {
+          "enum": [
+            "accept",
+            "reject"
+          ],
+          "type": "string"
+        },
+        "lessonId": {
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 500,
+          "type": "string"
+        }
+      },
+      "required": [
+        "lessonId",
+        "decision",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "name": "lesson_review",
+    "scope": "memory"
+  },
+  {
+    "description": "Shared notes under /memories: agent/ (yours), project/<key>/, org/ and global/ (read only). Commands: view a folder or a file, create, str_replace, insert, delete, rename, search (text query, optional scope, type, tag) and backlinks. Search before you start work, and save what a teammate would need. Never store secrets.",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "action": {
+          "enum": [
+            "view",
+            "create",
+            "str_replace",
+            "insert",
+            "delete",
+            "rename",
+            "search",
+            "backlinks"
+          ],
+          "type": "string"
+        },
+        "file_text": {
+          "type": "string"
+        },
+        "insert_line": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "insert_text": {
+          "type": "string"
+        },
+        "new_path": {
+          "type": "string"
+        },
+        "new_str": {
+          "type": "string"
+        },
+        "old_path": {
+          "type": "string"
+        },
+        "old_str": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "org",
+            "project",
+            "agent"
+          ],
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "lesson",
+            "fact",
+            "decision",
+            "howto",
+            "reference"
+          ],
+          "type": "string"
+        },
+        "view_range": {
+          "items": {
+            "maximum": 9007199254740991,
+            "minimum": -9007199254740991,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    },
+    "name": "memory",
+    "scope": "memory"
+  },
+  {
     "description": "Approve or reject a policy proposal of one of your reports; you can never approve a loosening of a tighten-only policy",
     "execution": {
       "taskSupport": "forbidden"
@@ -960,9 +1116,14 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
         "assignee": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "description": {

@@ -15,6 +15,7 @@ const stub: AgentSpec = {
   stateWrite: [],
   weakerNetworkIsolation: false,
   claudeMeta: false,
+  mcp: false,
 };
 
 test("HARNESS_TEST_AGENTS replaces the agent list when HARNESS_TEST=1", () => {

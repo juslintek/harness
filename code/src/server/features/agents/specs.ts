@@ -175,6 +175,7 @@ const specSchema: z.ZodType<AgentSpec> = z.object({
   stateWrite: z.array(z.string()),
   weakerNetworkIsolation: z.boolean(),
   claudeMeta: z.boolean(),
+  mcp: z.boolean().default(false),
 });
 
 // The black-box suite swaps in a stub agent this way. Outside HARNESS_TEST=1 the variable is
