@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
+import { noteSummarySchema } from "../../../shared/memory";
 import { getWrite, listWrites, logRead, logWrite } from "./index-log";
 import { getIndexed, getIndexedByDisk, removeIndexed, upsertIndexed } from "./index-repo";
 import { backlinks, facets, resolveWikilink, searchNotes } from "./index-search";
@@ -134,6 +135,15 @@ test("duplicate id: the newer file keeps it, the older gets a fresh id", () => {
   );
   expect(loser.id).not.toBe("dup");
   expect(getIndexed(db, "dup")?.disk).toBe("orgs/A/org/new.md");
+});
+
+test("a note with confidence outside 0..1 still lists in the API shape", () => {
+  for (const [i, c] of ["7", "-1", ".nan"].entries()) {
+    upsertIndexed(db, loc(`orgs/A/org/c${i}.md`), `---\nconfidence: ${c}\n---\n\nneedle\n`);
+  }
+  const hits = searchNotes(db, viewer("A", null, []), { text: "needle" });
+  expect(hits).toHaveLength(3);
+  expect(noteSummarySchema.array().safeParse(hits).success).toBe(true);
 });
 
 test("removeIndexed drops note, links and fts row", () => {

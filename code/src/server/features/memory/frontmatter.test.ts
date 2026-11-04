@@ -63,3 +63,9 @@ test("extra keys named like Object.prototype members are kept", () => {
   expect(Object.getOwnPropertyDescriptor(second.meta.extra, "constructor")?.value).toBe("foo");
   expect(Object.getOwnPropertyDescriptor(second.meta.extra, "__proto__")?.value).toBe("bar");
 });
+
+test("confidence outside 0..1 is kept as an unknown key, not indexed", () => {
+  const { meta } = parseNote("---\nconfidence: 7\n---\n\nbody\n");
+  expect(meta.confidence).toBeUndefined();
+  expect(meta.extra).toEqual({ confidence: 7 });
+});

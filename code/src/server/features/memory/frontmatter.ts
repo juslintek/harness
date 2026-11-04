@@ -80,7 +80,8 @@ const SETTERS: Record<string, Setter> = {
     return true;
   },
   confidence: (m, v) => {
-    if (typeof v !== "number") return false;
+    // The API schemas require 0..1; one hand-edited file outside that range would make every list fail.
+    if (typeof v !== "number" || !(v >= 0 && v <= 1)) return false;
     m.confidence = v;
     return true;
   },
