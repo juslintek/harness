@@ -13,7 +13,7 @@ pub const open_create = 0x00000004;
 pub const open_fullmutex = 0x00010000;
 
 /// Tells SQLite to copy the bound text or blob immediately.
-pub const transient: ?*const fn (?*anyopaque) callconv(.c) void = @ptrFromInt(std.math.maxInt(usize));
+pub const transient: ?*align(1) const fn (?*anyopaque) callconv(.c) void = @ptrFromInt(std.math.maxInt(usize));
 
 pub extern fn sqlite3_libversion() [*:0]const u8;
 pub extern fn sqlite3_open_v2(path: [*:0]const u8, out: *?*Db, flags: c_int, vfs: ?[*:0]const u8) c_int;
@@ -35,8 +35,8 @@ pub extern fn sqlite3_clear_bindings(stmt: *Stmt) c_int;
 pub extern fn sqlite3_bind_null(stmt: *Stmt, index: c_int) c_int;
 pub extern fn sqlite3_bind_int64(stmt: *Stmt, index: c_int, value: i64) c_int;
 pub extern fn sqlite3_bind_double(stmt: *Stmt, index: c_int, value: f64) c_int;
-pub extern fn sqlite3_bind_text(stmt: *Stmt, index: c_int, text: [*]const u8, len: c_int, destructor: ?*const fn (?*anyopaque) callconv(.c) void) c_int;
-pub extern fn sqlite3_bind_blob(stmt: *Stmt, index: c_int, data: [*]const u8, len: c_int, destructor: ?*const fn (?*anyopaque) callconv(.c) void) c_int;
+pub extern fn sqlite3_bind_text(stmt: *Stmt, index: c_int, text: [*]const u8, len: c_int, destructor: ?*align(1) const fn (?*anyopaque) callconv(.c) void) c_int;
+pub extern fn sqlite3_bind_blob(stmt: *Stmt, index: c_int, data: [*]const u8, len: c_int, destructor: ?*align(1) const fn (?*anyopaque) callconv(.c) void) c_int;
 
 pub extern fn sqlite3_column_count(stmt: *Stmt) c_int;
 pub extern fn sqlite3_column_type(stmt: *Stmt, index: c_int) c_int;

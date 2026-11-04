@@ -1,0 +1,5 @@
+id: stale-array-repeat
+valid:
+  - "const a: [3]u8 = @splat(1);"
+invalid:
+  - "const a = [_]u8{1} ** 3;"

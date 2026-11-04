@@ -1,0 +1,5 @@
+id: stale-fs-net
+valid:
+  - "const d = std.Io.Dir.cwd();"
+invalid:
+  - "const d = std.fs.cwd();"

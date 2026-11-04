@@ -1,0 +1,5 @@
+id: stale-errdefer-capture
+valid:
+  - "fn f() void {\n    errdefer {}\n}"
+invalid:
+  - "fn f() void {\n    errdefer |err| {\n        _ = err;\n    }\n}"

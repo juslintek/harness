@@ -1,0 +1,5 @@
+id: stale-posix-calls
+valid:
+  - "const n = std.posix.kill(pid, .TERM);"
+invalid:
+  - "const v = std.posix.getenv(\"HOME\");"

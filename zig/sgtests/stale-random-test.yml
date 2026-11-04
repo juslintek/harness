@@ -1,0 +1,5 @@
+id: stale-random
+valid:
+  - "try io.randomSecure(&buf);"
+invalid:
+  - "std.crypto.random.bytes(&buf);"

@@ -1,0 +1,5 @@
+id: stale-process-api
+valid:
+  - "const c = std.process.spawn(io, .{ .argv = argv });"
+invalid:
+  - "const a = std.process.argsAlloc(gpa);"

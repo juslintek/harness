@@ -1,77 +1,200 @@
-# Pre-0.16 std APIs that no longer exist in 0.17.0. Each was checked by grepping the installed std.
-id: stale-std-io-stdout
-language: zig
-severity: error
-message: std.io.getStdOut is gone; write through std.Io.File.stdout() or std.debug.print.
-rule:
-  pattern: std.io.$FN()
+# Pre-0.16 std APIs and syntax that no longer exist (or are deprecated) in Zig 0.17.0.
+# Every member path listed here was compiled against the installed std; see tests/ and PORTING.md.
 ---
-id: stale-general-purpose-allocator
+id: stale-std-io
 language: zig
 severity: error
-message: GeneralPurposeAllocator is gone; use std.heap.DebugAllocator in Debug builds and std.heap.c_allocator in production.
+message: "std.io is gone; use std.Io (std.Io.File.stdout(), std.Io.Writer, std.Io.Reader) and pass io explicitly."
 rule:
-  pattern: std.heap.GeneralPurposeAllocator
+  pattern: std.io
 ---
-id: stale-time-timestamps
+id: stale-heap-allocators
 language: zig
 severity: error
-message: std.time.milliTimestamp, nanoTimestamp and timestamp are gone; use std.Io.Clock.real.now(io).
+message: "GeneralPurposeAllocator is gone and DebugAllocator is deprecated; use std.heap.SafeAllocator (std.heap.c_allocator in production)."
 rule:
   any:
-    - pattern: std.time.milliTimestamp()
-    - pattern: std.time.nanoTimestamp()
-    - pattern: std.time.timestamp()
+    - pattern: std.heap.GeneralPurposeAllocator
+    - pattern: std.heap.DebugAllocator
+    - pattern: std.heap.DebugAllocatorConfig
 ---
-id: stale-time-sleep
+id: stale-time
 language: zig
 severity: error
-message: std.time.sleep is gone; use io.sleep.
+message: "std.time clocks, sleep and Timer are gone; use std.Io.Clock.real.now(io), std.Io.Clock.awake.now(io) and io.sleep."
 rule:
-  pattern: std.time.sleep($$$ARGS)
+  any:
+    - pattern: std.time.milliTimestamp
+    - pattern: std.time.nanoTimestamp
+    - pattern: std.time.timestamp
+    - pattern: std.time.microTimestamp
+    - pattern: std.time.sleep
+    - pattern: std.time.Timer
+    - pattern: std.time.Instant
 ---
 id: stale-thread-sync
 language: zig
 severity: error
-message: std.Thread.Mutex and std.Thread.Condition are gone; use std.Io.Mutex or the app state lock.
+message: "std.Thread.Mutex, Condition, Pool, RwLock, Semaphore, ResetEvent, WaitGroup and sleep are gone; use std.Io.Mutex, Condition, Semaphore, Event, Group and io.sleep."
 rule:
   any:
     - pattern: std.Thread.Mutex
     - pattern: std.Thread.Condition
+    - pattern: std.Thread.Pool
+    - pattern: std.Thread.RwLock
+    - pattern: std.Thread.Semaphore
+    - pattern: std.Thread.ResetEvent
+    - pattern: std.Thread.WaitGroup
+    - pattern: std.Thread.sleep
 ---
-id: stale-process-env-args
+id: stale-process-api
 language: zig
 severity: error
-message: argsAlloc and getEnvVarOwned are gone; use std.process.Init (init.minimal.args, init.environ_map).
+message: "argsAlloc, getEnvVarOwned, getEnvMap, Child.init and Child.run are gone; take std.process.Init in main (init.minimal.args, init.environ_map) and use std.process.spawn and std.process.run."
 rule:
   any:
-    - pattern: std.process.argsAlloc($$$ARGS)
-    - pattern: std.process.getEnvVarOwned($$$ARGS)
+    - pattern: std.process.argsAlloc
+    - pattern: std.process.getEnvVarOwned
+    - pattern: std.process.getEnvMap
+    - pattern: std.process.Child.init
+    - pattern: std.process.Child.run
+    - pattern: std.os.environ
 ---
-id: stale-fs-cwd
+id: stale-posix-calls
 language: zig
 severity: error
-message: std.fs.cwd is gone; use std.Io.Dir.cwd() and pass io explicitly.
+message: "std.posix.getenv, fork, waitpid, open, close and write are gone; use std.Io (files, std.process.spawn) or an extern."
 rule:
-  pattern: std.fs.cwd()
+  any:
+    - pattern: std.posix.getenv
+    - pattern: std.posix.fork
+    - pattern: std.posix.waitpid
+    - pattern: std.posix.open
+    - pattern: std.posix.close
+    - pattern: std.posix.write
 ---
-id: stale-crypto-random
+id: stale-fs-net
 language: zig
 severity: error
-message: std.crypto.random is gone; secrets must come from io.randomSecure.
+message: "std.fs.cwd, File, Dir, realpath and std.net are gone; use std.Io.Dir.cwd(), std.Io.File, std.Io.Dir and std.Io.net with io passed explicitly."
 rule:
-  pattern: std.crypto.random
+  any:
+    - pattern: std.fs.cwd
+    - pattern: std.fs.File
+    - pattern: std.fs.Dir
+    - pattern: std.fs.realpath
+    - pattern: std.net
 ---
-id: stale-buffered-writer
+id: stale-random
 language: zig
 severity: error
-message: std.io.bufferedWriter is gone; use a std.Io.Writer with an explicit buffer.
+message: "std.crypto.random and std.rand are gone; secrets come from io.randomSecure, non-secret randomness from io.random."
 rule:
-  pattern: std.io.bufferedWriter($$$ARGS)
+  any:
+    - pattern: std.crypto.random
+    - pattern: std.rand
+    - pattern: std.crypto.utils
+---
+id: stale-mem-names
+language: zig
+severity: error
+message: "std.mem.trimLeft, trimRight, split and tokenize are gone; use trimStart, trimEnd, splitScalar, splitSequence, splitAny, tokenizeScalar, tokenizeSequence and tokenizeAny."
+rule:
+  any:
+    - pattern: std.mem.trimLeft
+    - pattern: std.mem.trimRight
+    - pattern: std.mem.split
+    - pattern: std.mem.tokenize
+---
+id: deprecated-mem-index-of
+language: zig
+severity: error
+message: "std.mem.indexOf* are deprecated aliases; use find, findScalar, findAny, findNone, findPos, findScalarPos, findLast and the other find* names."
+rule:
+  any:
+    - pattern: std.mem.indexOf
+    - pattern: std.mem.indexOfScalar
+    - pattern: std.mem.indexOfAny
+    - pattern: std.mem.indexOfNone
+    - pattern: std.mem.indexOfPos
+    - pattern: std.mem.indexOfDiff
+    - pattern: std.mem.indexOfSentinel
+    - pattern: std.mem.indexOfScalarPos
+    - pattern: std.mem.indexOfAnyPos
+    - pattern: std.mem.indexOfMin
+    - pattern: std.mem.indexOfMinMax
+    - pattern: std.mem.lastIndexOf
+    - pattern: std.mem.lastIndexOfScalar
+    - pattern: std.mem.lastIndexOfAny
+    - pattern: std.mem.lastIndexOfNone
+    - pattern: std.mem.lastIndexOfLinear
+---
+id: stale-arraylist-init
+language: zig
+severity: error
+message: "std.ArrayList(T).init(gpa) is gone and ArrayListUnmanaged is a deprecated alias; use `var list: std.ArrayList(T) = .empty` and pass the allocator to every call. std.BoundedArray is gone too."
+rule:
+  any:
+    - pattern: std.ArrayList($$$T).init($$$A)
+    - pattern: std.ArrayListUnmanaged
+    - pattern: std.BoundedArray
+---
+id: stale-fmt-json
+language: zig
+severity: error
+message: "std.json.stringify and stringifyAlloc, std.fmt.fmtSliceHex*, std.fmt.format and fmtDuration are gone; use std.json.Stringify, std.fmt.bytesToHex and writer.print."
+rule:
+  any:
+    - pattern: std.json.stringify
+    - pattern: std.json.stringifyAlloc
+    - pattern: std.fmt.fmtSliceHexLower
+    - pattern: std.fmt.fmtSliceHexUpper
+    - pattern: std.fmt.format
+    - pattern: std.fmt.fmtDuration
 ---
 id: stale-cimport
 language: zig
 severity: error
-message: "@cImport is gone; declare the extern functions by hand (see src/db/c.zig)."
+message: "@cImport is gone; declare the extern functions by hand (see src/db/c.zig) or use b.addTranslateC in build.zig."
 rule:
   pattern: "@cImport($$$ARGS)"
+---
+id: deprecated-enum-builtins
+language: zig
+severity: error
+message: "@intFromEnum and @enumFromInt are deprecated; use @backingInt and @fromBackingInt."
+rule:
+  any:
+    - pattern: "@intFromEnum($$$ARGS)"
+    - pattern: "@enumFromInt($$$ARGS)"
+---
+id: stale-build-api
+language: zig
+severity: error
+message: "std.Build has no args or build_root field; pass arguments with run.addPassthruArgs() and use b.path() and b.pathJoin()."
+rule:
+  any:
+    - pattern: b.args
+    - pattern: b.build_root
+---
+id: stale-array-repeat
+language: zig
+severity: error
+message: The `**` array repeat operator is gone; build the array with @splat or std.mem.
+rule:
+  pattern: $A ** $B
+---
+id: stale-usingnamespace
+language: zig
+severity: error
+message: usingnamespace is gone; import the file and reference its declarations, or re-export each one.
+rule:
+  pattern: pub usingnamespace $X;
+---
+id: stale-errdefer-capture
+language: zig
+severity: error
+message: errdefer |err| is gone; handle the error at the call site with catch or use a plain errdefer.
+rule:
+  kind: errdefer_statement
+  regex: '^errdefer\s*\|'
