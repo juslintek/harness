@@ -4,7 +4,7 @@ import { getTask } from "../board/api";
 import { redact } from "../logs/api";
 import { getMember, memberForUser } from "../orgs/api";
 import { cleanBody, emitDecided, getLesson } from "./lessons";
-import { diskToLocated, type Located } from "./paths";
+import { diskToLocated, type Located, type Viewer } from "./paths";
 import { createNote } from "./store";
 import { MemoryError } from "./store-kit";
 import { agentViewer } from "./viewer";
@@ -75,6 +75,23 @@ function release(db: Database, id: string, body: string): void {
   ).run(body, id);
 }
 
+// The reviewer already passed reviewerOf, so the write rides on that authority rather than the
+// author's current role. A removed author leaves only the stored handle: the note is written for the
+// lesson's own org and project, never global, and the handle stays its source_agent.
+function writer(db: Database, lesson: LessonView, authorExists: boolean): Viewer {
+  if (authorExists && lesson.authorId !== null) {
+    return { ...agentViewer(db, lesson.authorId), canWrite: true };
+  }
+  return {
+    orgId: lesson.orgId,
+    memberId: null,
+    projectIds: lesson.projectId === null ? [] : [lesson.projectId],
+    canWriteGlobal: false,
+    canWrite: true,
+    actor: lesson.authorHandle,
+  };
+}
+
 export async function writeNote(
   db: Database,
   home: string,
@@ -83,13 +100,12 @@ export async function writeNote(
 ): Promise<string> {
   const author = lesson.authorId === null ? null : getMember(db, lesson.authorId);
   const dir = dirOf(lesson);
-  if (lesson.authorId === null || author === null || dir === null) {
+  // An agent note lives in a directory named after its author, so it has nowhere to go without one.
+  if (dir === null || (lesson.scope === "agent" && author === null)) {
     throw new MemoryError("not_found", "the author is gone");
   }
   const number = getTask(db, lesson.taskId)?.number ?? 0;
-  // The reviewer already passed reviewerOf, so the write rides on that authority rather than the
-  // author's current role; the author stays the viewer's actor and so the note's source_agent.
-  const ctx = { viewer: { ...agentViewer(db, lesson.authorId), canWrite: true }, runId: null };
+  const ctx = { viewer: writer(db, lesson, author !== null), runId: null };
   // Not slug-only: a non-Latin lesson has an empty slug and 51 of them would all be "lesson".
   // The tail of a v7 id is random, while its head is a timestamp shared by ids made a minute apart.
   const slug = `${slugOf(body)}-${lesson.id.replaceAll("-", "").slice(-ID_CHARS)}`;

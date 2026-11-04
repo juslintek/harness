@@ -267,9 +267,33 @@ test("removing the author keeps the accepted lesson with its reviewer, reason, n
   expect(reviewerFor(w.db, kept as LessonView)).toBeNull();
 });
 
-test("a lesson without an author can still be reviewed by anyone else, but not written as an agent note", async () => {
+test("a removed author's org and project lessons are written under the reviewer, sourced to the stored handle", async () => {
+  for (const scope of ["org", "project"]) {
+    w = world();
+    const { dev, lessons } = await pending();
+    w.db.query("UPDATE lessons SET scope = ? WHERE id = ?").run(scope, lessons[0]?.id as string);
+    removeMember(w.db, dev.id);
+    const lead = w.agent("lead");
+    const out = await decideLesson(
+      w.db,
+      w.home,
+      lessons[0]?.id as string,
+      asAgent(lead.id),
+      "accept",
+      "ok",
+    );
+    const hit = searchNotes(w.db, agentViewer(w.db, lead.id), { type: "lesson" }).find(
+      (n) => n.id === out.noteId,
+    );
+    expect(hit).toMatchObject({ sourceAgent: "dev", scope });
+    await close(w);
+  }
+});
+
+test("a lesson without an author can still be reviewed by anyone else, but an agent-scope one is not written", async () => {
   w = world();
   const { dev, lessons } = await pending();
+  w.db.query("UPDATE lessons SET scope = 'agent' WHERE id = ?").run(lessons[0]?.id as string);
   removeMember(w.db, dev.id);
   const lead = w.agent("lead");
   await expect(
