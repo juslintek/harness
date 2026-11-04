@@ -7,14 +7,7 @@ import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
 import { isAdmin, useOrg } from "../orgs/org-data";
 import { CandidateCard } from "./candidate-card";
-
-const OPEN: HireView["status"][] = [
-  "interviewing",
-  "followups",
-  "answering",
-  "scoring",
-  "deciding",
-];
+import { hirePhase } from "./hire-phase";
 
 function Decide({
   hire,
@@ -111,13 +104,13 @@ export function HireDetail({ slug, id }: { slug: string; id: string }): preact.J
                 hire={view}
                 candidate={c}
                 base={base}
-                canScore={admin && OPEN.includes(view.status)}
+                canScore={admin && hirePhase(view.status).scoring}
                 handleOf={handleOf}
                 onChange={hire.reload}
               />
             ))}
           </ul>
-          {admin && OPEN.includes(view.status) && (
+          {admin && hirePhase(view.status).deciding && (
             <Decide hire={view} base={base} onDecided={hire.reload} />
           )}
         </>
