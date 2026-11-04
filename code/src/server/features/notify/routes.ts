@@ -5,6 +5,7 @@ import { CHANNELS, type Channel, prefSchema } from "../../../shared/notify";
 import { notFound, parseBody } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
 import { getOrgBySlug, listOrgsForUser, memberForUser } from "../orgs/api";
+import { emailRoutes } from "./email/routes";
 import { effectivePrefs, setPref } from "./prefs";
 import { pushRoutes } from "./push/routes";
 import { deleteTarget, insertTarget, targetsOf, viewOf } from "./targets-repo";
@@ -60,6 +61,7 @@ export function notifyRoutes(db: Database, home: string): Hono<AuthEnv> {
     "/push",
     pushRoutes(db, home, (c, run) => asCaller(db, c, run)),
   );
+  app.route("/email", emailRoutes(db, home));
   app.get("/prefs", (c) => asCaller(db, c, (id) => c.json(effectivePrefs(db, id))));
   app.put("/prefs", (c) =>
     asCaller(db, c, async (id) => {

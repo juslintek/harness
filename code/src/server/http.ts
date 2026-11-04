@@ -173,6 +173,11 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", adminRoutes(deps));
 }
 
+// The fallback while no mail server is configured: the operator reads the code from the log.
+export function consoleEmailCode(email: string, code: string): void {
+  console.log(`email code for ${email}: ${code}`);
+}
+
 export function createApp(deps: AppDeps): Hono {
   const { db } = deps;
   const app = new Hono();
@@ -199,8 +204,7 @@ export function createApp(deps: AppDeps): Hono {
       db,
       rp: deps.rp,
       ...(deps.trustProxy === undefined ? {} : { trustProxy: deps.trustProxy }),
-      deliverEmailCode:
-        deps.deliverEmailCode ?? ((email, code) => console.log(`email code for ${email}: ${code}`)),
+      deliverEmailCode: deps.deliverEmailCode ?? consoleEmailCode,
     }),
   );
   mountSessionRoutes(app, deps);

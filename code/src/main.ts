@@ -12,7 +12,7 @@ import { startHeartbeat } from "./server/features/heartbeat/api";
 import { startHiring } from "./server/features/hiring/api";
 import { wireHiring } from "./server/features/hiring/wiring";
 import { startMemory } from "./server/features/memory/api";
-import { startNotify } from "./server/features/notify/api";
+import { emailCodeSender, startNotify } from "./server/features/notify/api";
 import { startRouter } from "./server/features/router/api";
 import {
   recoverRuns,
@@ -22,7 +22,7 @@ import {
 } from "./server/features/runtimes/api";
 import { startTracking } from "./server/features/tracking/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
-import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
+import { consoleEmailCode, createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
 import { type WsData, websocket, wireRealtime } from "./server/realtime";
 import { staticResponse } from "./server/ui-dist";
 import indexHtml from "./web/index.html";
@@ -73,6 +73,9 @@ app = createApp({
   port: bound.port,
   rp: bound.rp,
   trustProxy: bound.trustProxy,
+  // Resolved per request, so saving SMTP settings applies without a restart.
+  deliverEmailCode: (email, code) =>
+    (emailCodeSender(db, bound.home) ?? consoleEmailCode)(email, code),
   instanceId,
   version: "0.0.0",
 });

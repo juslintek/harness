@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { Channel, Notification, TargetView } from "../../../shared/notify";
 import { createDispatcher, type Dispatcher, type DispatcherDeps } from "./dispatcher";
+import { emailCodeSender } from "./email/adapter";
 import { effectivePrefs, setPref } from "./prefs";
 import { notifyRoutes } from "./routes";
 import { openSlackConnection, postSlackMessage, slackConfigured } from "./slack/client";
@@ -8,6 +9,7 @@ import { deleteTarget, insertTarget, targetsOf, viewOf } from "./targets-repo";
 
 export {
   effectivePrefs,
+  emailCodeSender,
   notifyRoutes,
   openSlackConnection,
   postSlackMessage,
