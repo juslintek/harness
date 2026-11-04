@@ -31,25 +31,32 @@ interface Raw {
   task_number: number | null;
 }
 
+// A removed member's row is gone (hard delete) but its runs keep member_id, so the org then comes
+// from the run's project. A removed member's run with no project cannot be placed in any org.
+const IN_ORG = "(m.org_id = ? OR (m.id IS NULL AND p.org_id = ?))";
+const RUN_JOINS =
+  "LEFT JOIN members m ON m.id = r.member_id LEFT JOIN projects p ON p.id = r.project_id";
+
 // Runs tied to a project are visible only to people who can open that project; the check is done
 // per distinct project here so the FTS cap applies after it.
 function openableProjects(db: Database, orgId: string, userId: string): string[] {
   return db
-    .query<{ project_id: string }, [string]>(
-      `SELECT DISTINCT r.project_id FROM runs r JOIN members m ON m.id = r.member_id
-       WHERE m.org_id = ? AND r.project_id IS NOT NULL`,
+    .query<{ project_id: string }, [string, string]>(
+      `SELECT DISTINCT r.project_id FROM runs r ${RUN_JOINS}
+       WHERE ${IN_ORG} AND r.project_id IS NOT NULL`,
     )
-    .all(orgId)
+    .all(orgId, orgId)
     .map((r) => r.project_id)
     .filter((id) => projectAccess(db, userId, id) !== "none");
 }
 
 function scopeOf(db: Database, orgId: string, q: OrgSearchQuery): RowidScope {
   const where = [
-    "m.org_id = ?",
+    IN_ORG,
     "(r.project_id IS NULL OR r.project_id IN (SELECT value FROM json_each(?)))",
   ];
   const params: Array<string | number> = [
+    orgId,
     orgId,
     JSON.stringify(openableProjects(db, orgId, q.userId)),
   ];
@@ -58,7 +65,7 @@ function scopeOf(db: Database, orgId: string, q: OrgSearchQuery): RowidScope {
     params.push(q.kind);
   }
   if (q.memberId !== undefined) {
-    where.push("m.id = ?");
+    where.push("r.member_id = ?");
     params.push(q.memberId);
   }
   if (q.before !== undefined && q.beforeRowid !== undefined) {
@@ -70,12 +77,12 @@ function scopeOf(db: Database, orgId: string, q: OrgSearchQuery): RowidScope {
   }
   return {
     sql: `SELECT e.rowid FROM events e JOIN runs r ON r.id = e.run_id
-      JOIN members m ON m.id = r.member_id WHERE ${where.join(" AND ")}`,
+      ${RUN_JOINS} WHERE ${where.join(" AND ")}`,
     params,
   };
 }
 
-// The org comes from the run's member, never from the event, so a run of another org cannot leak.
+// The org comes from the run's member (or its project once the member is removed), never from the event, so a run of another org cannot leak.
 // The scope is applied inside the FTS match so other orgs' hits cannot crowd out this org's.
 export function searchOrgEvents(
   db: Database,
@@ -89,11 +96,11 @@ export function searchOrgEvents(
   const limit = Math.min(Math.max(Math.trunc(q.limit ?? DEFAULT_LIMIT), 1), MAX_LIMIT);
   const rows = db
     .query<Raw, [string, number]>(
-      `SELECT e.rowid, e.id, e.run_id, e.kind, e.ts, e.command, m.handle,
+      `SELECT e.rowid, e.id, e.run_id, e.kind, e.ts, e.command, COALESCE(m.handle, '(removed)') AS handle,
          COALESCE(e.task_id, r.task_id) AS task_id, t.project_id, t.number AS task_number
        FROM events e
        JOIN runs r ON r.id = e.run_id
-       JOIN members m ON m.id = r.member_id
+       LEFT JOIN members m ON m.id = r.member_id
        LEFT JOIN tasks t ON t.id = COALESCE(e.task_id, r.task_id)
        WHERE e.rowid IN (SELECT value FROM json_each(?))
        ORDER BY e.ts DESC, e.rowid DESC LIMIT ?`,

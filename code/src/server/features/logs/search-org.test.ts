@@ -125,3 +125,29 @@ test("a run in a project the user cannot open is hidden until the org is granted
   );
   expect(searchOrgEvents(db, "A", { userId: "u1", text: "deploy" })).toHaveLength(1);
 });
+
+test("a removed member's run stays searchable in its project's org and never shows in another", () => {
+  for (const [id, org] of [
+    ["PA", "A"],
+    ["PB", "B"],
+  ] as const) {
+    db.run("INSERT INTO projects (id, org_id, key, name, created_at) VALUES (?, ?, ?, ?, 1)", [
+      id,
+      org,
+      id,
+      id,
+    ]);
+  }
+  db.run(
+    `INSERT INTO members (id, org_id, kind, user_id, handle, display_name, role, created_at)
+     VALUES ('hu', 'A', 'human', 'u1', 'hu', 'hu', 'owner', 1)`,
+  );
+  db.run("UPDATE runs SET project_id = 'PA' WHERE id = 'runA'");
+  db.run("UPDATE runs SET project_id = 'PB' WHERE id = 'runB'");
+  add("runA", "deploy alpha", 10);
+  add("runB", "deploy beta", 11);
+  db.run("DELETE FROM members WHERE id IN ('mA', 'mB')");
+  const inA = searchOrgEvents(db, "A", { userId: "u1", text: "deploy" });
+  expect(inA.map((h) => [h.snippet, h.memberHandle])).toEqual([["deploy alpha", "(removed)"]]);
+  expect(searchOrgEvents(db, "B", { userId: "u1", text: "deploy" })).toEqual([]);
+});
