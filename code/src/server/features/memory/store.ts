@@ -31,8 +31,9 @@ async function pickType(ctx: WriteCtx, loc: Located, body: string, meta: Patch):
   if (meta.type !== undefined) return meta.type;
   if (ctx.classify === undefined) return "fact";
   try {
-    // The location fixes the scope, so it is the only one the classifier may pick.
-    return (await ctx.classify(body, [loc.scope as NoteScope])).type;
+    // The location fixes the scope, so it is the only one the classifier may pick. The text leaves
+    // the process, so a secret is cut out first, the same way it is before the file is written.
+    return (await ctx.classify(redact(body), [loc.scope as NoteScope])).type;
   } catch {
     return "fact";
   }

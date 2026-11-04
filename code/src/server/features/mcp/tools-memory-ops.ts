@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { classifyNote } from "../laya/api";
+import { redact } from "../logs/api";
 import {
   backlinks,
   createNote,
@@ -143,8 +144,9 @@ async function createTarget(
   if (rel === undefined) return { loc: located(op, path) };
   const projectId =
     op.projectId !== null && op.viewer.projectIds.includes(op.projectId) ? op.projectId : null;
+  // The classifier is a network call, so it only ever sees redacted text.
   const cls = await classifyNote(
-    text,
+    redact(text),
     projectId === null ? ["agent", "org"] : ["project", "agent", "org"],
   );
   const dir =

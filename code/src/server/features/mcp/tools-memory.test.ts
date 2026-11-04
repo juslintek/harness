@@ -7,6 +7,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { startStub, stopStubs } from "../../test-support/stub-server";
+import { resetLayaCircuit } from "../laya/client";
 import {
   agentViewer,
   getIndexedByDisk,
@@ -276,4 +278,29 @@ test("the memory tool's input schema has no command property", async () => {
   const props = tools.find((t) => t.name === "memory")?.inputSchema.properties ?? {};
   expect(Object.keys(props)).toContain("action");
   expect(props).not.toHaveProperty("command");
+});
+
+test("an unscoped create never sends the secret to Laya", async () => {
+  const sent: string[] = [];
+  const stub = await startStub(async (req) => {
+    sent.push(await req.text());
+    return Response.json({ model: "laya:en", answers: {} });
+  });
+  process.env.OLLAYA_URL = stub.url;
+  resetLayaCircuit();
+  try {
+    const dev = w.agent(w.a.id, "dev");
+    const key = "AKIAIOSFODNN7EXAMPLE";
+    const made = await call(server, tokenOf(dev.id, w.a.id), "memory", {
+      action: "create",
+      path: "/memories/keys.md",
+      file_text: `# Keys\nuse ${key} for the deploy`,
+    });
+    expect(made.isError).toBe(false);
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.join("")).not.toContain(key);
+  } finally {
+    delete process.env.OLLAYA_URL;
+    await stopStubs();
+  }
 });
