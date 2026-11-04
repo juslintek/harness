@@ -4,6 +4,7 @@ import { getChannel } from "../chat/api";
 import { directReportsOf, getMember, getOrg, listPositions, type MemberRow } from "../orgs/api";
 import { memoryNotice, wakeTopic } from "./memory-notice";
 import { describeHiring, profileHeader, teamLacksHints } from "./prompt-hiring";
+import { describeMemory } from "./prompt-memory";
 import type { WakeRow } from "./repo";
 
 const MAX_WAKES = 10;
@@ -65,9 +66,8 @@ function describe(db: Database, wake: WakeRow): string {
     case "approval_resolved":
       return describeHiring(db, wake);
     case "retro":
-      return `A task you worked on is done. Write down what you learned for the team: ${text}`;
     case "lesson_review":
-      return `You are asked to review a proposed lesson: ${text}`;
+      return describeMemory(db, wake);
     case "policy_review":
       return `You are asked to review a policy change: ${text}\nCall \`policy_review {proposal, verdict: "approve" | "reject", comment}\` with the proposal id.`;
   }

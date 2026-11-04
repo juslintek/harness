@@ -5,8 +5,17 @@ import { buildMemoryIndex } from "./index-file";
 import { logRead } from "./index-log";
 import { getIndexedByDisk } from "./index-repo";
 import { backlinks, searchNotes } from "./index-search";
+import {
+  listLessons,
+  onLessonDecided,
+  onLessonProposed,
+  proposeLessons,
+  reviewerFor,
+} from "./lessons";
+import { decideLesson } from "./lessons-decide";
 import type { Located, Viewer } from "./paths";
 import { reconcile } from "./reconcile";
+import { startRetro } from "./retro";
 import { createNote, deleteNote, readNote, renameNote, updateNote } from "./store";
 import { MemoryError, onMemoryChange, type WriteCtx } from "./store-kit";
 import { revertWrite } from "./store-revert";
@@ -28,18 +37,25 @@ export {
   backlinks,
   buildMemoryIndex,
   createNote,
+  decideLesson,
   deleteNote,
   getIndexedByDisk,
+  listLessons,
   logRead,
   MemoryError,
+  onLessonDecided,
+  onLessonProposed,
   onMemoryChange,
   projectSlugs,
+  proposeLessons,
   readNote,
   renameNote,
   resolveNotePath,
   revertWrite,
+  reviewerFor,
   runProject,
   searchNotes,
+  startRetro,
   updateNote,
   virtualPathOf,
 };
