@@ -22,7 +22,7 @@ export function testDb(): { db: Database; dir: string } {
 }
 
 export function viewer(orgId: string, memberId: string | null, projectIds: string[]): Viewer {
-  return { orgId, memberId, projectIds, canWriteGlobal: false, actor: "t" };
+  return { orgId, memberId, projectIds, canWriteGlobal: false, canWrite: true, actor: "t" };
 }
 
 export function loc(disk: string): Located {

@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { NoteSummary } from "../../../shared/memory";
-import { getMember, listProjects, memberForUser, projectAccess } from "../orgs/api";
+import { getMember, listProjects, memberForUser, projectAccess, roleAtLeast } from "../orgs/api";
 import { diskToLocated, resolveVirtual, toVirtual, type Viewer } from "./paths";
 
 // Rebuilt from the member row on every call: org and project reach follow the current database
@@ -16,6 +16,7 @@ export function agentViewer(db: Database, memberId: string): Viewer {
     memberId,
     projectIds,
     canWriteGlobal: false,
+    canWrite: roleAtLeast(member.role, "member"),
     actor: member.handle,
   };
 }
@@ -37,6 +38,7 @@ export function humanViewer(
     memberId: null,
     projectIds,
     canWriteGlobal: isInstanceAdmin,
+    canWrite: roleAtLeast(member.role, "member"),
     actor: member.handle,
   };
 }

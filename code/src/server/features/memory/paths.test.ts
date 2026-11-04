@@ -15,6 +15,7 @@ const agent: Viewer = {
   memberId: "m1",
   projectIds: ["p1"],
   canWriteGlobal: false,
+  canWrite: true,
   actor: "bot",
 };
 const human: Viewer = { ...agent, memberId: null, canWriteGlobal: true, actor: "human:u1" };

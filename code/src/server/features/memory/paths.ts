@@ -6,6 +6,8 @@ export interface Viewer {
   memberId: string | null;
   projectIds: string[];
   canWriteGlobal: boolean;
+  // False for a viewer-role member: reads stay open, every write is refused.
+  canWrite: boolean;
   actor: string;
 }
 
@@ -144,6 +146,7 @@ export function canRead(viewer: Viewer, loc: Located): boolean {
 }
 
 export function canWrite(viewer: Viewer, loc: Located): boolean {
+  if (!viewer.canWrite) return false;
   if (loc.scope === "global") return viewer.canWriteGlobal;
   return canRead(viewer, loc);
 }

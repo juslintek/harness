@@ -69,3 +69,13 @@ test("a human viewer has no member scope and writes global only as instance admi
 test("runProject is null for an unknown run", () => {
   expect(runProject(setup().db, "none")).toBeNull();
 });
+
+test("a viewer-role member cannot write, a member can", () => {
+  const { db, a, agent } = setup();
+  expect(agentViewer(db, agent.id).canWrite).toBe(true);
+  db.run("UPDATE members SET role = 'viewer' WHERE id = ?", [agent.id]);
+  expect(agentViewer(db, agent.id).canWrite).toBe(false);
+  addHumanMember(db, a.id, "u3", "vic", "Vic", "viewer");
+  expect(humanViewer(db, a.id, "u3", true).canWrite).toBe(false);
+  expect(humanViewer(db, a.id, "u-acme", false).canWrite).toBe(true);
+});

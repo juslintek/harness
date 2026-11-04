@@ -277,3 +277,15 @@ test("the memory tool's input schema has no command property", async () => {
   expect(Object.keys(props)).toContain("action");
   expect(props).not.toHaveProperty("command");
 });
+
+test("a viewer-role agent reads memory but every write is forbidden", async () => {
+  const dev = w.agent(w.a.id, "dev");
+  const mem = (args: Record<string, unknown>) =>
+    call(server, tokenOf(dev.id, w.a.id), "memory", args);
+  await mem({ action: "create", path: "/memories/org/a.md", file_text: "# A\nx" });
+  db.run("UPDATE members SET role = 'viewer' WHERE id = ?", [dev.id]);
+  const denied = await mem({ action: "create", path: "/memories/agent/b.md", file_text: "# B" });
+  expect(denied).toEqual({ isError: true, text: "you are not allowed to do that here" });
+  expect((await mem({ action: "delete", path: "/memories/org/a.md" })).isError).toBe(true);
+  expect((await mem({ action: "view", path: "/memories/org/a.md" })).text).toContain("# A");
+});
