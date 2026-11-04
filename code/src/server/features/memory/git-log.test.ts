@@ -1,5 +1,5 @@
 import "../../test-support/no-git-env";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import {
   chmodSync,
   existsSync,
@@ -211,4 +211,25 @@ test("startup queues a commit for valid notes left uncommitted", async () => {
   await queueUncommitted(env.dir, env.db);
   await drainCommits();
   expect(await log("%s")).toEqual(["commit notes left uncommitted"]);
+});
+
+test("a failed reset abandons the attempt, so a hand-staged file is never committed", async () => {
+  const vault = vaultDir(env.dir);
+  await ensureVaultRepo(env.dir);
+  await Bun.write(join(vault, "credentials.json"), '{"token":"abc"}');
+  await gitOutput(vault, ["add", "-f", "credentials.json"]);
+  await Bun.write(join(vault, orgNote.disk), "# ok");
+  const real = Bun.spawn;
+  // Only reset is broken; add, diff and commit would all succeed.
+  const spy = spyOn(Bun, "spawn").mockImplementation(((cmd: string[], opts: object) =>
+    real(
+      cmd.map((a) => (a === "reset" ? "reset-broken" : a)),
+      opts,
+    )) as typeof Bun.spawn);
+  const errors = spyOn(console, "error").mockImplementation(() => {});
+  queueCommit(env.dir, "files");
+  await drainCommits();
+  spy.mockRestore();
+  errors.mockRestore();
+  expect(await log("%s")).toEqual([]);
 });

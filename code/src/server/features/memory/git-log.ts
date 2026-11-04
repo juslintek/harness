@@ -51,6 +51,14 @@ async function git(cwd: string, args: string[]): Promise<{ code: number; out: st
   return { code, out: stdout + stderr };
 }
 
+// Staging and cleanup commands go through here: a reset that failed leaves whatever was staged
+// by hand in the index, so the attempt is abandoned (and retried) instead of reaching `git commit`.
+async function must(dir: string, args: string[]): Promise<string> {
+  const res = await git(dir, args);
+  if (res.code !== 0) throw new Error(`git ${args.join(" ")} failed: ${res.out}`);
+  return res.out;
+}
+
 // Everything but folders and notes is ignored, so a stray credentials file in the vault is never
 // picked up by a broad `git add`. Existing entries stay; the missing ones are appended in order
 // because a later "!" rule must follow the "*" it carves out of.
@@ -153,25 +161,19 @@ function scrubOutside(db: Database, home: string, notes: string[]): void {
 // named like ":(glob)*" cannot widen the match.
 async function stageNotes(dir: string, notes: string[]): Promise<void> {
   for (let i = 0; i < notes.length; i += STAGE_CHUNK) {
-    const add = await git(dir, [
-      "--literal-pathspecs",
-      "add",
-      "--",
-      ...notes.slice(i, i + STAGE_CHUNK),
-    ]);
-    if (add.code !== 0) throw new Error(add.out);
+    await must(dir, ["--literal-pathspecs", "add", "--", ...notes.slice(i, i + STAGE_CHUNK)]);
   }
 }
 
 // Last line of defence: whatever got staged is checked as the blob git will store, and a note that
 // redaction would still change is unstaged, so a failed rewrite can never reach history.
 async function unstageSecrets(dir: string): Promise<void> {
-  const staged = await git(dir, ["diff", "--cached", "--name-only", "-z", "--diff-filter=d"]);
-  for (const path of staged.out.split("\0")) {
+  const staged = await must(dir, ["diff", "--cached", "--name-only", "-z", "--diff-filter=d"]);
+  for (const path of staged.split("\0")) {
     if (!path.endsWith(".md")) continue;
-    const blob = await git(dir, ["show", `:${path}`]);
-    if (blob.code !== 0 || redact(blob.out) === blob.out) continue;
-    await git(dir, ["reset", "-q", "--", path]);
+    const blob = await must(dir, ["show", `:${path}`]);
+    if (redact(blob) === blob) continue;
+    await must(dir, ["--literal-pathspecs", "reset", "-q", "--", path]);
     console.error(`memory: not committing ${path}: it still holds a secret`);
   }
 }
@@ -179,10 +181,10 @@ async function unstageSecrets(dir: string): Promise<void> {
 // Anything staged by hand before we got here (git add -f ignores the ignore rules) would ride along
 // in the commit, so a non-note path is unstaged whatever put it in the index.
 async function unstageNonNotes(dir: string): Promise<void> {
-  const staged = await git(dir, ["diff", "--cached", "--name-only", "-z"]);
-  for (const path of staged.out.split("\0")) {
+  const staged = await must(dir, ["diff", "--cached", "--name-only", "-z"]);
+  for (const path of staged.split("\0")) {
     if (path === "" || (path.endsWith(".md") && diskToLocated(path) !== null)) continue;
-    await git(dir, ["--literal-pathspecs", "reset", "-q", "--", path]);
+    await must(dir, ["--literal-pathspecs", "reset", "-q", "--", path]);
     console.error(`memory: not committing ${path}: it is not a note`);
   }
 }
@@ -190,13 +192,12 @@ async function unstageNonNotes(dir: string): Promise<void> {
 // `git add` stages a symlink as mode 120000 and a nested repo as a gitlink (160000), and neither
 // is note text, so only regular blobs may reach the commit. Deletions (mode 000000) stay.
 async function unstageNonFiles(dir: string): Promise<void> {
-  const raw = await git(dir, ["diff", "--cached", "--raw", "--no-renames", "-z"]);
-  const parts = raw.out.split("\0");
+  const parts = (await must(dir, ["diff", "--cached", "--raw", "--no-renames", "-z"])).split("\0");
   for (let i = 0; i + 1 < parts.length; i += 2) {
     const newMode = (parts[i] as string).split(" ")[1];
     const path = parts[i + 1] as string;
     if (newMode === "100644" || newMode === "100755" || newMode === "000000") continue;
-    await git(dir, ["--literal-pathspecs", "reset", "-q", "--", path]);
+    await must(dir, ["--literal-pathspecs", "reset", "-q", "--", path]);
     console.error(`memory: not committing ${path}: it is not a regular file`);
   }
 }
@@ -211,7 +212,7 @@ async function commitAll(
     const dir = vaultDir(home);
     if (db !== undefined) scrubOutside(db, home, await changedNotes(dir));
     // Back to HEAD first: tracked notes keep their history, and only what stageNotes adds is staged.
-    await git(dir, ["reset", "-q"]);
+    await must(dir, ["reset", "-q"]);
     await stageNotes(dir, await changedNotes(dir));
     await unstageNonNotes(dir);
     await unstageNonFiles(dir);
