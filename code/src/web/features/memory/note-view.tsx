@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { noteViewSchema } from "../../../shared/memory";
 import type { OrgDetail } from "../../../shared/orgs";
 import { api, useLoad } from "../../api";
@@ -71,6 +71,9 @@ export function NoteView({
     [slug, id, version],
   );
   const n = note.data;
+  const article = useRef<HTMLElement>(null);
+  // On a phone the list is stacked above the note, so a tapped note would open off screen.
+  useEffect(() => article.current?.scrollIntoView({ block: "nearest" }), [n?.id]);
   if (!n)
     return note.error ? <ErrorLine message="Note not found." /> : <p class="muted">Loading...</p>;
   const canEdit = writableScopes(
@@ -79,7 +82,7 @@ export function NoteView({
     true,
   ).includes(n.scope);
   return (
-    <article class="note-view">
+    <article class="note-view" ref={article}>
       <h3>{n.title}</h3>
       <p class="muted">
         {shownPath(n.path)} · {n.scope} · <span class="badge">{n.type}</span> · {n.sourceAgent} ·
