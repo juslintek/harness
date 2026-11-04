@@ -5,20 +5,16 @@ import {
   type NoteScope,
   type NoteSummary,
   type NoteView,
-  type NoteWriteView,
+  type NoteWriteFeedItem,
   noteSummarySchema,
   noteViewSchema,
-  noteWriteViewSchema,
+  noteWriteFeedItemSchema,
 } from "../../../shared/memory";
 import type { OrgDetail, Role } from "../../../shared/orgs";
 
 // Granted projects belong to another org; memory only accepts notes for the viewer's own org.
 export const ownProjects = (detail: OrgDetail): OrgDetail["projects"] =>
   detail.projects.filter((p) => p.orgId === detail.org.id);
-
-// The server refuses to revert a rename (rename back instead) and an outside edit has no known
-// previous text, so offering the button would only produce an error.
-export const canRevert = (op: string): boolean => op !== "outside" && op !== "rename";
 
 export type Tab = "notes" | "writes" | "review";
 export const TABS: Tab[] = ["notes", "writes", "review"];
@@ -40,16 +36,7 @@ export const facetsSchema: z.ZodType<Facets> = z.object({
 export const noteListSchema: z.ZodType<NoteSummary[]> = z.array(noteSummarySchema);
 export const lessonListSchema: z.ZodType<LessonView[]> = z.array(lessonViewSchema);
 
-export interface WriteWithText extends NoteWriteView {
-  before: string | null;
-  after: string | null;
-}
-export const writeListSchema: z.ZodType<WriteWithText[]> = z.array(
-  z.intersection(
-    noteWriteViewSchema,
-    z.object({ before: z.string().nullable(), after: z.string().nullable() }),
-  ),
-);
+export const writeListSchema: z.ZodType<NoteWriteFeedItem[]> = z.array(noteWriteFeedItemSchema);
 
 export const writeResultSchema: z.ZodType<{ note: NoteView; redacted: boolean }> = z.object({
   note: noteViewSchema,

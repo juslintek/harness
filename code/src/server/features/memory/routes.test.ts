@@ -237,3 +237,29 @@ test("the write feed fills its limit with visible writes when newer ones sit in 
   const feed = await (await k.call(k.alice, "GET", `${BASE}/writes?limit=50`)).json();
   expect(feed).toHaveLength(3);
 });
+
+test("the write feed marks only undoable rows as revertible", async () => {
+  const k = await boot();
+  const row = (op: "update" | "rename" | "outside", disk: string) =>
+    logWrite(k.db, {
+      noteId: "n",
+      orgId: k.acme.id,
+      op,
+      actor: "x",
+      memberId: null,
+      disk,
+      runId: null,
+      beforeText: "a",
+      afterText: "b",
+      beforeHash: null,
+      afterHash: null,
+    });
+  for (const op of ["update", "rename", "outside"] as const) {
+    row(op, `orgs/${k.acme.id}/org/${op}.md`);
+  }
+  const feed = await (await k.call(k.alice, "GET", `${BASE}/writes`)).json();
+  const byOp = Object.fromEntries(
+    feed.map((w: { op: string; canRevert: boolean }) => [w.op, w.canRevert]),
+  );
+  expect(byOp).toEqual({ update: true, rename: false, outside: false });
+});

@@ -1,17 +1,11 @@
 import { useState } from "preact/hooks";
+import type { NoteWriteFeedItem } from "../../../shared/memory";
 import { api, useLoad } from "../../api";
 import { fmtTime } from "../../format";
 import { ErrorLine } from "../auth/error-line";
 import { useAction } from "../auth/use-action";
 import { lineDiff } from "./line-diff";
-import {
-  canRevert,
-  memoryBase,
-  shownPath,
-  type WriteWithText,
-  writeListSchema,
-  writeResultSchema,
-} from "./memory-data";
+import { memoryBase, shownPath, writeListSchema, writeResultSchema } from "./memory-data";
 
 function Revert({
   slug,
@@ -54,7 +48,7 @@ function Revert({
   );
 }
 
-function Diff({ write }: { write: WriteWithText }): preact.JSX.Element {
+function Diff({ write }: { write: NoteWriteFeedItem }): preact.JSX.Element {
   const rows = lineDiff(write.before ?? "", write.after ?? "");
   return (
     <pre class="diff">
@@ -74,7 +68,7 @@ function WriteItem({
   onDone,
 }: {
   slug: string;
-  write: WriteWithText;
+  write: NoteWriteFeedItem;
   onDone: () => void;
 }): preact.JSX.Element {
   const [open, setOpen] = useState(false);
@@ -86,7 +80,7 @@ function WriteItem({
         </summary>
         {open && <Diff write={write} />}
       </details>
-      {canRevert(write.op) && <Revert slug={slug} id={write.id} onDone={onDone} />}
+      {write.canRevert && <Revert slug={slug} id={write.id} onDone={onDone} />}
     </li>
   );
 }

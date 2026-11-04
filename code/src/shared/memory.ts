@@ -89,6 +89,22 @@ export const noteWriteViewSchema: z.ZodType<NoteWriteView> = z.object({
   afterHash: z.string().nullable(),
 });
 
+// The feed row: the server decides canRevert (rename and outside edits cannot be undone, and the
+// viewer needs write access to the note's location) so the web never has to guess.
+export interface NoteWriteFeedItem extends NoteWriteView {
+  before: string | null;
+  after: string | null;
+  canRevert: boolean;
+}
+export const noteWriteFeedItemSchema: z.ZodType<NoteWriteFeedItem> = z.intersection(
+  noteWriteViewSchema,
+  z.object({
+    before: z.string().nullable(),
+    after: z.string().nullable(),
+    canRevert: z.boolean(),
+  }),
+);
+
 export interface LessonView {
   id: string;
   taskId: string;

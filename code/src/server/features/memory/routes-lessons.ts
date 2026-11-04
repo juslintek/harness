@@ -1,13 +1,14 @@
 import type { Database } from "bun:sqlite";
 import type { Hono } from "hono";
 import { z } from "zod";
+import type { NoteWriteFeedItem } from "../../../shared/memory";
 import { parseBody, parseQuery } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
 import { getTask } from "../board/api";
 import { getWrite, listWrites } from "./index-log";
 import { listLessons } from "./lessons";
 import { decideLesson } from "./lessons-decide";
-import { canRead, diskToLocated } from "./paths";
+import { canRead, canWrite, diskToLocated, type Viewer } from "./paths";
 import { memoryCtx } from "./routes-kit";
 import { MemoryError } from "./store-kit";
 import { revertWrite } from "./store-revert";
@@ -25,6 +26,28 @@ const decideBody = z.object({
   body: z.string().optional(),
 });
 
+function feed(
+  db: Database,
+  orgId: string,
+  viewer: Viewer,
+  opts: { limit: number; agentsOnly: boolean },
+): NoteWriteFeedItem[] {
+  const rows = listWrites(db, orgId, { ...opts, includeGlobal: viewer.canWriteGlobal, viewer });
+  const out: NoteWriteFeedItem[] = [];
+  for (const w of rows) {
+    const loc = diskToLocated(w.path);
+    if (loc === null || !canRead(viewer, loc)) continue;
+    const full = getWrite(db, orgId, w.id, viewer.canWriteGlobal);
+    out.push({
+      ...w,
+      before: full?.beforeText ?? null,
+      after: full?.afterText ?? null,
+      canRevert: w.op !== "rename" && w.op !== "outside" && canWrite(viewer, loc),
+    });
+  }
+  return out;
+}
+
 export function writeAndLessonRoutes(db: Database, home: string, app: Hono<AuthEnv>): void {
   // The feed is for human org members; a write the viewer cannot read is left out, so a project
   // they lack access to does not leak through its history. Text columns are already redacted.
@@ -33,20 +56,9 @@ export function writeAndLessonRoutes(db: Database, home: string, app: Hono<AuthE
     if (m instanceof Response) return m;
     const q = parseQuery(c, writesQuery);
     if (q instanceof Response) return q;
-    const rows = listWrites(db, m.orgId, {
-      limit: q.limit ?? 50,
-      agentsOnly: q.agentsOnly === "1",
-      includeGlobal: m.viewer.canWriteGlobal,
-      viewer: m.viewer,
-    });
-    const out = [];
-    for (const w of rows) {
-      const loc = diskToLocated(w.path);
-      if (loc === null || !canRead(m.viewer, loc)) continue;
-      const full = getWrite(db, m.orgId, w.id, m.viewer.canWriteGlobal);
-      out.push({ ...w, before: full?.beforeText ?? null, after: full?.afterText ?? null });
-    }
-    return c.json(out);
+    return c.json(
+      feed(db, m.orgId, m.viewer, { limit: q.limit ?? 50, agentsOnly: q.agentsOnly === "1" }),
+    );
   });
   app.post(`${base}/writes/:id/revert`, (c) => {
     const m = memoryCtx(db, c, "member");
