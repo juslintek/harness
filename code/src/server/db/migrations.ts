@@ -23,6 +23,9 @@ import budgets from "./migrations/021_budgets.sql" with { type: "text" };
 import tracking from "./migrations/022_tracking.sql" with { type: "text" };
 import wakeReasons from "./migrations/023_wake_reasons.sql" with { type: "text" };
 import runCharge from "./migrations/024_run_charge.sql" with { type: "text" };
+import memory from "./migrations/025_memory.sql" with { type: "text" };
+import lessons from "./migrations/026_lessons.sql" with { type: "text" };
+import wakeRetro from "./migrations/027_wake_retro.sql" with { type: "text" };
 
 export const migrations: readonly Migration[] = [
   { version: 1, sql: instance },
@@ -49,4 +52,7 @@ export const migrations: readonly Migration[] = [
   { version: 22, sql: tracking },
   { version: 23, sql: wakeReasons },
   { version: 24, sql: runCharge },
+  { version: 25, sql: memory },
+  { version: 26, sql: lessons },
+  { version: 27, sql: wakeRetro },
 ];

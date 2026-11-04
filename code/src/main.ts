@@ -10,6 +10,7 @@ import { wireChat } from "./server/features/chat/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
 import { startHiring } from "./server/features/hiring/api";
 import { wireHiring } from "./server/features/hiring/wiring";
+import { startMemory } from "./server/features/memory/api";
 import { startRouter } from "./server/features/router/api";
 import {
   recoverRuns,
@@ -72,6 +73,7 @@ wireRealtime(db, server);
 const runDeps = { home: config.home, port: config.port };
 const stopHeartbeat = startHeartbeat(db, { runDeps, home: config.home });
 const hiring = wireHiring(db, { runDeps, home: config.home });
+const stopMemory = startMemory(db, { home: config.home });
 const stopLoops = [
   ...[startRouter, startBudgets, startTracking].map((start) => start(db)),
   startHiring(db, hiring.deps),
@@ -90,9 +92,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     if (stopping) return;
     stopping = true;
     const drained = stopHeartbeat();
+    const memoryStopped = stopMemory();
     for (const stop of stopLoops) stop();
     shutdownRuns(db)
-      .then(() => drained)
+      .then(() => Promise.all([drained, memoryStopped]))
       .catch((err: unknown) => console.error("shutdown failed", err))
       .finally(() => {
         server.stop(true);

@@ -25,6 +25,7 @@ import { wakeRoutes } from "./features/heartbeat/routes";
 import { hiringRoutes } from "./features/hiring/routes";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { type McpDeps, mcpHandler, verifyRunToken } from "./features/mcp/api";
+import { memoryRoutes } from "./features/memory/routes";
 import { orgRoutes } from "./features/orgs/routes";
 import { harnessPolicyRoutes, policiesRoutes } from "./features/policies/routes";
 import { profilesRoutes } from "./features/profiles/routes";
@@ -162,6 +163,7 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", hiringRoutes(db));
   app.route("/api", budgetsRoutes(db));
   app.route("/api", trackingRoutes(db));
+  app.route("/api", memoryRoutes(db, deps.home));
   app.route("/api", adminRoutes(deps));
 }
 

@@ -63,6 +63,10 @@ function describe(db: Database, wake: WakeRow): string {
     case "onboarding":
     case "approval_resolved":
       return describeHiring(db, wake);
+    case "retro":
+      return `A task you worked on is done. Write down what you learned for the team: ${text}`;
+    case "lesson_review":
+      return `You are asked to review a proposed lesson: ${text}`;
     case "policy_review":
       return `You are asked to review a policy change: ${text}\nCall \`policy_review {proposal, verdict: "approve" | "reject", comment}\` with the proposal id.`;
   }

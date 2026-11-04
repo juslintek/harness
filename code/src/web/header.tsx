@@ -69,6 +69,8 @@ export function Header(): preact.JSX.Element {
                 <a href={`#/o/${slug}/dashboard`}>Dashboard</a>
                 <a href={`#/o/${slug}/hiring`}>Hiring</a>
                 <a href={`#/o/${slug}/policies`}>Policies</a>
+                <a href={`#/o/${slug}/memory`}>Memory</a>
+                <a href={`#/o/${slug}/logs`}>Logs</a>
                 <a href={`#/o/${slug}/settings`}>Settings</a>
               </>
             )}
