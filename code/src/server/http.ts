@@ -167,7 +167,7 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", trackingRoutes(db));
   app.route("/api", memoryRoutes(db, deps.home));
   app.route("/api", logsRoutes(db));
-  app.route("/api/notify", notifyRoutes());
+  app.route("/api/notify", notifyRoutes(db));
   app.route("/api", adminRoutes(deps));
 }
 

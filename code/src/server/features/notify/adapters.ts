@@ -1,11 +1,18 @@
-import type { Channel, DeliverResult, Notification, Target } from "../../../shared/notify";
+import type { Channel } from "../../../shared/notify";
+import type { Notifier } from "./port";
 
-// `base` is the public origin, used to build absolute links in the message.
-export interface Notifier {
-  readonly channel: Channel;
-  deliver(target: Target, n: Notification, base: string): Promise<DeliverResult>;
+function notConfigured(channel: Channel): Notifier {
+  return {
+    channel,
+    deliver: async () => ({ ok: false, retry: false, reason: "not configured" }),
+  };
 }
 
-export function createNotifiers(): readonly Notifier[] {
-  return [];
-}
+// One line per channel: the adapter tasks each replace exactly their own line.
+export const ADAPTERS: Record<Channel, Notifier> = {
+  push: notConfigured("push"),
+  email: notConfigured("email"),
+  slack: notConfigured("slack"),
+  telegram: notConfigured("telegram"),
+  webhook: notConfigured("webhook"),
+};

@@ -1,16 +1,16 @@
 import { z } from "zod";
 
-const channels = ["push", "email", "slack", "telegram", "webhook"] as const;
-export type Channel = (typeof channels)[number];
+export const CHANNELS = ["push", "email", "slack", "telegram", "webhook"] as const;
+export type Channel = (typeof CHANNELS)[number];
 
-const notifyKinds = [
+export const NOTIFY_KINDS = [
   "approval_requested",
   "approval_resolved",
   "mention",
   "dm",
   "run_blocked",
 ] as const;
-export type NotifyKind = (typeof notifyKinds)[number];
+export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 
 export interface Notification {
   kind: NotifyKind;
@@ -46,7 +46,7 @@ export interface PrefView {
 }
 
 export const notificationSchema: z.ZodType<Notification> = z.object({
-  kind: z.enum(notifyKinds),
+  kind: z.enum(NOTIFY_KINDS),
   orgId: z.string().min(1),
   title: z.string().min(1).max(200),
   body: z.string().max(4000),
@@ -55,7 +55,7 @@ export const notificationSchema: z.ZodType<Notification> = z.object({
 });
 
 export const prefSchema: z.ZodType<PrefView> = z.object({
-  channel: z.enum(channels),
-  kind: z.enum(notifyKinds),
+  channel: z.enum(CHANNELS),
+  kind: z.enum(NOTIFY_KINDS),
   enabled: z.boolean(),
 });
