@@ -13,6 +13,7 @@ import { getProject, type MemberRow } from "../orgs/api";
 import type { WakeRow } from "./repo";
 import type { ExecDeps } from "./run-input";
 
+const MEMORY_ONLY_REASONS = new Set(["retro", "lesson_review"]);
 const HITS = 5;
 const WITH_TOOL =
   "Shared memory: the `memory` tool reads and writes notes under `/memories` (`agent` is yours, `project/<slug>` and `org` are shared with your org). Before you start a task, search it (`action: search`) for the task's topic and read (`view`) the notes that apply; follow them unless the task says otherwise. Save durable facts you learn with `create`.";
@@ -92,6 +93,20 @@ export function wakeTopic(db: Database, wakes: WakeRow[]): string {
       return `${title} ${typeof excerpt === "string" ? excerpt : ""}`;
     })
     .join(" ");
+}
+
+export function isMemoryOnly(wakes: WakeRow[]): boolean {
+  return wakes.length > 0 && wakes.every((w) => MEMORY_ONLY_REASONS.has(w.reason));
+}
+
+// A retro or lesson-review run has nothing to do but call the memory tools, so an engine without
+// MCP would only burn a run; routing is limited to engines that have it for those batches.
+export function mcpOnly(
+  deps: ExecDeps,
+  wakes: WakeRow[],
+): ((runtime: string) => boolean) | undefined {
+  if (!isMemoryOnly(wakes)) return undefined;
+  return (runtime) => (deps.runDeps.resolveSpec ?? getSpec)(runtime)?.mcp ?? true;
 }
 
 // An engine without MCP cannot call the memory tool, so it gets the notes as a file instead.

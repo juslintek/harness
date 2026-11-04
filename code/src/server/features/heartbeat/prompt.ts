@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { getTask } from "../board/api";
 import { getChannel } from "../chat/api";
 import { directReportsOf, getMember, getOrg, listPositions, type MemberRow } from "../orgs/api";
-import { memoryNotice, wakeTaskProject, wakeTopic } from "./memory-notice";
+import { isMemoryOnly, memoryNotice, wakeTaskProject, wakeTopic } from "./memory-notice";
 import { describeHiring, profileHeader, teamLacksHints } from "./prompt-hiring";
 import { describeMemory } from "./prompt-memory";
 import type { WakeRow } from "./repo";
@@ -91,8 +91,6 @@ function managerNotice(db: Database, member: MemberRow): string {
   return `\n\nYou manage ${handles.join(", ")}. You do not write code. Your worktree is read-only on purpose. This overrides the instruction below to commit on your branch. Work like this:\n${steps}`;
 }
 
-const MEMORY_ONLY_REASONS = new Set(["retro", "lesson_review"]);
-
 // A memory wake only reads notes and proposes or reviews lessons; the work instruction would send it to check out tasks.
 function memoryOnlyTools(wakes: WakeRow[]): string {
   const tools = [
@@ -118,7 +116,7 @@ export function buildPrompt(
   }.`;
   const shown = wakes.slice(0, MAX_WAKES).map((w) => `- ${describe(db, w)}`);
   if (wakes.length > MAX_WAKES) shown.push(`- and ${wakes.length - MAX_WAKES} more`);
-  if (wakes.length > 0 && wakes.every((w) => MEMORY_ONLY_REASONS.has(w.reason))) {
+  if (isMemoryOnly(wakes)) {
     return `${profileHeader(db, member)}${who}\n\n${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}\n\n${memoryOnlyTools(wakes)}`;
   }
   const woken = `${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}${teamLacksHints(db, member, wakes)}`;

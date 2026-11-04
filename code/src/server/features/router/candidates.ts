@@ -24,6 +24,8 @@ export interface RouteInput {
   memberId: string;
   taskId?: string | null | undefined;
   exclude?: Engine[] | undefined;
+  // Keeps only the runtimes the caller can use for this run, e.g. those able to call MCP tools.
+  runtimeFilter?: ((runtime: string) => boolean) | undefined;
 }
 
 // Tests inject a fixed agent list; real discovery spawns every installed CLI.
@@ -82,6 +84,7 @@ export async function route(
   return candidateEngines(profile, usable)
     .filter((e) => usable.some((a) => a.id === e.runtime))
     .filter((e) => allowed === null || allowed.includes(e.runtime))
+    .filter((e) => input.runtimeFilter?.(e.runtime) ?? true)
     .filter((e) => !windowsOf(quota, e.runtime).some((used) => used >= 100))
     .filter((e) => !(input.exclude ?? []).some((x) => sameEngine(x, e)))
     .map((engine) => {

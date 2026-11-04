@@ -4,7 +4,7 @@ import { budgetGate } from "../budgets/api";
 import { getMember, getProject, type MemberRow } from "../orgs/api";
 import { route } from "../router/api";
 import { HaltedError, isHalted, scratchRepo, startRun } from "../runtimes/api";
-import { memoryRun } from "./memory-notice";
+import { mcpOnly, memoryRun } from "./memory-notice";
 import { buildPrompt } from "./prompt";
 import {
   endedStartedRuns,
@@ -75,9 +75,11 @@ async function startFirst(
   batch: Batch,
 ): Promise<string | null> {
   const taskId = batch.wakes.find((w) => w.taskId !== null && getTask(db, w.taskId))?.taskId;
-  const [choice] = await route(db, { memberId: member.id, taskId }, deps.routeDeps);
+  const runtimeFilter = mcpOnly(deps, batch.wakes);
+  const [choice] = await route(db, { memberId: member.id, taskId, runtimeFilter }, deps.routeDeps);
   if (!choice) {
-    setStatus(db, batch.ids, "failed", { detail: { route: "no engine" } });
+    const reason = runtimeFilter ? "no engine with MCP for a memory-only run" : "no engine";
+    setStatus(db, batch.ids, "failed", { detail: { route: reason } });
     return null;
   }
   const { runtime, model } = choice.engine;

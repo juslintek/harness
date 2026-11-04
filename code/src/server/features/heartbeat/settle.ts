@@ -4,19 +4,24 @@ import { appendEvent } from "../logs/api";
 import { getMember } from "../orgs/api";
 import { linkHandoff, type NextAttempt, nextAttempt } from "../router/api";
 import { getRun, type RunRow, ShuttingDownError, startRun } from "../runtimes/api";
-import { memoryRun } from "./memory-notice";
+import { mcpOnly, memoryRun } from "./memory-notice";
 import { nudgeUndelegated } from "./nudge";
 import { buildPrompt } from "./prompt";
 import { setStatus, startedWakesOf, type WakeRow } from "./repo";
 import { type ExecDeps, fail, runMember, wakeProject } from "./run-input";
 
 // A paused member or budget means the run was stopped on purpose, so no other engine takes over.
-async function chooseNext(db: Database, deps: ExecDeps, run: RunRow): Promise<NextAttempt | null> {
+async function chooseNext(
+  db: Database,
+  deps: ExecDeps,
+  run: RunRow,
+  wakes: WakeRow[],
+): Promise<NextAttempt | null> {
   if (run.state === "completed" || run.memberId === null) return null;
   if (getMember(db, run.memberId)?.paused) return null;
   if (budgetGate(db, run.memberId).state === "paused") return null;
   try {
-    return await nextAttempt(db, run.id, deps.routeDeps);
+    return await nextAttempt(db, run.id, deps.routeDeps, mcpOnly(deps, wakes));
   } catch (err) {
     // A routing fault must not leave the wakes started on a run that is already over.
     appendEvent(db, {
@@ -68,7 +73,7 @@ export async function settleRun(db: Database, deps: ExecDeps, runId: string): Pr
     return;
   }
   if (run.endedAt === null) return;
-  const next = await chooseNext(db, deps, run);
+  const next = await chooseNext(db, deps, run, wakes);
   if (next) {
     let nextRunId: string;
     try {
