@@ -24,11 +24,16 @@ const REL = /^[a-z0-9._/-]+\.md$/;
 const ID = /^[A-Za-z0-9_-]+$/;
 const SCOPE_DIRS = ["global", "org", "project", "agent"];
 
-// A segment starting with "." covers "..", ".git" and hidden files in one check.
+// A segment starting with "." covers "..", ".git" and hidden files in one check. A folder ending
+// in ".md" is refused because the note is indistinguishable from that folder in a listing.
 function validRel(rel: string): boolean {
   if (rel.length > 200 || !REL.test(rel) || rel.startsWith("/")) return false;
   if (posix.normalize(rel) !== rel) return false;
-  return rel.split("/").every((s) => s !== "" && !s.startsWith("."));
+  const segments = rel.split("/");
+  const folders = segments.slice(0, -1);
+  return (
+    segments.every((s) => s !== "" && !s.startsWith(".")) && !folders.some((s) => s.endsWith(".md"))
+  );
 }
 
 // A folder path follows the note rules minus the .md ending, so nested folders can be viewed.
@@ -36,7 +41,7 @@ function validRel(rel: string): boolean {
 function validDirRel(rel: string): boolean {
   if (rel.length > 200 || !/^[a-z0-9._/-]+$/.test(rel) || posix.normalize(rel) !== rel)
     return false;
-  return rel.split("/").every((s) => s !== "" && !s.startsWith("."));
+  return rel.split("/").every((s) => s !== "" && !s.startsWith(".") && !s.endsWith(".md"));
 }
 
 export function toDisk(loc: Omit<Located, "disk">): string {

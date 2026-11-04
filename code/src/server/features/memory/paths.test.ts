@@ -34,6 +34,7 @@ test("path tricks are rejected", () => {
     "/memories/org/.git/config",
     "/memories/org/.git/x.md",
     "/memories/org/.hidden.md",
+    "/memories/org/foo.md/bar.md",
     "/memories/org/X.md",
     "/memories/org/a\\b.md",
     "/memories/org/a\0b.md",
