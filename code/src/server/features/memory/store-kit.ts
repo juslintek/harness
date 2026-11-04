@@ -128,6 +128,7 @@ interface Change {
 }
 
 // Global writes are logged under the writer's org, otherwise nobody could review or revert them.
+// The change event keeps a null org for them: a global note is visible in every org.
 function record(db: Database, home: string, ctx: WriteCtx, c: Change): void {
   logWrite(db, {
     noteId: c.noteId,
@@ -143,7 +144,7 @@ function record(db: Database, home: string, ctx: WriteCtx, c: Change): void {
     afterHash: c.after === null ? null : hashText(c.after),
   });
   queueCommit(home, `${c.op} ${c.loc.disk}`, db);
-  emit(c.loc.orgId ?? ctx.viewer.orgId, c.noteId);
+  emit(c.loc.orgId, c.noteId);
 }
 
 // Must stay synchronous: callers have just checked the base hash and nothing may run between

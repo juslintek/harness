@@ -108,6 +108,16 @@ test("an agent cannot write global, a global admin can", async () => {
   expect((await createNote(env.db, env.dir, ctx(admin), g, "x")).note.scope).toBe("global");
 });
 
+test("a global note change emits a null org while the audit row keeps the writer's org", async () => {
+  const events: (string | null)[] = [];
+  const off = onMemoryChange((e) => events.push(e.orgId));
+  const admin = { ...aliceA, canWriteGlobal: true };
+  await createNote(env.db, env.dir, ctx(admin), loc("global/g.md"), "x");
+  off();
+  expect(events).toEqual([null]);
+  expect(listWrites(env.db, aliceA.orgId, { limit: 5 })[0]?.op).toBe("create");
+});
+
 test("delete removes file and index row and logs it", async () => {
   const note = await made();
   deleteNote(env.db, env.dir, ctx(aliceA), note.id, note.hash);
