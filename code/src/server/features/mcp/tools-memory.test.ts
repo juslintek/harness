@@ -42,6 +42,24 @@ const SCOPES = ["report", "guard_hook", "memory"] as const;
 const tokenOf = (memberId: string, orgId: string): string =>
   tokenFor(db, memberId, orgId, [...SCOPES]);
 
+test("view lists a nested folder, and says not found when it holds nothing", async () => {
+  const dev = w.agent(w.a.id, "dev");
+  const mem = (args: Record<string, unknown>) =>
+    call(server, tokenOf(dev.id, w.a.id), "memory", args);
+  await mem({
+    action: "create",
+    path: "/memories/org/howto/deploy.md",
+    file_text: "# Deploy\nship",
+  });
+  await mem({ action: "create", path: "/memories/org/other.md", file_text: "# Other\nx" });
+  const listed = await mem({ action: "view", path: "/memories/org/howto" });
+  expect(listed.text).toContain("/memories/org/howto/deploy.md");
+  expect(listed.text).not.toContain("other.md");
+  const empty = await mem({ action: "view", path: "/memories/org/nothing/here" });
+  expect(empty.isError).toBe(true);
+  expect(empty.text).toBe("not found");
+});
+
 test("create, view, str_replace, insert, rename and delete round trip", async () => {
   const dev = w.agent(w.a.id, "dev");
   const t = tokenOf(dev.id, w.a.id);

@@ -29,6 +29,13 @@ function validRel(rel: string): boolean {
   return rel.split("/").every((s) => s !== "" && !s.startsWith("."));
 }
 
+// A folder path follows the note rules minus the .md ending, so nested folders can be viewed.
+// Dots are left out so a file such as x.txt does not read as a folder.
+function validDirRel(rel: string): boolean {
+  if (rel.length > 200 || !/^[a-z0-9_/-]+$/.test(rel) || posix.normalize(rel) !== rel) return false;
+  return rel.split("/").every((s) => s !== "" && !s.startsWith("."));
+}
+
 export function toDisk(loc: Omit<Located, "disk">): string {
   switch (loc.scope) {
     case "global":
@@ -74,15 +81,21 @@ function resolveScoped(
 ): Located | "dir" | null {
   const scope = p[2] as string;
   const rel = (n: number): string => p.slice(n).join("/");
-  if (scope === "global") return make("global", null, null, null, rel(3));
-  if (scope === "org") return make("org", viewer.orgId, null, null, rel(3));
-  if (scope === "agent") {
-    if (viewer.memberId === null) return null;
-    return make("agent", viewer.orgId, null, viewer.memberId, rel(3));
-  }
+  const note = (
+    start: number,
+    project: string | null,
+    member: string | null,
+    org: string | null,
+  ): Located | "dir" | null =>
+    make(scope as NoteScope, org, project, member, rel(start)) ??
+    (validDirRel(rel(start)) ? "dir" : null);
+  if (scope === "global") return note(3, null, null, null);
+  if (scope === "org") return note(3, null, null, viewer.orgId);
+  if (scope === "agent")
+    return viewer.memberId === null ? null : note(3, null, viewer.memberId, viewer.orgId);
   const projectId = projectBySlug(p[3] as string);
   if (projectId === null || !viewer.projectIds.includes(projectId)) return null;
-  return p.length === 4 ? "dir" : make("project", viewer.orgId, projectId, null, rel(4));
+  return p.length === 4 ? "dir" : note(4, projectId, null, viewer.orgId);
 }
 
 export function resolveVirtual(

@@ -95,6 +95,12 @@ function numbered(body: string, range: number[] | undefined): string {
     .join("\n");
 }
 
+// Scope roots and project roots always exist; anything below them is a folder only if it holds notes.
+function isNested(vpath: string): boolean {
+  const p = vpath.split("/");
+  return p.length > (p[2] === "project" ? 4 : 3);
+}
+
 function listDir(op: Op, vpath: string): string {
   const [, , scope, slug] = vpath.split("/");
   if (scope === undefined) {
@@ -109,10 +115,13 @@ function listDir(op: Op, vpath: string): string {
     ...(projectId === undefined ? {} : { projectId }),
     limit: 100,
   });
-  return hits
-    .map((n) => `${virtualPathOf(n, op.slugs)} — ${n.title}`)
-    .slice(0, MAX_LINES)
-    .join("\n");
+  const prefix = `${vpath}/`;
+  const lines = hits
+    .map((n) => ({ path: virtualPathOf(n, op.slugs), title: n.title }))
+    .filter((n) => n.path.startsWith(prefix))
+    .map((n) => `${n.path} — ${n.title}`);
+  if (lines.length === 0 && isNested(vpath)) return fail("not found");
+  return lines.slice(0, MAX_LINES).join("\n");
 }
 
 function view(op: Op, a: MemoryArgs): string {

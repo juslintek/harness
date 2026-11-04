@@ -56,6 +56,14 @@ test("directories", () => {
   expect(resolveVirtual("/memories/agent", human, bySlug)).toBeNull();
 });
 
+test("nested folders resolve as dir, bad folder names do not", () => {
+  for (const p of ["/memories/org/howto", "/memories/org/a/b", "/memories/project/alpha/docs/x"])
+    expect(resolveVirtual(p, agent, bySlug)).toBe("dir");
+  expect(resolveVirtual("/memories/org/howto/a.md", agent, bySlug)).not.toBe("dir");
+  for (const p of ["/memories/org/.git", "/memories/org/A B", "/memories/project/beta/docs"])
+    expect(resolveVirtual(p, agent, bySlug)).toBeNull();
+});
+
 test("project outside viewer.projectIds is not resolvable", () => {
   expect(resolveVirtual("/memories/project/beta/a.md", agent, bySlug)).toBeNull();
   expect(resolveVirtual("/memories/project/nope/a.md", agent, bySlug)).toBeNull();
