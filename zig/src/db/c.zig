@@ -25,6 +25,7 @@ pub extern fn sqlite3_errmsg(db: *Db) [*:0]const u8;
 pub extern fn sqlite3_extended_errcode(db: *Db) c_int;
 pub extern fn sqlite3_changes(db: *Db) c_int;
 pub extern fn sqlite3_last_insert_rowid(db: *Db) i64;
+pub extern fn sqlite3_get_autocommit(db: *Db) c_int;
 
 pub extern fn sqlite3_prepare_v2(db: *Db, sql: [*]const u8, len: c_int, out: *?*Stmt, tail: ?*[*]const u8) c_int;
 pub extern fn sqlite3_step(stmt: *Stmt) c_int;

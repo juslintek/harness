@@ -12,6 +12,7 @@ const health_body = @import("../health.zig");
 const headers = @import("headers.zig");
 const policy = @import("policy.zig");
 const session_endpoints = @import("../auth/middleware.zig");
+const logs_api = @import("../logs/api.zig");
 const usage_routes = @import("../usage/routes.zig");
 const ws = @import("ws.zig");
 const Hub = @import("../realtime/hub.zig").Hub;
@@ -154,7 +155,7 @@ pub const table = [_]Route{
     row(.POST, "/api/runs", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
     row(.GET, "/api/runs/:id", .{ .session = true, .admin = true }),
     row(.POST, "/api/runs/:id/kill", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
-    row(.GET, "/api/search", .{ .session = true, .admin = true }),
+    .{ .method = .GET, .path = "/api/search", .handler = logs_api.search, .policy = .{ .session = true, .admin = true } },
     row(.GET, "/api/tasks/:id", .{ .session = true }),
     row(.PATCH, "/api/tasks/:id", .{ .session = true, .origin = true }),
     row(.POST, "/api/tasks/:id/checkout", .{ .session = true, .origin = true }),

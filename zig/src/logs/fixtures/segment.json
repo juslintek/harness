@@ -1,0 +1,43 @@
+{
+ "segment": {
+  "id": "01a1a7cb-b338-74b6-aa8f-95b721c25ec0",
+  "runId": "00000000-0000-7000-8000-000000000001",
+  "level": 3,
+  "rawLen": 270125,
+  "bytes": "KLUv/aAtHwQA/AMAwggdIbAnHQwDQMsg49AjBIEMZGljdstykGy7VvBke50kx5kSiGdUd8711aToiq0kr3A1cX6RkTsXkI8Gd8OiaDwDqvBpRjvNdNMSbWmIdmgHOJ1Po7y90wKmk8AYMz2X8dcxfdu0r1z0UjQliM5Mj7uC9DivTSQBAIy4f8+nFNQAAGh1bmVlZGxlbWFya2VyAgAo8EwPYp7F98EVVQAACCACACAEh+/BFQ=="
+ },
+ "events": [
+  {
+   "rowid": 1,
+   "id": "01a1a7cb-b32e-738c-8ffd-ad3d001aeab6",
+   "offset": 0,
+   "len": 24,
+   "body": "first body about deploys",
+   "markerAt": null
+  },
+  {
+   "rowid": 2,
+   "id": "01a1a7cb-b330-7633-aa3b-a2e5976ead65",
+   "offset": 24,
+   "len": 61,
+   "body": "Šis įrašas turi lietuviškų raidžių: ąčęėįšųūž",
+   "markerAt": null
+  },
+  {
+   "rowid": 3,
+   "id": "01a1a7cb-b330-7634-b52a-69157a23de88",
+   "offset": 85,
+   "len": 28,
+   "body": "emoji 🙂 and text after it",
+   "markerAt": null
+  },
+  {
+   "rowid": 4,
+   "id": "01a1a7cb-b332-706e-a10b-1e0f2a64e545",
+   "offset": 113,
+   "len": 270012,
+   "body": null,
+   "markerAt": 135000
+  }
+ ]
+}
