@@ -12,6 +12,7 @@ const health_body = @import("../health.zig");
 const headers = @import("headers.zig");
 const policy = @import("policy.zig");
 const session_endpoints = @import("../auth/middleware.zig");
+const mcp = @import("../mcp/server.zig");
 
 pub const Method = policy.Method;
 pub const Policy = policy.Policy;
@@ -28,6 +29,7 @@ pub const Health = struct {
 pub const Services = struct {
     app: *App,
     health: Health,
+    mcp: mcp.Deps = .{},
 };
 
 /// One request as a handler sees it. `actor` is set for every row that went through the session
@@ -37,6 +39,8 @@ pub const Call = struct {
     req: *httpz.Request,
     res: *httpz.Response,
     actor: ?Actor,
+    /// The port the listener is bound to; `/mcp` accepts only Hosts that name it.
+    port: u16 = 0,
 };
 
 pub const HandlerFn = *const fn (call: *Call) anyerror!void;
@@ -160,6 +164,6 @@ pub const table = [_]Route{
     row(.POST, "/api/tasks/:id/release", .{ .session = true, .origin = true }),
     row(.GET, "/api/usage", .{ .session = true, .admin = true }),
     row(.POST, "/api/guard/hook", .{ .public = true, .loopback = true }),
-    row(.any, "/mcp", .{ .public = true, .loopback = true }),
+    .{ .method = .any, .path = "/mcp", .handler = mcp.handle, .policy = .{ .public = true, .loopback = true } },
     row(.GET, "/ws", .{ .session = true, .origin = true }),
 };

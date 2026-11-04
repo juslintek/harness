@@ -168,7 +168,7 @@ pub const Server = struct {
     }
 
     fn run(self: *Server, route: *const routes.Route, req: *httpz.Request, res: *httpz.Response, actor: ?policy.Actor) !void {
-        var call: routes.Call = .{ .services = &self.services, .req = req, .res = res, .actor = actor };
+        var call: routes.Call = .{ .services = &self.services, .req = req, .res = res, .actor = actor, .port = self.port.load(.acquire) };
         try route.handler(&call);
     }
 };
