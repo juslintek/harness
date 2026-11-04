@@ -98,7 +98,7 @@ export function updateNote(
   const clean = scrub(next, nextBody);
   const after = serializeNote(clean.meta, clean.body);
   const saved = persist(db, home, ctx, "update", loc, before, after);
-  return { note: toView(saved, clean.body), redacted: clean.redacted };
+  return { note: toView(saved, clean.body), redacted: clean.redacted || redact(before) !== before };
 }
 
 export function deleteNote(

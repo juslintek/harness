@@ -43,8 +43,11 @@ export function revertWrite(
     drop(db, home, ctx, "revert", note.id, loc, current);
     return { note: toView(note, parseNote(current).body), redacted: false };
   }
-  // The old text may come from an outside edit, which was never redacted.
+  // Stored text is already redacted, so a secret in the original shows up only as a hash mismatch.
   const restored = redact(w.beforeText);
   const note = persist(db, home, ctx, "revert", loc, current, restored);
-  return { note: toView(note, parseNote(restored).body), redacted: restored !== w.beforeText };
+  return {
+    note: toView(note, parseNote(restored).body),
+    redacted: hashText(restored) !== w.beforeHash,
+  };
 }

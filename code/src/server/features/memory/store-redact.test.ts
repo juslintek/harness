@@ -81,3 +81,18 @@ test("an outside edit with secrets is stored, indexed and served redacted, disk 
   const stored = env.db.query("SELECT before_text FROM note_writes WHERE op = 'update'").get();
   expect(JSON.stringify(stored)).not.toContain(GH);
 });
+
+test("update over a human-written secret and revert of redacted text report redacted", async () => {
+  put(noteText(`# D\nkey ${AWS}`));
+  reconcile(env.db, env.dir);
+  const note = getIndexedByDisk(env.db, orgNote.disk);
+  const c = ctx(aliceA);
+  const u = updateNote(env.db, env.dir, c, note?.id as string, note?.hash as string, "# D\nplain");
+  expect(u.redacted).toBe(true);
+  const id = (listWrites(env.db, "A", { limit: 1 })[0] as { id: string }).id;
+  const back = revertWrite(env.db, env.dir, c, id);
+  expect(back.redacted).toBe(true);
+  expect(back.note.body).not.toContain(AWS);
+  const next = updateNote(env.db, env.dir, c, back.note.id, back.note.hash, "# D\nagain");
+  expect(next.redacted).toBe(false);
+});
