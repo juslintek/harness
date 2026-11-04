@@ -1,0 +1,173 @@
+import type { Database } from "bun:sqlite";
+import { lstatSync } from "node:fs";
+import { join } from "node:path";
+import type { NoteScope, NoteSummary, NoteType } from "../../../shared/memory";
+import { redact } from "../logs/api";
+import { hashText, normKey, noteTitle, parseNote, wikilinks } from "./frontmatter";
+import type { Located } from "./paths";
+import { vaultDir } from "./vault";
+
+export type IndexedNote = NoteSummary & { disk: string; slug: string };
+
+export interface NoteRow {
+  id: string;
+  disk: string;
+  scope: NoteScope;
+  org_id: string | null;
+  project_id: string | null;
+  member_id: string | null;
+  type: NoteType;
+  title: string;
+  tags: string;
+  source_agent: string | null;
+  confidence: number | null;
+  created: number;
+  updated: number;
+  hash: string;
+  slug: string;
+  title_key: string;
+  snippet?: string;
+}
+
+export function toIndexed(r: NoteRow): IndexedNote {
+  return {
+    id: r.id,
+    path: r.disk,
+    disk: r.disk,
+    slug: r.slug,
+    scope: r.scope,
+    orgId: r.org_id,
+    projectId: r.project_id,
+    memberId: r.member_id,
+    type: r.type,
+    title: r.title,
+    tags: JSON.parse(r.tags) as string[],
+    sourceAgent: r.source_agent ?? "outside",
+    confidence: r.confidence ?? 1,
+    created: new Date(r.created).toISOString(),
+    updated: new Date(r.updated).toISOString(),
+    hash: r.hash,
+    ...(r.snippet === undefined ? {} : { snippet: r.snippet }),
+  };
+}
+
+// The public shape: disk and slug are index internals and must not leave the server.
+export function toSummary(n: IndexedNote): NoteSummary {
+  const { disk: _disk, slug: _slug, ...summary } = n;
+  return summary;
+}
+
+export function getIndexed(db: Database, id: string): IndexedNote | null {
+  const r = db.query<NoteRow, [string]>("SELECT * FROM notes WHERE id = ?").get(id);
+  return r ? toIndexed(r) : null;
+}
+
+export function getIndexedByDisk(db: Database, disk: string): IndexedNote | null {
+  const r = db.query<NoteRow, [string]>("SELECT * FROM notes WHERE disk = ?").get(disk);
+  return r ? toIndexed(r) : null;
+}
+
+function epoch(iso: string | undefined, fallback: number): number {
+  const t = iso === undefined ? Number.NaN : Date.parse(iso);
+  return Number.isNaN(t) ? fallback : t;
+}
+
+// A path already in the index keeps its id whatever the file now claims, so audit rows and links
+// written against it stay with the note; settleId writes that id back into the file. Only a new
+// file may bring its own id, and it gets a fresh one when another live path already holds it. A
+// holder whose file is gone is a rename caught mid-crash (new file written, old one removed, old
+// row not yet dropped): the id moves to the new path so audit rows stay attached to the note.
+function pickId(db: Database, wanted: string, home: string | undefined): string {
+  const holder = db
+    .query<{ disk: string }, [string]>("SELECT disk FROM notes WHERE id = ?")
+    .get(wanted);
+  if (holder === null) return wanted;
+  if (
+    home === undefined ||
+    lstatSync(join(vaultDir(home), holder.disk), { throwIfNoEntry: false })
+  ) {
+    return Bun.randomUUIDv7();
+  }
+  removeIndexed(db, holder.disk);
+  return wanted;
+}
+
+function replaceFts(db: Database, disk: string, title: string, body: string, tags: string[]): void {
+  const rowid = db
+    .query<{ seq: number }, [string]>("SELECT seq FROM notes WHERE disk = ?")
+    .get(disk)?.seq as number;
+  db.run("DELETE FROM notes_fts WHERE rowid = ?", [rowid]);
+  db.run("INSERT INTO notes_fts (rowid, title, body, tags) VALUES (?, ?, ?, ?)", [
+    rowid,
+    title,
+    body,
+    tags.join(" "),
+  ]);
+}
+
+// The location decides scope and owner; frontmatter cannot move a note into another org.
+export function upsertIndexed(
+  db: Database,
+  loc: Located,
+  text: string,
+  home?: string,
+): IndexedNote {
+  // Title, links and full-text come from the redacted text; the hash stays the raw file hash so
+  // "disk hash equals index hash" still means no change.
+  const { meta, body } = parseNote(redact(text));
+  const now = Date.now();
+  const title = noteTitle(body, loc.rel);
+  const slug = normKey((loc.rel.split("/").pop() ?? loc.rel).replace(/\.md$/, ""));
+  const updated = epoch(meta.updated, now);
+  db.transaction(() => {
+    const prior = getIndexedByDisk(db, loc.disk);
+    if (prior) db.run("DELETE FROM note_links WHERE src_id = ?", [prior.id]);
+    const id = prior?.id ?? pickId(db, meta.id ?? Bun.randomUUIDv7(), home);
+    db.run(
+      `INSERT INTO notes (id, disk, scope, org_id, project_id, member_id, type, title, tags,
+         source_agent, confidence, created, updated, hash, slug, title_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(disk) DO UPDATE SET id = excluded.id, scope = excluded.scope,
+         org_id = excluded.org_id, project_id = excluded.project_id, member_id = excluded.member_id,
+         type = excluded.type, title = excluded.title, tags = excluded.tags,
+         source_agent = excluded.source_agent, confidence = excluded.confidence,
+         created = excluded.created, updated = excluded.updated, hash = excluded.hash,
+         slug = excluded.slug, title_key = excluded.title_key`,
+      [
+        id,
+        loc.disk,
+        loc.scope,
+        loc.orgId,
+        loc.projectId,
+        loc.memberId,
+        meta.type ?? "fact",
+        title,
+        JSON.stringify(meta.tags),
+        meta.sourceAgent ?? null,
+        meta.confidence ?? null,
+        epoch(meta.created, now),
+        updated,
+        hashText(text),
+        slug,
+        normKey(title),
+      ],
+    );
+    for (const target of wikilinks(body)) {
+      db.run("INSERT OR IGNORE INTO note_links (src_id, target) VALUES (?, ?)", [id, target]);
+    }
+    replaceFts(db, loc.disk, title, body, meta.tags);
+  })();
+  return getIndexedByDisk(db, loc.disk) as IndexedNote;
+}
+
+export function removeIndexed(db: Database, disk: string): string | null {
+  const row = db
+    .query<{ id: string; seq: number }, [string]>("SELECT id, seq FROM notes WHERE disk = ?")
+    .get(disk);
+  if (row === null) return null;
+  db.transaction(() => {
+    db.run("DELETE FROM notes_fts WHERE rowid = ?", [row.seq]);
+    db.run("DELETE FROM notes WHERE disk = ?", [disk]);
+  })();
+  return row.id;
+}

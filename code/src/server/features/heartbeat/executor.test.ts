@@ -253,12 +253,16 @@ test("an assignment wake whose task was reassigned or finished meanwhile is skip
   updateTask(k.db, moved.id, { assigneeId: other.id }, k.human.id);
   moveTask(k.db, closed.id, "done", k.human.id);
   setHalted(k.db, false);
-  await until(() => wakes(k.db, bob.id).every((w) => w.status === "skipped"));
-  expect(wakes(k.db, bob.id).map((w) => JSON.parse(w.detail ?? "{}"))).toEqual([
+  // Finishing "closed" also queues a retro for bob, which is a real run and not what this checks.
+  const assignments = () => wakes(k.db, bob.id).filter((w) => w.reason === "assignment");
+  await until(() => assignments().every((w) => w.status === "skipped"));
+  expect(assignments().map((w) => JSON.parse(w.detail ?? "{}"))).toEqual([
     { reason: "stale" },
     { reason: "stale" },
   ]);
-  expect(k.seen.filter((s) => s.memberId === bob.id)).toHaveLength(0);
+  expect(
+    k.seen.filter((s) => s.memberId === bob.id && s.prompt.includes("was assigned to you.")),
+  ).toHaveLength(0);
 });
 
 test("wakes in two projects start two runs, each recording its own project", async () => {

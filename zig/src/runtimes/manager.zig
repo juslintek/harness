@@ -862,7 +862,8 @@ pub const Manager = struct {
     /// Stops every live run: abort and SIGTERM, then SIGKILL on the agent groups once `grace_ms`
     /// is over, then end whatever is still registered so nothing outlives the harness. Returns
     /// error.AgentSurvived, with the count in `survivors_after_shutdown`, when an agent group
-    /// could not be ended after the bounded retries: those runs stay registered, and calling
+    /// could not be ended after the bounded retries, and error.RunStillRegistered when a run
+    /// without a surviving process could not be finalized: those runs stay registered, and calling
     /// `shutdown` again retries them. `deinit` must not follow a failed shutdown.
     pub fn shutdown(m: *Manager, grace_ms: i64) !void {
         m.lock();
@@ -926,15 +927,22 @@ pub const Manager = struct {
         }
         m.lock();
         var survivors: usize = 0;
+        var registered: usize = 0;
         var left = m.live.valueIterator();
         while (left.next()) |entry| {
             if (entry.*.survivor != null) survivors += 1;
+            // A record shutdown already ended is only waiting for its owner task to free it.
+            if (!entry.*.shutdown_took) registered += 1;
         }
         m.survivors_after_shutdown = survivors;
         m.unlock();
         if (survivors > 0) {
             m.loud("shutdown left {d} agent process group(s) alive; their runs stay registered", .{survivors});
             return error.AgentSurvived;
+        }
+        if (registered > 0) {
+            m.loud("shutdown could not end {d} run(s); they stay registered", .{registered});
+            return error.RunStillRegistered;
         }
     }
 

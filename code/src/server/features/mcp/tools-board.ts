@@ -190,7 +190,7 @@ function registerWrites(server: McpServer, env: ToolEnv): void {
         title: z.string().min(1).max(200).optional(),
         description: z.string().max(20000).optional(),
         estimateMinutes: z.number().int().positive().nullable().optional(),
-        assignee: z.string().nullable().optional(),
+        assignee: z.union([z.string().min(1), z.null()]).optional(),
       },
     },
     (ctx, a) => {
