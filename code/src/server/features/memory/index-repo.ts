@@ -62,12 +62,12 @@ function epoch(iso: string | undefined, fallback: number): number {
   return Number.isNaN(t) ? fallback : t;
 }
 
-// Two files claiming one id: the row already indexed keeps it. The other file keeps the id it
-// already had in the index, or gets a fresh one when it is new, so audit rows and links written
-// against an id stay with the note they were made for.
-function pickId(db: Database, disk: string, wanted: string, own: string | undefined): string {
-  const taken = db.query("SELECT 1 FROM notes WHERE id = ? AND disk != ?").get(wanted, disk);
-  return taken === null ? wanted : (own ?? Bun.randomUUIDv7());
+// A path already in the index keeps its id whatever the file now claims, so audit rows and links
+// written against it stay with the note; settleId writes that id back into the file. Only a new
+// file may bring its own id, and it gets a fresh one when another path already holds it.
+function pickId(db: Database, wanted: string): string {
+  const taken = db.query("SELECT 1 FROM notes WHERE id = ?").get(wanted);
+  return taken === null ? wanted : Bun.randomUUIDv7();
 }
 
 function replaceFts(db: Database, disk: string, title: string, body: string, tags: string[]): void {
@@ -95,7 +95,7 @@ export function upsertIndexed(db: Database, loc: Located, text: string): Indexed
   db.transaction(() => {
     const prior = getIndexedByDisk(db, loc.disk);
     if (prior) db.run("DELETE FROM note_links WHERE src_id = ?", [prior.id]);
-    const id = pickId(db, loc.disk, meta.id ?? prior?.id ?? Bun.randomUUIDv7(), prior?.id);
+    const id = prior?.id ?? pickId(db, meta.id ?? Bun.randomUUIDv7());
     db.run(
       `INSERT INTO notes (id, disk, scope, org_id, project_id, member_id, type, title, tags,
          source_agent, confidence, created, updated, hash, slug)

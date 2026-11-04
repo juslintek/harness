@@ -101,3 +101,19 @@ test("a note pasted with another note's id keeps its own id and gets its frontma
   const text = readNoteFile(env.dir, "orgs/A/org/two.md") as string;
   expect(parseNote(text).meta.id).toBe("id-two");
 });
+
+test("an indexed note keeps its id when the file claims another unused id, and the file is fixed", () => {
+  const disk = "orgs/A/org/first.md";
+  put(disk, noteText("first"));
+  const first = syncOutside(env.db, env.dir, disk);
+  put(disk, noteText("first, edited", { id: "someone-elses-new-id" }));
+  const again = syncOutside(env.db, env.dir, disk);
+  expect(again?.id).toBe(first?.id as string);
+  expect(parseNote(readNoteFile(env.dir, disk) as string).meta.id).toBe(first?.id as string);
+  expect(getIndexedByDisk(env.db, disk)?.id).toBe(first?.id as string);
+});
+
+test("a new file keeps its own valid unused id", () => {
+  put("orgs/A/org/fresh.md", noteText("fresh", { id: "my-own-id" }));
+  expect(syncOutside(env.db, env.dir, "orgs/A/org/fresh.md")?.id).toBe("my-own-id");
+});
