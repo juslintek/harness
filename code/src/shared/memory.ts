@@ -110,7 +110,9 @@ export interface LessonView {
   taskId: string;
   orgId: string;
   projectId: string | null;
-  authorId: string;
+  // Null once the author's member row is removed; authorHandle still says who wrote it.
+  authorId: string | null;
+  authorHandle: string;
   body: string;
   scope: NoteScope;
   type: NoteType;
@@ -129,7 +131,8 @@ export const lessonViewSchema: z.ZodType<LessonView> = z.object({
   taskId: z.string(),
   orgId: z.string(),
   projectId: z.string().nullable(),
-  authorId: z.string(),
+  authorId: z.string().nullable(),
+  authorHandle: z.string(),
   body: z.string(),
   scope: noteScopeSchema,
   type: noteTypeSchema,

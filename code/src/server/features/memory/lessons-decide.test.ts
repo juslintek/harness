@@ -2,9 +2,10 @@ import "../../test-support/no-git-env";
 import { afterEach, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { createProject, updateMember } from "../orgs/api";
+import type { LessonView } from "../../../shared/memory";
+import { createProject, removeMember, updateMember } from "../orgs/api";
 import { searchNotes } from "./index-search";
-import { onLessonDecided, proposeLessons } from "./lessons";
+import { getLesson, onLessonDecided, proposeLessons, reviewerFor } from "./lessons";
 import { decideLesson } from "./lessons-decide";
 import { close, GOOD, type World, world } from "./lessons-test-kit";
 import { MemoryError } from "./store-kit";
@@ -209,4 +210,48 @@ test("a demoted author's lesson is still written when a reviewer accepts it, sou
     (n) => n.id === out.noteId,
   );
   expect(hit).toMatchObject({ sourceAgent: "dev" });
+});
+
+test("removing the author keeps the accepted lesson with its reviewer, reason, note and handle", async () => {
+  w = world();
+  const { dev, lessons } = await pending();
+  const lead = w.agent("lead");
+  const out = await decideLesson(
+    w.db,
+    w.home,
+    lessons[0]?.id as string,
+    asAgent(lead.id),
+    "accept",
+    "useful",
+  );
+  removeMember(w.db, dev.id);
+  const kept = getLesson(w.db, out.id);
+  expect(kept).toMatchObject({
+    status: "accepted",
+    authorId: null,
+    authorHandle: "dev",
+    reviewerId: lead.id,
+    reason: "useful",
+    noteId: out.noteId,
+  });
+  expect(reviewerFor(w.db, kept as LessonView)).toBeNull();
+});
+
+test("a lesson without an author can still be reviewed by anyone else, but not written as an agent note", async () => {
+  w = world();
+  const { dev, lessons } = await pending();
+  removeMember(w.db, dev.id);
+  const lead = w.agent("lead");
+  await expect(
+    decideLesson(w.db, w.home, lessons[0]?.id as string, asAgent(lead.id), "accept", "ok"),
+  ).rejects.toThrow("author is gone");
+  const out = await decideLesson(
+    w.db,
+    w.home,
+    lessons[0]?.id as string,
+    asAgent(lead.id),
+    "reject",
+    "no",
+  );
+  expect(out).toMatchObject({ status: "rejected", authorId: null, authorHandle: "dev" });
 });

@@ -192,8 +192,8 @@ test("lesson decide is admin-only and an accepted lesson becomes a note", async 
   });
   const task = createTask(k.db, { projectId: project.id, title: "t", createdBy: agent.id });
   k.db.run(
-    `INSERT INTO lessons (id, task_id, org_id, project_id, author_id, body, scope, type, status, created_at, confidence)
-     VALUES ('l1', ?, ?, ?, ?, ?, 'org', 'lesson', 'pending', 1, 0.8)`,
+    `INSERT INTO lessons (id, task_id, org_id, project_id, author_id, author_handle, body, scope, type, status, created_at, confidence)
+     VALUES ('l1', ?, ?, ?, ?, 'dev', ?, 'org', 'lesson', 'pending', 1, 0.8)`,
     [
       task.id,
       k.acme.id,

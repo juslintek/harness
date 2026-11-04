@@ -17,7 +17,8 @@ type Raw = {
   task_id: string;
   org_id: string;
   project_id: string | null;
-  author_id: string;
+  author_id: string | null;
+  author_handle: string;
   body: string;
   scope: string;
   type: string;
@@ -36,6 +37,7 @@ const view = (r: Raw): LessonView => ({
   orgId: r.org_id,
   projectId: r.project_id,
   authorId: r.author_id,
+  authorHandle: r.author_handle,
   body: r.body,
   scope: r.scope as NoteScope,
   type: "lesson",
@@ -114,7 +116,10 @@ export interface LessonCtx {
   taskId: string;
 }
 
-function checkTask(db: Database, ctx: LessonCtx): { projectId: string; orgId: string } {
+function checkTask(
+  db: Database,
+  ctx: LessonCtx,
+): { projectId: string; orgId: string; handle: string } {
   const member = getMember(db, ctx.memberId);
   if (member?.kind !== "agent")
     throw new MemoryError("forbidden", "only an agent proposes lessons");
@@ -123,7 +128,7 @@ function checkTask(db: Database, ctx: LessonCtx): { projectId: string; orgId: st
     throw new MemoryError("not_found", "no such task");
   if (task.assigneeId !== member.id) throw new MemoryError("forbidden", "the task is not yours");
   if (task.status !== "done") throw new MemoryError("invalid", "the task is not done yet");
-  return { projectId: task.projectId, orgId: member.orgId };
+  return { projectId: task.projectId, orgId: member.orgId, handle: member.handle };
 }
 
 interface Classed {
@@ -143,12 +148,12 @@ async function classed(body: string): Promise<Classed> {
 function insertAll(
   db: Database,
   ctx: LessonCtx,
-  at: { projectId: string; orgId: string },
+  at: { projectId: string; orgId: string; handle: string },
   rows: { id: string; body: string; c: Classed }[],
 ): void {
   const insert = db.query(
-    `INSERT INTO lessons (id, task_id, org_id, project_id, author_id, run_id, body, scope, type, confidence, status, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'lesson', ?, 'pending', ?)`,
+    `INSERT INTO lessons (id, task_id, org_id, project_id, author_id, author_handle, run_id, body, scope, type, confidence, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'lesson', ?, 'pending', ?)`,
   );
   const now = Date.now();
   db.transaction(() => {
@@ -165,6 +170,7 @@ function insertAll(
         at.orgId,
         at.projectId,
         ctx.memberId,
+        at.handle,
         ctx.runId,
         r.body,
         r.c.scope,
@@ -211,18 +217,21 @@ export function reviewerFor(
   db: Database,
   lesson: Pick<LessonView, "authorId" | "orgId">,
 ): string | null {
+  // Without an author there is no manager chain or team to pick from.
+  if (lesson.authorId === null) return null;
+  const authorId = lesson.authorId;
   const positions = listPositions(db, lesson.orgId);
   const byId = new Map(positions.map((p) => [p.id, p]));
-  for (const mine of positions.filter((p) => p.memberId === lesson.authorId)) {
+  for (const mine of positions.filter((p) => p.memberId === authorId)) {
     let up = mine.reportsTo === null ? undefined : byId.get(mine.reportsTo);
     for (let depth = 0; up !== undefined && depth < CHAIN_CAP; depth++) {
-      if (up.memberId !== null && usable(db, up.memberId, lesson.authorId)) return up.memberId;
+      if (up.memberId !== null && usable(db, up.memberId, authorId)) return up.memberId;
       up = up.reportsTo === null ? undefined : byId.get(up.reportsTo);
     }
   }
-  const teams = new Set(teamIdsOf(db, lesson.authorId));
+  const teams = new Set(teamIdsOf(db, authorId));
   const mate = listMembers(db, lesson.orgId).find(
-    (m) => usable(db, m.id, lesson.authorId) && teamIdsOf(db, m.id).some((t) => teams.has(t)),
+    (m) => usable(db, m.id, authorId) && teamIdsOf(db, m.id).some((t) => teams.has(t)),
   );
   return mate?.id ?? null;
 }

@@ -59,6 +59,7 @@ test("the memory schemas accept their views and reject a bad confidence", () => 
     orgId: "o1",
     projectId: null,
     authorId: "m1",
+    authorHandle: "dev",
     body: "b",
     scope,
     type,

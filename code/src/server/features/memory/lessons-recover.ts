@@ -8,7 +8,9 @@ import { dirOf, writeNote } from "./lessons-decide";
 // the directory pins the scope and project the accept path would have used, so a similar lesson
 // note of the same task is never taken for it.
 function existingNote(db: Database, lesson: LessonView) {
-  const dir = `${dirOf(lesson)}/`;
+  const base = dirOf(lesson);
+  if (base === null) return undefined;
+  const dir = `${base}/`;
   const row = db
     .query<NoteRow, [string, string, string, string]>(
       `SELECT * FROM notes WHERE org_id = ? AND type = 'lesson'

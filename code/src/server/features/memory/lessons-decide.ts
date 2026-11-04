@@ -35,14 +35,14 @@ function reviewerOf(db: Database, lesson: LessonView, by: Decider): string {
   return m.id;
 }
 
-export function dirOf(lesson: LessonView): string {
+// Null for an agent-scoped lesson whose author is gone: that directory is named after the author.
+export function dirOf(lesson: LessonView): string | null {
   const base = `orgs/${lesson.orgId}`;
   if (lesson.scope === "project" && lesson.projectId !== null) {
     return `${base}/projects/${lesson.projectId}/lessons`;
   }
-  return lesson.scope === "org"
-    ? `${base}/org/lessons`
-    : `${base}/agents/${lesson.authorId}/lessons`;
+  if (lesson.scope === "org") return `${base}/org/lessons`;
+  return lesson.authorId === null ? null : `${base}/agents/${lesson.authorId}/lessons`;
 }
 
 function slugOf(body: string): string {
@@ -80,13 +80,15 @@ export async function writeNote(
   lesson: LessonView & { confidence: number },
   body: string,
 ): Promise<string> {
-  const author = getMember(db, lesson.authorId);
-  if (author === null) throw new MemoryError("not_found", "the author is gone");
+  const author = lesson.authorId === null ? null : getMember(db, lesson.authorId);
+  const dir = dirOf(lesson);
+  if (lesson.authorId === null || author === null || dir === null) {
+    throw new MemoryError("not_found", "the author is gone");
+  }
   const number = getTask(db, lesson.taskId)?.number ?? 0;
   // The reviewer already passed reviewerOf, so the write rides on that authority rather than the
   // author's current role; the author stays the viewer's actor and so the note's source_agent.
   const ctx = { viewer: { ...agentViewer(db, lesson.authorId), canWrite: true }, runId: null };
-  const dir = dirOf(lesson);
   const slug = slugOf(body);
   for (let n = 1; n <= MAX_CLASH; n++) {
     const loc = diskToLocated(`${dir}/${slug}${n === 1 ? "" : `-${n}`}.md`) as Located;

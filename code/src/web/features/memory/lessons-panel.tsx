@@ -6,7 +6,6 @@ import { fmtTime } from "../../format";
 import { ErrorLine } from "../auth/error-line";
 import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
-import { handleOf } from "../policies/policies-data";
 import { lessonListSchema, memoryBase } from "./memory-data";
 
 function Lesson({
@@ -32,7 +31,7 @@ function Lesson({
       })
       .catch((err: unknown) => console.error(err));
   };
-  const author = handleOf(lesson.authorId, detail.members);
+  const author = lesson.authorHandle;
   return (
     <li class="card">
       <p class="muted">

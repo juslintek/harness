@@ -43,7 +43,7 @@ export function hasLiveRun(db: Db, memberId: string): boolean {
 
 interface LessonRow {
   id: string;
-  author_id: string;
+  author_id: string | null;
   reviewer_id: string | null;
   status: string;
   note_id: string | null;
@@ -84,7 +84,7 @@ export function dumpMemoryState(db: Db, s: Scene): void {
   console.error("\nlessons:");
   for (const l of lessons(db, s.orgId)) {
     console.error(
-      `  ${l.id.slice(-6)} ${l.status} author=${l.author_id.slice(-6)} reviewer=${l.reviewer_id?.slice(-6) ?? "-"} note=${l.note_id ?? "-"} ${l.body.slice(0, 100)}`,
+      `  ${l.id.slice(-6)} ${l.status} author=${l.author_id?.slice(-6) ?? "-"} reviewer=${l.reviewer_id?.slice(-6) ?? "-"} note=${l.note_id ?? "-"} ${l.body.slice(0, 100)}`,
     );
   }
   console.error("wakeups:");
