@@ -15,6 +15,7 @@ import type { ExecDeps } from "./run-input";
 
 const MEMORY_ONLY_REASONS = new Set(["retro", "lesson_review"]);
 const HITS = 5;
+const DESCRIPTION_CHARS = 2000;
 const WITH_TOOL =
   "Shared memory: the `memory` tool reads and writes notes under `/memories` (`agent` is yours, `project/<slug>` and `org` are shared with your org). Before you start a task, search it (`action: search`) for the task's topic and read (`view`) the notes that apply; follow them unless the task says otherwise. Save durable facts you learn with `create`.";
 const WITH_FILE =
@@ -84,13 +85,13 @@ export function memoryNotice(
   return any && fileWritten ? `\n\n${WITH_FILE}` : "";
 }
 
-// Task titles and wake excerpts are what the work is about, so they are the search text.
+// Task titles, descriptions (cut so a long one cannot flood the query) and wake excerpts are what the work is about, so they are the search text.
 export function wakeTopic(db: Database, wakes: WakeRow[]): string {
   return wakes
     .map((w) => {
-      const title = (w.taskId === null ? null : getTask(db, w.taskId))?.title ?? "";
+      const task = w.taskId === null ? null : getTask(db, w.taskId);
       const excerpt = (w.detail as { excerpt?: unknown } | null)?.excerpt;
-      return `${title} ${typeof excerpt === "string" ? excerpt : ""}`;
+      return `${task?.title ?? ""} ${task?.description.slice(0, DESCRIPTION_CHARS) ?? ""} ${typeof excerpt === "string" ? excerpt : ""}`;
     })
     .join(" ");
 }

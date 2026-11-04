@@ -3,6 +3,7 @@ import { agentViewer, createNote, projectSlugs, resolveNotePath } from "../memor
 import { addAgentMember, createOrg, createProject, grantProject } from "../orgs/api";
 import { setup } from "./kit";
 import { memoryNotice, memoryRun } from "./memory-notice";
+import type { WakeRow } from "./repo";
 import type { ExecDeps } from "./run-input";
 
 async function put(
@@ -218,4 +219,17 @@ test("a run on another org's granted project gets none of the member org's notes
   const deps = { runDeps: { resolveSpec: () => ({ mcp: false }) } } as unknown as ExecDeps;
   const run = memoryRun(k.db, deps, eve, "fake", k.projectId, []);
   expect(run.index ?? "").not.toContain("Own web rule");
+});
+
+test("a note that matches only the task description reaches MEMORY.md behind 120 newer notes", async () => {
+  const k = setup();
+  const bob = k.agent("bob");
+  await put(k, "bob", "/memories/org/old-rule.md", "# Old rule\nalways quarantine flurbs");
+  for (let i = 0; i < 120; i++) await put(k, "bob", `/memories/org/n${i}.md`, `# N${i}\nfiller`);
+  k.db.run("UPDATE notes SET updated = 1 WHERE disk LIKE '%old-rule.md'");
+  const task = k.task("Ship the release");
+  k.db.run("UPDATE tasks SET description = 'handle the flurbs first' WHERE id = ?", [task.id]);
+  const wakes = [{ taskId: task.id, detail: null }] as unknown as WakeRow[];
+  const deps = { runDeps: { resolveSpec: () => ({ mcp: false }) } } as unknown as ExecDeps;
+  expect(memoryRun(k.db, deps, bob, "fake", null, wakes).index ?? "").toContain("Old rule");
 });
