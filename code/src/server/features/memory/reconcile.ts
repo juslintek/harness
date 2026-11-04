@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { lstatSync, readdirSync } from "node:fs";
+import { lstatSync, readdirSync, type Stats } from "node:fs";
 import { join } from "node:path";
 import { hashText } from "./frontmatter";
 import { getIndexedByDisk, removeIndexed, upsertIndexed } from "./index-repo";
@@ -17,14 +17,18 @@ function walk(root: string, rel: string, out: string[]): void {
 
 function vaultFiles(home: string): string[] {
   const root = vaultDir(home);
+  let st: Stats;
   try {
-    if (!lstatSync(root).isDirectory()) return [];
-    const out: string[] = [];
-    walk(root, "", out);
-    return out;
-  } catch {
-    return [];
+    st = lstatSync(root);
+  } catch (e) {
+    // Only a missing root is an empty vault; any other error must not read as "all files gone".
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw e;
   }
+  if (!st.isDirectory()) return [];
+  const out: string[] = [];
+  walk(root, "", out);
+  return out;
 }
 
 // Files are the source of truth: the index follows whatever is on disk, including outside edits.
@@ -39,11 +43,12 @@ export function reconcile(db: Database, home: string): { indexed: number; remove
   let indexed = 0;
   for (const disk of vaultFiles(home)) {
     const loc = diskToLocated(disk);
-    const text = loc === null ? null : readNoteFile(home, disk);
-    if (loc === null || text === null) continue;
     // A dir of an org this instance does not know cannot be indexed (foreign key) and stays unseen.
-    if (loc.orgId !== null && !orgs.has(loc.orgId)) continue;
+    if (loc === null || (loc.orgId !== null && !orgs.has(loc.orgId))) continue;
+    // Seen before reading: a file deleted mid-walk keeps its row until the next reconcile.
     seen.add(disk);
+    const text = readNoteFile(home, disk);
+    if (text === null) continue;
     if (getIndexedByDisk(db, disk)?.hash === hashText(text)) continue;
     upsertIndexed(db, loc, text);
     indexed++;

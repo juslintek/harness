@@ -161,7 +161,8 @@ test("write and read logs round trip", () => {
   const id = logWrite(db, w);
   logWrite(db, { ...w, runId: null, memberId: null, actor: "human:u" });
   logWrite(db, { ...w, orgId: "B" });
-  expect(getWrite(db, id)).toMatchObject({ ...w, id });
+  expect(getWrite(db, "A", id)).toMatchObject({ ...w, id });
+  expect(getWrite(db, "B", id)).toBeNull();
   expect(listWrites(db, "A", { limit: 10 })).toHaveLength(2);
   expect(listWrites(db, "A", { limit: 10, agentsOnly: true }).map((x) => x.id)).toEqual([id]);
   logRead(db, "n", "r1", "m1", "view");

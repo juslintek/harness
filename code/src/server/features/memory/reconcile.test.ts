@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getIndexedByDisk, upsertIndexed } from "./index-repo";
 import { loc, noteText, testDb } from "./index-test-kit";
@@ -62,5 +62,23 @@ test("a symlinked vault root is not walked", () => {
   mkdirSync(join(dir, "real/global"), { recursive: true });
   writeFileSync(join(dir, "real/global/a.md"), "x");
   symlinkSync(join(dir, "real"), join(dir, "memory"));
+  expect(reconcile(db, dir)).toEqual({ indexed: 0, removed: 0 });
+});
+
+test("a read error throws and leaves the index intact", () => {
+  put("global/a.md", "x");
+  put("global/sub/b.md", "y");
+  reconcile(db, dir);
+  const sub = join(dir, "memory/global/sub");
+  chmodSync(sub, 0o000);
+  try {
+    expect(() => reconcile(db, dir)).toThrow();
+  } finally {
+    chmodSync(sub, 0o700);
+  }
+  expect(db.query("SELECT 1 FROM notes").all()).toHaveLength(2);
+});
+
+test("a missing vault root is an empty vault", () => {
   expect(reconcile(db, dir)).toEqual({ indexed: 0, removed: 0 });
 });

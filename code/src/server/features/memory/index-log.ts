@@ -83,9 +83,12 @@ export function listWrites(
 
 export function getWrite(
   db: Database,
+  orgId: string,
   id: string,
 ): (NoteWriteRow & { id: string; at: number }) | null {
-  const r = db.query<WriteRaw, [string]>("SELECT * FROM note_writes WHERE id = ?").get(id);
+  const r = db
+    .query<WriteRaw, [string, string]>("SELECT * FROM note_writes WHERE id = ? AND org_id = ?")
+    .get(id, orgId);
   if (r === null) return null;
   return {
     id: r.id,
