@@ -91,13 +91,13 @@ function managerNotice(db: Database, member: MemberRow): string {
   return `\n\nYou manage ${handles.join(", ")}. You do not write code. Your worktree is read-only on purpose. This overrides the instruction below to commit on your branch. Work like this:\n${steps}`;
 }
 
-// A memory wake only reads notes and proposes or reviews lessons; the work instruction would send it to check out tasks.
+// A memory wake only reads and proposes or reviews lessons; the work instruction would send it to check out tasks.
 function memoryOnlyTools(wakes: WakeRow[]): string {
   const tools = [
-    wakes.some((w) => w.reason === "retro") ? "`lesson_propose`" : "",
-    wakes.some((w) => w.reason === "lesson_review") ? "`lesson_review`" : "",
+    wakes.some((w) => w.reason === "retro") ? "`lesson_propose` (retro)" : "",
+    wakes.some((w) => w.reason === "lesson_review") ? "`lesson_review` (review)" : "",
   ].filter(Boolean);
-  return `Use only ${tools.join(" and ")} for this. You may call \`memory\` with \`action\` set to \`view\` or \`search\` to check existing notes.`;
+  return `Use ${tools.join(" or ")} for this. You may read with \`task_get\` and \`memory\` (\`action\` \`view\` or \`search\`). Do not change code, the task, or chat.`;
 }
 
 export function buildPrompt(
