@@ -32,6 +32,7 @@ function setup(script: Parameters<typeof fakeNotifier>[1] = []): {
   const fake = fakeNotifier("push", script);
   const clock = { t: 1_000_000 };
   const dispatcher = createDispatcher(db, {
+    home: "/nonexistent",
     origin: "https://h.test",
     adapters: { push: fake },
     now: () => clock.t,
@@ -106,7 +107,11 @@ test("a permanent failure is not retried", async () => {
 test("an adapter that throws becomes a failed row and does not reject", async () => {
   const { db, memberId, dispatcher } = setup();
   const boom = { channel: "push", deliver: () => Promise.reject(new Error("kaput")) } as const;
-  const d = createDispatcher(db, { origin: "https://h.test", adapters: { push: boom } });
+  const d = createDispatcher(db, {
+    home: "/nonexistent",
+    origin: "https://h.test",
+    adapters: { push: boom },
+  });
   addTarget(db, memberId, "push", push);
   d.notify([memberId], note());
   await d.idle();
@@ -186,6 +191,7 @@ test("title and body are redacted before the adapter sees them and no body is st
 test("stop cancels a pending retry, logs it and resolves at once", async () => {
   const { db, memberId, fake, dispatcher } = setup([{ ok: false, retry: true, reason: "503" }]);
   const slow = createDispatcher(db, {
+    home: "/nonexistent",
     origin: "https://h.test",
     adapters: { push: fake },
     backoffMs: [60_000],

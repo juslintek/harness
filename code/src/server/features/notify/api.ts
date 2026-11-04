@@ -7,7 +7,7 @@ import { deleteTarget, insertTarget, targetsOf, viewOf } from "./targets-repo";
 
 export { effectivePrefs, notifyRoutes, setPref };
 
-export interface NotifyDeps extends Partial<Omit<DispatcherDeps, "origin">> {
+export interface NotifyDeps extends Partial<Omit<DispatcherDeps, "origin" | "home">> {
   home: string;
   origin: string;
 }

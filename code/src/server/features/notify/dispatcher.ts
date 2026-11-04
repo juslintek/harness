@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { CHANNELS, type Channel, type Notification, type Target } from "../../../shared/notify";
 import { redact } from "../logs/api";
-import { ADAPTERS } from "./adapters";
+import { buildAdapters } from "./adapters";
 import { createOutbox, writeLog } from "./outbox";
 import type { Notifier } from "./port";
 import { isEnabled } from "./prefs";
@@ -12,6 +12,7 @@ const WINDOW_MS = 60_000;
 const MAX_SENDS_PER_WINDOW = 30;
 
 export interface DispatcherDeps {
+  home: string;
   origin: string;
   adapters?: Partial<Record<Channel, Notifier>>;
   now?: () => number;
@@ -51,7 +52,7 @@ export function createDispatcher(db: Database, deps: DispatcherDeps): Dispatcher
   const now = deps.now ?? Date.now;
   const outbox = createOutbox({
     db,
-    adapters: { ...ADAPTERS, ...deps.adapters },
+    adapters: { ...buildAdapters({ db, home: deps.home }), ...deps.adapters },
     origin: deps.origin,
     now,
     backoffMs: deps.backoffMs ?? BACKOFF_MS,
