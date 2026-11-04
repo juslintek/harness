@@ -72,7 +72,11 @@ export function reconcile(db: Database, home: string): { indexed: number; remove
     // Seen before reading: a file deleted mid-walk keeps its row until the next reconcile.
     seen.add(disk);
     const text = readNoteFile(home, disk);
-    if (text === null) continue;
+    // Unreadable (mode 000, swapped for a FIFO): treated as gone, so the row and audit entry go too.
+    if (text === null) {
+      syncSafely(db, home, disk);
+      continue;
+    }
     if (getIndexedByDisk(db, disk)?.hash === hashText(text)) continue;
     if (syncSafely(db, home, disk)) indexed++;
   }

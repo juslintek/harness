@@ -87,6 +87,21 @@ test("a read error throws and leaves the index intact", () => {
   expect(db.query("SELECT 1 FROM notes").all()).toHaveLength(2);
 });
 
+test("an indexed note that became unreadable is dropped with an audit row", () => {
+  put("orgs/A/org/a.md", noteText("# A\nhello"));
+  reconcile(db, dir);
+  const file = join(dir, "memory/orgs/A/org/a.md");
+  chmodSync(file, 0o000);
+  try {
+    reconcile(db, dir);
+  } finally {
+    chmodSync(file, 0o600);
+  }
+  expect(getIndexedByDisk(db, "orgs/A/org/a.md")).toBeNull();
+  const [last] = listWrites(db, "A", { limit: 5 });
+  expect(last).toMatchObject({ op: "outside", actor: "outside" });
+});
+
 test("a missing vault root is an empty vault", () => {
   expect(reconcile(db, dir)).toEqual({ indexed: 0, removed: 0 });
 });
