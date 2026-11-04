@@ -9,6 +9,7 @@ import { onApprovalChange } from "./features/guard/api";
 import { getProject, listGrantOrgIds, onMemberRemoved, orgAccess } from "./features/orgs/api";
 import { getRun, onRunEvent } from "./features/runtimes/api";
 import { viewRun } from "./features/runtimes/routes";
+import { wireDashboardNudges } from "./realtime-dashboard";
 
 export interface WsData {
   topic: string;
@@ -80,6 +81,34 @@ function projectTopics(db: Database, projectId: string): string[] {
   return [project.orgId, ...listGrantOrgIds(db, projectId)].map((id) => `org:${id}`);
 }
 
+type Send = (topic: string, message: WsMessage) => void;
+
+function nudgeChat(
+  db: Database,
+  send: Send,
+  { message, channel }: Parameters<Parameters<typeof onMessage>[0]>[0],
+): void {
+  const nudge: WsMessage = {
+    type: "chat",
+    channelId: channel.id,
+    messageId: message.id,
+    threadRootId: message.threadRootId,
+  };
+  if (channel.kind === "group" || channel.kind === "dm") {
+    // An org topic reaches every member, so a private conversation is sent socket by socket.
+    const userIds = new Set(channelMembers(db, channel).map((m) => m.userId));
+    const text = JSON.stringify(nudge);
+    for (const ws of sockets) {
+      if (ws.data.topic.startsWith("org:") && userIds.has(ws.data.userId)) ws.send(text);
+    }
+    return;
+  }
+  const topics = channel.projectId
+    ? projectTopics(db, channel.projectId)
+    : [`org:${channel.orgId}`];
+  for (const topic of topics) send(topic, nudge);
+}
+
 export function wireRealtime(
   db: Database,
   server: Server<WsData>,
@@ -110,31 +139,14 @@ export function wireRealtime(
     };
     for (const topic of projectTopics(db, change.task.projectId)) send(topic, message);
   });
-  const offChat = onMessage(({ message, channel }) => {
-    const nudge: WsMessage = {
-      type: "chat",
-      channelId: channel.id,
-      messageId: message.id,
-      threadRootId: message.threadRootId,
-    };
-    if (channel.kind === "group" || channel.kind === "dm") {
-      // An org topic reaches every member, so a private conversation is sent socket by socket.
-      const userIds = new Set(channelMembers(db, channel).map((m) => m.userId));
-      const text = JSON.stringify(nudge);
-      for (const ws of sockets) {
-        if (ws.data.topic.startsWith("org:") && userIds.has(ws.data.userId)) ws.send(text);
-      }
-      return;
-    }
-    const topics = channel.projectId
-      ? projectTopics(db, channel.projectId)
-      : [`org:${channel.orgId}`];
-    for (const topic of topics) send(topic, nudge);
-  });
+  const offChat = onMessage((e) => nudgeChat(db, send, e));
   const offSession = onSessionRevoked((sessionId) => closeWhere((d) => d.sessionId === sessionId));
   const offMember = onMemberRemoved((_db, member) =>
     closeWhere((d) => d.userId === member.userId && d.topic === `org:${member.orgId}`),
   );
+  const offDashboard = wireDashboardNudges(db, send, () => [
+    ...new Set([...sockets].map((ws) => ws.data.topic).filter((t) => t.startsWith("org:"))),
+  ]);
   const sweeper = setInterval(() => sweepExpired(db), sweepMs);
   sweeper.unref();
   return () => {
@@ -145,5 +157,6 @@ export function wireRealtime(
     offApproval();
     offTask();
     offChat();
+    offDashboard();
   };
 }

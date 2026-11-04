@@ -11,7 +11,8 @@ export type WsMessage =
   | { type: "run"; run: RunView }
   | { type: "approval"; approval: ApprovalView }
   | { type: "task"; projectId: string; taskId: string; kind: string }
-  | { type: "chat"; channelId: string; messageId: string; threadRootId: string | null };
+  | { type: "chat"; channelId: string; messageId: string; threadRootId: string | null }
+  | { type: "dashboard" };
 
 export const wsMessageSchema: z.ZodType<WsMessage> = z.discriminatedUnion("type", [
   z.object({
@@ -33,4 +34,5 @@ export const wsMessageSchema: z.ZodType<WsMessage> = z.discriminatedUnion("type"
     messageId: z.string(),
     threadRootId: z.string().nullable(),
   }),
+  z.object({ type: z.literal("dashboard") }),
 ]);
