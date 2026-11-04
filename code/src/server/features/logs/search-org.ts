@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { OrgLogHit } from "../../../shared/logs";
-import { projectAccess } from "../orgs/api";
+import { orgAccess, projectAccess, roleAtLeast } from "../orgs/api";
 import { type EventKind, readBody, snippetFor } from "./api";
 import { matchRowids, type RowidScope } from "./repo";
 
@@ -31,33 +31,32 @@ interface Raw {
   task_number: number | null;
 }
 
-// A removed member's row is gone (hard delete) but its runs keep member_id, so the org then comes
-// from the run's project. A removed member's run with no project cannot be placed in any org.
-const IN_ORG = "(m.org_id = ? OR (m.id IS NULL AND p.org_id = ?))";
-const RUN_JOINS =
-  "LEFT JOIN members m ON m.id = r.member_id LEFT JOIN projects p ON p.id = r.project_id";
-
 // Runs tied to a project are visible only to people who can open that project; the check is done
 // per distinct project here so the FTS cap applies after it.
 function openableProjects(db: Database, orgId: string, userId: string): string[] {
   return db
-    .query<{ project_id: string }, [string, string]>(
-      `SELECT DISTINCT r.project_id FROM runs r ${RUN_JOINS}
-       WHERE ${IN_ORG} AND r.project_id IS NOT NULL`,
+    .query<{ project_id: string }, [string]>(
+      "SELECT DISTINCT project_id FROM runs WHERE org_id = ? AND project_id IS NOT NULL",
     )
-    .all(orgId, orgId)
+    .all(orgId)
     .map((r) => r.project_id)
     .filter((id) => projectAccess(db, userId, id) !== "none");
 }
 
+// A run with no project can come from a private channel or a DM wake, so only org admins see it.
+function seesProjectless(db: Database, orgId: string, userId: string): boolean {
+  const role = orgAccess(db, userId, orgId);
+  return role !== null && roleAtLeast(role, "admin");
+}
+
 function scopeOf(db: Database, orgId: string, q: OrgSearchQuery): RowidScope {
   const where = [
-    IN_ORG,
-    "(r.project_id IS NULL OR r.project_id IN (SELECT value FROM json_each(?)))",
+    "r.org_id = ?",
+    "((r.project_id IS NULL AND ?) OR r.project_id IN (SELECT value FROM json_each(?)))",
   ];
   const params: Array<string | number> = [
     orgId,
-    orgId,
+    seesProjectless(db, orgId, q.userId) ? 1 : 0,
     JSON.stringify(openableProjects(db, orgId, q.userId)),
   ];
   if (q.kind !== undefined) {
@@ -77,12 +76,13 @@ function scopeOf(db: Database, orgId: string, q: OrgSearchQuery): RowidScope {
   }
   return {
     sql: `SELECT e.rowid FROM events e JOIN runs r ON r.id = e.run_id
-      ${RUN_JOINS} WHERE ${where.join(" AND ")}`,
+      WHERE ${where.join(" AND ")}`,
     params,
+    newestFirst: true,
   };
 }
 
-// The org comes from the run's member (or its project once the member is removed), never from the event, so a run of another org cannot leak.
+// The org is the one stored on the run at start, never read from the event or a later member row, so a run of another org cannot leak.
 // The scope is applied inside the FTS match so other orgs' hits cannot crowd out this org's.
 export function searchOrgEvents(
   db: Database,

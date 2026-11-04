@@ -134,6 +134,8 @@ function trigramQuery(text: string): string {
 export interface RowidScope {
   sql: string;
   params: Array<string | number>;
+  // Cap the candidates by recency instead of rank, so the newest matches are never cut.
+  newestFirst?: boolean;
 }
 
 function matchRowidsIn(
@@ -143,11 +145,12 @@ function matchRowidsIn(
   limit: number,
   scope?: RowidScope,
 ): number[] {
-  const within = scope ? ` AND rowid IN (${scope.sql})` : "";
+  const sql = scope?.newestFirst
+    ? `SELECT ${table}.rowid FROM ${table} JOIN events e ON e.rowid = ${table}.rowid
+       WHERE ${table} MATCH ? AND ${table}.rowid IN (${scope.sql}) ORDER BY e.ts DESC, e.rowid DESC LIMIT ?`
+    : `SELECT rowid FROM ${table} WHERE ${table} MATCH ?${scope ? ` AND rowid IN (${scope.sql})` : ""} ORDER BY rank LIMIT ?`;
   return db
-    .query<{ rowid: number }, Array<string | number>>(
-      `SELECT rowid FROM ${table} WHERE ${table} MATCH ?${within} ORDER BY rank LIMIT ?`,
-    )
+    .query<{ rowid: number }, Array<string | number>>(sql)
     .all(match, ...(scope?.params ?? []), limit)
     .map((r) => r.rowid);
 }
@@ -173,5 +176,6 @@ export function matchRowids(db: Database, q: string, limit: number, scope?: Rowi
     }
   }
   for (const rowid of matchCommands(db, q.trim(), limit, scope)) ids.add(rowid);
-  return [...ids].slice(0, limit);
+  // Each source is already capped; slicing the union would drop the newest of the second one.
+  return scope?.newestFirst ? [...ids] : [...ids].slice(0, limit);
 }

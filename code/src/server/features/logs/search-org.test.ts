@@ -27,11 +27,15 @@ beforeEach(() => {
       [`m${org}`, org, `bot-${org}`, `bot-${org}`],
     );
     db.run(
-      `INSERT INTO runs (id, agent_id, repo, prompt, state, created_at, member_id)
-       VALUES (?, 'claude', '/r', 'p', 'completed', 1, ?)`,
-      [`run${org}`, `m${org}`],
+      `INSERT INTO runs (id, agent_id, repo, prompt, state, created_at, member_id, org_id)
+       VALUES (?, 'claude', '/r', 'p', 'completed', 1, ?, ?)`,
+      [`run${org}`, `m${org}`, org],
     );
   }
+  db.run(
+    `INSERT INTO members (id, org_id, kind, user_id, handle, display_name, role, created_at)
+     VALUES ('admin-u', 'A', 'human', 'u', 'admin-u', 'admin-u', 'admin', 1)`,
+  );
 });
 afterEach(() => {
   db.close();
@@ -150,4 +154,49 @@ test("a removed member's run stays searchable in its project's org and never sho
   const inA = searchOrgEvents(db, "A", { userId: "u1", text: "deploy" });
   expect(inA.map((h) => [h.snippet, h.memberHandle])).toEqual([["deploy alpha", "(removed)"]]);
   expect(searchOrgEvents(db, "B", { userId: "u1", text: "deploy" })).toEqual([]);
+});
+
+test("the candidate cap keeps the newest matches even when older ones rank higher", () => {
+  add("runA", "deploy", 1);
+  add("runA", "deploy", 2);
+  add("runA", "deploy", 3);
+  for (let i = 0; i < 3; i++) add("runA", `deploy ${"filler ".repeat(20)}${i}`, 100 + i);
+  const hits = searchOrgEvents(db, "A", { userId: "u", text: "deploy" }, 3);
+  expect(hits.map((h) => h.ts)).toEqual([102, 101, 100]);
+});
+
+function grantee(): void {
+  db.run("INSERT INTO projects (id, org_id, key, name, created_at) VALUES ('P', 'B', 'P', 'P', 1)");
+  db.run(
+    "INSERT INTO grants (id, project_id, org_id, permission, granted_by, created_at) VALUES ('g', 'P', 'A', 'write', 'x', 1)",
+  );
+  db.run(
+    `INSERT INTO members (id, org_id, kind, user_id, handle, display_name, role, created_at)
+     VALUES ('hu', 'A', 'human', 'u1', 'hu', 'hu', 'owner', 1), ('hb', 'B', 'human', 'u2', 'hb', 'hb', 'owner', 1)`,
+  );
+}
+
+test("a grantee org's run on the owner org's project stays in the grantee org after member removal", () => {
+  grantee();
+  db.run("UPDATE runs SET project_id = 'P', org_id = 'A' WHERE id = 'runA'");
+  add("runA", "deploy alpha", 10);
+  db.run("DELETE FROM members WHERE id = 'mA'");
+  expect(searchOrgEvents(db, "A", { userId: "u1", text: "deploy" })).toHaveLength(1);
+  expect(searchOrgEvents(db, "B", { userId: "u2", text: "deploy" })).toEqual([]);
+});
+
+test("a run with no project is hidden from a member and shown to an admin", () => {
+  for (const [id, user, role] of [
+    ["hm", "u3", "member"],
+    ["ha", "u4", "admin"],
+  ]) {
+    db.run(
+      `INSERT INTO members (id, org_id, kind, user_id, handle, display_name, role, created_at)
+       VALUES (?, 'A', 'human', ?, ?, ?, ?, 1)`,
+      [id, user, id, id, role],
+    );
+  }
+  add("runA", "deploy dm", 10);
+  expect(searchOrgEvents(db, "A", { userId: "u3", text: "deploy" })).toEqual([]);
+  expect(searchOrgEvents(db, "A", { userId: "u4", text: "deploy" })).toHaveLength(1);
 });
