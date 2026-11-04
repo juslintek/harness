@@ -38,9 +38,9 @@ test("startMemory reconciles existing files, and stop commits an outside edit", 
     await Bun.sleep(25);
   }
   await stop();
-  expect(await gitOutput(vaultDir(env.dir), ["log", "--format=%s"])).toBe(
-    "outside orgs/A/org/a.md\n",
-  );
+  // The note existed uncommitted at start, so its recovery commit and the outside edit are one commit.
+  expect(await gitOutput(vaultDir(env.dir), ["log", "--format=%s"])).toBe("2 note changes\n");
+  expect(await gitOutput(vaultDir(env.dir), ["show", "HEAD:orgs/A/org/a.md"])).toContain("edited");
 });
 
 test("startMemory tightens a 0755 vault to 0700 and refuses a symlinked one", async () => {

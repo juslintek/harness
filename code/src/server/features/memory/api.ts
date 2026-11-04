@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { assertVaultGit, drainCommits, ensureVaultRepo } from "./git-log";
+import { assertVaultGit, drainCommits, queueUncommitted } from "./git-log";
 import { buildMemoryIndex } from "./index-file";
 import { logRead } from "./index-log";
 import { getIndexedByDisk } from "./index-repo";
@@ -63,7 +63,7 @@ export {
 export function startMemory(db: Database, deps: { home: string }): () => Promise<void> {
   assertVaultGit(deps.home);
   securePrivateVault(deps.home);
-  ensureVaultRepo(deps.home).catch((e: Error) => {
+  queueUncommitted(deps.home, db).catch((e: Error) => {
     console.error(`memory: git init failed: ${e.message}`);
   });
   reconcile(db, deps.home);

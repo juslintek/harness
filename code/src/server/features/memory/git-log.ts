@@ -16,6 +16,9 @@ import { vaultDir } from "./vault";
 
 const COMMIT_DEBOUNCE_MS = 500;
 const GIT_TIMEOUT_MS = 30_000;
+// A lock or a full disk is usually gone within seconds, so a failed commit is tried again a few
+// times instead of leaving the notes uncommitted until the next write.
+const RETRY_MS = [1_000, 5_000, 30_000];
 const STAGE_CHUNK = 200;
 const IDENT = [
   "-c",
@@ -198,7 +201,11 @@ async function unstageNonFiles(dir: string): Promise<void> {
   }
 }
 
-async function commitAll(home: string, message: string, db: Database | undefined): Promise<void> {
+async function commitAll(
+  home: string,
+  message: string,
+  db: Database | undefined,
+): Promise<boolean> {
   try {
     await ensureVaultRepo(home);
     const dir = vaultDir(home);
@@ -212,26 +219,47 @@ async function commitAll(home: string, message: string, db: Database | undefined
     const commit = await git(dir, ["commit", "-q", "-m", message]);
     if (commit.code !== 0 && !/nothing (added )?to commit/.test(commit.out))
       throw new Error(commit.out);
+    return true;
   } catch (e) {
     // History is a convenience; a failed commit must not break the write that queued it. A scrub
     // that threw lands here too, so unchecked content is never committed.
     console.error(`memory: git commit failed: ${(e as Error).message}`);
+    return false;
   }
 }
 
 const pending = new Map<string, string[]>();
 const databases = new Map<string, Database>();
+const attempts = new Map<string, number>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 let chain: Promise<void> = Promise.resolve();
 
+// The messages go back in front of anything queued meanwhile. The retry timer is unref'd so it
+// never keeps the process alive; startup recovery covers notes still uncommitted after the last try.
+function retryLater(home: string, messages: string[]): void {
+  const done = attempts.get(home) ?? 0;
+  const delay = RETRY_MS[done];
+  if (delay === undefined) {
+    attempts.delete(home);
+    console.error("memory: giving up on the git commit; the notes stay on disk");
+    return;
+  }
+  attempts.set(home, done + 1);
+  pending.set(home, [...messages, ...(pending.get(home) ?? [])]);
+  timer ??= setTimeout(flush, delay);
+  timer.unref();
+}
+
+async function commitOrRetry(home: string, messages: string[]): Promise<void> {
+  const message =
+    messages.length === 1 ? (messages[0] as string) : `${messages.length} note changes`;
+  if (await commitAll(home, message, databases.get(home))) attempts.delete(home);
+  else retryLater(home, messages);
+}
+
 function flush(): void {
   timer = null;
-  for (const [home, messages] of pending) {
-    const message =
-      messages.length === 1 ? (messages[0] as string) : `${messages.length} note changes`;
-    const db = databases.get(home);
-    chain = chain.then(() => commitAll(home, message, db));
-  }
+  for (const [home, messages] of pending) chain = chain.then(() => commitOrRetry(home, messages));
   pending.clear();
 }
 
@@ -242,10 +270,22 @@ export function queueCommit(home: string, message: string, db?: Database): void 
   timer ??= setTimeout(flush, COMMIT_DEBOUNCE_MS);
 }
 
-export async function drainCommits(): Promise<void> {
-  if (timer !== null) {
-    clearTimeout(timer);
-    flush();
+// Covers a crash, or retries that ran out, since neither leaves a queued commit behind.
+export async function queueUncommitted(home: string, db: Database): Promise<void> {
+  await ensureVaultRepo(home);
+  if ((await changedNotes(vaultDir(home))).length > 0) {
+    queueCommit(home, "commit notes left uncommitted", db);
   }
+}
+
+// Stopping gives a waiting commit or retry one last immediate attempt; whatever still fails is
+// dropped with its timer, because the next start recommits it.
+export async function drainCommits(): Promise<void> {
+  if (timer !== null) clearTimeout(timer);
+  flush();
   await chain;
+  if (timer !== null) clearTimeout(timer);
+  timer = null;
+  pending.clear();
+  attempts.clear();
 }

@@ -15,7 +15,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gitOutput } from "../../git-env";
-import { assertVaultGit, drainCommits, ensureVaultRepo, queueCommit } from "./git-log";
+import {
+  assertVaultGit,
+  drainCommits,
+  ensureVaultRepo,
+  queueCommit,
+  queueUncommitted,
+} from "./git-log";
 import { createNote, updateNote } from "./store";
 import { aliceA, ctx, type Env, orgNote, setup, teardown } from "./store-test-kit";
 import { vaultDir } from "./vault";
@@ -183,4 +189,26 @@ test("a symlink at a valid note path is never committed", async () => {
   expect(tree).toContain(orgNote.disk);
   expect(tree).not.toContain("link.md");
   expect(errors.join("\n")).toContain("link.md");
+});
+
+test("a commit that fails once is retried and lands without another write", async () => {
+  await ensureVaultRepo(env.dir);
+  const lock = join(vaultDir(env.dir), ".git", "index.lock");
+  writeFileSync(lock, "");
+  await Bun.write(join(vaultDir(env.dir), orgNote.disk), "# one");
+  queueCommit(env.dir, "first");
+  await Bun.sleep(800);
+  expect(await log("%s")).toEqual([]);
+  rmSync(lock);
+  for (let i = 0; i < 30 && (await log("%s")).length === 0; i++) await Bun.sleep(100);
+  expect(await log("%s")).toEqual(["first"]);
+  await drainCommits();
+});
+
+test("startup queues a commit for valid notes left uncommitted", async () => {
+  await ensureVaultRepo(env.dir);
+  await Bun.write(join(vaultDir(env.dir), orgNote.disk), "# left behind");
+  await queueUncommitted(env.dir, env.db);
+  await drainCommits();
+  expect(await log("%s")).toEqual(["commit notes left uncommitted"]);
 });
