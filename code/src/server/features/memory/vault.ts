@@ -117,12 +117,3 @@ export function removeNoteFile(home: string, disk: string, expected: string): vo
   assertUnchanged(home, disk, expected);
   rmSync(file, { force: true });
 }
-
-export function isMissingPath(path: string): boolean {
-  try {
-    lstatSync(path);
-    return false;
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === "ENOENT";
-  }
-}
