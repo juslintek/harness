@@ -21,6 +21,7 @@ const spec: AgentSpec = {
   stateWrite: [],
   weakerNetworkIsolation: false,
   claudeMeta: false,
+  mcp: true,
 };
 
 const done: RunOutcome = {

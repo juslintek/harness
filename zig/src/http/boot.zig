@@ -15,6 +15,8 @@ const routes = @import("routes.zig");
 const server = @import("server.zig");
 const auth = @import("../auth/middleware.zig");
 const agents = @import("../agents/routes.zig");
+const hub_mod = @import("../realtime/hub.zig");
+const ws = @import("ws.zig");
 
 /// What a running server owns on disk. On the heap because `app` holds a mutex that must not move.
 pub const Home = struct {
@@ -90,6 +92,11 @@ pub fn serveHome(
     var wired = options;
     wired.authenticator = options.authenticator orelse session_auth.authenticator();
     wired.throttle = options.throttle orelse limiter.throttle();
+    var socket_access = ws.Wiring.init(&home.app, &session_auth);
+    var hub = hub_mod.Hub.init(gpa, io, socket_access.access(), .{});
+    defer hub.deinit();
+    try hub.start();
+    wired.hub = options.hub orelse &hub;
     try server.run(gpa, io, &home.app, home.health, wired, out);
 }
 

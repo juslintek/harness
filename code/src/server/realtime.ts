@@ -6,6 +6,7 @@ import { type AuthEnv, onSessionRevoked, sessionExpiresAt } from "./features/aut
 import { onTaskChange } from "./features/board/api";
 import { channelMembers, onMessage } from "./features/chat/api";
 import { onApprovalChange } from "./features/guard/api";
+import { onLessonDecided, onLessonProposed, onMemoryChange } from "./features/memory/api";
 import { getProject, listGrantOrgIds, onMemberRemoved, orgAccess } from "./features/orgs/api";
 import { getRun, onRunEvent } from "./features/runtimes/api";
 import { viewRun } from "./features/runtimes/routes";
@@ -109,6 +110,22 @@ function nudgeChat(
   for (const topic of topics) send(topic, nudge);
 }
 
+// A global note is visible in every org, so a change with no org nudges every org topic in use.
+function wireMemoryNudges(send: Send, liveOrgTopics: () => string[]): () => void {
+  const nudge = (orgId: string | null): void => {
+    const topics = orgId === null ? liveOrgTopics() : [`org:${orgId}`];
+    for (const topic of topics) send(topic, { type: "memory", orgId: topic.slice(4) });
+  };
+  const offs = [
+    onMemoryChange((e) => nudge(e.orgId)),
+    onLessonProposed((e) => nudge(e.orgId)),
+    onLessonDecided((lesson) => nudge(lesson.orgId)),
+  ];
+  return () => {
+    for (const off of offs) off();
+  };
+}
+
 export function wireRealtime(
   db: Database,
   server: Server<WsData>,
@@ -144,9 +161,11 @@ export function wireRealtime(
   const offMember = onMemberRemoved((_db, member) =>
     closeWhere((d) => d.userId === member.userId && d.topic === `org:${member.orgId}`),
   );
-  const offDashboard = wireDashboardNudges(db, send, () => [
+  const liveOrgTopics = (): string[] => [
     ...new Set([...sockets].map((ws) => ws.data.topic).filter((t) => t.startsWith("org:"))),
-  ]);
+  ];
+  const offDashboard = wireDashboardNudges(db, send, liveOrgTopics);
+  const offMemory = wireMemoryNudges(send, liveOrgTopics);
   const sweeper = setInterval(() => sweepExpired(db), sweepMs);
   sweeper.unref();
   return () => {
@@ -158,5 +177,6 @@ export function wireRealtime(
     offTask();
     offChat();
     offDashboard();
+    offMemory();
   };
 }

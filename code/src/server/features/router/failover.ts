@@ -37,6 +37,7 @@ export async function nextAttempt(
   db: Database,
   endedRunId: string,
   deps?: RouteDeps,
+  runtimeFilter?: (runtime: string) => boolean,
 ): Promise<NextAttempt | null> {
   const run = getRun(db, endedRunId);
   if (!run?.memberId || !run.worktree || !failsOver(run) || run.attempt >= MAX_ATTEMPTS) {
@@ -47,7 +48,7 @@ export async function nextAttempt(
   const batchId = run.batchId ?? run.id;
   const [next] = await route(
     db,
-    { memberId: run.memberId, taskId: run.taskId, exclude: triedIn(db, batchId) },
+    { memberId: run.memberId, taskId: run.taskId, exclude: triedIn(db, batchId), runtimeFilter },
     deps,
   );
   if (!next) return null;

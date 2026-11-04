@@ -10,6 +10,7 @@ import { wireChat } from "./server/features/chat/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
 import { startHiring } from "./server/features/hiring/api";
 import { wireHiring } from "./server/features/hiring/wiring";
+import { startMemory } from "./server/features/memory/api";
 import { startRouter } from "./server/features/router/api";
 import {
   recoverRuns,
@@ -79,6 +80,7 @@ wireRealtime(db, server);
 const runDeps = { home: bound.home, port: bound.port };
 const stopHeartbeat = startHeartbeat(db, { runDeps, home: config.home });
 const hiring = wireHiring(db, { runDeps, home: config.home });
+const stopMemory = startMemory(db, { home: config.home });
 const stopLoops = [
   ...[startRouter, startBudgets, startTracking].map((start) => start(db)),
   startHiring(db, hiring.deps),
@@ -98,12 +100,16 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     stopping = true;
     const drained = stopHeartbeat();
     for (const stop of stopLoops) stop();
-    shutdownRuns(db)
-      .then(() => drained)
-      .catch((err: unknown) => console.error("shutdown failed", err))
-      .finally(() => {
-        server.stop(true);
-        process.exit(0);
-      });
+    // The server stops before memory drains so no API write lands after the last commit is flushed;
+    // a failed step is logged and the later ones still run.
+    const step = (run: () => unknown) =>
+      Promise.resolve()
+        .then(run)
+        .catch((err: unknown) => console.error("shutdown failed", err));
+    step(() => shutdownRuns(db))
+      .then(() => step(() => drained))
+      .then(() => step(() => server.stop(true)))
+      .then(() => step(stopMemory))
+      .finally(() => process.exit(0));
   });
 }

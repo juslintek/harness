@@ -85,7 +85,7 @@ function toRow(r: DbRun): RunRow {
 
 export function insertRun(db: Database, run: NewRun): void {
   db.run(
-    "INSERT INTO runs (id, task_id, member_id, project_id, agent_id, model, repo, prompt, state, created_at, attempt, batch_id, charged_to) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)",
+    "INSERT INTO runs (id, task_id, member_id, project_id, agent_id, model, repo, prompt, state, created_at, attempt, batch_id, charged_to, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?)",
     [
       run.id,
       run.taskId,
@@ -99,6 +99,7 @@ export function insertRun(db: Database, run: NewRun): void {
       run.attempt ?? 1,
       run.batchId ?? null,
       run.chargedTo ?? null,
+      run.member?.orgId ?? null,
     ],
   );
 }

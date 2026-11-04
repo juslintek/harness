@@ -4,7 +4,9 @@ import { registerBoardTools } from "../src/server/features/mcp/tools-board";
 import { registerChatTools } from "../src/server/features/mcp/tools-chat";
 import { registerHiringTools } from "../src/server/features/mcp/tools-hiring";
 import type { ToolEnv } from "../src/server/features/mcp/tools-kit";
+import { registerLessonTools } from "../src/server/features/mcp/tools-lessons";
 import { registerManagerTools } from "../src/server/features/mcp/tools-manager";
+import { registerMemoryTools } from "../src/server/features/mcp/tools-memory";
 import { registerPoliciesTools } from "../src/server/features/mcp/tools-policies";
 import { registerProfilesTools } from "../src/server/features/mcp/tools-profiles";
 import { registerTrackingTools } from "../src/server/features/mcp/tools-tracking";
@@ -16,7 +18,9 @@ const TOOL_REGISTRARS = [
   registerBoardTools,
   registerChatTools,
   registerHiringTools,
+  registerLessonTools,
   registerManagerTools,
+  registerMemoryTools,
   registerPoliciesTools,
   registerProfilesTools,
   registerTrackingTools,

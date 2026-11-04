@@ -13,6 +13,7 @@ import { onMessage, wireChat } from "../src/server/features/chat/api";
 import { startHeartbeat } from "../src/server/features/heartbeat/api";
 import { startHiring } from "../src/server/features/hiring/api";
 import { wireHiring } from "../src/server/features/hiring/wiring";
+import { startMemory } from "../src/server/features/memory/api";
 import { startRouter } from "../src/server/features/router/api";
 import {
   listRuns,
@@ -258,6 +259,7 @@ async function main(): Promise<void> {
   const hireRun = watchHireRun(db, s);
   const stopHeartbeat = startHeartbeat(db, { runDeps, home, tickMs: 5000 });
   const hiring = wireHiring(db, { runDeps, home });
+  const stopMemory = startMemory(db, { home });
   const stops = [
     ...[startRouter, startBudgets, startTracking].map((start) => start(db)),
     startHiring(db, hiring.deps),
@@ -275,9 +277,11 @@ async function main(): Promise<void> {
     stopTimeline();
     await shutdownRuns(db);
     await drained;
+    // No API write can arrive once the server is down, so the memory drain sees the last one.
+    await stop();
+    await stopMemory();
   }
   const view = await dashboard(db, s, app, port);
-  await stop();
   assertOutcome(db, s, view);
   printSpend(db, s, view);
   console.log(`\nscript-decided approvals: ${leftovers.decided.length}`);

@@ -1,0 +1,944 @@
+{
+  "lessonViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "authorHandle": {
+          "type": "string"
+        },
+        "authorId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "body": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "decidedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "noteId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reviewerId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "org",
+            "project",
+            "agent"
+          ],
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "accepted",
+            "rejected"
+          ],
+          "type": "string"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "properties": {
+                "number": {
+                  "type": "number"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "number",
+                "projectId",
+                "title"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "lesson",
+            "fact",
+            "decision",
+            "howto",
+            "reference"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "orgId",
+        "projectId",
+        "authorId",
+        "authorHandle",
+        "body",
+        "scope",
+        "type",
+        "status",
+        "reviewerId",
+        "reason",
+        "noteId",
+        "createdAt",
+        "decidedAt"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "authorHandle": {
+          "type": "string"
+        },
+        "authorId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "body": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "number"
+        },
+        "decidedAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "noteId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reviewerId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "org",
+            "project",
+            "agent"
+          ],
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "accepted",
+            "rejected"
+          ],
+          "type": "string"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "number": {
+                  "type": "number"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "number",
+                "projectId",
+                "title"
+              ],
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "lesson",
+            "fact",
+            "decision",
+            "howto",
+            "reference"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "orgId",
+        "projectId",
+        "authorId",
+        "authorHandle",
+        "body",
+        "scope",
+        "type",
+        "status",
+        "reviewerId",
+        "reason",
+        "noteId",
+        "createdAt",
+        "decidedAt"
+      ],
+      "type": "object"
+    }
+  },
+  "noteSummarySchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "created": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "memberId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orgId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "org",
+            "project",
+            "agent"
+          ],
+          "type": "string"
+        },
+        "snippet": {
+          "type": "string"
+        },
+        "sourceAgent": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "lesson",
+            "fact",
+            "decision",
+            "howto",
+            "reference"
+          ],
+          "type": "string"
+        },
+        "updated": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "scope",
+        "orgId",
+        "projectId",
+        "memberId",
+        "type",
+        "title",
+        "tags",
+        "sourceAgent",
+        "confidence",
+        "created",
+        "updated",
+        "hash"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "created": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "memberId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orgId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "org",
+            "project",
+            "agent"
+          ],
+          "type": "string"
+        },
+        "snippet": {
+          "type": "string"
+        },
+        "sourceAgent": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "lesson",
+            "fact",
+            "decision",
+            "howto",
+            "reference"
+          ],
+          "type": "string"
+        },
+        "updated": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "scope",
+        "orgId",
+        "projectId",
+        "memberId",
+        "type",
+        "title",
+        "tags",
+        "sourceAgent",
+        "confidence",
+        "created",
+        "updated",
+        "hash"
+      ],
+      "type": "object"
+    }
+  },
+  "noteViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "canWrite": {
+          "type": "boolean"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "created": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "memberId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orgId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "org",
+            "project",
+            "agent"
+          ],
+          "type": "string"
+        },
+        "sourceAgent": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "lesson",
+            "fact",
+            "decision",
+            "howto",
+            "reference"
+          ],
+          "type": "string"
+        },
+        "updated": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "scope",
+        "orgId",
+        "projectId",
+        "memberId",
+        "type",
+        "title",
+        "tags",
+        "sourceAgent",
+        "confidence",
+        "created",
+        "updated",
+        "hash",
+        "body",
+        "canWrite"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "canWrite": {
+          "type": "boolean"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "created": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "memberId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "orgId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "enum": [
+            "global",
+            "org",
+            "project",
+            "agent"
+          ],
+          "type": "string"
+        },
+        "sourceAgent": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "lesson",
+            "fact",
+            "decision",
+            "howto",
+            "reference"
+          ],
+          "type": "string"
+        },
+        "updated": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "scope",
+        "orgId",
+        "projectId",
+        "memberId",
+        "type",
+        "title",
+        "tags",
+        "sourceAgent",
+        "confidence",
+        "created",
+        "updated",
+        "hash",
+        "body",
+        "canWrite"
+      ],
+      "type": "object"
+    }
+  },
+  "noteWriteFeedItemSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "afterHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "at": {
+          "type": "number"
+        },
+        "before": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "beforeHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "canRevert": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "noteId": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "create",
+            "update",
+            "delete",
+            "rename",
+            "revert",
+            "outside"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "runId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "noteId",
+        "path",
+        "op",
+        "actor",
+        "runId",
+        "at",
+        "beforeHash",
+        "afterHash",
+        "before",
+        "after",
+        "canRevert"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "afterHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "at": {
+          "type": "number"
+        },
+        "before": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "beforeHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "canRevert": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "noteId": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "create",
+            "update",
+            "delete",
+            "rename",
+            "revert",
+            "outside"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "runId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "noteId",
+        "path",
+        "op",
+        "actor",
+        "runId",
+        "at",
+        "beforeHash",
+        "afterHash",
+        "before",
+        "after",
+        "canRevert"
+      ],
+      "type": "object"
+    }
+  },
+  "noteWriteViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "afterHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "at": {
+          "type": "number"
+        },
+        "beforeHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "noteId": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "create",
+            "update",
+            "delete",
+            "rename",
+            "revert",
+            "outside"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "runId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "noteId",
+        "path",
+        "op",
+        "actor",
+        "runId",
+        "at",
+        "beforeHash",
+        "afterHash"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string"
+        },
+        "afterHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "at": {
+          "type": "number"
+        },
+        "beforeHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "noteId": {
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "create",
+            "update",
+            "delete",
+            "rename",
+            "revert",
+            "outside"
+          ],
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "runId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "noteId",
+        "path",
+        "op",
+        "actor",
+        "runId",
+        "at",
+        "beforeHash",
+        "afterHash"
+      ],
+      "type": "object"
+    }
+  }
+}

@@ -4,18 +4,24 @@ import { appendEvent } from "../logs/api";
 import { getMember } from "../orgs/api";
 import { linkHandoff, type NextAttempt, nextAttempt } from "../router/api";
 import { getRun, type RunRow, ShuttingDownError, startRun } from "../runtimes/api";
+import { mcpOnly, memoryRun } from "./memory-notice";
 import { nudgeUndelegated } from "./nudge";
 import { buildPrompt } from "./prompt";
 import { setStatus, startedWakesOf, type WakeRow } from "./repo";
 import { type ExecDeps, fail, runMember, wakeProject } from "./run-input";
 
 // A paused member or budget means the run was stopped on purpose, so no other engine takes over.
-async function chooseNext(db: Database, deps: ExecDeps, run: RunRow): Promise<NextAttempt | null> {
+async function chooseNext(
+  db: Database,
+  deps: ExecDeps,
+  run: RunRow,
+  wakes: WakeRow[],
+): Promise<NextAttempt | null> {
   if (run.state === "completed" || run.memberId === null) return null;
   if (getMember(db, run.memberId)?.paused) return null;
   if (budgetGate(db, run.memberId).state === "paused") return null;
   try {
-    return await nextAttempt(db, run.id, deps.routeDeps);
+    return await nextAttempt(db, run.id, deps.routeDeps, mcpOnly(deps, wakes));
   } catch (err) {
     // A routing fault must not leave the wakes started on a run that is already over.
     appendEvent(db, {
@@ -38,13 +44,14 @@ async function startNext(
   if (!member) throw new Error("member is gone");
   const [first] = wakes;
   const projectId = first ? wakeProject(db, first) : null;
+  const mem = memoryRun(db, deps, member, next.engine.runtime, projectId, wakes);
   const runId = await startRun(db, deps.runDeps, {
     agentId: next.engine.runtime,
     ...(next.engine.model === null ? {} : { model: next.engine.model }),
     repo: run.repo,
-    prompt: `${next.summary}\n\n${buildPrompt(db, member, wakes)}`,
+    prompt: `${next.summary}\n\n${buildPrompt(db, member, wakes, mem.mcp, mem.index !== undefined)}`,
     ...(run.taskId === null ? {} : { taskId: run.taskId }),
-    member: runMember(db, member, projectId),
+    member: runMember(db, member, projectId, mem.index),
     reuseWorktreeOf: next.reuseWorktreeOf,
     attempt: run.attempt + 1,
     batchId: run.batchId ?? run.id,
@@ -66,7 +73,7 @@ export async function settleRun(db: Database, deps: ExecDeps, runId: string): Pr
     return;
   }
   if (run.endedAt === null) return;
-  const next = await chooseNext(db, deps, run);
+  const next = await chooseNext(db, deps, run, wakes);
   if (next) {
     let nextRunId: string;
     try {

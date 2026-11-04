@@ -10,7 +10,8 @@ export type TokenScope =
   | "interview"
   | "hiring"
   | "profile"
-  | "policy";
+  | "policy"
+  | "memory";
 
 export interface RunIdentity {
   runId: string;
