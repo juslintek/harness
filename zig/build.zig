@@ -96,11 +96,21 @@ pub fn build(b: *std.Build) void {
     // The slice modules are imported only from `test` blocks, so the diagnostics loop compiles the
     // test artifacts (never run, never installed): `zig build check -fincremental --watch`.
     const cookbook_tests = b.addTest(.{ .root_module = cookbook_mod, .filters = test_filters });
+    // Z13 builds as its own test root: it needs no libc or vendored C, and its recorded ceremonies
+    // are embedded from src/auth/fixtures.
+    const auth_mod = b.createModule(.{
+        .root_source_file = b.path("src/auth/webauthn.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const auth_tests = b.addTest(.{ .root_module = auth_mod, .filters = test_filters });
     const check = b.step("check", "Compile the code and its tests for errors only");
+    check.dependOn(&auth_tests.step);
     check.dependOn(&server_tests.step);
     check.dependOn(&hook_tests.step);
     check.dependOn(&cookbook_tests.step);
     const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&b.addRunArtifact(auth_tests).step);
     test_step.dependOn(&b.addRunArtifact(server_tests).step);
     test_step.dependOn(&b.addRunArtifact(hook_tests).step);
     const cookbook_run = b.addRunArtifact(cookbook_tests);
