@@ -44,19 +44,34 @@ function syncSafely(db: Database, home: string, disk: string): boolean {
   }
 }
 
+function stillMissing(home: string, disk: string): boolean {
+  try {
+    lstatSync(join(vaultDir(home), disk));
+    return false;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "ENOENT";
+  }
+}
+
 function dropMissing(db: Database, home: string, seen: Set<string>): number {
   let removed = 0;
   for (const { disk } of db.query<{ disk: string }, []>("SELECT disk FROM notes").all()) {
     if (seen.has(disk)) continue;
     // The shared path leaves the outside delete audit row; a row it cannot map is dropped as before.
     syncSafely(db, home, disk);
+    // Recreated since the snapshot: syncOutside just indexed it, so the row must stay.
+    if (!stillMissing(home, disk)) continue;
     if (getIndexedByDisk(db, disk) === null || removeIndexed(db, disk) !== null) removed++;
   }
   return removed;
 }
 
 // Files are the source of truth: the index follows whatever is on disk, including outside edits.
-export function reconcile(db: Database, home: string): { indexed: number; removed: number } {
+export function reconcile(
+  db: Database,
+  home: string,
+  beforeDrop?: () => void,
+): { indexed: number; removed: number } {
   const seen = new Set<string>();
   const orgs = new Set(
     db
@@ -80,6 +95,7 @@ export function reconcile(db: Database, home: string): { indexed: number; remove
     if (getIndexedByDisk(db, disk)?.hash === hashText(text)) continue;
     if (syncSafely(db, home, disk)) indexed++;
   }
+  beforeDrop?.();
   const removed = dropMissing(db, home, seen);
   return { indexed, removed };
 }

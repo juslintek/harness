@@ -140,3 +140,14 @@ test("a rename caught mid-crash keeps its id on the new path", () => {
   expect(readFileSync(join(dir, "memory/orgs/A/org/new.md"), "utf8")).toBe(moved);
   expect(db.query("SELECT 1 FROM notes").all()).toHaveLength(1);
 });
+
+test("a file recreated after the snapshot keeps its row", () => {
+  put("orgs/A/org/a.md", noteText("# A\nhello"));
+  reconcile(db, dir);
+  const file = join(dir, "memory/orgs/A/org/a.md");
+  rmSync(file);
+  const back = noteText("# A\nback");
+  const result = reconcile(db, dir, () => writeFileSync(file, back));
+  expect(result).toEqual({ indexed: 0, removed: 0 });
+  expect(getIndexedByDisk(db, "orgs/A/org/a.md")).not.toBeNull();
+});
