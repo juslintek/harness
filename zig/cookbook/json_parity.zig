@@ -22,8 +22,10 @@ pub fn parseBody(gpa: std.mem.Allocator, bytes: []const u8) !std.json.Parsed(Bod
 
 /// JS `string.length` counts UTF-16 code units; `[]const u8.len` counts bytes. Length limits that
 /// the TS server enforces with zod `.max(n)` must use this. Invalid UTF-8 is an error here.
-pub fn jsLength(utf8: []const u8) !usize {
-    return std.unicode.calcUtf16LeLen(utf8);
+pub fn jsLength(utf8: []const u8) error{InvalidUtf8}!usize {
+    // calcUtf16LeLen indexes past the end on a truncated sequence, so validate first.
+    if (!std.unicode.utf8ValidateSlice(utf8)) return error.InvalidUtf8;
+    return std.unicode.calcUtf16LeLen(utf8) catch error.InvalidUtf8;
 }
 
 /// The code points JS String.prototype.trim removes (WhiteSpace and LineTerminator in the spec).
@@ -38,10 +40,13 @@ fn isJsSpace(cp: u21) bool {
 /// std.mem.trim with an ASCII set leaves U+00A0, U+3000, U+FEFF and friends in place; JS removes them.
 pub fn jsTrim(utf8: []const u8) []const u8 {
     var start: usize = 0;
-    var it = std.unicode.Utf8Iterator{ .bytes = utf8, .i = 0 };
-    while (it.nextCodepoint()) |cp| {
+    while (start < utf8.len) {
+        // Utf8Iterator.nextCodepoint asserts on a bad lead byte, so decode by hand.
+        const len = std.unicode.utf8ByteSequenceLength(utf8[start]) catch break;
+        if (start + len > utf8.len) break;
+        const cp = std.unicode.utf8Decode(utf8[start..][0..len]) catch break;
         if (!isJsSpace(cp)) break;
-        start = it.i;
+        start += len;
     }
     var end = utf8.len;
     while (end > start) {
@@ -83,6 +88,14 @@ test "json: length is UTF-16 code units like JS" {
     try std.testing.expectEqual(@as(usize, 2), try jsLength("\u{1F600}"));
     try std.testing.expectEqual(@as(usize, 1), try jsLength("\u{0105}"));
     try std.testing.expectEqual(@as(usize, 4), "\u{0105}\u{0105}".len);
+}
+
+test "json: invalid UTF-8 is an error or left alone, never a panic" {
+    try std.testing.expectError(error.InvalidUtf8, jsLength("a\xc3"));
+    try std.testing.expectError(error.InvalidUtf8, jsLength("\xff"));
+    try std.testing.expectEqualStrings("a\xc3", jsTrim(" a\xc3"));
+    try std.testing.expectEqualStrings("\xffa", jsTrim("\xffa "));
+    try std.testing.expectEqualStrings("\xc3", jsTrim("\xc3"));
 }
 
 test "json: trim removes the JS whitespace set, not just ASCII" {

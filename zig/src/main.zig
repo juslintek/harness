@@ -1,5 +1,6 @@
 const std = @import("std");
 const db_command = @import("db/command.zig");
+const http_boot = @import("http/boot.zig");
 
 pub const Command = enum {
     serve,
@@ -33,7 +34,8 @@ pub fn main(init: std.process.Init) u8 {
     };
     return switch (command) {
         .migrate => db_command.run(init),
-        .serve, .enroll, .@"mcp-stdio", .@"guard-eval" => notImplemented(command),
+        .serve => http_boot.serve(init),
+        .enroll, .@"mcp-stdio", .@"guard-eval" => notImplemented(command),
     };
 }
 
@@ -76,6 +78,7 @@ test {
     _ = @import("health.zig");
     _ = @import("logs/zstd_c.zig");
     _ = @import("http/server.zig");
+    _ = @import("http/boot.zig");
     _ = @import("realtime/hub.zig");
     _ = @import("auth/cbor.zig");
     _ = @import("orgs/repo.zig");
