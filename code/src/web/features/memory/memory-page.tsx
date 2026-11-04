@@ -5,7 +5,7 @@ import { routeParts } from "../../route";
 import { ErrorLine } from "../auth/error-line";
 import { isAdmin, OrgGate, useOrg } from "../orgs/org-data";
 import { LessonsPanel } from "./lessons-panel";
-import { TABS, tabOf } from "./memory-data";
+import { tabOf, tabsFor } from "./memory-data";
 import { NotesPane } from "./notes-pane";
 import { WritesPanel } from "./writes-panel";
 
@@ -14,7 +14,8 @@ const LABELS = { notes: "Notes", writes: "Writes", review: "Review" } as const;
 function Memory({ detail }: { detail: OrgDetail }): preact.JSX.Element {
   const slug = detail.org.slug;
   const parts = routeParts();
-  const tab = tabOf(parts[3]);
+  const tabs = tabsFor(detail.me.role);
+  const tab = tabOf(parts[3], tabs);
   const [version, setVersion] = useState(0);
   useTopic(`org:${detail.org.id}`, (m) => {
     if (m === null || m.type === "memory") setVersion((v) => v + 1);
@@ -23,7 +24,7 @@ function Memory({ detail }: { detail: OrgDetail }): preact.JSX.Element {
     <section class="memory-page">
       <h2>Memory</h2>
       <nav class="memory-tabs" aria-label="Memory sections">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <a key={t} href={`#/o/${slug}/memory/${t}`} aria-current={t === tab ? "page" : undefined}>
             {LABELS[t]}
           </a>

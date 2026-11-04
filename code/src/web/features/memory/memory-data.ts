@@ -57,7 +57,11 @@ export const mayDiscard = (dirty: boolean, ask: (q: string) => boolean): boolean
 
 export const memoryBase = (slug: string): string => `/api/orgs/${slug}/memory`;
 
-export const tabOf = (part: string | undefined): Tab => TABS.find((t) => t === part) ?? "notes";
+// Writes and Review are for members who can act on them; their endpoints refuse a viewer anyway.
+export const tabsFor = (role: Role): Tab[] => (role === "viewer" ? ["notes"] : TABS);
+
+export const tabOf = (part: string | undefined, tabs: Tab[] = TABS): Tab =>
+  tabs.find((t) => t === part) ?? "notes";
 
 export const notesHash = (slug: string, id?: string): string =>
   `#/o/${slug}/memory/notes${id ? `/${id}` : ""}`;

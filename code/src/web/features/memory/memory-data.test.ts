@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { OrgDetail } from "../../../shared/orgs";
-import { keptAfterReload, mayDiscard, ownProjects } from "./memory-data";
+import { keptAfterReload, mayDiscard, ownProjects, tabOf, tabsFor } from "./memory-data";
 
 test("a second reload without edits keeps the first draft", () => {
   const first = keptAfterReload(null, "my draft", "server v1");
@@ -34,4 +34,12 @@ test("the note form only offers projects owned by the current org", () => {
     ],
   } as OrgDetail;
   expect(ownProjects(detail).map((p) => p.id)).toEqual(["p1"]);
+});
+
+test("a viewer only gets the notes tab and a direct writes link falls back to it", () => {
+  expect(tabsFor("viewer")).toEqual(["notes"]);
+  expect(tabsFor("member")).toEqual(["notes", "writes", "review"]);
+  expect(tabOf("writes", tabsFor("viewer"))).toBe("notes");
+  expect(tabOf("review", tabsFor("viewer"))).toBe("notes");
+  expect(tabOf("writes", tabsFor("member"))).toBe("writes");
 });
