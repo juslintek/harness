@@ -60,6 +60,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     server_mod.addImport("httpz", httpz.module("httpz"));
+    sibling.addOption(usize, "migration_count", addMigrations(b, server_mod));
     server_mod.addOptions("build_options", sibling);
     addVendoredC(b, server_mod);
 
@@ -117,4 +118,39 @@ fn addVendoredC(b: *std.Build, mod: *std.Build.Module) void {
 fn pathIfExists(b: *std.Build, rel: []const u8) ?std.Build.LazyPath {
     b.root.root_dir.handle.access(b.graph.io, b.pathJoin(&.{ b.root.sub_path, rel }), .{}) catch return null;
     return b.path(rel);
+}
+
+const migrations_dir = "../code/src/server/db/migrations";
+
+/// Embeds every NNN_*.sql of the TS migrations unchanged, as anonymous imports named
+/// migration_001, migration_002, and so on. A name that does not match, a duplicate or a gap in
+/// the numbering stops the build: the runner applies them by number and would otherwise skip or
+/// misorder a file silently. Returns the highest number; 0 when the directory is absent.
+fn addMigrations(b: *std.Build, mod: *std.Build.Module) usize {
+    const io = b.graph.io;
+    var dir = b.root.root_dir.handle.openDir(io, b.pathJoin(&.{ b.root.sub_path, migrations_dir }), .{ .iterate = true }) catch return 0;
+    defer dir.close(io);
+
+    const max_files = 999;
+    var files: [max_files + 1]?[]const u8 = @splat(null);
+    var highest: usize = 0;
+    var it = dir.iterate();
+    while (it.next(io) catch |err| std.debug.panic("cannot list {s}: {t}", .{ migrations_dir, err })) |entry| {
+        if (entry.kind != .file or !std.mem.endsWith(u8, entry.name, ".sql")) continue;
+        const name = entry.name;
+        const numbered = name.len > 4 and name[3] == '_' and
+            std.ascii.isDigit(name[0]) and std.ascii.isDigit(name[1]) and std.ascii.isDigit(name[2]);
+        if (!numbered) std.debug.panic("migration file {s} is not named NNN_name.sql", .{name});
+        const n = std.fmt.parseInt(usize, name[0..3], 10) catch unreachable;
+        if (n == 0 or files[n] != null) std.debug.panic("migration number {d} is zero or used twice ({s})", .{ n, name });
+        files[n] = b.dupe(name);
+        highest = @max(highest, n);
+    }
+    for (1..highest + 1) |n| {
+        const name = files[n] orelse std.debug.panic("migration {d} is missing from {s}", .{ n, migrations_dir });
+        mod.addAnonymousImport(b.fmt("migration_{d:0>3}", .{n}), .{
+            .root_source_file = b.path(b.pathJoin(&.{ migrations_dir, name })),
+        });
+    }
+    return highest;
 }
