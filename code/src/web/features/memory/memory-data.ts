@@ -96,12 +96,3 @@ export function splitLinks(body: string): BodyPart[] {
   parts.push({ text: body.slice(last) });
   return parts;
 }
-
-const slugOf = (path: string): string => (path.split("/").pop() ?? "").replace(/\.md$/, "");
-
-export function pickLinkTarget(hits: NoteSummary[], target: string): NoteSummary | null {
-  const t = target.toLowerCase();
-  return (
-    hits.find((h) => h.title.toLowerCase() === t || slugOf(h.path).toLowerCase() === t) ?? null
-  );
-}

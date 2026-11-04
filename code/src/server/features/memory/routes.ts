@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { parseBody, parseQuery } from "../../route-kit";
 import type { AuthEnv } from "../auth/api";
-import { backlinks, facets, searchNotes } from "./index-search";
+import { backlinks, facets, resolveWikilink, searchNotes } from "./index-search";
 import { diskToLocated, toDisk } from "./paths";
 import { memoryCtx, memoryError } from "./routes-kit";
 import { writeAndLessonRoutes } from "./routes-lessons";
@@ -23,6 +23,7 @@ const listQuery = z.object({
   project: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
 });
+const linkQuery = z.object({ target: z.string().min(1).max(200) });
 const createBody = z.object({
   scope: z.enum(["global", "org", "project"]),
   projectId: z.string().optional(),
@@ -71,6 +72,17 @@ function readRoutes(db: Database, home: string, app: Hono<AuthEnv>): void {
     if (m instanceof Response) return m;
     const { note } = locate(db, m.viewer, c.req.param("id"));
     return c.json(backlinks(db, m.viewer, note.id));
+  });
+  // Resolved here because only the server knows every note this viewer may see; a search hit list
+  // can miss the target and has no notion of the source note's directory.
+  app.get(`${base}/notes/:id/link`, (c) => {
+    const m = memoryCtx(db, c, "viewer");
+    if (m instanceof Response) return m;
+    const q = parseQuery(c, linkQuery);
+    if (q instanceof Response) return q;
+    const { note } = locate(db, m.viewer, c.req.param("id"));
+    const hit = resolveWikilink(db, m.viewer, q.target, note.disk);
+    return hit === null ? c.json({ error: "not_found" }, 404) : c.json(hit);
   });
 }
 

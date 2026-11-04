@@ -1,30 +1,26 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { noteViewSchema } from "../../../shared/memory";
+import { noteSummarySchema, noteViewSchema } from "../../../shared/memory";
 import type { OrgDetail } from "../../../shared/orgs";
-import { api, useLoad } from "../../api";
+import { ApiError, api, useLoad } from "../../api";
 import { errorText } from "../../format";
 import { ErrorLine } from "../auth/error-line";
-import {
-  memoryBase,
-  noteListSchema,
-  notesHash,
-  pickLinkTarget,
-  shownPath,
-  splitLinks,
-} from "./memory-data";
+import { memoryBase, noteListSchema, notesHash, shownPath, splitLinks } from "./memory-data";
 import { EditNote } from "./note-editor";
 
-function Body({ slug, text }: { slug: string; text: string }): preact.JSX.Element {
+function Body({ slug, id, text }: { slug: string; id: string; text: string }): preact.JSX.Element {
   const [missing, setMissing] = useState<string | null>(null);
   const follow = (target: string): void => {
-    const qs = new URLSearchParams({ q: target, limit: "20" });
-    api(`${memoryBase(slug)}/notes?${qs}`, noteListSchema).then(
-      (hits) => {
-        const hit = pickLinkTarget(hits, target);
-        if (hit) location.hash = notesHash(slug, hit.id);
-        else setMissing(`No note titled "${target}"`);
+    const qs = new URLSearchParams({ target });
+    api(`${memoryBase(slug)}/notes/${id}/link?${qs}`, noteSummarySchema).then(
+      (hit) => {
+        location.hash = notesHash(slug, hit.id);
       },
-      (err: unknown) => setMissing(errorText(err)),
+      (err: unknown) =>
+        setMissing(
+          err instanceof ApiError && err.status === 404
+            ? `No note titled "${target}"`
+            : errorText(err),
+        ),
     );
   };
   return (
@@ -94,7 +90,7 @@ export function NoteView({
         />
       ) : (
         <>
-          <Body slug={slug} text={n.body} />
+          <Body slug={slug} id={n.id} text={n.body} />
           {n.canWrite && (
             <button type="button" onClick={() => setEditing(true)}>
               Edit
