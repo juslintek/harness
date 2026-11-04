@@ -62,6 +62,7 @@ pub fn build(b: *std.Build) void {
     server_mod.addImport("httpz", httpz.module("httpz"));
     sibling.addOption(usize, "migration_count", addMigrations(b, server_mod));
     server_mod.addOptions("build_options", sibling);
+    server_mod.addAnonymousImport("mcp_tools_json", .{ .root_source_file = b.path("../contract/mcp-tools.json") });
     addVendoredC(b, server_mod);
 
     const hook_mod = b.createModule(.{

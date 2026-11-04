@@ -13,6 +13,9 @@ const headers = @import("headers.zig");
 const policy = @import("policy.zig");
 const session_endpoints = @import("../auth/middleware.zig");
 const agents = @import("../agents/routes.zig");
+const mcp = @import("../mcp/server.zig");
+const logs_api = @import("../logs/api.zig");
+const usage_routes = @import("../usage/routes.zig");
 const ws = @import("ws.zig");
 const Hub = @import("../realtime/hub.zig").Hub;
 
@@ -33,6 +36,7 @@ pub const Services = struct {
     health: Health,
     /// The agents slice's state; null in tests that never reach its routes.
     agents: ?*agents.Ctx = null,
+    mcp: mcp.Deps = .{},
     /// The realtime hub; null where no WebSocket is served (the `/ws` row then answers 501).
     hub: ?*Hub = null,
 };
@@ -44,6 +48,8 @@ pub const Call = struct {
     req: *httpz.Request,
     res: *httpz.Response,
     actor: ?Actor,
+    /// The port the listener is bound to; `/mcp` accepts only Hosts that name it.
+    port: u16 = 0,
 };
 
 pub const HandlerFn = *const fn (call: *Call) anyerror!void;
@@ -147,8 +153,8 @@ pub const table = [_]Route{
     row(.GET, "/api/projects/:id/members", .{ .session = true }),
     row(.GET, "/api/projects/:id/tasks", .{ .session = true }),
     row(.POST, "/api/projects/:id/tasks", .{ .session = true, .origin = true }),
-    row(.GET, "/api/quota", .{ .session = true, .admin = true }),
-    row(.POST, "/api/quota", .{ .session = true, .admin = true, .origin = true }),
+    .{ .method = .GET, .path = "/api/quota", .handler = usage_routes.getQuota, .policy = .{ .session = true, .admin = true } },
+    .{ .method = .POST, .path = "/api/quota", .handler = usage_routes.postQuota, .policy = .{ .session = true, .admin = true, .origin = true } },
     row(.GET, "/api/router/registry", .{ .session = true, .admin = true }),
     row(.POST, "/api/router/registry/refresh", .{ .session = true, .admin = true, .origin = true }),
     row(.GET, "/api/router/route", .{ .session = true, .admin = true }),
@@ -156,7 +162,7 @@ pub const table = [_]Route{
     row(.POST, "/api/runs", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
     row(.GET, "/api/runs/:id", .{ .session = true, .admin = true }),
     row(.POST, "/api/runs/:id/kill", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
-    row(.GET, "/api/search", .{ .session = true, .admin = true }),
+    .{ .method = .GET, .path = "/api/search", .handler = logs_api.search, .policy = .{ .session = true, .admin = true } },
     row(.GET, "/api/tasks/:id", .{ .session = true }),
     row(.PATCH, "/api/tasks/:id", .{ .session = true, .origin = true }),
     row(.POST, "/api/tasks/:id/checkout", .{ .session = true, .origin = true }),
@@ -165,8 +171,10 @@ pub const table = [_]Route{
     row(.POST, "/api/tasks/:id/deps", .{ .session = true, .origin = true }),
     row(.POST, "/api/tasks/:id/move", .{ .session = true, .origin = true }),
     row(.POST, "/api/tasks/:id/release", .{ .session = true, .origin = true }),
-    row(.GET, "/api/usage", .{ .session = true, .admin = true }),
+    .{ .method = .GET, .path = "/api/usage", .handler = usage_routes.getUsage, .policy = .{ .session = true, .admin = true } },
     row(.POST, "/api/guard/hook", .{ .public = true, .loopback = true }),
+    .{ .method = .any, .path = "/mcp", .handler = mcp.handle, .policy = .{ .public = true, .loopback = true } },
+    row(.GET, "/ws", .{ .session = true, .origin = true }),
     row(.any, "/mcp", .{ .public = true, .loopback = true }),
     .{ .method = .GET, .path = "/ws", .handler = ws.upgrade, .policy = .{ .session = true, .origin = true } },
 };

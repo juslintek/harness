@@ -49,7 +49,7 @@ fn percentByte(text: []const u8, at: usize) ?u8 {
 
 /// `tryDecodeURIComponent` of Hono: each run of `%XX` becomes the UTF-8 text it spells; a run that
 /// is not valid UTF-8, and any stray `%`, stay as written.
-fn percentDecode(arena: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error![]const u8 {
+pub fn percentDecode(arena: std.mem.Allocator, text: []const u8) std.mem.Allocator.Error![]const u8 {
     if (std.mem.findScalar(u8, text, '%') == null) return text;
     var out: std.ArrayList(u8) = .empty;
     var i: usize = 0;

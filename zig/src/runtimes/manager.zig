@@ -6,6 +6,7 @@
 //! directly (events with redaction, usage, guard, tokens, realtime) are reached through `Links`,
 //! so this file depends on none of them.
 const std = @import("std");
+const builtin = @import("builtin");
 const app_mod = @import("../app.zig");
 const sqlite = @import("../db/sqlite.zig");
 const ids = @import("../ids.zig");
@@ -239,9 +240,10 @@ pub fn hasExpiredApproval(db: sqlite.Db, run_id: []const u8) !bool {
     return stmt.int(0) > 0;
 }
 
-/// A plain INSERT into events for tests and for a server without the logs slice. Production
-/// wires the logs slice's append instead, which redacts secrets and indexes the body: this one
-/// does neither.
+/// A plain INSERT into events for tests only (`appendIn` refuses to use it in a real build).
+/// Production sets `Links.append_event` to `logs/api.zig`'s `appendLinked`, which redacts secrets
+/// and writes the base row, the pending body and both text indexes in one transaction: this one
+/// does not redact and a failure between its statements leaves a half-stored event.
 pub fn insertEventPlain(db: sqlite.Db, event: types.NewEvent, id: []const u8, now_ms: i64) !void {
     const stmt = try db.prepare("INSERT INTO events (id, ts, run_id, task_id, agent, kind, gen_ai_operation_name, " ++
         "gen_ai_tool_name, gen_ai_conversation_id, gen_ai_request_model, gen_ai_usage_input_tokens, " ++
@@ -353,10 +355,11 @@ pub fn endState(
 /// the fail-closed default.
 pub const Links = struct {
     ctx: ?*anyopaque = null,
-    /// Appends an event; runs under the App lock. Defaults to `insertEventPlain`. The end event of
-    /// a run is appended inside a transaction the manager has opened, so an implementation must
-    /// not BEGIN its own (use a savepoint).
-    append_event: ?*const fn (ctx: ?*anyopaque, db: sqlite.Db, event: types.NewEvent, now_ms: i64) anyerror!void = null,
+    /// Appends an event under the App lock, `id` being its fresh UUIDv7. Required outside tests,
+    /// where it defaults to `insertEventPlain`; production sets `logs.appendLinked`. The end event
+    /// of a run is appended inside a transaction the manager has opened, so an implementation
+    /// must not BEGIN its own (use a savepoint).
+    append_event: ?*const fn (ctx: ?*anyopaque, gpa: std.mem.Allocator, db: sqlite.Db, event: types.NewEvent, id: []const u8, now_ms: i64) anyerror!void = null,
     /// Realtime and anything else that listens to run events. Runs outside the lock; the event is
     /// borrowed for the call.
     on_event: ?*const fn (ctx: ?*anyopaque, event: types.NewEvent) void = null,
@@ -507,7 +510,8 @@ pub const Manager = struct {
 
     fn appendIn(m: *Manager, db: sqlite.Db, event: types.NewEvent, now_ms: i64, id: []const u8) !void {
         if (takeInjected(&m.inject_append_failures)) return error.Busy;
-        if (m.links.append_event) |append| return append(m.links.ctx, db, event, now_ms);
+        if (m.links.append_event) |append| return append(m.links.ctx, m.gpa, db, event, id, now_ms);
+        if (!builtin.is_test) return error.NoEventAppender;
         try insertEventPlain(db, event, id, now_ms);
     }
 

@@ -132,7 +132,7 @@ test "http: mutations under /api need the exact Origin, loopback rows do not" {
         .{ .DELETE, "/api/tasks/1", &.{host}, 403 },
         .{ .POST, "/api/health", &.{host}, 403 },
         .{ .GET, "/api/health", &.{host}, 200 },
-        .{ .POST, "/mcp", &.{host}, 501 },
+        .{ .POST, "/mcp", &.{host}, 401 },
         .{ .POST, "/api/guard/hook", &.{host}, 501 },
     };
     for (cases) |case| {
@@ -417,7 +417,8 @@ test "http: real socket, the body cap is 1 MiB" {
     defer testing.allocator.free(exact_request);
     const exact = try fixture.exchange(exact_request);
     defer testing.allocator.free(exact);
-    try testing.expectEqual(@as(u16, 501), try statusOf(exact));
+    // A body of exactly the cap reaches the handler; /mcp answers 401 for a request with no token.
+    try testing.expectEqual(@as(u16, 401), try statusOf(exact));
 }
 
 test "http: real socket, ambiguous framing and duplicate hosts are refused" {
