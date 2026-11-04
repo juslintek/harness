@@ -185,6 +185,21 @@ export function drop(
   record(db, home, ctx, { op, loc, noteId, before, after: null });
 }
 
+// A rename is write-new then remove-old. If the removal fails the old file still has the index
+// row, so the new copy has to go or the same note would live in two files.
+function undoCopyOnFailure(home: string, from: Located, to: Located): void {
+  try {
+    removeNoteFile(home, from.disk);
+  } catch (e) {
+    try {
+      removeNoteFile(home, to.disk);
+    } catch {
+      // Best effort: the failure of the first removal is the one worth reporting.
+    }
+    throw e;
+  }
+}
+
 export function moved(
   db: Database,
   home: string,
@@ -196,7 +211,7 @@ export function moved(
 ): IndexedNote {
   try {
     writeNoteFileAtomic(home, to.disk, after);
-    removeNoteFile(home, from.disk);
+    undoCopyOnFailure(home, from, to);
   } catch (e) {
     throw new MemoryError("invalid", (e as Error).message);
   }

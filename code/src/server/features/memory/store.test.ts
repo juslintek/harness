@@ -1,7 +1,7 @@
 import "../../test-support/no-git-env";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { chmodSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { hashText, parseNote } from "./frontmatter";
 import { listWrites } from "./index-log";
 import { getIndexed } from "./index-repo";
@@ -135,6 +135,24 @@ test("rename keeps the id and backlinks, cannot change org or overwrite", async 
       renameNote(env.db, env.dir, ctx(aliceA), target.id, moved.hash, loc("orgs/A/org/other.md")),
     ),
   ).toBe("exists");
+});
+
+test("rename leaves only the source file when removing it fails", async () => {
+  const target = await made("# Deploy\nsteps");
+  const to = loc("orgs/A/projects/pa/deploy.md");
+  // Not an ancestor of the target: writing the target re-chmods its own parents to 0700.
+  const sourceDir = dirname(join(env.dir, "memory", orgNote.disk));
+  chmodSync(sourceDir, 0o555);
+  try {
+    expect(code(() => renameNote(env.db, env.dir, ctx(aliceA), target.id, target.hash, to))).toBe(
+      "invalid",
+    );
+  } finally {
+    chmodSync(sourceDir, 0o755);
+  }
+  expect(readNoteFile(env.dir, orgNote.disk)).not.toBeNull();
+  expect(readNoteFile(env.dir, to.disk)).toBeNull();
+  expect(getIndexed(env.db, target.id)?.disk).toBe(orgNote.disk);
 });
 
 test("readNote reindexes when the file changed on disk", async () => {
