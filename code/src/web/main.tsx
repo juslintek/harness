@@ -1,6 +1,7 @@
 import { render } from "preact";
 import { useEffect } from "preact/hooks";
 import { AgentsPage } from "./features/agents/agents-page";
+import { ApprovalPage } from "./features/approvals/approval-page";
 import { PendingApprovals } from "./features/approvals/approvals";
 import { AccountPage } from "./features/auth/account-page";
 import { EnrollPage } from "./features/auth/enroll-page";
@@ -41,12 +42,18 @@ function OrgRoute({ parts }: { parts: string[] }): preact.JSX.Element {
   );
 }
 
+// The single page answers 404 itself to anyone who may not decide it, so no client-side role check.
+function ApprovalsRoute({ id }: { id: string | undefined }): preact.JSX.Element {
+  if (id) return <ApprovalPage id={id} key={id} />;
+  return canDecideApprovals(me.value) ? <PendingApprovals /> : <p class="muted">Not available.</p>;
+}
+
 function Page(): preact.JSX.Element {
   const parts = routeParts();
   const admin = me.value?.user.instanceAdmin === true;
   if (parts[0] === "o" && parts[1]) return <OrgRoute parts={parts} />;
   if (parts[0] === "account") return <AccountPage />;
-  if (parts[0] === "approvals" && canDecideApprovals(me.value)) return <PendingApprovals />;
+  if (parts[0] === "approvals") return <ApprovalsRoute id={parts[1]} />;
   if (admin && parts[0] === "agents") return <AgentsPage />;
   if (admin && parts[0] === "search") return <SearchPage />;
   if (admin && parts[0] === "runs" && parts[1]) return <RunPage id={parts[1]} key={parts[1]} />;

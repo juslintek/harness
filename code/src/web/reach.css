@@ -1,1 +1,15 @@
 /* Styles for the notification and bridge settings screens. */
+
+.approval-page {
+  max-width: 40rem;
+  margin-inline: auto;
+}
+.approval-page .command {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.approval-page .row button {
+  flex: 1 1 8rem;
+  min-height: 2.75rem;
+}

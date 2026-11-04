@@ -112,6 +112,20 @@
     }
   },
   {
+    "method": "GET",
+    "path": "/api/approvals/:id",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
     "method": "POST",
     "path": "/api/approvals/:id",
     "policy": {

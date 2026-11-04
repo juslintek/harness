@@ -1,6 +1,7 @@
 import { type Signal, signal } from "@preact/signals";
 import { z } from "zod";
 import { api } from "../../api";
+import { takeReturn } from "../../route";
 
 export interface Me {
   user: { id: string; email: string; name: string; instanceAdmin: boolean };
@@ -36,5 +37,5 @@ export async function refreshMe(): Promise<void> {
 
 export async function leaveLogin(): Promise<void> {
   await refreshMe();
-  location.hash = "#/";
+  location.hash = takeReturn();
 }

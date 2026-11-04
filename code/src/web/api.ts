@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { type WsMessage, wsMessageSchema } from "../shared/realtime";
 import { stepUp } from "./features/auth/webauthn";
+import { rememberReturn } from "./route";
 
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
@@ -45,7 +46,9 @@ const issuesOf = (body: unknown): string[] =>
 
 // The login and enroll pages answer 401 themselves (a wrong code is not an expired session).
 function sessionLost(): void {
-  if (!/^#\/(login|enroll)/.test(location.hash)) location.hash = "#/login";
+  if (/^#\/(login|enroll)/.test(location.hash)) return;
+  rememberReturn(location.hash);
+  location.hash = "#/login";
 }
 
 async function postJson(path: string, body: unknown): Promise<unknown> {
