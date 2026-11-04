@@ -4,7 +4,14 @@ import type { OrgDetail } from "../../../shared/orgs";
 import { ApiError, api, useLoad } from "../../api";
 import { errorText } from "../../format";
 import { ErrorLine } from "../auth/error-line";
-import { memoryBase, noteListSchema, notesHash, shownPath, splitLinks } from "./memory-data";
+import {
+  memoryBase,
+  noteListSchema,
+  notesHash,
+  shownNote,
+  shownPath,
+  splitLinks,
+} from "./memory-data";
 import { EditNote } from "./note-editor";
 
 function Body({ slug, id, text }: { slug: string; id: string; text: string }): preact.JSX.Element {
@@ -64,7 +71,7 @@ export function NoteView({
     () => api(`${memoryBase(slug)}/notes/${id}/backlinks`, noteListSchema),
     [slug, id, version],
   );
-  const n = note.data;
+  const n = shownNote(note.data, note.error);
   const article = useRef<HTMLElement>(null);
   // On a phone the list is stacked above the note, so a tapped note would open off screen.
   useEffect(() => article.current?.scrollIntoView({ block: "nearest" }), [n?.id]);

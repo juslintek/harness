@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { OrgDetail } from "../../../shared/orgs";
-import { keptAfterReload, mayDiscard, ownProjects, tabOf, tabsFor } from "./memory-data";
+import { keptAfterReload, mayDiscard, ownProjects, shownNote, tabOf, tabsFor } from "./memory-data";
 
 test("a second reload without edits keeps the first draft", () => {
   const first = keptAfterReload(null, "my draft", "server v1");
@@ -42,4 +42,10 @@ test("a viewer only gets the notes tab and a direct writes link falls back to it
   expect(tabOf("writes", tabsFor("viewer"))).toBe("notes");
   expect(tabOf("review", tabsFor("viewer"))).toBe("notes");
   expect(tabOf("writes", tabsFor("member"))).toBe("writes");
+});
+
+test("a failed reload hides the cached note, a successful one shows it", () => {
+  expect(shownNote({ id: "n1" }, null)).toEqual({ id: "n1" });
+  expect(shownNote({ id: "n1" }, "Error: 404")).toBeNull();
+  expect(shownNote(null, null)).toBeNull();
 });
