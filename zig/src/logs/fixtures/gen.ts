@@ -114,6 +114,8 @@ const corpus = [
   "SECRET_ACCESS_KEY=abc AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE",
   "ACCESS-KEY: abc and api-key=def and apikey=ghi and api_key:jkl",
   "password=a password=b token=c",
+  "éAKIAIOSFODNN7EXAMPLEé and ñsk-ant-abcdefgh and 日本npm_abcdefghijklmnopqrstuvwxyz0123456789日本",
+  "🙂Bearer abcdefgh12 and éghp_abcdefghijklmnopqrst and \u00e9xoxb-1234567890-abcdef",
 ];
 writeFileSync(
   join(dir, "redact.json"),

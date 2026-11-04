@@ -178,5 +178,13 @@
  {
   "input": "password=a password=b token=c",
   "expected": "password=[REDACTED:secret] password=[REDACTED:secret] token=[REDACTED:secret]"
+ },
+ {
+  "input": "éAKIAIOSFODNN7EXAMPLEé and ñsk-ant-abcdefgh and 日本npm_abcdefghijklmnopqrstuvwxyz0123456789日本",
+  "expected": "é[REDACTED:aws-key]é and ñ[REDACTED:anthropic-key] and 日本[REDACTED:npm-token]日本"
+ },
+ {
+  "input": "🙂Bearer abcdefgh12 and éghp_abcdefghijklmnopqrst and éxoxb-1234567890-abcdef",
+  "expected": "🙂[REDACTED:bearer] and é[REDACTED:github-token] and é[REDACTED:slack-token]"
  }
 ]
