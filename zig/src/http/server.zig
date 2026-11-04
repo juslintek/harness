@@ -35,7 +35,15 @@ const header_buffer_bytes: usize = 16 * 1024;
 
 const origin_buf_len = 64;
 
+/// Runs once after the listening line is written, with the bound port and stdout; main.ts prints
+/// the first-run enrollment link at this point.
+pub const OnListening = struct {
+    ctx: *anyopaque,
+    call: *const fn (ctx: *anyopaque, port: u16, out: *std.Io.Writer) anyerror!void,
+};
+
 pub const Options = struct {
+    on_listening: ?OnListening = null,
     host: []const u8,
     /// 0 binds a free port.
     port: u16,
@@ -176,7 +184,8 @@ pub const Server = struct {
     }
 
     fn run(self: *Server, route: *const routes.Route, req: *httpz.Request, res: *httpz.Response, actor: ?policy.Actor) !void {
-        var call: routes.Call = .{ .services = &self.services, .req = req, .res = res, .actor = actor, .port = self.port.load(.acquire) };
+        var origin_buf: [origin_buf_len]u8 = undefined;
+        var call: routes.Call = .{ .services = &self.services, .req = req, .res = res, .actor = actor, .origin = self.originFor(&origin_buf), .port = self.port.load(.acquire) };
         try route.handler(&call);
     }
 };
@@ -356,6 +365,10 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, app: *App, health: routes.Health,
     var line_buf: [128]u8 = undefined;
     try out.writeAll(try listeningLine(&line_buf, options.host, running.port));
     try out.flush();
+    if (options.on_listening) |hook| {
+        try hook.call(hook.ctx, running.port, out);
+        try out.flush();
+    }
 
     installSignalHandlers();
     while (!stop_requested.load(.acquire)) io.sleep(.fromMilliseconds(50), .awake) catch break;

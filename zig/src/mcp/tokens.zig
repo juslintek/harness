@@ -12,7 +12,7 @@ pub const token_len = sessions.token_len;
 
 /// `TokenScope`. `Identity.scopes` keeps the stored text instead: TS casts the parsed JSON and
 /// `whoami` prints whatever a row holds.
-pub const Scope = enum { report, guard_hook, board, chat, approvals_decide, interview, hiring, profile, policy };
+pub const Scope = enum { report, guard_hook, board, chat, approvals_decide, interview, hiring, profile, policy, memory };
 
 /// `TokenHolder`.
 pub const Holder = union(enum) {

@@ -673,19 +673,19 @@ test "middleware: the throttle sits in the chain after the origin guard and befo
         var web = httpz.testing.init(.{});
         defer web.deinit();
         web.req.method = .POST;
-        web.url("/api/auth/login/options");
+        web.url("/api/auth/email/request");
         web.header("host", "localhost:4100");
         web.header("origin", "http://localhost:4100");
-        try server.chain(web.req, web.res, routeFor(.POST, "/api/auth/login/options"));
-        try web.expectStatus(if (n < 10) 501 else 429);
+        server.chain(web.req, web.res, routeFor(.POST, "/api/auth/email/request")) catch |err| server.uncaughtError(web.req, web.res, err);
+        try web.expectStatus(if (n < 10) 400 else 429);
     }
     // A request the origin guard refuses never counts against the client.
     var refused = httpz.testing.init(.{});
     defer refused.deinit();
     refused.req.method = .POST;
-    refused.url("/api/auth/login/options");
+    refused.url("/api/auth/email/request");
     refused.header("host", "localhost:4100");
-    try server.chain(refused.req, refused.res, routeFor(.POST, "/api/auth/login/options"));
+    try server.chain(refused.req, refused.res, routeFor(.POST, "/api/auth/email/request"));
     try refused.expectStatus(403);
 }
 
@@ -799,11 +799,11 @@ test "middleware: over a real socket the cookie opens /api/auth/me, logout close
     var origin_only: [64]u8 = undefined;
     const origin_header = try std.fmt.bufPrint(&origin_only, "Origin: http://localhost:{d}\r\n", .{wire.running.port});
     for (0..10) |_| {
-        const attempt = try wire.send("POST", "/api/auth/login/options", origin_header);
+        const attempt = try wire.send("POST", "/api/auth/email/request", origin_header);
         defer testing.allocator.free(attempt);
-        try testing.expectEqualStrings("501", statusLine(attempt));
+        try testing.expectEqualStrings("400", statusLine(attempt));
     }
-    const limited = try wire.send("POST", "/api/auth/login/options", origin_header);
+    const limited = try wire.send("POST", "/api/auth/email/request", origin_header);
     defer testing.allocator.free(limited);
     try testing.expectEqualStrings("429", statusLine(limited));
     try testing.expectEqualStrings("60", wireHeader(limited, "retry-after").?);

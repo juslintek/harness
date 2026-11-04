@@ -12,6 +12,7 @@ const health_body = @import("../health.zig");
 const headers = @import("headers.zig");
 const policy = @import("policy.zig");
 const session_endpoints = @import("../auth/middleware.zig");
+const auth_routes = @import("../auth/routes.zig");
 const agents = @import("../agents/routes.zig");
 const mcp = @import("../mcp/server.zig");
 const logs_api = @import("../logs/api.zig");
@@ -48,6 +49,8 @@ pub const Call = struct {
     req: *httpz.Request,
     res: *httpz.Response,
     actor: ?Actor,
+    /// `deps.rp.origin`: HARNESS_ORIGIN, or `http://localhost:<port>`. Valid while the handler runs.
+    origin: []const u8 = "",
     /// The port the listener is bound to; `/mcp` accepts only Hosts that name it.
     port: u16 = 0,
 };
@@ -88,24 +91,24 @@ pub const table = [_]Route{
     .{ .method = .GET, .path = "/api/agents/ollaya", .handler = agents.ollayaStatus, .policy = .{ .session = true, .admin = true } },
     row(.GET, "/api/approvals", .{ .session = true }),
     row(.POST, "/api/approvals/:id", .{ .session = true, .step_up = true, .origin = true }),
-    row(.POST, "/api/auth/email/request", .{ .public = true, .origin = true }),
-    row(.POST, "/api/auth/email/verify", .{ .public = true, .origin = true }),
-    row(.POST, "/api/auth/enroll/:code/options", .{ .public = true, .origin = true }),
-    row(.POST, "/api/auth/enroll/:code/verify", .{ .public = true, .origin = true }),
-    row(.POST, "/api/auth/login/options", .{ .public = true, .origin = true }),
-    row(.POST, "/api/auth/login/verify", .{ .public = true, .origin = true }),
+    .{ .method = .POST, .path = "/api/auth/email/request", .handler = auth_routes.emailRequest, .policy = .{ .public = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/email/verify", .handler = auth_routes.emailVerify, .policy = .{ .public = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/enroll/:code/options", .handler = auth_routes.enrollOptions, .policy = .{ .public = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/enroll/:code/verify", .handler = auth_routes.enrollVerify, .policy = .{ .public = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/login/options", .handler = auth_routes.loginOptions, .policy = .{ .public = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/login/verify", .handler = auth_routes.loginVerify, .policy = .{ .public = true, .origin = true } },
     .{ .method = .POST, .path = "/api/auth/logout", .handler = session_endpoints.logout, .policy = .{ .session = true, .origin = true } },
     .{ .method = .GET, .path = "/api/auth/me", .handler = session_endpoints.me, .policy = .{ .session = true } },
-    row(.GET, "/api/auth/passkeys", .{ .session = true }),
-    row(.DELETE, "/api/auth/passkeys/:id", .{ .session = true, .step_up = true, .origin = true }),
-    row(.POST, "/api/auth/passkeys/options", .{ .session = true, .step_up = true, .origin = true }),
-    row(.POST, "/api/auth/passkeys/verify", .{ .session = true, .step_up = true, .origin = true }),
-    row(.POST, "/api/auth/recovery", .{ .public = true, .origin = true }),
-    row(.POST, "/api/auth/recovery/regenerate", .{ .session = true, .step_up = true, .origin = true }),
-    row(.GET, "/api/auth/sessions", .{ .session = true }),
-    row(.DELETE, "/api/auth/sessions/:id", .{ .session = true, .origin = true }),
-    row(.POST, "/api/auth/step-up/options", .{ .session = true, .origin = true }),
-    row(.POST, "/api/auth/step-up/verify", .{ .session = true, .origin = true }),
+    .{ .method = .GET, .path = "/api/auth/passkeys", .handler = auth_routes.passkeyList, .policy = .{ .session = true } },
+    .{ .method = .DELETE, .path = "/api/auth/passkeys/:id", .handler = auth_routes.passkeyDelete, .policy = .{ .session = true, .step_up = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/passkeys/options", .handler = auth_routes.passkeyOptions, .policy = .{ .session = true, .step_up = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/passkeys/verify", .handler = auth_routes.passkeyVerify, .policy = .{ .session = true, .step_up = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/recovery", .handler = auth_routes.recovery, .policy = .{ .public = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/recovery/regenerate", .handler = auth_routes.recoveryRegenerate, .policy = .{ .session = true, .step_up = true, .origin = true } },
+    .{ .method = .GET, .path = "/api/auth/sessions", .handler = auth_routes.sessionList, .policy = .{ .session = true } },
+    .{ .method = .DELETE, .path = "/api/auth/sessions/:id", .handler = auth_routes.sessionDelete, .policy = .{ .session = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/step-up/options", .handler = auth_routes.stepUpOptions, .policy = .{ .session = true, .origin = true } },
+    .{ .method = .POST, .path = "/api/auth/step-up/verify", .handler = auth_routes.stepUpVerify, .policy = .{ .session = true, .origin = true } },
     row(.GET, "/api/channels/:id/members", .{ .session = true }),
     row(.GET, "/api/channels/:id/messages", .{ .session = true }),
     row(.POST, "/api/channels/:id/messages", .{ .session = true, .origin = true }),
@@ -174,7 +177,5 @@ pub const table = [_]Route{
     .{ .method = .GET, .path = "/api/usage", .handler = usage_routes.getUsage, .policy = .{ .session = true, .admin = true } },
     row(.POST, "/api/guard/hook", .{ .public = true, .loopback = true }),
     .{ .method = .any, .path = "/mcp", .handler = mcp.handle, .policy = .{ .public = true, .loopback = true } },
-    row(.GET, "/ws", .{ .session = true, .origin = true }),
-    row(.any, "/mcp", .{ .public = true, .loopback = true }),
     .{ .method = .GET, .path = "/ws", .handler = ws.upgrade, .policy = .{ .session = true, .origin = true } },
 };

@@ -78,6 +78,9 @@ pub const table = [_]Tool{
     pending("interview_ask", "hiring"),
     pending("interview_pass", "hiring"),
     pending("interview_score", "hiring"),
+    pending("lesson_propose", "memory"),
+    pending("lesson_review", "memory"),
+    pending("memory", "memory"),
     pending("policy_decide", "policy"),
     pending("policy_get", "policy"),
     pending("policy_propose", "policy"),
@@ -284,7 +287,9 @@ test "mcp: tools/list drops the dump's scope field and keeps the SDK key order" 
     try writeToolsList(arena.allocator(), &jw);
     const text = out.written();
     try testing.expect(std.mem.startsWith(u8, text, "{\"tools\":[{\"name\":\"approvals_decide\",\"description\":"));
-    try testing.expect(std.mem.find(u8, text, "\"scope\"") == null);
+    // A tool's own argument may be called scope (memory has one), so look at the top level only.
+    const listed = (try std.json.parseFromSliceLeaky(std.json.Value, arena.allocator(), text, .{})).object.get("tools").?.array.items;
+    for (listed) |entry| try testing.expect(entry.object.get("scope") == null);
     try testing.expect(std.mem.find(u8, text, "{\"name\":\"whoami\",\"description\":\"Identify the run and member this token belongs to\",\"inputSchema\":{\"properties\":{},\"type\":\"object\"},\"execution\":{\"taskSupport\":\"forbidden\"}}") != null);
 }
 

@@ -82,7 +82,7 @@ fn dbOf(state: *State) Error!sqlite.Db {
 
 // ---- createSession ----
 
-const InsertArgs = struct {
+pub const InsertArgs = struct {
     id: [ids.uuid_len]u8,
     hash: [64]u8,
     input: NewSession,
@@ -90,7 +90,11 @@ const InsertArgs = struct {
 };
 
 fn insertLocked(args: *const InsertArgs, state: *State) Error!void {
-    const db = try dbOf(state);
+    return insertRow(try dbOf(state), args);
+}
+
+/// The INSERT of `createSession`, for a caller that holds the lock and its own transaction.
+pub fn insertRow(db: sqlite.Db, args: *const InsertArgs) Error!void {
     const stmt = try db.prepare(
         \\INSERT INTO sessions
         \\  (id, user_id, token_hash, method, user_agent, created_at, last_seen_at, expires_at, step_up_at)

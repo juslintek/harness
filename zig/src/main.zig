@@ -2,6 +2,7 @@ const std = @import("std");
 const db_command = @import("db/command.zig");
 const http_boot = @import("http/boot.zig");
 const guard_eval = @import("guard/eval.zig");
+const enroll = @import("auth/enroll.zig");
 const mcp_server = @import("mcp/server.zig");
 
 pub const Command = enum {
@@ -38,8 +39,8 @@ pub fn main(init: std.process.Init) u8 {
         .migrate => db_command.run(init),
         .serve => http_boot.serve(init),
         .@"guard-eval" => guard_eval.run(init),
+        .enroll => enroll.run(init),
         .@"mcp-stdio" => mcp_server.runStdio(init),
-        .enroll => notImplemented(command),
     };
 }
 
@@ -87,6 +88,11 @@ test {
     _ = @import("auth/cbor.zig");
     _ = @import("auth/sessions.zig");
     _ = @import("auth/middleware.zig");
+    _ = @import("auth/codes.zig");
+    _ = @import("auth/passkeys.zig");
+    _ = @import("auth/body.zig");
+    _ = @import("auth/enroll.zig");
+    _ = @import("auth/routes.zig");
     _ = @import("orgs/repo.zig");
     _ = @import("board/repo.zig");
     _ = @import("chat/repo.zig");

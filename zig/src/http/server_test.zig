@@ -30,7 +30,7 @@ fn call(server: *Server, method: httpz.Method, path: []const u8, pairs: []const 
     web.req.method = method;
     web.url(path);
     for (pairs) |pair| web.header(pair[0], pair[1]);
-    try server.chain(web.req, web.res, routeFor(method, path));
+    server.chain(web.req, web.res, routeFor(method, path)) catch |err| server.uncaughtError(web.req, web.res, err);
     return web;
 }
 
@@ -122,10 +122,10 @@ test "http: mutations under /api need the exact Origin, loopback rows do not" {
     const good: [2][]const u8 = .{ "origin", "http://localhost:4100" };
     const Case = struct { httpz.Method, []const u8, []const [2][]const u8, u16 };
     const cases = [_]Case{
-        .{ .POST, "/api/auth/login/options", &.{host}, 403 },
-        .{ .POST, "/api/auth/login/options", &.{ host, .{ "origin", "http://evil.test" } }, 403 },
-        .{ .POST, "/api/auth/login/options", &.{ host, .{ "origin", "http://localhost:4100/" } }, 403 },
-        .{ .POST, "/api/auth/login/options", &.{ host, good }, 501 },
+        .{ .POST, "/api/auth/email/request", &.{host}, 403 },
+        .{ .POST, "/api/auth/email/request", &.{ host, .{ "origin", "http://evil.test" } }, 403 },
+        .{ .POST, "/api/auth/email/request", &.{ host, .{ "origin", "http://localhost:4100/" } }, 403 },
+        .{ .POST, "/api/auth/email/request", &.{ host, good }, 400 },
         .{ .POST, "/api/nothing-here", &.{host}, 403 },
         .{ .PUT, "/api/tasks/1", &.{host}, 403 },
         .{ .PATCH, "/api/tasks/1", &.{host}, 403 },
@@ -370,15 +370,15 @@ test "http: real socket, origin guard on mutations and the fail-closed session r
     var origin_buf: [64]u8 = undefined;
     const origin_line = try std.fmt.bufPrint(&origin_buf, "Origin: http://localhost:{d}\r\n", .{fixture.running.port});
 
-    const no_origin = try fixture.get("POST", "/api/auth/login/options", browser, "");
+    const no_origin = try fixture.get("POST", "/api/auth/email/request", browser, "");
     defer testing.allocator.free(no_origin);
     try testing.expectEqual(@as(u16, 403), try statusOf(no_origin));
     try testing.expectEqualStrings("{\"error\":\"forbidden origin\"}", bodyOf(no_origin));
 
-    const with_origin = try fixture.get("POST", "/api/auth/login/options", browser, origin_line);
+    const with_origin = try fixture.get("POST", "/api/auth/email/request", browser, origin_line);
     defer testing.allocator.free(with_origin);
-    try testing.expectEqual(@as(u16, 501), try statusOf(with_origin));
-    try testing.expectEqualStrings("{\"error\":\"not_implemented\"}", bodyOf(with_origin));
+    try testing.expectEqual(@as(u16, 400), try statusOf(with_origin));
+    try testing.expectEqualStrings("{\"error\":\"invalid body\"}", bodyOf(with_origin));
 
     const session = try fixture.get("GET", "/api/agents", browser, "");
     defer testing.allocator.free(session);
@@ -489,13 +489,13 @@ test "http: real socket, a configured origin replaces localhost in the guards" {
     defer testing.allocator.free(health);
     try testing.expectEqual(@as(u16, 200), try statusOf(health));
 
-    const wrong = try fixture.get("POST", "/api/auth/login/options", "harness.example.com", "Origin: http://localhost:1\r\n");
+    const wrong = try fixture.get("POST", "/api/auth/email/request", "harness.example.com", "Origin: http://localhost:1\r\n");
     defer testing.allocator.free(wrong);
     try testing.expectEqual(@as(u16, 403), try statusOf(wrong));
 
-    const right = try fixture.get("POST", "/api/auth/login/options", "harness.example.com", "Origin: https://harness.example.com\r\n");
+    const right = try fixture.get("POST", "/api/auth/email/request", "harness.example.com", "Origin: https://harness.example.com\r\n");
     defer testing.allocator.free(right);
-    try testing.expectEqual(@as(u16, 501), try statusOf(right));
+    try testing.expectEqual(@as(u16, 400), try statusOf(right));
 }
 
 fn stopSoon(io: std.Io) void {
