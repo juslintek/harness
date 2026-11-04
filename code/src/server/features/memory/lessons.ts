@@ -4,7 +4,7 @@ import { getTask } from "../board/api";
 import { teamIdsOf } from "../hiring/api";
 import { classifyNote } from "../laya/api";
 import { redact } from "../logs/api";
-import { getMember, listMembers, listPositions } from "../orgs/api";
+import { getMember, listMembers, listPositions, roleAtLeast } from "../orgs/api";
 import { MemoryError } from "./store-kit";
 
 const MIN_LESSON_CHARS = 20;
@@ -126,6 +126,8 @@ function checkTask(
   const task = getTask(db, ctx.taskId);
   if (task === null || task.orgId !== member.orgId)
     throw new MemoryError("not_found", "no such task");
+  if (!roleAtLeast(member.role, "member"))
+    throw new MemoryError("forbidden", "you are not allowed to do that here");
   if (task.assigneeId !== member.id) throw new MemoryError("forbidden", "the task is not yours");
   if (task.status !== "done") throw new MemoryError("invalid", "the task is not done yet");
   return { projectId: task.projectId, orgId: member.orgId, handle: member.handle };
@@ -192,7 +194,8 @@ export async function proposeLessons(
   checkTask(db, ctx);
   const clean = bodies.map(cleanBody);
   const classes = await Promise.all(clean.map(classed));
-  // Checked again after the await: the task may have been reopened or reassigned meanwhile.
+  // Checked again after the await: the task may have been reopened or reassigned, or the member
+  // demoted, meanwhile.
   const at = checkTask(db, ctx);
   const rows = clean.map((body, i) => ({ id: Bun.randomUUIDv7(), body, c: classes[i] as Classed }));
   insertAll(db, ctx, at, rows);

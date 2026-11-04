@@ -1,6 +1,7 @@
 import "../../test-support/no-git-env";
 import { afterEach, expect, test } from "bun:test";
 import { moveTask } from "../board/api";
+import { resetLayaCircuit } from "../laya/api";
 import { updateMember } from "../orgs/api";
 import { listLessons, onLessonProposed, proposeLessons, reviewerFor } from "./lessons";
 import { close, GOOD, manage, mate, type World, world } from "./lessons-test-kit";
@@ -115,4 +116,27 @@ test("the 1 to 3 cap holds per task and author, also for two racing calls", asyn
   expect(res.filter((r) => r.status === "fulfilled").length).toBe(1);
   expect(seen).toEqual([1]);
   expect(listLessons(w.db, w.orgId).length).toBe(2);
+});
+
+test("a member demoted to viewer while the classifier runs proposes nothing", async () => {
+  w = world();
+  const dev = w.agent("dev");
+  const task = w.doneTask(dev);
+  const classifier = Bun.serve({
+    port: 0,
+    fetch: () => {
+      updateMember(w.db, dev.id, { role: "viewer" });
+      return new Response("busy", { status: 503 });
+    },
+  });
+  process.env.OLLAYA_URL = `http://127.0.0.1:${classifier.port}`;
+  resetLayaCircuit();
+  try {
+    await expect(proposeLessons(w.db, ctxOf(dev.id, task.id), [GOOD])).rejects.toThrow(
+      "not allowed",
+    );
+  } finally {
+    await classifier.stop(true);
+  }
+  expect(listLessons(w.db, w.orgId)).toEqual([]);
 });
