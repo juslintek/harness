@@ -10,7 +10,15 @@ import {
   noteViewSchema,
   noteWriteViewSchema,
 } from "../../../shared/memory";
-import type { Role } from "../../../shared/orgs";
+import type { OrgDetail, Role } from "../../../shared/orgs";
+
+// Granted projects belong to another org; memory only accepts notes for the viewer's own org.
+export const ownProjects = (detail: OrgDetail): OrgDetail["projects"] =>
+  detail.projects.filter((p) => p.orgId === detail.org.id);
+
+// The server refuses to revert a rename (rename back instead) and an outside edit has no known
+// previous text, so offering the button would only produce an error.
+export const canRevert = (op: string): boolean => op !== "outside" && op !== "rename";
 
 export type Tab = "notes" | "writes" | "review";
 export const TABS: Tab[] = ["notes", "writes", "review"];

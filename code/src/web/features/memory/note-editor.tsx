@@ -9,6 +9,7 @@ import {
   keptAfterReload,
   mayDiscard,
   memoryBase,
+  ownProjects,
   writableScopes,
   writeResultSchema,
 } from "./memory-data";
@@ -143,13 +144,14 @@ export function NewNote({
   onClose: () => void;
   onCreated: (id: string) => void;
 }): preact.JSX.Element {
+  const projects = ownProjects(detail);
   const scopes = writableScopes(
     detail.me.role,
     me.value?.user.instanceAdmin === true,
-    detail.projects.length > 0,
+    projects.length > 0,
   );
   const [scope, setScope] = useState(scopes[0] ?? "org");
-  const [projectId, setProjectId] = useState(detail.projects[0]?.id ?? "");
+  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
   const [rel, setRel] = useState("");
   const [body, setBody] = useState("");
   const action = useAction();
@@ -192,7 +194,7 @@ export function NewNote({
           <label>
             Project
             <select value={projectId} onChange={(e) => setProjectId(e.currentTarget.value)}>
-              {detail.projects.map((p) => (
+              {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>

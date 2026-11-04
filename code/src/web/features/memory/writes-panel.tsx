@@ -5,6 +5,7 @@ import { ErrorLine } from "../auth/error-line";
 import { useAction } from "../auth/use-action";
 import { lineDiff } from "./line-diff";
 import {
+  canRevert,
   memoryBase,
   shownPath,
   type WriteWithText,
@@ -85,7 +86,7 @@ function WriteItem({
         </summary>
         {open && <Diff write={write} />}
       </details>
-      {write.op !== "outside" && <Revert slug={slug} id={write.id} onDone={onDone} />}
+      {canRevert(write.op) && <Revert slug={slug} id={write.id} onDone={onDone} />}
     </li>
   );
 }
