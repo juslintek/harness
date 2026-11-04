@@ -66,10 +66,17 @@ export function startMemory(db: Database, deps: { home: string }): () => Promise
   queueUncommitted(deps.home, db).catch((e: Error) => {
     console.error(`memory: git init failed: ${e.message}`);
   });
-  reconcile(db, deps.home);
-  // A crash between claiming a lesson and writing its note leaves it accepted without a note.
-  const finishing = finishAcceptedLessons(db, deps.home);
+  // Watching first means a file written while reconcile walks is still seen; syncOutside is hash-checked, so a repeat is a no-op.
   const stopWatch = watchVault(db, deps.home);
+  let finishing: Promise<void>;
+  try {
+    reconcile(db, deps.home);
+    // A crash between claiming a lesson and writing its note leaves it accepted without a note.
+    finishing = finishAcceptedLessons(db, deps.home);
+  } catch (e) {
+    stopWatch();
+    throw e;
+  }
   return async () => {
     stopWatch();
     await finishing;
