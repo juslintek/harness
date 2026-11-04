@@ -368,6 +368,26 @@ test "agents: one login at a time, killed with its group after the timeout, then
     try testing.expect(try waitForPid(rig.tmp.dir, "pid") != pid);
 }
 
+test "agents: a login that ignores SIGTERM is killed after the grace" {
+    const rig = try Rig.create();
+    defer rig.destroy();
+    var dir_buf: [Io.Dir.max_path_bytes]u8 = undefined;
+    const dir_path = dir_buf[0..try rig.tmp.dir.realPath(testing.io, &dir_buf)];
+    const script = try std.fmt.allocPrint(testing.allocator, "trap '' TERM; echo $$ > '{s}/pid'; while :; do /bin/sleep 1; done", .{dir_path});
+    defer testing.allocator.free(script);
+    try useLoginScript(rig, &.{ "/bin/sh", "-c", script });
+    rig.ctx.login_timeout_ms = 300;
+    rig.ctx.login_grace_ms = 100;
+    var started = try rig.call(agents.login, .{ .id = "claude" });
+    defer started.deinit();
+    const pid = try waitForPid(rig.tmp.dir, "pid");
+    for (0..300) |_| {
+        if (loginsEmpty(rig) and !process_mod.pidExists(pid)) return;
+        try testing.io.sleep(.fromMilliseconds(10), .awake);
+    }
+    return error.SurvivedSigterm;
+}
+
 test "agents: a login still running when the server stops is ended" {
     const rig = try Rig.create();
     var dir_buf: [Io.Dir.max_path_bytes]u8 = undefined;

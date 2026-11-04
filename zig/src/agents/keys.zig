@@ -163,8 +163,8 @@ pub const Store = struct {
     fn readLegacy(self: *Store, arena: std.mem.Allocator, provider: Provider) !?[]const u8 {
         const out = self.run(arena, &.{ "security", "find-generic-password", "-s", legacy_service, "-a", @tagName(provider), "-w" });
         if (out.code != 0) return null;
-        const value = std.mem.trimEnd(u8, out.stdout, "\n");
-        // `replace(/\n$/, "")` drops one newline; the line reader already ended every line with one.
+        // `replace(/\n$/, "")`: one newline, not all of them.
+        const value = if (std.mem.endsWith(u8, out.stdout, "\n")) out.stdout[0 .. out.stdout.len - 1] else out.stdout;
         return if (value.len > 0) value else null;
     }
 
@@ -511,6 +511,18 @@ test "agents: a store that cannot be read stops the migration before any delete 
     try fx.write("{}");
     const status = try fx.store.status(arena.allocator(), &diag);
     try testing.expectEqual(Source.file, status[0].source.?);
+}
+
+test "agents: only one trailing newline of the security output is dropped, like replace(/\\n$/, \"\")" {
+    const fx = try Fx.create(&.{});
+    defer fx.destroy();
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    // The fake prints the value and a newline, so a runner that hands over raw bytes gives "key\n\n".
+    fx.tools.legacy[@backingInt(Provider.gemini)] = "key\n";
+    var diag: Diag = .{};
+    _ = try fx.store.status(arena.allocator(), &diag);
+    try testing.expectEqualStrings("{\"gemini\":\"key\\n\"}", try fx.secrets(arena.allocator()));
 }
 
 test "agents: control characters are refused" {

@@ -38,13 +38,15 @@ pub const Ctx = struct {
     specs_arena: std.heap.ArenaAllocator,
     process_runner: runner_mod.ProcessRunner,
     /// What discovery, models and the key store run commands through; tests swap it.
-    runner: runner_mod.Runner = undefined,
+    runner: runner_mod.Runner,
     keys: keys.Store,
     flights: models_mod.Flights = .{},
     /// Hooked up by the runtimes slice; without it the ACP model probe answers 502.
     list_acp: ?models_mod.ListAcp = null,
     probe_timeout_ms: i64 = discover.probe_timeout_ms,
     login_timeout_ms: i64 = login_timeout_ms,
+    /// SIGTERM to SIGKILL for a login that outlives its timeout.
+    login_grace_ms: i64 = runner_mod.kill_grace_ms,
     ollaya_timeout_ms: i64 = ollaya.health_timeout_ms,
     /// Guards `cache` and `logins`.
     mutex: Io.Mutex = .init,
@@ -65,13 +67,14 @@ pub const Ctx = struct {
             .specs = &.{},
             .specs_arena = .init(gpa),
             .process_runner = .{ .gpa = gpa, .io = io, .base_env = env },
-            .keys = .{ .gpa = gpa, .io = io, .home = home, .env = env, .runner = undefined },
+            // `runner()` only takes the address, which is final: `self` is on the heap.
+            .runner = runner_mod.ProcessRunner.runner(&self.process_runner),
+            .keys = .{ .gpa = gpa, .io = io, .home = home, .env = env, .runner = runner_mod.ProcessRunner.runner(&self.process_runner) },
         };
         errdefer self.specs_arena.deinit();
         const arena = self.specs_arena.allocator();
         const paths: specs_mod.Paths = .{ .adapter_dir = try adapterDir(arena, io), .home = env.get("HOME") orelse "" };
         self.specs = try specs_mod.load(arena, env, try specs_mod.builtin(arena, paths));
-        self.setRunner(self.process_runner.runner());
         return self;
     }
 
@@ -343,6 +346,7 @@ const LoginRun = struct {
 const LoginEvent = union(enum) {
     exited: std.process.Child.WaitError!std.process.Child.Term,
     timeout: Io.Cancelable!void,
+    grace: Io.Cancelable!void,
 };
 
 fn waitChild(io: Io, child: *std.process.Child) std.process.Child.WaitError!std.process.Child.Term {
@@ -358,7 +362,7 @@ fn watchLogin(run: *LoginRun) void {
     const ctx = run.ctx;
     const io = ctx.io;
     defer finishLogin(run);
-    var buffer: [2]LoginEvent = undefined;
+    var buffer: [3]LoginEvent = undefined;
     var select: Io.Select(LoginEvent) = .init(io, &buffer);
     defer select.cancelDiscard();
     // The wait goes last: if it cannot start, the child is untouched and `finishLogin` ends it.
@@ -373,7 +377,7 @@ fn watchLogin(run: *LoginRun) void {
             process_mod.signalGroup(run.pgid, .KILL);
             while (true) switch (select.await() catch return) {
                 .exited => return,
-                .timeout => {},
+                .timeout, .grace => {},
             };
         };
         switch (event) {
@@ -382,6 +386,13 @@ fn watchLogin(run: *LoginRun) void {
                 result catch return;
                 // `proc.kill()` in TS; the whole group here, as the login CLIs spawn helpers.
                 process_mod.signalGroup(run.pgid, .TERM);
+                // TS stops at SIGTERM; a CLI that ignores it would live on, so the group is killed
+                // after the grace, as `ProcessRunner` does. Never return with the wait running.
+                select.concurrent(.grace, sleepMs, .{ io, ctx.login_grace_ms }) catch process_mod.signalGroup(run.pgid, .KILL);
+            },
+            .grace => |result| {
+                result catch return;
+                process_mod.signalGroup(run.pgid, .KILL);
             },
         }
     }

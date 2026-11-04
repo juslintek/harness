@@ -18,7 +18,7 @@ pub const not_found_code: i32 = 127;
 pub const timed_out_code: i32 = 124;
 
 /// SIGTERM to SIGKILL for a command that is over its time.
-const kill_grace_ms: i64 = 500;
+pub const kill_grace_ms: i64 = 500;
 /// After SIGKILL, a process outside the group may still hold the pipes; stop reading then.
 const reader_force_ms: i64 = 2000;
 const max_line_bytes: usize = 1024 * 1024;
