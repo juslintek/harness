@@ -181,7 +181,8 @@ pub const Tailer = struct {
                 pos = nl + 1;
             }
             while (std.mem.findScalarPos(u8, buf.items, pos, '\n')) |end| {
-                try lines.append(t.gpa, .{ .text = buf.items[pos..end], .offset = buf_start + pos });
+                if (end - pos <= t.options.max_line_bytes)
+                    try lines.append(t.gpa, .{ .text = buf.items[pos..end], .offset = buf_start + pos });
                 pos = end + 1;
             }
             added += try t.applyBatches(name, path, session_id, lines.items, &arena);
@@ -690,6 +691,21 @@ test "usage: an oversized line is dropped and the lines after it still count" {
     try out.writer.writeAll(try claudeLine(&b, "after"));
     try env.write(claude_file, out.written());
     try testing.expectEqual(@as(u64, 2), try env.tailer.sweep());
+}
+
+test "usage: a complete line over the limit is dropped even when it ends inside a chunk" {
+    const env = try Env.create(.{ .backfill_days = 1e9, .chunk_bytes = 1024, .max_line_bytes = 2100 });
+    defer env.destroy();
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+    // Carry stays at 1024 then 2048 (both under the limit), and the newline arrives in chunk three.
+    try out.writer.print("{{\"message\":{{\"id\":\"big\",\"model\":\"", .{});
+    try out.writer.splatByteAll('m', 2400);
+    try out.writer.writeAll("\",\"usage\":{}}}\n");
+    var b: [512]u8 = undefined;
+    try out.writer.writeAll(try claudeLine(&b, "after"));
+    try env.write(claude_file, out.written());
+    try testing.expectEqual(@as(u64, 1), try env.tailer.sweep());
 }
 
 test "usage: a unreadable entry does not stop the sweep" {
