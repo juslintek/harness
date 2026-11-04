@@ -9,8 +9,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { gitEnv } from "../../git-env";
 import { redact } from "../logs/api";
+import { assertSafeVaultRepo, vaultGitArgs, vaultGitEnv } from "./git-safety";
 import { diskToLocated } from "./paths";
 import { vaultDir } from "./vault";
 
@@ -24,16 +24,13 @@ const IDENT = [
   "user.email=harness@localhost",
   "-c",
   "commit.gpgsign=false",
-  // The vault is the harness's own repo; the user's global hooks must not run on its commits.
-  "-c",
-  "core.hooksPath=/dev/null",
 ];
 
 async function git(cwd: string, args: string[]): Promise<{ code: number; out: string }> {
-  const proc = Bun.spawn(["git", ...IDENT, ...args], {
+  const proc = Bun.spawn(["git", ...vaultGitArgs(cwd), ...IDENT, ...args], {
     cwd,
     // "nothing to commit" is matched below, so the message must not be translated.
-    env: { ...gitEnv(), LC_ALL: "C" },
+    env: { ...vaultGitEnv(), LC_ALL: "C" },
     stdout: "pipe",
     stderr: "pipe",
     timeout: GIT_TIMEOUT_MS,
@@ -77,7 +74,11 @@ function writeIgnore(dir: string): void {
 // outside the vault. Nothing is deleted: the operator has to look at it.
 export function assertVaultGit(home: string): void {
   const entry = lstatSync(join(vaultDir(home), ".git"), { throwIfNoEntry: false });
-  if (entry === undefined || entry.isDirectory()) return;
+  if (entry === undefined) return;
+  if (entry.isDirectory()) {
+    assertSafeVaultRepo(vaultDir(home));
+    return;
+  }
   throw new Error(
     `memory vault .git is a ${entry.isSymbolicLink() ? "symlink" : "file"}, not a directory; ` +
       "remove it or replace it with a real repository, then restart",
