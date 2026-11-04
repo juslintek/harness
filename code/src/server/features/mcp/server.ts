@@ -10,7 +10,9 @@ import { registerBoardTools } from "./tools-board";
 import { registerChatTools } from "./tools-chat";
 import { registerHiringTools } from "./tools-hiring";
 import type { TrackingPort } from "./tools-kit";
+import { registerLessonTools } from "./tools-lessons";
 import { registerManagerTools } from "./tools-manager";
+import { registerMemoryTools } from "./tools-memory";
 import { registerPoliciesTools } from "./tools-policies";
 import { registerProfilesTools } from "./tools-profiles";
 import { registerTrackingTools } from "./tools-tracking";
@@ -74,6 +76,8 @@ function buildServer(db: Database, identity: RunIdentity, deps: McpDeps): McpSer
   registerPoliciesTools(server, env);
   registerTrackingTools(server, env);
   registerManagerTools(server, env);
+  registerMemoryTools(server, env);
+  registerLessonTools(server, env);
   return server;
 }
 

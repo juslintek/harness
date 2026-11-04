@@ -31,6 +31,7 @@ function scopesFor(db: Database, member: MemberRow): TokenScope[] {
     "hiring",
     "profile",
     "policy",
+    "memory",
   ];
   if (managerPositionsOf(db, member.id).length > 0) scopes.push("approvals_decide");
   return scopes;
@@ -44,13 +45,19 @@ function isReadOnly(db: Database, member: MemberRow): boolean {
   );
 }
 
-export function runMember(db: Database, member: MemberRow, projectId: string | null): RunMember {
+export function runMember(
+  db: Database,
+  member: MemberRow,
+  projectId: string | null,
+  memoryIndex?: string,
+): RunMember {
   return {
     memberId: member.id,
     orgId: member.orgId,
     scopes: scopesFor(db, member),
     ...(isReadOnly(db, member) ? { readOnly: true } : {}),
     ...(projectId === null ? {} : { projectId }),
+    ...(memoryIndex === undefined ? {} : { memoryIndex }),
   };
 }
 

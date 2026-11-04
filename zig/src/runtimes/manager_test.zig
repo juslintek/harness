@@ -568,6 +568,22 @@ test "manager: an end write that always fails keeps the run registered until shu
     try testing.expectEqual(@as(i64, 1), try h.count("SELECT count(*) FROM events WHERE kind = 'run'"));
 }
 
+test "manager: shutdown fails while a run stays registered because its end write keeps failing" {
+    const h = try Harness.init("[{\"say\":\"x\"}]");
+    defer h.deinit();
+    h.mgr.inject_end_failures.store(1_000_000, .release);
+    const id = try h.mgr.startRun(h.input());
+    try h.mgr.waitIdle();
+    try testing.expectError(error.RunStillRegistered, h.mgr.shutdown(100));
+    try testing.expectEqual(@as(usize, 1), h.mgr.liveCount());
+    h.mgr.inject_end_failures.store(0, .release);
+    try h.mgr.shutdown(100);
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    try testing.expectEqual(manager.RunState.completed, (try h.row(arena.allocator(), &id)).state);
+    try testing.expectEqual(@as(usize, 0), h.mgr.liveCount());
+}
+
 test "manager: a failing usage record fails the run like TS does" {
     const h = try Harness.init("[{\"usage\":{\"inputTokens\":1,\"outputTokens\":1}}]");
     defer h.deinit();

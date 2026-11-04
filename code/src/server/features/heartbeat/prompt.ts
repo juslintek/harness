@@ -2,10 +2,12 @@ import type { Database } from "bun:sqlite";
 import { getTask } from "../board/api";
 import { getChannel } from "../chat/api";
 import { directReportsOf, getMember, getOrg, listPositions, type MemberRow } from "../orgs/api";
+import { isMemoryOnly, memoryNotice, wakeTaskProject, wakeTopic } from "./memory-notice";
 import { describeHiring, profileHeader, teamLacksHints } from "./prompt-hiring";
+import { describeMemory } from "./prompt-memory";
 import type { WakeRow } from "./repo";
 
-const MAX_WAKES = 10;
+export const MAX_WAKES = 10;
 const INSTRUCTION =
   "Use the harness MCP tools (`task_get`, `board_list`, `chat_read`, `chat_post`, `task_checkout`, `task_move`, `task_release`, `task_comment`...) to do the work (pass the task id from the prompt when it names one) and report back in the project channel with `chat_post`, @mentioning whoever gave you the task, and also comment on the task. @mention someone only when they need to act; do not post just to acknowledge, and if you were woken about work that is already done, stop without posting. Before you work on a task assigned to you, take it with `task_checkout`; do not just move it to `in_progress`. Do not stop without updating the task status. When you hand a task over for review, move it to `in_review` and then release it with `task_release`, so the reviewer can close it. You work in your own git worktree on the branch `harness/<run>` (see `git branch --show-current`): commit your changes on that branch, do not create or switch branches, and name the branch in your task comment or chat message. To review someone else's branch use `git log` and `git diff main..<branch>` from your worktree, because the repository is shared; you cannot read their worktree directory. For scratch files use `$TMPDIR`; it is the only writable place outside your worktree, and writing anywhere else is denied.";
 const DATA_NOTICE =
@@ -63,6 +65,9 @@ function describe(db: Database, wake: WakeRow): string {
     case "onboarding":
     case "approval_resolved":
       return describeHiring(db, wake);
+    case "retro":
+    case "lesson_review":
+      return describeMemory(db, wake);
     case "policy_review":
       return `You are asked to review a policy change: ${text}\nCall \`policy_review {proposal, verdict: "approve" | "reject", comment}\` with the proposal id.`;
   }
@@ -86,7 +91,22 @@ function managerNotice(db: Database, member: MemberRow): string {
   return `\n\nYou manage ${handles.join(", ")}. You do not write code. Your worktree is read-only on purpose. This overrides the instruction below to commit on your branch. Work like this:\n${steps}`;
 }
 
-export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[]): string {
+// A memory wake only reads and proposes or reviews lessons; the work instruction would send it to check out tasks.
+function memoryOnlyTools(wakes: WakeRow[]): string {
+  const tools = [
+    wakes.some((w) => w.reason === "retro") ? "`lesson_propose` (retro)" : "",
+    wakes.some((w) => w.reason === "lesson_review") ? "`lesson_review` (review)" : "",
+  ].filter(Boolean);
+  return `Use ${tools.join(" or ")} for this. You may read with \`task_get\` and \`memory\` (\`action\` \`view\` or \`search\`). Do not change code, the task, or chat.`;
+}
+
+export function buildPrompt(
+  db: Database,
+  member: MemberRow,
+  wakes: WakeRow[],
+  mcp = true,
+  fileWritten = true,
+): string {
   const org = getOrg(db, member.orgId);
   const titles = listPositions(db, member.orgId)
     .filter((p) => p.memberId === member.id)
@@ -96,6 +116,9 @@ export function buildPrompt(db: Database, member: MemberRow, wakes: WakeRow[]): 
   }.`;
   const shown = wakes.slice(0, MAX_WAKES).map((w) => `- ${describe(db, w)}`);
   if (wakes.length > MAX_WAKES) shown.push(`- and ${wakes.length - MAX_WAKES} more`);
+  if (isMemoryOnly(wakes)) {
+    return `${profileHeader(db, member)}${who}\n\n${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}\n\n${memoryOnlyTools(wakes)}`;
+  }
   const woken = `${DATA_NOTICE}\nYou were woken because:\n${shown.join("\n")}${teamLacksHints(db, member, wakes)}`;
-  return `${profileHeader(db, member)}${who}\n\n${woken}${managerNotice(db, member)}\n\n${INSTRUCTION}`;
+  return `${profileHeader(db, member)}${who}\n\n${woken}${managerNotice(db, member)}${memoryNotice(db, member, wakeTopic(db, wakes), mcp, wakeTaskProject(db, wakes), fileWritten)}\n\n${INSTRUCTION}`;
 }

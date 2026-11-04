@@ -22,6 +22,10 @@ export const canDecideApprovals = (m: Me | null): boolean =>
   m !== null &&
   (m.user.instanceAdmin || m.orgs.some((o) => o.role === "owner" || o.role === "admin"));
 
+// Viewers get 403 from the org logs endpoint, so the UI hides what they cannot use.
+export const isViewerIn = (m: Me | null, slug: string): boolean =>
+  m?.orgs.find((o) => o.slug === slug)?.role === "viewer";
+
 export const ignored: z.ZodType<unknown> = z.unknown();
 
 export const me: Signal<Me | null> = signal<Me | null>(null);

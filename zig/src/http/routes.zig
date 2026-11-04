@@ -13,6 +13,8 @@ const headers = @import("headers.zig");
 const policy = @import("policy.zig");
 const session_endpoints = @import("../auth/middleware.zig");
 const usage_routes = @import("../usage/routes.zig");
+const ws = @import("ws.zig");
+const Hub = @import("../realtime/hub.zig").Hub;
 
 pub const Method = policy.Method;
 pub const Policy = policy.Policy;
@@ -29,6 +31,8 @@ pub const Health = struct {
 pub const Services = struct {
     app: *App,
     health: Health,
+    /// The realtime hub; null where no WebSocket is served (the `/ws` row then answers 501).
+    hub: ?*Hub = null,
 };
 
 /// One request as a handler sees it. `actor` is set for every row that went through the session
@@ -162,5 +166,5 @@ pub const table = [_]Route{
     .{ .method = .GET, .path = "/api/usage", .handler = usage_routes.getUsage, .policy = .{ .session = true, .admin = true } },
     row(.POST, "/api/guard/hook", .{ .public = true, .loopback = true }),
     row(.any, "/mcp", .{ .public = true, .loopback = true }),
-    row(.GET, "/ws", .{ .session = true, .origin = true }),
+    .{ .method = .GET, .path = "/ws", .handler = ws.upgrade, .policy = .{ .session = true, .origin = true } },
 };

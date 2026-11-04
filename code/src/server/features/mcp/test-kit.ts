@@ -24,14 +24,17 @@ export type Db = ReturnType<typeof openDb>;
 
 export const ALL: TokenScope[] = ["report", "guard_hook", "board", "chat"];
 
-export async function listen(database: Db): Promise<ReturnType<typeof Bun.serve>> {
+export async function listen(
+  database: Db,
+  harnessHome = "/Users/x/.harness",
+): Promise<ReturnType<typeof Bun.serve>> {
   for (let attempt = 0; attempt < 20; attempt++) {
     const own: ReturnType<typeof Bun.serve> = Bun.serve({
       port: 0,
       fetch: (req) =>
         mcpHandler(
           database,
-          { onReport: () => {}, harnessHome: "/Users/x/.harness", tracking: trackingPort },
+          { onReport: () => {}, harnessHome, tracking: trackingPort },
           own.port as number,
         )(req),
     });

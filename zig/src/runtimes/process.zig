@@ -35,6 +35,8 @@ pub const Options = struct {
     tee_close_counter: ?*std.atomic.Value(u32) = null,
     /// Test hook: that many `terminate` calls fail with GroupSurvivedKill without signalling.
     inject_terminate_failures: u32 = 0,
+    /// Test hook: `spawn` fails after the readers started, once a stdout line sits in the queue.
+    inject_start_failure: bool = false,
 };
 
 pub const Process = struct {
@@ -90,6 +92,10 @@ pub const Process = struct {
         errdefer process.abortStart();
         try process.readers.concurrent(io, stdoutPump, .{process});
         try process.readers.concurrent(io, stderrPump, .{process});
+        if (options.inject_start_failure) {
+            while (process.queuedLines() == 0) try io.sleep(.fromMilliseconds(5), .awake);
+            return error.OutOfMemory;
+        }
         return process;
     }
 
@@ -110,6 +116,28 @@ pub const Process = struct {
         signalGroup(process.pgid, .KILL);
         process.readers.cancel(process.io);
         process.child.kill(process.io);
+        process.closeAndDrainLines();
+    }
+
+    fn queuedLines(process: *Process) usize {
+        const queue = &process.lines.type_erased;
+        queue.mutex.lockUncancelable(process.io);
+        defer queue.mutex.unlock(process.io);
+        return queue.len;
+    }
+
+    /// Closes the queue and frees the lines nobody read. The readers must be done or cancelled.
+    fn closeAndDrainLines(process: *Process) void {
+        const io = process.io;
+        process.lines.close(io);
+        while (process.lines.getOneUncancelable(io)) |line| {
+            switch (line) {
+                .text => |text| process.gpa.free(text),
+                .eof, .failed => {},
+            }
+        } else |err| switch (err) {
+            error.Closed => {},
+        }
     }
 
     /// Ends the run's process: terminates it when that has not happened, frees queued lines and
@@ -125,15 +153,7 @@ pub const Process = struct {
             };
         }
         process.readers.cancel(io);
-        process.lines.close(io);
-        while (process.lines.getOneUncancelable(io)) |line| {
-            switch (line) {
-                .text => |text| process.gpa.free(text),
-                .eof, .failed => {},
-            }
-        } else |err| switch (err) {
-            error.Closed => {},
-        }
+        process.closeAndDrainLines();
         if (process.tee) |tee| closeTee(tee.file, io, process.tee_close_counter);
         const gpa = process.gpa;
         gpa.destroy(process);
@@ -568,6 +588,18 @@ test "process: a failed spawn leaves no child behind" {
         .argv = &.{"/nonexistent/agent-binary"},
         .cwd = "/",
         .env = &env,
+    }));
+}
+
+test "process: a start that fails after a line was queued frees the line and the child" {
+    const io = testing.io;
+    var env = try testEnv(testing.allocator);
+    defer env.deinit();
+    try testing.expectError(error.OutOfMemory, Process.spawn(testing.allocator, io, .{
+        .argv = &.{ "/bin/sh", "-c", "echo queued; sleep 30" },
+        .cwd = "/",
+        .env = &env,
+        .inject_start_failure = true,
     }));
 }
 

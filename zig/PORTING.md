@@ -173,7 +173,9 @@ These are all caught by `sgrules/stale-std-apis.yml`. The list is what a model r
 - The macOS accept-loop cancel hang named in the task brief is not in `working-docs/zig-plan.md` and
   did not reproduce here (see the httpz note above). Stop servers with `server.stop()` and join;
   treat cancelling the accept loop through `Io` as unsafe until someone reproduces the hang.
-- WebSocket ping behaviour (plan 2.6) is still unobserved; the cookbook client does not send pings.
+- WebSocket pings: websocket.zig and httpz send none and have no idle timeout. `realtime/hub.zig` does it
+  itself: a ticker pings every socket every 30 s and closes one that has been silent for 120 s (a pong or
+  any client frame counts as activity). The cookbook client does not send pings.
 - No cookbook entry yet for: zstd streaming, CBOR, CORS and cookie helpers in httpz, `Io.Queue`
   producer and consumer, and the `checkAllAllocationFailures` pattern for a parser with a
   `std.Io.Reader`. Add them with the slice that first needs them.

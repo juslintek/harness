@@ -130,35 +130,52 @@ function trigramQuery(text: string): string {
   return [...grams].map(quote).join(" AND ");
 }
 
-function matchRowidsIn(db: Database, table: string, match: string, limit: number): number[] {
+// Restricts candidates inside the FTS query, so the limit is applied after the filter.
+export interface RowidScope {
+  sql: string;
+  params: Array<string | number>;
+  // Cap the candidates by recency instead of rank, so the newest matches are never cut.
+  newestFirst?: boolean;
+}
+
+function matchRowidsIn(
+  db: Database,
+  table: string,
+  match: string,
+  limit: number,
+  scope?: RowidScope,
+): number[] {
+  const sql = scope?.newestFirst
+    ? `SELECT ${table}.rowid FROM ${table} JOIN events e ON e.rowid = ${table}.rowid
+       WHERE ${table} MATCH ? AND ${table}.rowid IN (${scope.sql}) ORDER BY e.ts DESC, e.rowid DESC LIMIT ?`
+    : `SELECT rowid FROM ${table} WHERE ${table} MATCH ?${scope ? ` AND rowid IN (${scope.sql})` : ""} ORDER BY rank LIMIT ?`;
   return db
-    .query<{ rowid: number }, [string, number]>(
-      `SELECT rowid FROM ${table} WHERE ${table} MATCH ? ORDER BY rank LIMIT ?`,
-    )
-    .all(match, limit)
+    .query<{ rowid: number }, Array<string | number>>(sql)
+    .all(match, ...(scope?.params ?? []), limit)
     .map((r) => r.rowid);
 }
 
-function matchCommands(db: Database, q: string, limit: number): number[] {
+function matchCommands(db: Database, q: string, limit: number, scope?: RowidScope): number[] {
   // The trigram tokenizer needs at least 3 characters to match anything.
   if ([...q].length < 3) return [];
   const needle = q.toLowerCase();
   const commandOf = db.query<{ command: string | null }, [number]>(
     "SELECT command FROM events WHERE rowid = ?",
   );
-  return matchRowidsIn(db, "commands_fts", trigramQuery(q), limit * 5)
+  return matchRowidsIn(db, "commands_fts", trigramQuery(q), limit * 5, scope)
     .filter((rowid) => commandOf.get(rowid)?.command?.toLowerCase().includes(needle))
     .slice(0, limit);
 }
 
-export function matchRowids(db: Database, q: string, limit: number): number[] {
+export function matchRowids(db: Database, q: string, limit: number, scope?: RowidScope): number[] {
   const words = q.match(/[\p{L}\p{N}]+/gu) ?? [];
   const ids = new Set<number>();
   if (words.length > 0) {
-    for (const rowid of matchRowidsIn(db, "events_fts", words.map(quote).join(" "), limit)) {
+    for (const rowid of matchRowidsIn(db, "events_fts", words.map(quote).join(" "), limit, scope)) {
       ids.add(rowid);
     }
   }
-  for (const rowid of matchCommands(db, q.trim(), limit)) ids.add(rowid);
-  return [...ids].slice(0, limit);
+  for (const rowid of matchCommands(db, q.trim(), limit, scope)) ids.add(rowid);
+  // Each source is already capped; slicing the union would drop the newest of the second one.
+  return scope?.newestFirst ? [...ids] : [...ids].slice(0, limit);
 }
