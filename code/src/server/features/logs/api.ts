@@ -170,7 +170,7 @@ function cut(text: string, needle: string): string | null {
   return text.slice(Math.max(0, at - SNIPPET_RADIUS), at + needle.length + SNIPPET_RADIUS);
 }
 
-function snippetFor(body: string | null, command: string | null, q: string): string {
+export function snippetFor(body: string | null, command: string | null, q: string): string {
   const needles = [q.trim(), ...(q.match(/[\p{L}\p{N}]+/gu) ?? [])];
   for (const needle of needles) {
     for (const text of [body, command]) {

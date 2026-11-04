@@ -1,0 +1,85 @@
+import type { Database } from "bun:sqlite";
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { migrate, openDb } from "../../db/db";
+import { migrations } from "../../db/migrations";
+import { appendEvent, type EventKind } from "./api";
+import { searchOrgEvents } from "./search-org";
+
+let dir: string;
+let db: Database;
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "harness-logs-org-"));
+  db = openDb(join(dir, "t.db"));
+  migrate(db, migrations);
+  for (const org of ["A", "B"]) {
+    db.run("INSERT INTO orgs (id, slug, name, created_at) VALUES (?, ?, ?, 1)", [
+      org,
+      org.toLowerCase(),
+      org,
+    ]);
+    db.run(
+      `INSERT INTO members (id, org_id, kind, agent_id, handle, display_name, role, created_at)
+       VALUES (?, ?, 'agent', 'claude', ?, ?, 'member', 1)`,
+      [`m${org}`, org, `bot-${org}`, `bot-${org}`],
+    );
+    db.run(
+      `INSERT INTO runs (id, agent_id, repo, prompt, state, created_at, member_id)
+       VALUES (?, 'claude', '/r', 'p', 'completed', 1, ?)`,
+      [`run${org}`, `m${org}`],
+    );
+  }
+});
+afterEach(() => {
+  db.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+function add(
+  runId: string | undefined,
+  body: string,
+  ts: number,
+  kind: EventKind = "message",
+): void {
+  appendEvent(db, { kind, body, ts, ...(runId && { runId }) });
+}
+
+test("an org B run's events never appear in org A results, and runless events are excluded", () => {
+  add("runA", "deploy alpha", 10);
+  add("runB", "deploy beta", 11);
+  add(undefined, "deploy orphan", 12);
+  const hits = searchOrgEvents(db, "A", { text: "deploy" });
+  expect(hits.map((h) => h.snippet)).toEqual(["deploy alpha"]);
+  expect(hits[0]).toMatchObject({ memberHandle: "bot-A", runId: "runA", taskId: null });
+});
+
+test("kind and member filters narrow the results", () => {
+  add("runA", "deploy one", 10, "message");
+  add("runA", "deploy two", 11, "error");
+  expect(searchOrgEvents(db, "A", { text: "deploy", kind: "error" }).map((h) => h.ts)).toEqual([
+    11,
+  ]);
+  expect(searchOrgEvents(db, "A", { text: "deploy", memberId: "mB" })).toEqual([]);
+  expect(searchOrgEvents(db, "A", { text: "deploy", memberId: "mA" })).toHaveLength(2);
+});
+
+test("the before cursor returns the next page without overlap", () => {
+  for (let i = 1; i <= 5; i++) add("runA", `deploy ${i}`, i * 10);
+  const first = searchOrgEvents(db, "A", { text: "deploy", limit: 2 });
+  const last = first.at(-1);
+  if (!last) throw new Error("empty page");
+  const second = searchOrgEvents(db, "A", { text: "deploy", limit: 2, before: last.ts });
+  expect(first.map((h) => h.ts)).toEqual([50, 40]);
+  expect(second.map((h) => h.ts)).toEqual([30, 20]);
+});
+
+test("quotes and wildcards in the text do not throw", () => {
+  add("runA", 'say "hi" now', 10);
+  for (const text of ['"', 'say "hi', "*", "dep*", "a AND", "(", "-"]) {
+    expect(() => searchOrgEvents(db, "A", { text })).not.toThrow();
+  }
+  expect(searchOrgEvents(db, "A", { text: '"hi"' })).toHaveLength(1);
+});
