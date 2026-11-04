@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import {
+  chmodSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -78,4 +79,24 @@ test("a symlinked vault root is refused", () => {
   expect(() => writeNoteFileAtomic(h, "global/b.md", "x")).toThrow();
   expect(() => removeNoteFile(h, "global/a.md")).toThrow();
   expect(readdirSync(join(real, "global"))).toEqual(["a.md"]);
+});
+
+test("a FIFO named like a note is not read", () => {
+  const h = home();
+  mkdirSync(join(vaultDir(h), "global"), { recursive: true });
+  const r = Bun.spawnSync(["mkfifo", join(vaultDir(h), "global/pipe.md")]);
+  expect(r.exitCode).toBe(0);
+  expect(readNoteFile(h, "global/pipe.md")).toBeNull();
+});
+
+test("an lstat error other than a missing path refuses the write as unsafe", () => {
+  const h = home();
+  const dir = join(vaultDir(h), "global");
+  mkdirSync(dir, { recursive: true });
+  chmodSync(dir, 0o000);
+  try {
+    expect(() => writeNoteFileAtomic(h, "global/a.md", "x")).toThrow(/symlink in note path/);
+  } finally {
+    chmodSync(dir, 0o700);
+  }
 });

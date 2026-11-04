@@ -25,7 +25,8 @@ function vaultFiles(home: string): string[] {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw e;
   }
-  if (!st.isDirectory()) return [];
+  // A moved-and-linked vault would otherwise read as empty and wipe the index while writes are refused.
+  if (!st.isDirectory()) throw new Error(`memory vault is not a plain directory: ${root}`);
   const out: string[] = [];
   walk(root, "", out);
   return out;

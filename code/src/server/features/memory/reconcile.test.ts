@@ -58,11 +58,15 @@ test("ignores org dirs the instance does not know", () => {
   expect(reconcile(db, dir)).toEqual({ indexed: 0, removed: 0 });
 });
 
-test("a symlinked vault root is not walked", () => {
+test("a symlinked vault root throws instead of emptying the index", () => {
+  put("global/kept.md", "x");
+  reconcile(db, dir);
+  rmSync(join(dir, "memory"), { recursive: true });
   mkdirSync(join(dir, "real/global"), { recursive: true });
   writeFileSync(join(dir, "real/global/a.md"), "x");
   symlinkSync(join(dir, "real"), join(dir, "memory"));
-  expect(reconcile(db, dir)).toEqual({ indexed: 0, removed: 0 });
+  expect(() => reconcile(db, dir)).toThrow(/plain directory/);
+  expect(db.query("SELECT 1 FROM notes").all()).toHaveLength(1);
 });
 
 test("a read error throws and leaves the index intact", () => {

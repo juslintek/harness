@@ -17,8 +17,9 @@ export function vaultDir(home: string): string {
 function isSymlink(path: string): boolean {
   try {
     return lstatSync(path).isSymbolicLink();
-  } catch {
-    return false;
+  } catch (e) {
+    // A missing component is fine (first write); any other error means we cannot vouch for the path.
+    return (e as NodeJS.ErrnoException).code !== "ENOENT";
   }
 }
 
@@ -43,7 +44,10 @@ function checked(home: string, disk: string): string {
 export function readNoteFile(home: string, disk: string): string | null {
   if (diskToLocated(disk) === null || hasSymlink(home, disk)) return null;
   try {
-    return readFileSync(join(vaultDir(home), disk), "utf8");
+    const file = join(vaultDir(home), disk);
+    // Reading a FIFO named *.md would block the event loop.
+    if (!lstatSync(file).isFile()) return null;
+    return readFileSync(file, "utf8");
   } catch {
     return null;
   }
