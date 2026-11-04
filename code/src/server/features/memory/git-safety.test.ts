@@ -2,9 +2,11 @@ import "../../test-support/no-git-env";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { gitOutput } from "../../git-env";
 import { startMemory } from "./api";
-import { ensureVaultRepo } from "./git-log";
-import { type Env, setup, teardown } from "./store-test-kit";
+import { drainCommits, ensureVaultRepo } from "./git-log";
+import { createNote } from "./store";
+import { aliceA, ctx, type Env, orgNote, setup, teardown } from "./store-test-kit";
 import { vaultDir } from "./vault";
 
 let env: Env;
@@ -40,15 +42,45 @@ test("startMemory refuses an attributes file that names a filter or diff driver"
   await repoWithConfig("");
   const vault = vaultDir(env.dir);
   writeFileSync(join(vault, ".git", "info", "attributes"), "*.md filter=x\n");
-  expect(() => startMemory(env.db, { home: env.dir })).toThrow("filter or diff");
+  expect(() => startMemory(env.db, { home: env.dir })).toThrow("driver");
   writeFileSync(join(vault, ".git", "info", "attributes"), "");
   mkdirSync(join(vault, "orgs"), { recursive: true });
   writeFileSync(join(vault, "orgs", ".gitattributes"), "*.md diff=x\n");
-  expect(() => startMemory(env.db, { home: env.dir })).toThrow("filter or diff");
+  expect(() => startMemory(env.db, { home: env.dir })).toThrow("driver");
 });
 
 test("a repo made by the harness passes the check", async () => {
   await repoWithConfig("");
   const stop = startMemory(env.db, { home: env.dir });
   await stop();
+});
+
+test("a filter added after start never runs and the commit is skipped", async () => {
+  await ensureVaultRepo(env.dir);
+  const vault = vaultDir(env.dir);
+  const marker = join(env.dir, "marker");
+  appendFileSync(join(vault, ".git", "config"), `[filter "pwn"]\n\tclean = touch ${marker}\n`);
+  mkdirSync(join(vault, "orgs", "A", "org"), { recursive: true });
+  writeFileSync(join(vault, "orgs", "A", ".gitattributes"), "*.md filter=pwn\n");
+  const errors: string[] = [];
+  const original = console.error;
+  console.error = (...a: unknown[]) => errors.push(a.join(" "));
+  try {
+    await createNote(env.db, env.dir, ctx(aliceA), orgNote, "hello");
+    await drainCommits();
+  } finally {
+    console.error = original;
+  }
+  expect(existsSync(marker)).toBe(false);
+  expect(await gitOutput(vault, ["rev-list", "--all", "--count"])).toBe("0\n");
+  expect(errors.join("\n")).toContain("filter");
+});
+
+test("a merge driver or textconv in any .gitattributes is refused", async () => {
+  await ensureVaultRepo(env.dir);
+  const vault = vaultDir(env.dir);
+  writeFileSync(join(vault, ".gitattributes"), "*.md merge=x\n");
+  expect(() => startMemory(env.db, { home: env.dir })).toThrow("driver");
+  writeFileSync(join(vault, ".gitattributes"), "*.md diff\n*.md textconv=x\n");
+  expect(() => startMemory(env.db, { home: env.dir })).toThrow("driver");
 });

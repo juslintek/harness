@@ -13,6 +13,9 @@ export function vaultGitArgs(vault: string): string[] {
     "core.fsmonitor=false",
     "-c",
     "core.hooksPath=/dev/null",
+    // Keeps a global or per-user attributes file from adding drivers the vault scan never saw.
+    "-c",
+    "core.attributesFile=/dev/null",
   ];
 }
 
@@ -55,7 +58,7 @@ function assertConfig(vault: string): void {
   }
 }
 
-const DRIVER = /(^|\s)(filter|diff)=/m;
+const DRIVER = /(^|\s)(filter|diff|merge)=|textconv/m;
 
 function hasDriver(file: string): boolean {
   const entry = lstatSync(file, { throwIfNoEntry: false });
@@ -77,5 +80,5 @@ export function assertSafeVaultRepo(vault: string): void {
   assertConfig(vault);
   const files = [join(vault, ".git", "info", "attributes"), ...attributeFiles(vault, [])];
   const bad = files.find(hasDriver);
-  if (bad !== undefined) refuse(`${bad} defines a filter or diff driver`);
+  if (bad !== undefined) refuse(`${bad} defines a filter, diff, merge or textconv driver`);
 }

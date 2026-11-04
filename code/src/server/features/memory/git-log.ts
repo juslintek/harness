@@ -26,7 +26,11 @@ const IDENT = [
   "commit.gpgsign=false",
 ];
 
+// The vault is writable by anyone who can write a note, so its git metadata is checked again
+// before each command, not only at start: a config key or attributes file added later would
+// otherwise make the next `git add` run an attacker's filter.
 async function git(cwd: string, args: string[]): Promise<{ code: number; out: string }> {
+  assertVaultDir(cwd);
   const proc = Bun.spawn(["git", ...vaultGitArgs(cwd), ...IDENT, ...args], {
     cwd,
     // "nothing to commit" is matched below, so the message must not be translated.
@@ -73,10 +77,14 @@ function writeIgnore(dir: string): void {
 // A .git symlink or "gitdir:" file would point git, and every commit and revert, at a repository
 // outside the vault. Nothing is deleted: the operator has to look at it.
 export function assertVaultGit(home: string): void {
-  const entry = lstatSync(join(vaultDir(home), ".git"), { throwIfNoEntry: false });
+  assertVaultDir(vaultDir(home));
+}
+
+function assertVaultDir(dir: string): void {
+  const entry = lstatSync(join(dir, ".git"), { throwIfNoEntry: false });
   if (entry === undefined) return;
   if (entry.isDirectory()) {
-    assertSafeVaultRepo(vaultDir(home));
+    assertSafeVaultRepo(dir);
     return;
   }
   throw new Error(
