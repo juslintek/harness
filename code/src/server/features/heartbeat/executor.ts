@@ -79,7 +79,7 @@ async function startFirst(
     agentId: runtime,
     ...(model === null ? {} : { model }),
     repo: repo ?? scratchRepo(deps.home, member.orgId),
-    prompt: buildPrompt(db, member, batch.wakes, mem.mcp),
+    prompt: buildPrompt(db, member, batch.wakes, mem.mcp, mem.index !== undefined),
     ...(taskId == null ? {} : { taskId }),
     member: runMember(db, member, batch.projectId, mem.index),
     attempt: 1,

@@ -88,3 +88,11 @@ test("project lessons lead the index even when the task text matches nothing in 
   ).toBe(true);
   expect(text.indexOf("# Your notes")).toBeGreaterThan(text.indexOf("# Project and org lessons"));
 });
+
+test("a note too big for the budget is skipped and smaller notes after it still fit", () => {
+  add("orgs/A/org/huge.md", `# huge\n${"x".repeat(40_000)}`, "2026-02-01T00:00:00.000Z");
+  add("orgs/A/org/small.md", "# small\nfits", "2026-01-01T00:00:00.000Z");
+  const text = buildMemoryIndex(env.db, alice, null, "");
+  expect(text).toContain("## small");
+  expect(text).not.toContain("## huge");
+});

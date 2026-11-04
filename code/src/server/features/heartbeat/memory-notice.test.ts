@@ -53,6 +53,13 @@ test("without MCP the notice points at the file, and is empty when there are no 
   expect(memoryNotice(k.db, bob, "deploy", false)).toContain("$HARNESS_MEMORY_FILE");
 });
 
+test("without MCP the file line is left out when no MEMORY.md was written", async () => {
+  const k = setup();
+  const bob = k.agent("bob");
+  await put(k, "bob", "/memories/org/rules.md", "# Rules\nbe kind");
+  expect(memoryNotice(k.db, bob, "deploy", false, null, false)).toBe("");
+});
+
 test("a note of another org is not listed", async () => {
   const k = setup();
   const bob = k.agent("bob");

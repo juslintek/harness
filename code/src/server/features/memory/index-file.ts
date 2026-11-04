@@ -65,7 +65,7 @@ export function buildMemoryIndex(
     for (const n of group) {
       const entry = `## ${n.title}\n${virtualPathOf(n, slugs)}\n\n${bodyOf(db, n.id).trim()}\n\n`;
       const cost = Buffer.byteLength(entry) + (open ? 0 : Buffer.byteLength(heading) + 2);
-      if (size + cost > MAX_BYTES) return parts.join("");
+      if (size + cost > MAX_BYTES) continue;
       if (!open) parts.push(`${heading}\n\n`);
       open = true;
       parts.push(entry);

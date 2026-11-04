@@ -44,7 +44,7 @@ async function startNext(
     agentId: next.engine.runtime,
     ...(next.engine.model === null ? {} : { model: next.engine.model }),
     repo: run.repo,
-    prompt: `${next.summary}\n\n${buildPrompt(db, member, wakes, mem.mcp)}`,
+    prompt: `${next.summary}\n\n${buildPrompt(db, member, wakes, mem.mcp, mem.index !== undefined)}`,
     ...(run.taskId === null ? {} : { taskId: run.taskId }),
     member: runMember(db, member, projectId, mem.index),
     reuseWorktreeOf: next.reuseWorktreeOf,

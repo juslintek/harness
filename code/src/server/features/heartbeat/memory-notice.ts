@@ -66,6 +66,7 @@ export function wakeTaskProject(db: Database, wakes: WakeRow[]): string | null {
   return null;
 }
 
+// fileWritten is false when the run got no MEMORY.md, so the prompt must not point at one.
 // Starts with a blank line when not empty, like the other prompt sections.
 export function memoryNotice(
   db: Database,
@@ -73,10 +74,11 @@ export function memoryNotice(
   taskText: string,
   mcp: boolean,
   projectId: string | null = null,
+  fileWritten = true,
 ): string {
   if (mcp) return `\n\n${WITH_TOOL}${hints(db, member, taskText, projectId)}`;
   const any = searchNotes(db, agentViewer(db, member.id), { limit: 1 }).length > 0;
-  return any ? `\n\n${WITH_FILE}` : "";
+  return any && fileWritten ? `\n\n${WITH_FILE}` : "";
 }
 
 // Task titles and wake excerpts are what the work is about, so they are the search text.
