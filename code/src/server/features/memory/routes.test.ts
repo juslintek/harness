@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { lessonViewSchema } from "../../../shared/memory";
 import { createTask } from "../board/api";
 import { addAgentMember, addHumanMember, createProject, grantProject } from "../orgs/api";
 import { logWrite } from "./index-log";
@@ -151,6 +152,9 @@ test("lesson decide is admin-only and an accepted lesson becomes a note", async 
   expect(res.status).toBe(200);
   const decided = await res.json();
   expect(decided.status).toBe("accepted");
+  // zod strips unknown keys, so equality with the parsed value means no internal field leaked.
+  expect(decided).toEqual(lessonViewSchema.parse(decided));
+  expect(pending[0]).toEqual(lessonViewSchema.parse(pending[0]));
   expect((await k.call(k.alice, "GET", `${BASE}/notes/${decided.noteId}`)).status).toBe(200);
 });
 

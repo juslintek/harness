@@ -154,7 +154,10 @@ export async function decideLesson(
       throw e;
     }
   }
-  const out = getLesson(db, lesson.id) as LessonView;
+  // confidence is a ranking input and not part of the public LessonView.
+  const { confidence: _confidence, ...out } = getLesson(db, lesson.id) as LessonView & {
+    confidence: number;
+  };
   emitDecided(out);
   return out;
 }
