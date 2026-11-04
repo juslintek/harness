@@ -114,27 +114,16 @@ test("facets count visible notes", () => {
   expect(f.types).toEqual({ fact: 4 });
 });
 
-test("duplicate id: the newer file keeps it, the older gets a fresh id", () => {
-  upsertIndexed(
-    db,
-    loc("orgs/A/org/old.md"),
-    noteText("old", { id: "dup", updated: "2024-01-01T00:00:00Z" }),
-  );
-  upsertIndexed(
-    db,
-    loc("orgs/A/org/new.md"),
-    noteText("new", { id: "dup", updated: "2025-01-01T00:00:00Z" }),
-  );
-  expect(getIndexedByDisk(db, "orgs/A/org/new.md")?.id).toBe("dup");
-  const moved = getIndexedByDisk(db, "orgs/A/org/old.md");
-  expect(moved?.id).not.toBe("dup");
-  const loser = upsertIndexed(
-    db,
-    loc("orgs/A/org/older.md"),
-    noteText("o", { id: "dup", updated: "2020-01-01T00:00:00Z" }),
-  );
-  expect(loser.id).not.toBe("dup");
-  expect(getIndexed(db, "dup")?.disk).toBe("orgs/A/org/new.md");
+test("duplicate id: the indexed note keeps it, a newcomer with the same id gets a fresh one", () => {
+  upsertIndexed(db, loc("orgs/A/org/old.md"), noteText("old", { id: "dup" }));
+  upsertIndexed(db, loc("orgs/A/org/new.md"), noteText("new [[x]]", { id: "dup" }));
+  expect(getIndexedByDisk(db, "orgs/A/org/old.md")?.id).toBe("dup");
+  const newcomer = getIndexedByDisk(db, "orgs/A/org/new.md");
+  expect(newcomer?.id).not.toBe("dup");
+  expect(getIndexed(db, "dup")?.disk).toBe("orgs/A/org/old.md");
+  const link = db.query<{ src_id: string }, []>("SELECT src_id FROM note_links").get();
+  expect(link?.src_id).toBe(newcomer?.id as string);
+  expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
 test("a note with confidence outside 0..1 still lists in the API shape", () => {

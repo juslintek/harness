@@ -62,21 +62,11 @@ function epoch(iso: string | undefined, fallback: number): number {
   return Number.isNaN(t) ? fallback : t;
 }
 
-// Two files claiming one id: the more recently updated keeps it, the other gets a fresh id,
-// so links and writes logged against the id cannot point at the wrong file.
-function pickId(db: Database, disk: string, wanted: string, updated: number): string {
-  const other = db
-    .query<{ id: string; updated: number }, [string, string]>(
-      "SELECT id, updated FROM notes WHERE id = ? AND disk != ?",
-    )
-    .get(wanted, disk);
-  if (other === null) return wanted;
-  if (other.updated > updated) return Bun.randomUUIDv7();
-  const fresh = Bun.randomUUIDv7();
-  db.run("PRAGMA defer_foreign_keys = ON");
-  db.run("UPDATE note_links SET src_id = ? WHERE src_id = ?", [fresh, other.id]);
-  db.run("UPDATE notes SET id = ? WHERE id = ?", [fresh, other.id]);
-  return wanted;
+// Two files claiming one id: the row already indexed keeps it and the newcomer gets a fresh one,
+// so audit rows and links written against the id stay with the note they were made for.
+function pickId(db: Database, disk: string, wanted: string): string {
+  const taken = db.query("SELECT 1 FROM notes WHERE id = ? AND disk != ?").get(wanted, disk);
+  return taken === null ? wanted : Bun.randomUUIDv7();
 }
 
 function replaceFts(db: Database, disk: string, title: string, body: string, tags: string[]): void {
@@ -104,7 +94,7 @@ export function upsertIndexed(db: Database, loc: Located, text: string): Indexed
   db.transaction(() => {
     const prior = getIndexedByDisk(db, loc.disk);
     if (prior) db.run("DELETE FROM note_links WHERE src_id = ?", [prior.id]);
-    const id = pickId(db, loc.disk, meta.id ?? prior?.id ?? Bun.randomUUIDv7(), updated);
+    const id = pickId(db, loc.disk, meta.id ?? prior?.id ?? Bun.randomUUIDv7());
     db.run(
       `INSERT INTO notes (id, disk, scope, org_id, project_id, member_id, type, title, tags,
          source_agent, confidence, created, updated, hash, slug)
