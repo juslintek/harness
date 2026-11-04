@@ -97,7 +97,13 @@ async function startFirst(
   });
 }
 
-async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<boolean> {
+// "retry" means the batch was marked failed at routing, so the member's next pending batch is
+// still waiting for this pass.
+async function launchBatch(
+  db: Database,
+  deps: ExecDeps,
+  memberId: string,
+): Promise<boolean | "retry"> {
   const member = getMember(db, memberId);
   const { wakes, projectId } = nextBatch(db, memberId);
   if (wakes.length === 0) return false;
@@ -118,7 +124,7 @@ async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<b
   setStatus(db, ids, "started");
   try {
     const runId = await startFirst(db, deps, member, { ids, wakes, projectId });
-    if (runId === null) return false;
+    if (runId === null) return "retry";
     setStatus(db, ids, "started", { runId });
     await settleRun(db, deps, runId);
     return false;
@@ -130,6 +136,15 @@ async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<b
     fail(db, ids, err);
     return false;
   }
+}
+
+// Each retry marks its batch failed, so a pass takes at most one round per pending wake.
+async function launch(db: Database, deps: ExecDeps, memberId: string): Promise<boolean> {
+  for (let left = pendingWakes(db, memberId).length; left > 0; left--) {
+    const outcome = await launchBatch(db, deps, memberId);
+    if (outcome !== "retry") return outcome;
+  }
+  return false;
 }
 
 // Every member with pending wakes and no live run gets one run for the whole batch.
