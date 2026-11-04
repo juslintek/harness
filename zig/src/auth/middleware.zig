@@ -104,6 +104,12 @@ fn joinedHeader(arena: std.mem.Allocator, req: *const httpz.Request, name: []con
     return if (found) joined.items else null;
 }
 
+fn sessionToken(arena: std.mem.Allocator, req: *const httpz.Request) std.mem.Allocator.Error!?[]const u8 {
+    const header = try joinedHeader(arena, req, "cookie") orelse return null;
+    const token = try cookieValue(arena, header, cookie_name) orelse return null;
+    return if (token.len == 0) null else token;
+}
+
 /// A token that survives `encodeURIComponent` unchanged, which every token we mint does.
 fn isPlainToken(token: []const u8) bool {
     if (token.len == 0) return false;
@@ -147,12 +153,17 @@ pub const SessionAuth = struct {
         return .{ .ctx = self, .authenticate = authenticate };
     }
 
+    /// The session behind the request's cookie, for callers that cannot set a cookie on a response
+    /// (the `/ws` upgrade, which runs after the chain has already refreshed it).
+    pub fn sessionOf(self: *SessionAuth, arena: std.mem.Allocator, req: *const httpz.Request) anyerror!?sessions.Session {
+        const token = try sessionToken(arena, req) orelse return null;
+        return sessions.lookup(self.app, arena, token, self.clock(self.app.io));
+    }
+
     fn authenticate(ctx: *anyopaque, req: *httpz.Request, res: *httpz.Response) anyerror!?policy.Actor {
         const self: *SessionAuth = @ptrCast(@alignCast(ctx));
         const arena = res.arena;
-        const header = try joinedHeader(arena, req, "cookie") orelse return null;
-        const token = try cookieValue(arena, header, cookie_name) orelse return null;
-        if (token.len == 0) return null;
+        const token = try sessionToken(arena, req) orelse return null;
         const session = try sessions.lookup(self.app, arena, token, self.clock(self.app.io)) orelse return null;
         if (session.slid and policy.isApiPath(req.url.path)) {
             // The token matched a stored hash, so it is one of ours and plain; the check only
@@ -438,7 +449,10 @@ pub fn me(call: *routes.Call) anyerror!void {
 pub fn logout(call: *routes.Call) anyerror!void {
     const actor = call.actor orelse return error.Unauthorized;
     const app = call.services.app;
-    _ = try sessions.revoke(app, actor.user_id, actor.session_id, ids.nowMs(app.io));
+    const revoked = try sessions.revoke(app, actor.user_id, actor.session_id, ids.nowMs(app.io));
+    if (revoked) if (call.services.hub) |hub| {
+        _ = hub.registry.closeSession(actor.session_id);
+    };
     call.res.header("set-cookie", cleared_cookie);
     try headers.sendJson(call.res, .{ .ok = true });
 }
