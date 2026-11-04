@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 import type { HireView } from "../../../shared/hiring";
 import { type HiringWorld, hiringWorld } from "../../test-support/hiring-kit";
-import { createProject, findMemberByHandle, listPositions, updateMember } from "../orgs/api";
+import {
+  createPosition,
+  createProject,
+  findMemberByHandle,
+  listPositions,
+  updateMember,
+} from "../orgs/api";
 import { setPolicy } from "../policies/api";
 import { profileOfMember } from "../profiles/api";
 import { candidateOfRun, decide, getHire, pass, score, teamLacks } from "./api";
@@ -116,6 +122,23 @@ test("manager policy wakes the manager, human policy waits", async () => {
   toDeciding(other, waiting, []);
   expect(getHire(other.db, waiting.id)?.status).toBe("deciding");
   expect(other.wakes.some((x) => x.reason === "hire_decision")).toBe(false);
+});
+
+test("a vacant manager position older than the occupied one does not hide the approver", async () => {
+  const w = hiringWorld();
+  const vacant = createPosition(w.db, {
+    orgId: w.orgId,
+    teamId: w.teamId,
+    title: "Lead (open)",
+    isManager: true,
+  });
+  w.db.query("UPDATE positions SET created_at = 1 WHERE id = ?").run(vacant.id);
+  const rev = w.agent("rev1");
+  const hire = await w.file(rev.id);
+  toDeciding(w, hire, []);
+  expect(w.wakes.filter((x) => x.reason === "hire_decision").map((x) => x.memberId)).toEqual([
+    w.boss.id,
+  ]);
 });
 
 test("two decide calls make one member and the second is told it was already decided", async () => {

@@ -62,15 +62,20 @@ export function questionProgress(
   db: Database,
   requestId: string,
   candidateId: string,
+  kind: "base" | "followup" | null = null,
 ): { total: number; answered: number } {
   return db
-    .query<{ total: number; answered: number }, [string, string, string]>(
+    .query<
+      { total: number; answered: number },
+      [string, string, string, string | null, string | null]
+    >(
       `SELECT COUNT(*) AS total, COUNT(a.question_id) AS answered
        FROM interview_questions q
        LEFT JOIN interview_answers a ON a.question_id = q.id AND a.candidate_id = ?
-       WHERE q.request_id = ? AND (q.candidate_id IS NULL OR q.candidate_id = ?)`,
+       WHERE q.request_id = ? AND (q.candidate_id IS NULL OR q.candidate_id = ?)
+         AND (? IS NULL OR q.kind = ?)`,
     )
-    .get(candidateId, requestId, candidateId) as { total: number; answered: number };
+    .get(candidateId, requestId, candidateId, kind, kind) as { total: number; answered: number };
 }
 
 export function insertAnswer(

@@ -156,8 +156,12 @@ export async function fileRequest(
   return getHire(db, requestId) as HireView;
 }
 
+// listPositions is oldest first, so among several occupied manager positions the oldest wins; a vacant one only stands in when none is occupied.
 function teamManagerPosition(db: Database, head: HireHead): PositionRow | null {
-  return listPositions(db, head.orgId).find((p) => p.teamId === head.teamId && p.isManager) ?? null;
+  const managers = listPositions(db, head.orgId).filter(
+    (p) => p.teamId === head.teamId && p.isManager,
+  );
+  return managers.find((p) => p.memberId !== null) ?? managers[0] ?? null;
 }
 
 // A manager asking for help is answered by their own manager; anyone else by the team's manager.

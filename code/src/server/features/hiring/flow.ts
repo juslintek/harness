@@ -165,6 +165,10 @@ export function advance(db: Database, deps: HiringDeps, requestId: string): void
   }
 }
 
+// Base answers are already in by the follow-up round, so only the follow-ups asked of the candidate say whether it finished.
+const roundKind = (head: HireHead): "followup" | null =>
+  head.status === "answering" ? "followup" : null;
+
 export function recordAnswer(
   db: Database,
   candidateId: string,
@@ -184,7 +188,7 @@ export function recordAnswer(
     throw new DomainError("interview is closed");
   }
   insertAnswer(db, { questionId, candidateId, body, runId, now: Date.now() });
-  const { total, answered } = questionProgress(db, head.id, cand.id);
+  const { total, answered } = questionProgress(db, head.id, cand.id, roundKind(head));
   if (answered === total) setCandidateStatus(db, cand.id, "answered");
   return head.id;
 }
@@ -208,7 +212,7 @@ export function candidateRunEnded(
   const cand = getCandidate(db, candidateId);
   const head = cand ? getHead(db, cand.requestId) : null;
   if (!cand || !head || (head.status !== "interviewing" && head.status !== "answering")) return;
-  const { total, answered } = questionProgress(db, head.id, cand.id);
+  const { total, answered } = questionProgress(db, head.id, cand.id, roundKind(head));
   const partialOk = head.status === "answering" && ok && answered > 0;
   setCandidateStatus(db, cand.id, answered === total || partialOk ? "answered" : "failed");
   advance(db, deps, head.id);

@@ -92,3 +92,14 @@ test("a candidate who answers the text questions and submits a card is answered"
   expect(now?.status).toBe("answered");
   expect(now?.answers).toHaveLength(3);
 });
+
+test("a card submitted after the request left the interview phases is refused", async () => {
+  const hire = await w.file();
+  const cand = hire.candidates[0];
+  w.db.query("UPDATE hire_requests SET status = 'scoring' WHERE id = ?").run(hire.id);
+  const res = await call(server, candidateToken(cand?.id as string), "profile_card_submit", {
+    card: goodCard,
+  });
+  expect(res).toEqual({ isError: true, text: "interview is closed" });
+  expect(getProfile(w.db, cand?.profile.id as string)?.card).toBeNull();
+});

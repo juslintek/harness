@@ -109,6 +109,14 @@ export function getCandidate(db: Database, id: string): CandidateRow | null {
   return r ? candidate(r) : null;
 }
 
+// A candidate row can stay "interviewing" after its request moved on, so the request decides whether answers still count.
+export function interviewOpen(db: Database, candidateId: string): boolean {
+  const cand = getCandidate(db, candidateId);
+  const head = cand ? getHead(db, cand.requestId) : null;
+  const phaseOpen = head?.status === "interviewing" || head?.status === "answering";
+  return phaseOpen && !["failed", "hired", "rejected"].includes(cand?.status ?? "failed");
+}
+
 export function setCandidateStatus(db: Database, id: string, status: CandidateStatus): void {
   db.query("UPDATE hire_candidates SET status = ? WHERE id = ?").run(status, id);
 }

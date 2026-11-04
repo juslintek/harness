@@ -147,3 +147,21 @@ test("an invalid card zeroes the card part of the system score", () => {
   expect(systemScore({ ...base, card: true })).toBeCloseTo(5);
   expect(systemScore({ ...base, card: false })).toBeCloseTo(3.5);
 });
+
+test("a follow-up run that answers nothing fails the candidate even though the base answers are in", async () => {
+  const w = hiringWorld();
+  const hire = await w.file();
+  w.answerAll(hire);
+  const first = hire.candidates[0]?.id as string;
+  ask(w.db, w.deps, {
+    requestId: hire.id,
+    reviewerId: w.boss.id,
+    candidateId: first,
+    body: "Why SQL?",
+  });
+  pass(w.db, w.deps, hire.id, w.boss.id);
+  expect(getHire(w.db, hire.id)?.status).toBe("answering");
+  candidateRunEnded(w.db, w.deps, first, true);
+  const cand = getHire(w.db, hire.id)?.candidates.find((c) => c.id === first);
+  expect(cand?.status).toBe("failed");
+});
