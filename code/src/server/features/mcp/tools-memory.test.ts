@@ -289,3 +289,18 @@ test("a viewer-role agent reads memory but every write is forbidden", async () =
   expect((await mem({ action: "delete", path: "/memories/org/a.md" })).isError).toBe(true);
   expect((await mem({ action: "view", path: "/memories/org/a.md" })).text).toContain("# A");
 });
+
+test("view lists an old nested folder under newer notes, and matches the folder name literally", async () => {
+  const dev = w.agent(w.a.id, "dev");
+  const mem = (args: Record<string, unknown>) =>
+    call(server, tokenOf(dev.id, w.a.id), "memory", args);
+  await mem({ action: "create", path: "/memories/org/old_dir/n.md", file_text: "# Old\nx" });
+  await mem({ action: "create", path: "/memories/org/oldxdir/m.md", file_text: "# Other\nx" });
+  for (let i = 0; i < 101; i++) {
+    await mem({ action: "create", path: `/memories/org/new${i}.md`, file_text: `# New ${i}\nx` });
+  }
+  const listed = await mem({ action: "view", path: "/memories/org/old_dir" });
+  expect(listed.isError).toBe(false);
+  expect(listed.text).toContain("/memories/org/old_dir/n.md");
+  expect(listed.text).not.toContain("oldxdir");
+});

@@ -11,6 +11,8 @@ export interface NoteQuery {
   tag?: string;
   sourceAgent?: string;
   projectId?: string;
+  // Disk path prefix (a folder, with its trailing slash); matched literally, not as a pattern.
+  pathPrefix?: string;
   // Task text is long and its words rarely all occur in one note, so a prompt query ranks by bm25
   // over any word instead of requiring every word.
   anyWord?: boolean;
@@ -43,6 +45,10 @@ function filters(viewer: Viewer, q: NoteQuery): { where: string[]; params: Param
     where.push(`${col} = ?`);
     params.push(val);
   }
+  if (q.pathPrefix !== undefined) {
+    where.push("n.disk LIKE ? ESCAPE '\\'");
+    params.push(`${q.pathPrefix.replace(/[\\%_]/g, "\\$&")}%`);
+  }
   if (q.tag !== undefined) {
     where.push("EXISTS (SELECT 1 FROM json_each(n.tags) WHERE value = ?)");
     params.push(q.tag);
@@ -65,7 +71,7 @@ function ftsQuery(text: string, anyWord: boolean): string | null {
 }
 
 export function searchNotes(db: Database, viewer: Viewer, q: NoteQuery): NoteSummary[] {
-  const limit = Math.min(Math.max(q.limit ?? 20, 1), 100);
+  const limit = Math.min(Math.max(q.limit ?? 20, 1), 200);
   const { where, params } = filters(viewer, q);
   const text = q.text?.trim();
   if (text === undefined || text === "") {

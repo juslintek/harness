@@ -109,19 +109,16 @@ function listDir(op: Op, vpath: string): string {
   if (scope === "project" && slug === undefined) {
     return op.viewer.projectIds.map((id) => `/memories/project/${op.slugs.slugOf(id)}/`).join("\n");
   }
-  const projectId = slug === undefined ? undefined : (op.slugs.idOf(slug) ?? undefined);
+  // The folder is filtered in SQL, otherwise an older-only folder would fall outside the newest notes.
+  const probe = resolveNotePath(`${vpath}/x.md`, op.viewer, op.slugs);
+  if (probe === null || probe === "dir") return fail("invalid path");
   const hits = searchNotes(op.db, op.viewer, {
-    scope: scope as NoteScope,
-    ...(projectId === undefined ? {} : { projectId }),
-    limit: 100,
+    pathPrefix: probe.disk.slice(0, -"x.md".length),
+    limit: MAX_LINES,
   });
-  const prefix = `${vpath}/`;
-  const lines = hits
-    .map((n) => ({ path: virtualPathOf(n, op.slugs), title: n.title }))
-    .filter((n) => n.path.startsWith(prefix))
-    .map((n) => `${n.path} — ${n.title}`);
+  const lines = hits.map((n) => `${virtualPathOf(n, op.slugs)} — ${n.title}`);
   if (lines.length === 0 && isNested(vpath)) return fail("not found");
-  return lines.slice(0, MAX_LINES).join("\n");
+  return lines.join("\n");
 }
 
 function view(op: Op, a: MemoryArgs): string {
