@@ -44,9 +44,26 @@ export interface OauthKit {
     clientId: string,
     challenge: string,
     extra?: Record<string, unknown>,
+    freshTap?: boolean,
   ) => Promise<Response>;
   authorize: (clientId: string, challenge: string) => Promise<string>;
   exchange: (clientId: string, code: string, verifier: string) => Promise<Response>;
+}
+
+function exchangeWith(post: OauthKit["post"]): OauthKit["exchange"] {
+  return (clientId, code, verifier) =>
+    post(
+      "/oauth/token",
+      {
+        grant_type: "authorization_code",
+        client_id: clientId,
+        code,
+        redirect_uri: REDIRECT,
+        code_verifier: verifier,
+        resource: RESOURCE,
+      },
+      true,
+    );
 }
 
 export async function bootOauth(): Promise<OauthKit> {
@@ -75,8 +92,15 @@ export async function bootOauth(): Promise<OauthKit> {
     });
     return ((await res.json()) as { client_id: string }).client_id;
   };
-  const consent: OauthKit["consent"] = (clientId, challenge, extra = {}) =>
-    api.call(owner, "POST", "/oauth/consent", {
+  // Each grant needs its own passkey tap; this stamps a new, strictly later one before a consent.
+  let lastTap = 0;
+  const tap = (): void => {
+    lastTap = Math.max(Date.now(), lastTap + 1);
+    api.db.query("UPDATE sessions SET step_up_at = ?").run(lastTap);
+  };
+  const consent: OauthKit["consent"] = (clientId, challenge, extra = {}, freshTap = true) => {
+    if (freshTap) tap();
+    return api.call(owner, "POST", "/oauth/consent", {
       client_id: clientId,
       redirect_uri: REDIRECT,
       code_challenge: challenge,
@@ -87,23 +111,12 @@ export async function bootOauth(): Promise<OauthKit> {
       state: "xyz",
       ...extra,
     });
+  };
   const authorize: OauthKit["authorize"] = async (clientId, challenge) => {
     const res = await consent(clientId, challenge);
     const redirect = new URL(((await res.json()) as { redirect: string }).redirect);
     return redirect.searchParams.get("code") ?? "";
   };
-  const exchange: OauthKit["exchange"] = (clientId, code, verifier) =>
-    post(
-      "/oauth/token",
-      {
-        grant_type: "authorization_code",
-        client_id: clientId,
-        code,
-        redirect_uri: REDIRECT,
-        code_verifier: verifier,
-        resource: RESOURCE,
-      },
-      true,
-    );
+  const exchange = exchangeWith(post);
   return { api, owner, org, post, get, register, consent, authorize, exchange };
 }

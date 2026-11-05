@@ -92,6 +92,8 @@ function Choices(props: {
 
 // The server validates every field again on POST; this page only shows what is being asked.
 export function ConsentPage(): preact.JSX.Element {
+  // The page is served without frame headers, so it refuses to run inside someone else's page.
+  if (window.top !== window.self) return <p class="muted">Open this page in its own tab.</p>;
   const params = new URLSearchParams(location.hash.split("?")[1] ?? "");
   const clientId = params.get("client_id") ?? "";
   const requested = askedScopes(params);

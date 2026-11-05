@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { checkAuthRequest, redirectWith } from "./authorize";
+import { checkAuthRequest } from "./authorize";
 import { authorizationServerMetadata, protectedResourceMetadata } from "./metadata";
 import { registerRoutes } from "./register";
 import { tokenRoutes } from "./token";
@@ -33,13 +33,9 @@ function authorizeRoute(db: Database, origin: string): Hono {
     const check = checkAuthRequest(db, origin, query);
     if (!check.ok && check.fatal)
       return c.json({ error: "invalid_request", error_description: check.error }, 400);
-    if (!check.ok) {
-      const to = redirectWith(check.redirectUri, origin, check.state, {
-        error: check.error,
-        error_description: check.description,
-      });
-      return c.redirect(to, 302);
-    }
+    // An error page, not a redirect: client registration is open, so redirecting to a registered
+    // address would let anyone bounce a victim off this origin (RFC 9700, open redirectors).
+    if (!check.ok) return c.json({ error: check.error, error_description: check.description }, 400);
     const forward = new URLSearchParams();
     for (const key of CONSENT_FIELDS) {
       const value = query[key];

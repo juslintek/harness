@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { type ConsentResult, type GrantView, grantViewSchema } from "../../../shared/oauth";
 import { forbidden, notFound, parseBody } from "../../route-kit";
-import { type AuthEnv, requireStepUp } from "../auth/api";
+import { type AuthEnv, hasFreshStepUp, stepUpRequired } from "../auth/api";
 import { memberForUser } from "../orgs/api";
 import { checkAuthRequest, issueCode, matchClient, redirectWith } from "./authorize";
 import { SCOPES } from "./metadata";
@@ -27,11 +27,23 @@ const denyBody = z.object({
   state: z.string().max(500).optional(),
 });
 
+// One passkey tap covers one grant: the tap is remembered per session and refused a second time, so
+// a step-up done for something else a minute ago cannot approve a client the person never saw.
+const spentStepUps = new Map<string, number>();
+const MAX_SPENT = 10_000;
+
+function spendStepUp(sessionId: string, stepUpAt: number | null, fresh: boolean): boolean {
+  if (!fresh || stepUpAt === null || spentStepUps.get(sessionId) === stepUpAt) return false;
+  if (spentStepUps.size >= MAX_SPENT) spentStepUps.clear();
+  spentStepUps.set(sessionId, stepUpAt);
+  return true;
+}
+
 // Every field comes from the browser, so the request is validated again here exactly as at the
 // authorize endpoint; the consent page is not trusted to have done it.
 export function consentRoutes(db: Database, origin: string, clock: () => number): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
-  app.post("/consent", requireStepUp, async (c) => {
+  app.post("/consent", async (c) => {
     const body = await parseBody(c, consentBody);
     if (body instanceof Response) return body;
     const check = checkAuthRequest(db, origin, { ...body, response_type: "code" });
@@ -41,8 +53,12 @@ export function consentRoutes(db: Database, origin: string, clock: () => number)
     if (!body.granted.every((s) => check.scopes.includes(s))) {
       return c.json({ error: "granted scopes exceed the request" }, 400);
     }
-    const member = memberForUser(db, body.org_id, c.get("actor").userId);
+    const actor = c.get("actor");
+    const member = memberForUser(db, body.org_id, actor.userId);
     if (!member) return forbidden(c);
+    if (!spendStepUp(actor.id, actor.stepUpAt, hasFreshStepUp(actor, clock()))) {
+      return stepUpRequired(c);
+    }
     const code = issueCode(
       db,
       {

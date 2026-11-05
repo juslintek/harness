@@ -55,6 +55,15 @@ export function insertClient(
   return id;
 }
 
+// Only clients that never got a code or a token: deleting a used client would cascade to its grants.
+export function pruneClients(db: Database, olderThan: number): void {
+  db.query(
+    `DELETE FROM oauth_clients WHERE created_at < ?
+       AND NOT EXISTS (SELECT 1 FROM oauth_codes WHERE client_id = oauth_clients.id)
+       AND NOT EXISTS (SELECT 1 FROM oauth_tokens WHERE client_id = oauth_clients.id)`,
+  ).run(olderThan);
+}
+
 export const countClients = (db: Database): number =>
   db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM oauth_clients").get()?.n ?? 0;
 

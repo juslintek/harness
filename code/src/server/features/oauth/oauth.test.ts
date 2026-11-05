@@ -90,11 +90,8 @@ test("the plain method is refused at consent and at authorize", async () => {
   expect(res.status).toBe(400);
   const url = `/oauth/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(REDIRECT)}&code_challenge=${pkce().challenge}&code_challenge_method=plain&resource=${encodeURIComponent(RESOURCE)}&state=s1`;
   const authz = await kit.get(url);
-  expect(authz.status).toBe(302);
-  const to = new URL(authz.headers.get("location") ?? "");
-  expect(to.origin + to.pathname).toBe(REDIRECT);
-  expect(to.searchParams.get("error")).toBe("invalid_request");
-  expect(to.searchParams.get("state")).toBe("s1");
+  expect(authz.status).toBe(400);
+  expect(((await authz.json()) as { error: string }).error).toBe("invalid_request");
 });
 
 test("code reuse is refused and revokes the tokens issued from it", async () => {
@@ -166,10 +163,64 @@ test("consent without fresh step-up is 403 step_up_required and issues nothing",
   const kit = await bootOauth();
   const clientId = await kit.register();
   kit.api.db.query("UPDATE sessions SET step_up_at = NULL").run();
-  const res = await kit.consent(clientId, pkce().challenge);
+  const res = await kit.consent(clientId, pkce().challenge, {}, false);
   expect(res.status).toBe(403);
   expect(((await res.json()) as { error: string }).error).toBe("step_up_required");
   expect(kit.api.db.query("SELECT 1 FROM oauth_codes").all()).toHaveLength(0);
+});
+
+test("one step-up covers one consent: a second grant on the same tap needs a new one", async () => {
+  const kit = await bootOauth();
+  const clientId = await kit.register();
+  const first = await kit.consent(clientId, pkce().challenge);
+  expect(first.status).toBe(200);
+  const replay = await kit.consent(clientId, pkce().challenge, {}, false);
+  expect(replay.status).toBe(403);
+  expect(((await replay.json()) as { error: string }).error).toBe("step_up_required");
+  expect((await kit.consent(clientId, pkce().challenge)).status).toBe(200);
+});
+
+test("an authorize request with a bad parameter gets a 400, never a redirect", async () => {
+  const kit = await bootOauth();
+  const clientId = await kit.register();
+  const query = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: "https://claude.ai/api/mcp/auth_callback",
+    response_type: "token",
+  });
+  const res = await kit.get(`/oauth/authorize?${query}`);
+  expect(res.status).toBe(400);
+  expect(res.headers.get("location")).toBeNull();
+});
+
+test("client names with control or bidi characters are refused", async () => {
+  const kit = await bootOauth();
+  for (const name of ["Cl\u202eaude", "Claude\u0007"]) {
+    const res = await kit.post("/oauth/register", { client_name: name, redirect_uris: [REDIRECT] });
+    expect(res.status).toBe(400);
+  }
+});
+
+test("registration is rate limited", async () => {
+  const kit = await bootOauth();
+  for (let i = 0; i < 30; i++) await kit.register();
+  expect((await kit.post("/oauth/register", { redirect_uris: [REDIRECT] })).status).toBe(429);
+});
+
+test("a full table frees unused old clients but keeps clients that hold grants", async () => {
+  const kit = await bootOauth();
+  const used = await kit.register();
+  await kit.authorize(used, pkce().challenge);
+  const insert = kit.api.db.query(
+    "INSERT INTO oauth_clients (id, name, redirect_uris, created_at) VALUES (?, 'x', '[]', 1)",
+  );
+  for (let i = 0; i < 999; i++) insert.run(`old-${i}`);
+  kit.api.db.query("UPDATE oauth_clients SET created_at = 1 WHERE id = ?").run(used);
+  const res = await kit.post("/oauth/register", { redirect_uris: [REDIRECT] });
+  expect(res.status).toBe(201);
+  const ids = kit.api.db.query<{ id: string }, []>("SELECT id FROM oauth_clients").all();
+  expect(ids.some((r) => r.id === used)).toBe(true);
+  expect(ids.some((r) => r.id.startsWith("old-"))).toBe(false);
 });
 
 test("consent for an org the member does not belong to is 403", async () => {
