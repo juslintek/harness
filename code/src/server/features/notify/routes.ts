@@ -84,7 +84,7 @@ export function notifyRoutes(db: Database, home: string): Hono<AuthEnv> {
   );
   app.delete("/targets/:id", (c) =>
     asCaller(db, c, (id) =>
-      deleteTarget(db, id, c.req.param("id")) ? c.json({ ok: true }) : notFound(c),
+      deleteTarget(db, id, c.req.param("id"), home) ? c.json({ ok: true }) : notFound(c),
     ),
   );
   return app;

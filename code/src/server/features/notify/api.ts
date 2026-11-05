@@ -69,6 +69,11 @@ export function listTargets(db: Database, memberId: string): TargetView[] {
   return targetsOf(db, memberId).map(viewOf);
 }
 
-export function removeTarget(db: Database, memberId: string, targetId: string): boolean {
-  return deleteTarget(db, memberId, targetId);
+export function removeTarget(
+  db: Database,
+  memberId: string,
+  targetId: string,
+  home?: string,
+): boolean {
+  return deleteTarget(db, memberId, targetId, home);
 }

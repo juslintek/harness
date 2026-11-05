@@ -48,6 +48,7 @@ async function safeDeliver(
 
 export interface OutboxDeps {
   db: Database;
+  home: string;
   adapters: Record<Channel, Notifier>;
   origin: string;
   now: () => number;
@@ -62,7 +63,7 @@ export interface Outbox {
 
 // Delivers with retries; every send ends as exactly one notify_log row.
 export function createOutbox(deps: OutboxDeps): Outbox {
-  const { db, adapters, origin, now, backoffMs } = deps;
+  const { db, home, adapters, origin, now, backoffMs } = deps;
   const tasks = new Set<Promise<void>>();
   const sleepers = new Set<() => void>();
   let stopped = false;
@@ -95,7 +96,7 @@ export function createOutbox(deps: OutboxDeps): Outbox {
 
   async function deliverTo(target: Target, n: Notification): Promise<void> {
     const { result, attempts } = await attemptAll(target, n);
-    if (!result.ok && result.gone) deleteTarget(db, target.memberId, target.id);
+    if (!result.ok && result.gone) deleteTarget(db, target.memberId, target.id, home);
     const status = result.ok ? "sent" : "failed";
     const reason = result.ok ? null : result.reason;
     writeLog(db, { target, n, status, reason, attempts, at: now() });

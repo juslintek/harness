@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Channel, Target, TargetView } from "../../../shared/notify";
+import { deleteSecret } from "../agents/api";
 
 interface Raw {
   id: string;
@@ -51,11 +52,22 @@ export function targetsOf(db: Database, memberId: string, channel?: Channel): Ta
   return rows.map(toTarget);
 }
 
-export function deleteTarget(db: Database, memberId: string, targetId: string): boolean {
-  const res = db
-    .query("DELETE FROM notify_targets WHERE id = ? AND member_id = ?")
-    .run(targetId, memberId);
-  return res.changes > 0;
+// A webhook's signing secret lives in secrets.json, so it goes with the row.
+export function deleteTarget(
+  db: Database,
+  memberId: string,
+  targetId: string,
+  home?: string,
+): boolean {
+  const row = db
+    .query<Raw, [string, string]>("SELECT * FROM notify_targets WHERE id = ? AND member_id = ?")
+    .get(targetId, memberId);
+  if (!row) return false;
+  db.query("DELETE FROM notify_targets WHERE id = ?").run(targetId);
+  if (row.channel === "webhook") {
+    deleteSecret(toTarget(row).value.secretName ?? `webhook.${targetId}`, home);
+  }
+  return true;
 }
 
 function pushHost(endpoint: string | undefined): string {

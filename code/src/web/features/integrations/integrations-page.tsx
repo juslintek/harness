@@ -1,13 +1,14 @@
 import { me } from "../auth/me";
+import { DesktopCard } from "./desktop-card";
 import { McpCard } from "./mcp-card";
 import { SmtpCard } from "./smtp-card";
 import { TunnelCard } from "./tunnel-card";
 
-// One entry per card: a later task adds the Claude Desktop link card by appending to this list.
 const CARDS: { id: string; render: () => preact.JSX.Element }[] = [
   { id: "smtp", render: () => <SmtpCard /> },
   { id: "tunnel", render: () => <TunnelCard /> },
   { id: "mcp", render: () => <McpCard /> },
+  { id: "desktop", render: () => <DesktopCard /> },
 ];
 
 export function IntegrationsPage(): preact.JSX.Element {

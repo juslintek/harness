@@ -52,6 +52,7 @@ export function createDispatcher(db: Database, deps: DispatcherDeps): Dispatcher
   const now = deps.now ?? Date.now;
   const outbox = createOutbox({
     db,
+    home: deps.home,
     adapters: { ...buildAdapters({ db, home: deps.home }), ...deps.adapters },
     origin: deps.origin,
     now,

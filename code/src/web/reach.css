@@ -116,6 +116,10 @@
   margin-top: 0.2rem;
 }
 
+.desktop-path code {
+  word-break: break-all;
+}
+
 .integrations input[type="radio"] {
   flex: none;
   width: 1.25rem;

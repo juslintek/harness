@@ -1,9 +1,13 @@
 import type { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Notification } from "../../../shared/notify";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { seedMember } from "../../test-support/bridge-kit";
+import { secretNames, setSecret } from "../agents/api";
 import { addTarget, listTargets, notifyMembers, setPref, startNotify } from "./api";
 import { createDispatcher } from "./dispatcher";
 import { type FakeNotifier, fakeNotifier } from "./fake-notifier";
@@ -128,6 +132,25 @@ test("gone deletes the target", async () => {
   await dispatcher.idle();
   expect(listTargets(db, memberId)).toEqual([]);
   expect(logs(db)[0]?.status).toBe("failed");
+});
+
+test("gone on a webhook target also removes its secret", async () => {
+  const home = mkdtempSync(join(tmpdir(), "harness-gone-"));
+  const gone = { ok: false, retry: false, gone: true, reason: "410" } as const;
+  const { db, memberId } = setup();
+  const dispatcher = createDispatcher(db, {
+    home,
+    origin: "https://h.test",
+    adapters: { webhook: fakeNotifier("webhook", [gone]) },
+    backoffMs: [1],
+  });
+  addTarget(db, memberId, "webhook", { url: "https://h.test/in", secretName: "webhook.w1" });
+  setSecret("webhook.w1", "s", home);
+  setPref(db, memberId, "webhook", "mention", true);
+  dispatcher.notify([memberId], note());
+  await dispatcher.idle();
+  expect(listTargets(db, memberId)).toEqual([]);
+  expect(secretNames(home)).toEqual([]);
 });
 
 test("the same tag to the same target within 60 s is dropped, later it is sent", async () => {
