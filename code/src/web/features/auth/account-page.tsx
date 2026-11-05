@@ -1,6 +1,8 @@
 import { useState } from "preact/hooks";
 import { z } from "zod";
 import { api } from "../../api";
+import { PrefsGrid } from "../notify/prefs";
+import { Targets } from "../notify/targets";
 import { ErrorLine } from "./error-line";
 import { me } from "./me";
 import { PasskeysList } from "./passkeys-list";
@@ -51,6 +53,8 @@ export function AccountPage(): preact.JSX.Element {
           {user.name} <span class="muted">{user.email}</span>
         </p>
       )}
+      <PrefsGrid />
+      <Targets />
       <PasskeysList />
       <Recovery />
       <SessionsList />

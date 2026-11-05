@@ -4,6 +4,7 @@ import { api } from "../../api";
 import { ErrorLine } from "../auth/error-line";
 import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
+import { BridgeSettings } from "../bridge/bridge-settings";
 import { Members } from "./members";
 import { isAdmin, OrgGate, useOrg } from "./org-data";
 import { Positions } from "./positions";
@@ -128,6 +129,7 @@ function OrgSettings({ slug }: { slug: string }): preact.JSX.Element {
       <Members detail={detail} onChange={org.reload} />
       <Positions detail={detail} onChange={org.reload} />
       <Projects detail={detail} onChange={org.reload} />
+      {isAdmin(detail) && <BridgeSettings slug={slug} />}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { BoardPage } from "./features/board/board-page";
 import { ChatPage } from "./features/chat/chat-page";
 import { DashboardPage } from "./features/dashboard/dashboard-page";
 import { HiringPage } from "./features/hiring/hiring-page";
+import { IntegrationsPage } from "./features/integrations/integrations-page";
 import { LogsPage } from "./features/logs/logs-page";
 import { MemoryPage } from "./features/memory/memory-page";
 import { ConsentPage } from "./features/oauth/consent-page";
@@ -55,6 +56,15 @@ function ownRoute(parts: string[]): preact.JSX.Element | null {
   return parts[0] === "oauth" && parts[1]?.startsWith("consent") ? <ConsentPage /> : null;
 }
 
+// Instance admin pages; the API refuses everyone else too, this only keeps the screens out of sight.
+function adminRoute(parts: string[]): preact.JSX.Element | null {
+  if (parts[0] === "agents") return <AgentsPage />;
+  if (parts[0] === "search") return <SearchPage />;
+  if (parts[0] === "integrations") return <IntegrationsPage />;
+  if (parts[0] === "runs" && parts[1]) return <RunPage id={parts[1]} key={parts[1]} />;
+  return parts[0] === "runs" || parts.length === 0 ? <RunsPage /> : null;
+}
+
 function Page(): preact.JSX.Element {
   const parts = routeParts();
   const admin = me.value?.user.instanceAdmin === true;
@@ -62,10 +72,8 @@ function Page(): preact.JSX.Element {
   const own = ownRoute(parts);
   if (own) return own;
   if (parts[0] === "approvals") return <ApprovalsRoute id={parts[1]} />;
-  if (admin && parts[0] === "agents") return <AgentsPage />;
-  if (admin && parts[0] === "search") return <SearchPage />;
-  if (admin && parts[0] === "runs" && parts[1]) return <RunPage id={parts[1]} key={parts[1]} />;
-  if (admin && (parts[0] === "runs" || parts.length === 0)) return <RunsPage />;
+  const adminPage = admin ? adminRoute(parts) : null;
+  if (adminPage) return adminPage;
   const slug = selectedSlug();
   return slug ? <OrgRoute parts={["o", slug]} /> : <p class="muted">No organisation yet.</p>;
 }

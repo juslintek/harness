@@ -1,0 +1,158 @@
+import { useState } from "preact/hooks";
+import { api } from "../../api";
+import { CopyButton } from "../../copy-button";
+import { fmtTime } from "../../format";
+import { ErrorLine } from "../auth/error-line";
+import { useAction } from "../auth/use-action";
+import { createdSchema, linkCodeSchema, webhookAddedSchema } from "./notify-data";
+
+interface ValueFormProps {
+  channel: "email" | "slack";
+  field: "address" | "userId";
+  label: string;
+  hint: string;
+  onAdded: () => void;
+}
+
+export function ValueForm(props: ValueFormProps): preact.JSX.Element {
+  const [value, setValue] = useState("");
+  const action = useAction();
+  const submit = (e: Event): void => {
+    e.preventDefault();
+    action
+      .run(async () => {
+        const body = { channel: props.channel, value: { [props.field]: value.trim() } };
+        await api("/api/notify/targets", createdSchema, { method: "POST", body });
+        setValue("");
+        props.onAdded();
+      })
+      .catch((err: unknown) => console.error(err));
+  };
+  const shared = {
+    value,
+    required: true,
+    maxLength: 320,
+    onInput: (e: preact.TargetedEvent<HTMLInputElement>) => setValue(e.currentTarget.value),
+  };
+  return (
+    <form class="row" onSubmit={submit}>
+      <label>
+        {props.label}
+        <input
+          {...shared}
+          inputMode={props.channel === "email" ? "email" : "text"}
+          autoComplete="off"
+        />
+      </label>
+      <button type="submit" disabled={action.busy}>
+        Add
+      </button>
+      <p class="muted hint">{props.hint}</p>
+      <ErrorLine message={action.error} />
+    </form>
+  );
+}
+
+// The secret is only in this component's state: closing the box drops it for good.
+function SecretOnce({
+  secret,
+  note,
+  onDone,
+}: {
+  secret: string;
+  note: string;
+  onDone: () => void;
+}): preact.JSX.Element {
+  return (
+    <div class="card secret-once" role="status">
+      <p>
+        <strong>Copy this signing secret now.</strong> It is shown only once and cannot be read back
+        later.
+      </p>
+      <p class="muted">{note}</p>
+      <div class="row">
+        <label>
+          Signing secret
+          <input readOnly value={secret} onFocus={(e) => e.currentTarget.select()} />
+        </label>
+        <CopyButton text={secret} label="Copy the webhook signing secret" />
+        <button type="button" onClick={onDone}>
+          I have saved it
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function WebhookForm({ onAdded }: { onAdded: () => void }): preact.JSX.Element {
+  const [url, setUrl] = useState("");
+  const [added, setAdded] = useState<{ secret: string; note: string } | null>(null);
+  const action = useAction();
+  const submit = (e: Event): void => {
+    e.preventDefault();
+    action
+      .run(async () => {
+        const body = { channel: "webhook", url: url.trim() };
+        setAdded(await api("/api/notify/targets", webhookAddedSchema, { method: "POST", body }));
+        setUrl("");
+        onAdded();
+      })
+      .catch((err: unknown) => console.error(err));
+  };
+  return (
+    <>
+      {added && <SecretOnce {...added} onDone={() => setAdded(null)} />}
+      <form class="row" onSubmit={submit}>
+        <label>
+          Webhook URL
+          <input
+            type="url"
+            value={url}
+            required
+            maxLength={2000}
+            placeholder="https://example.com/harness-hook"
+            onInput={(e) => setUrl(e.currentTarget.value)}
+          />
+        </label>
+        <button type="submit" disabled={action.busy}>
+          Add
+        </button>
+        <ErrorLine message={action.error} />
+      </form>
+    </>
+  );
+}
+
+export function TelegramLink({ onLinked }: { onLinked: () => void }): preact.JSX.Element {
+  const [issued, setIssued] = useState<{ code: string; expiresAt: number } | null>(null);
+  const action = useAction();
+  const request = (): void => {
+    action
+      .run(async () => {
+        setIssued(await api("/api/bridge/telegram/link-code", linkCodeSchema, { method: "POST" }));
+      })
+      .catch((err: unknown) => console.error(err));
+  };
+  return (
+    <div>
+      <button type="button" disabled={action.busy} onClick={request}>
+        Get a Telegram link code
+      </button>
+      <ErrorLine message={action.error} />
+      {issued && (
+        <div class="card" role="status">
+          <p>
+            Send this message to the harness bot in Telegram: <code>/link {issued.code}</code>
+          </p>
+          <p class="muted">
+            The code works once and expires at {fmtTime(issued.expiresAt)}. The chat appears in the
+            list when the bot has received it.
+          </p>
+          <button type="button" onClick={onLinked}>
+            Refresh the list
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
