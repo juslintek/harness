@@ -1834,6 +1834,20 @@
     }
   },
   {
+    "method": "ALL",
+    "path": "/mcp/remote",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
     "method": "GET",
     "path": "/oauth/authorize",
     "policy": {

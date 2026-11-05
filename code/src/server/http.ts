@@ -26,7 +26,7 @@ import { wakeRoutes } from "./features/heartbeat/routes";
 import { hiringRoutes } from "./features/hiring/routes";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { logsRoutes } from "./features/logs/routes";
-import { type McpDeps, mcpHandler, verifyRunToken } from "./features/mcp/api";
+import { type McpDeps, mcpHandler, remoteMcpHandler, verifyRunToken } from "./features/mcp/api";
 import { memoryRoutes } from "./features/memory/routes";
 import { notifyRoutes } from "./features/notify/api";
 import { consentRoutes, grantRoutes, oauthPublicRoutes } from "./features/oauth/api";
@@ -160,6 +160,14 @@ function mountMcp(app: Hono, deps: AppDeps): void {
     deps.port,
   );
   app.all("/mcp", (c) => mcp(c.req.raw));
+  // Not in LOOPBACK_PATHS: only the configured origin host reaches it. Bearer-token calls carry no
+  // cookie, and mutationOriginGuard only covers /api.
+  const remote = remoteMcpHandler(
+    deps.db,
+    { harnessHome: deps.home, tracking: trackingPort },
+    deps.rp.origin,
+  );
+  app.all("/mcp/remote", (c) => remote(c.req.raw));
 }
 
 // Public: discovery, registration and the token endpoint carry no cookie, so no Origin check

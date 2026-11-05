@@ -16,7 +16,7 @@ import {
   updateTask,
 } from "../board/api";
 import { findMembersByHandle, projectAccess } from "../orgs/api";
-import { defineTool, fail, handleOf, type ToolCtx, type ToolEnv } from "./tools-kit";
+import { defineMemberTool, fail, handleOf, type MemberCtx, type ToolEnv } from "./tools-kit";
 import { canWrite, project, task, visibleProjects } from "./tools-refs";
 import { recordPlannerEstimate } from "./tools-tracking";
 
@@ -48,7 +48,7 @@ function compact(db: Database, t: TaskView): Record<string, unknown> {
 
 // A project can be worked by members of its owning org and of grantee orgs, so the handle is
 // matched across orgs among members who may write to it.
-function assigneeId(ctx: ToolCtx, handle: string | null, projectId: string): string | null {
+function assigneeId(ctx: MemberCtx, handle: string | null, projectId: string): string | null {
   if (handle === null) return null;
   const known = findMembersByHandle(ctx.db, handle.replace(/^@/, ""));
   if (known.length === 0) fail(`no member @${handle}`);
@@ -60,7 +60,7 @@ function assigneeId(ctx: ToolCtx, handle: string | null, projectId: string): str
   return writers[0]?.id ?? fail(`@${handle} cannot work on this project`);
 }
 
-function moved(ctx: ToolCtx, r: MoveResult): unknown {
+function moved(ctx: MemberCtx, r: MoveResult): unknown {
   if (r.ok) return compact(ctx.db, r.task);
   if (r.reason === "held") return fail(`held by @${handleOf(ctx.db, r.holderId) ?? "unknown"}`);
   if (r.reason === "not_found") return fail("task not found or already closed");
@@ -68,7 +68,7 @@ function moved(ctx: ToolCtx, r: MoveResult): unknown {
 }
 
 function registerReads(server: McpServer, env: ToolEnv): void {
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -99,7 +99,7 @@ function registerReads(server: McpServer, env: ToolEnv): void {
       };
     },
   );
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -127,7 +127,7 @@ function registerReads(server: McpServer, env: ToolEnv): void {
 }
 
 function updatePatch(
-  ctx: ToolCtx,
+  ctx: MemberCtx,
   a: {
     title?: string | undefined;
     description?: string | undefined;
@@ -145,7 +145,7 @@ function updatePatch(
 }
 
 function registerWrites(server: McpServer, env: ToolEnv): void {
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -178,7 +178,7 @@ function registerWrites(server: McpServer, env: ToolEnv): void {
       return compact(ctx.db, created);
     },
   );
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -202,7 +202,7 @@ function registerWrites(server: McpServer, env: ToolEnv): void {
 }
 
 function registerFlow(server: McpServer, env: ToolEnv): void {
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -213,7 +213,7 @@ function registerFlow(server: McpServer, env: ToolEnv): void {
     },
     (ctx, a) => moved(ctx, checkout(ctx.db, task(ctx, a.task, true).id, ctx.memberId)),
   );
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -224,7 +224,7 @@ function registerFlow(server: McpServer, env: ToolEnv): void {
     },
     (ctx, a) => moved(ctx, release(ctx.db, task(ctx, a.task, true).id, ctx.memberId)),
   );
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -235,7 +235,7 @@ function registerFlow(server: McpServer, env: ToolEnv): void {
     },
     (ctx, a) => moved(ctx, moveTask(ctx.db, task(ctx, a.task, true).id, a.to, ctx.memberId)),
   );
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -249,7 +249,7 @@ function registerFlow(server: McpServer, env: ToolEnv): void {
       return "ok";
     },
   );
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
