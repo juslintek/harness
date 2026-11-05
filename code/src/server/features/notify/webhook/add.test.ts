@@ -7,7 +7,7 @@ import { migrate, openDb } from "../../../db/db";
 import { migrations } from "../../../db/migrations";
 import { withActor } from "../../../test-support/app-kit";
 import { seedMember } from "../../../test-support/bridge-kit";
-import { getSecret } from "../../agents/api";
+import { getSecret, secretNames } from "../../agents/api";
 import type { AuthEnv } from "../../auth/api";
 import { notifyRoutes } from "../routes";
 
@@ -47,6 +47,16 @@ test("a generated secret is returned once and stored under webhook.<id>", async 
   expect(list).not.toContain(created.secret);
   expect(list).not.toContain("secretName");
   expect(list).toContain("https://93.184.216.34/in");
+});
+
+test("deleting a webhook target removes its secret", async () => {
+  const { app } = setup();
+  const res = await post(app, { channel: "webhook", url: "https://93.184.216.34/in" });
+  const { id } = (await res.json()) as { id: string };
+  expect(secretNames(home)).toContain(`webhook.${id}`);
+  const del = await Promise.resolve(app.request(`/targets/${id}`, { method: "DELETE" }));
+  expect(del.status).toBe(200);
+  expect(secretNames(home)).not.toContain(`webhook.${id}`);
 });
 
 test("a caller supplied secret is kept", async () => {
