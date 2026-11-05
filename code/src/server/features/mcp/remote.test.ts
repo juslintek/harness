@@ -234,3 +234,13 @@ test("only the configured host reaches /mcp/remote, the loopback exemption does 
   });
   expect(del.status).toBe(405);
 });
+
+test("a role downgrade after the grant is honoured on the next call: viewers read but never write", async () => {
+  const w = await world();
+  const made = await call(w.server, w.token, "task_create", { project: "web", title: "before" });
+  expect(made.isError).toBe(false);
+  w.db.query("UPDATE members SET role = 'viewer' WHERE id = ?").run(w.owner);
+  const denied = await call(w.server, w.token, "task_create", { project: "web", title: "after" });
+  expect(denied.isError).toBe(true);
+  expect((await call(w.server, w.token, "board_list")).isError).toBe(false);
+});
