@@ -93,7 +93,9 @@ export function decideApproval(
   decision: "approve" | "deny",
   by: string,
 ): boolean {
-  return decide(db, id, decision, by);
+  const ok = decide(db, id, decision, by);
+  if (ok) notifyApproval(db, id);
+  return ok;
 }
 
 export function managerDecide(

@@ -6,14 +6,14 @@ import { websocket } from "../realtime";
 
 // The listener is bound first and the app is attached once the port is known. Probing for a free
 // port and binding it later raced with other processes taking that port in between.
-export function listenDeferred(): {
+export function listenDeferred(wanted = 0): {
   server: ReturnType<typeof Bun.serve>;
   port: number;
   attach: (app: ReturnType<typeof createApp>) => void;
 } {
   let current: ReturnType<typeof createApp> | undefined;
   const server = Bun.serve({
-    port: 0,
+    port: wanted,
     hostname: "127.0.0.1",
     maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
     fetch: (req, srv) =>
