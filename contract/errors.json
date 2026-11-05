@@ -43,6 +43,7 @@
   "member not in org",
   "no live run",
   "no login command",
+  "no org membership for this user",
   "no tunnel set up",
   "not configured",
   "not pending",

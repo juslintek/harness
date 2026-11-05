@@ -24,6 +24,7 @@ import { chatRoutes } from "./features/chat/routes";
 import { approvalRoutes } from "./features/guard/routes";
 import { wakeRoutes } from "./features/heartbeat/routes";
 import { hiringRoutes } from "./features/hiring/routes";
+import { integrationRoutes } from "./features/integrations/api";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { logsRoutes } from "./features/logs/routes";
 import { type McpDeps, mcpHandler, remoteMcpHandler, verifyRunToken } from "./features/mcp/api";
@@ -109,6 +110,7 @@ function adminRoutes(deps: AppDeps): Hono {
     "/router",
     "/policies",
     "/tunnel",
+    "/integrations",
   ]) {
     app.use(`${path}/*`, requireInstanceAdmin);
   }
@@ -119,6 +121,7 @@ function adminRoutes(deps: AppDeps): Hono {
     "/tunnel",
     tunnelRoutes(deps.tunnel ?? createTunnel({ home: deps.home, port: deps.port }), deps.home),
   );
+  app.route("/integrations", integrationRoutes(db, deps.home));
   app.route("/router", routerRoutes(db));
   app.route("/policies", harnessPolicyRoutes(db));
   app.route("/agents", agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }));

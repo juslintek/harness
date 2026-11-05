@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { consentRoutes, grantRoutes } from "./consent";
-import { liveAccessToken } from "./repo";
+import { liveAccessToken, revokeLocalTokens } from "./repo";
 import { oauthPublicRoutes } from "./routes";
 import { mintLocalToken } from "./token";
 
@@ -33,4 +33,12 @@ export function mintLocalLinkToken(
   now: number = Date.now(),
 ): string {
   return mintLocalToken(db, memberId, orgId, now);
+}
+
+export function revokeLocalLinkTokens(
+  db: Database,
+  memberId: string,
+  now: number = Date.now(),
+): number {
+  return revokeLocalTokens(db, memberId, now);
 }

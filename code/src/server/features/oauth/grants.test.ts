@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mintLocalLinkToken, verifyAccessToken } from "./api";
+import { mintLocalLinkToken, revokeLocalLinkTokens, verifyAccessToken } from "./api";
 import { bootOauth, flow } from "./test-kit";
 
 test("a token whose member left the org stops verifying on the next call", async () => {
@@ -64,4 +64,15 @@ test("the local link token is a year-long board and chat token for that member",
   }[];
   expect(grants[0]?.clientName).toBe("Claude Desktop (local)");
   expect(() => mintLocalLinkToken(kit.api.db, "nobody", kit.org.id)).toThrow();
+});
+
+test("revokeLocalLinkTokens kills the member's desktop tokens and leaves other members' alone", async () => {
+  const kit = await bootOauth();
+  const other = await kit.api.user();
+  const otherMember = kit.api.join(kit.org.id, other, "member", "other");
+  const mine = mintLocalLinkToken(kit.api.db, kit.org.owner.id, kit.org.id);
+  const theirs = mintLocalLinkToken(kit.api.db, otherMember.id, kit.org.id);
+  expect(revokeLocalLinkTokens(kit.api.db, kit.org.owner.id)).toBe(1);
+  expect(verifyAccessToken(kit.api.db, mine)).toBeNull();
+  expect(verifyAccessToken(kit.api.db, theirs)).not.toBeNull();
 });
