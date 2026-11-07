@@ -25,6 +25,7 @@ import { createTunnel } from "./server/features/tunnel/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { consoleEmailCode, createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
 import { closeRealtimeSockets, type WsData, websocket, wireRealtime } from "./server/realtime";
+import { drainStops } from "./server/shutdown";
 import { staticResponse } from "./server/ui-dist";
 import indexHtml from "./web/index.html";
 
@@ -112,13 +113,13 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     const serverDrain = server.stop();
     closeRealtimeSockets();
     const drained = stopHeartbeat();
-    for (const stop of stopLoops) stop();
     // The server stops before memory drains so no API write lands after the last commit is flushed;
     // a failed step is logged and the later ones still run.
     const step = (run: () => unknown) =>
       Promise.resolve()
         .then(run)
         .catch((err: unknown) => console.error("shutdown failed", err));
+    const loopsDrained = drainStops(stopLoops, (err) => console.error("shutdown failed", err));
     const stopTunnel = step(async () => {
       const result = await tunnel.stop();
       if (!result.ok) throw new Error(result.error);
@@ -127,6 +128,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
       .then(() => stopTunnel)
       .then(() => step(() => shutdownRuns(db)))
       .then(() => step(() => drained))
+      .then(() => loopsDrained)
       .then(() => step(stopMemory))
       .finally(() => process.exit(0));
   });

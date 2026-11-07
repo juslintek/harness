@@ -7,6 +7,7 @@ export interface SocketOptions {
   onMessage: (msg: InboundMessage) => void;
   onLink?: (userId: string, code: string) => boolean;
   sleep?: Sleep;
+  openConnection?: typeof openSlackConnection;
 }
 
 interface Envelope {
@@ -107,6 +108,14 @@ function runSocket(url: string, opts: SocketOptions, stop: AbortSignal): Promise
   });
 }
 
+async function connectSlack(opts: SocketOptions, stop: AbortController): Promise<boolean> {
+  const conn = await (opts.openConnection ?? openSlackConnection)(opts.home);
+  if (stop.signal.aborted) return false;
+  if ("url" in conn) return runSocket(conn.url, opts, stop.signal);
+  console.error("slack bridge: connect failed:", conn.reason);
+  return false;
+}
+
 // Outbound-only: the app dials Slack, so no public URL is needed. Stop closes the socket and
 // resolves once the loop has ended.
 export function startSlackSocket(opts: SocketOptions): () => Promise<void> {
@@ -115,12 +124,7 @@ export function startSlackSocket(opts: SocketOptions): () => Promise<void> {
   const loop = (async () => {
     let delay = MIN_BACKOFF_MS;
     while (!stop.signal.aborted) {
-      const conn = await openSlackConnection(opts.home);
-      if ("url" in conn) {
-        if (await runSocket(conn.url, opts, stop.signal)) delay = MIN_BACKOFF_MS;
-      } else {
-        console.error("slack bridge: connect failed:", conn.reason);
-      }
+      if (await connectSlack(opts, stop)) delay = MIN_BACKOFF_MS;
       if (stop.signal.aborted) break;
       await sleep(delay, stop.signal);
       delay = Math.min(delay * 2, MAX_BACKOFF_MS);

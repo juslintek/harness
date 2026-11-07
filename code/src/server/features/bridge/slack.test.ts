@@ -128,3 +128,24 @@ test("stop closes the socket and returns promptly even mid-backoff", async () =>
   expect(Date.now() - started).toBeLessThan(1000);
   expect(mock.sockets()).toBe(0);
 });
+
+test("stop during a pending connection open does not open a late socket", async () => {
+  let resolveOpen!: (connection: { url: string }) => void;
+  let enteredOpen!: () => void;
+  const entered = new Promise<void>((resolve) => (enteredOpen = resolve));
+  const pending = new Promise<{ url: string }>((resolve) => (resolveOpen = resolve));
+  stop = startSlackSocket({
+    home,
+    onMessage: () => {},
+    openConnection: () => {
+      enteredOpen();
+      return pending;
+    },
+  });
+  await entered;
+  const stopping = stop();
+  resolveOpen({ url: `${mock.url.replace("http", "ws")}/ws` });
+  await stopping;
+  stop = null;
+  expect(mock.sockets()).toBe(0);
+});
