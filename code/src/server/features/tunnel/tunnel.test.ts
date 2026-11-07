@@ -17,7 +17,9 @@ afterEach(async () => {
   for (const tunnel of tunnels.splice(0)) await tunnel.stop();
 });
 
-function setup(opts: { stepUpAt?: number; env?: Record<string, string> } = {}): {
+function setup(
+  opts: { stepUpAt?: number; env?: Record<string, string>; statusTimeoutMs?: number } = {},
+): {
   app: Hono<AuthEnv>;
   home: string;
   calls: () => string;
@@ -31,6 +33,7 @@ function setup(opts: { stepUpAt?: number; env?: Record<string, string> } = {}): 
     port: PORT,
     bin: FAKE_BIN,
     env: { FAKE_BIN_LOG: log, ...opts.env },
+    ...(opts.statusTimeoutMs === undefined ? {} : { statusTimeoutMs: opts.statusTimeoutMs }),
     urlTimeoutMs: 5000,
   });
   tunnels.push(tunnel);
@@ -169,7 +172,9 @@ test("start serve runs tailscale serve --bg with the port, and stop disables tha
   expect(tunnel.running()).toBe("tailscale-serve");
   expect((await post(app, "/start", { confirm: true })).status).toBe(409);
   expect((await app.request("/", { method: "DELETE" })).status).toBe(200);
-  expect(calls()).toBe(`tailscale serve --bg ${PORT}\ntailscale serve --bg ${PORT} off\n`);
+  expect(calls()).toBe(
+    `tailscale serve --bg ${PORT}\ntailscale serve status --json\ntailscale serve --bg ${PORT} off\n`,
+  );
   expect(tunnel.running()).toBeNull();
 });
 
@@ -178,7 +183,77 @@ test("start funnel with confirmPublic runs tailscale funnel --bg, stop disables 
   await post(app, "/setup", { provider: "tailscale-funnel", hostname: "mac.tail1234.ts.net" });
   expect((await post(app, "/start", { confirm: true, confirmPublic: true })).status).toBe(200);
   await app.request("/", { method: "DELETE" });
-  expect(calls()).toBe(`tailscale funnel --bg ${PORT}\ntailscale funnel --bg ${PORT} off\n`);
+  expect(calls()).toBe(
+    `tailscale funnel --bg ${PORT}\ntailscale funnel status --json\ntailscale funnel --bg ${PORT} off\n`,
+  );
+});
+
+test("stop preserves a Tailscale mapping whose backend changed", async () => {
+  const { tunnel, calls } = setup({ env: { FAKE_TAILSCALE_BACKEND: "http://127.0.0.1:9999" } });
+  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
+  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
+  expect(calls()).toBe("tailscale serve --bg 4100\ntailscale serve status --json\n");
+  expect(tunnel.running()).toBe("tailscale-serve");
+});
+
+test("stop preserves a Tailscale listener with another configured path", async () => {
+  const { tunnel, calls } = setup({
+    env: {
+      FAKE_TAILSCALE_BACKEND: "http://127.0.0.1:9999",
+      FAKE_TAILSCALE_EXTRA_PATH: "/other",
+    },
+  });
+  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
+  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
+  expect(calls()).toBe("tailscale serve --bg 4100\ntailscale serve status --json\n");
+  expect(tunnel.running()).toBe("tailscale-serve");
+});
+
+test("stop preserves a Tailscale listener on another HTTPS port", async () => {
+  const { tunnel, calls } = setup({ env: { FAKE_TAILSCALE_WEB_KEY: "mac.tail1234.ts.net:8443" } });
+  expect((await tunnel.start("tailscale-funnel")).ok).toBe(true);
+  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
+  expect(calls()).toBe("tailscale funnel --bg 4100\ntailscale funnel status --json\n");
+  expect(tunnel.running()).toBe("tailscale-funnel");
+});
+
+test("stop leaves unrelated Tailscale listeners and paths in place", async () => {
+  const { tunnel, calls } = setup({
+    env: {
+      FAKE_TAILSCALE_EXTRA_PATH: "/other",
+      FAKE_TAILSCALE_EXTRA_WEB_KEY: "mac.tail1234.ts.net:8443",
+    },
+  });
+  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
+  expect(await tunnel.stop()).toMatchObject({ ok: true });
+  expect(calls()).toBe(
+    "tailscale serve --bg 4100\ntailscale serve status --json\ntailscale serve --bg 4100 off\n",
+  );
+});
+
+test("stop refuses a Tailscale listener whose Serve or Funnel mode changed", async () => {
+  const { tunnel, calls } = setup({ env: { FAKE_TAILSCALE_ALLOW_FUNNEL: "1" } });
+  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
+  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
+  expect(calls()).toBe("tailscale serve --bg 4100\ntailscale serve status --json\n");
+});
+
+test("stop refuses an HTTP listener that replaced the HTTPS mapping", async () => {
+  const { tunnel, calls } = setup({ env: { FAKE_TAILSCALE_HTTP_443: "1" } });
+  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
+  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
+  expect(calls()).toBe("tailscale serve --bg 4100\ntailscale serve status --json\n");
+});
+
+test("status timeout kills an unresponsive Tailscale process before cleanup", async () => {
+  const { tunnel, calls } = setup({
+    env: { FAKE_TAILSCALE_HANG_STATUS: "1" },
+    statusTimeoutMs: 25,
+  });
+  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
+  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
+  expect(calls()).toBe("tailscale serve --bg 4100\ntailscale serve status --json\n");
+  expect(tunnel.running()).toBe("tailscale-serve");
 });
 
 test("a failing tailscale start is reported and leaves nothing marked running", async () => {

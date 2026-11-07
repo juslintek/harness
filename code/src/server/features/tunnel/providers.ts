@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { Subprocess } from "bun";
+import { z } from "zod";
 import { type Provider, writeTunnelConfig } from "./config";
 import { type Detected, detectProviders } from "./detect";
 
@@ -14,6 +15,7 @@ export interface TunnelDeps {
   // A directory holding the binaries; tests point it at stubs, otherwise PATH is used.
   bin?: string;
   env?: Record<string, string>;
+  statusTimeoutMs?: number;
   urlTimeoutMs?: number;
 }
 
@@ -63,13 +65,15 @@ type TunnelState = {
   shuttingDown: boolean;
 };
 
-function spawn(deps: TunnelDeps, command: Command): Child {
+function spawn(deps: TunnelDeps, command: Command, timeout?: number): Child {
   const path = deps.bin ? join(deps.bin, command.bin) : command.bin;
   return Bun.spawn([path, ...command.args], {
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
     env: { ...process.env, ...deps.env },
+    ...(timeout === undefined ? {} : { killSignal: "SIGKILL" }),
+    ...(timeout === undefined ? {} : { timeout }),
   });
 }
 
@@ -85,6 +89,53 @@ async function runToEnd(deps: TunnelDeps, command: Command): Promise<StartResult
     };
   } catch {
     return { ok: false, status: 502, error: `${command.bin} could not be run` };
+  }
+}
+
+const tailscaleStatusSchema = z
+  .object({
+    AllowFunnel: z.record(z.string(), z.boolean()).optional(),
+    TCP: z.record(z.string(), z.object({ HTTPS: z.boolean().optional() }).passthrough()).optional(),
+    Web: z.record(
+      z.string(),
+      z
+        .object({
+          Handlers: z.record(z.string(), z.object({ Proxy: z.string().optional() }).passthrough()),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+async function ownsTailscaleMapping(
+  deps: TunnelDeps,
+  provider: "tailscale-serve" | "tailscale-funnel",
+): Promise<boolean> {
+  try {
+    const command = provider === "tailscale-serve" ? "serve" : "funnel";
+    const child = spawn(
+      deps,
+      { bin: "tailscale", args: [command, "status", "--json"] },
+      deps.statusTimeoutMs ?? 5000,
+    );
+    const [stdout, code] = await Promise.all([new Response(child.stdout).text(), child.exited]);
+    if (code !== 0) return false;
+    const status = tailscaleStatusSchema.safeParse(JSON.parse(stdout));
+    if (!status.success) return false;
+    const target = `http://127.0.0.1:${deps.port}`;
+    const entries = Object.entries(status.data.Web).filter(([key]) => key.endsWith(":443"));
+    const [entry] = entries;
+    if (entries.length !== 1 || !entry) return false;
+    const [listener, server] = entry;
+    const funnel = status.data.AllowFunnel?.[listener] === true;
+    const https = status.data.TCP?.["443"]?.HTTPS === true;
+    return (
+      server.Handlers["/"]?.Proxy === target &&
+      https &&
+      funnel === (provider === "tailscale-funnel")
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -204,6 +255,12 @@ async function runStopTunnel(deps: TunnelDeps, state: TunnelState): Promise<Star
   if (running.child) {
     running.child.kill();
     await running.child.exited;
+  }
+  if (
+    (running.provider === "tailscale-serve" || running.provider === "tailscale-funnel") &&
+    !(await ownsTailscaleMapping(deps, running.provider))
+  ) {
+    return { ok: false, status: 409, error: "Tailscale mapping changed or could not be verified" };
   }
   const command = stopCommand(running.provider, deps.port);
   const result = command ? await runToEnd(deps, command) : { ok: true as const, origin: null };

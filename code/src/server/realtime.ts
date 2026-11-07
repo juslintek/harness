@@ -22,6 +22,10 @@ export interface WsData {
 // Access is checked once at the upgrade, so sockets are tracked to be closed when it ends.
 const sockets = new Set<ServerWebSocket<WsData>>();
 
+export function closeRealtimeSockets(): void {
+  for (const ws of sockets) ws.close(1001, "server shutting down");
+}
+
 function closeWhere(match: (data: WsData) => boolean): void {
   for (const ws of sockets) if (match(ws.data)) ws.close(4401, "access ended");
 }

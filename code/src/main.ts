@@ -24,7 +24,7 @@ import { startTracking } from "./server/features/tracking/api";
 import { createTunnel } from "./server/features/tunnel/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
 import { consoleEmailCode, createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
-import { type WsData, websocket, wireRealtime } from "./server/realtime";
+import { closeRealtimeSockets, type WsData, websocket, wireRealtime } from "./server/realtime";
 import { staticResponse } from "./server/ui-dist";
 import indexHtml from "./web/index.html";
 
@@ -110,6 +110,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     stopping = true;
     tunnel.beginShutdown();
     const serverDrain = server.stop();
+    closeRealtimeSockets();
     const drained = stopHeartbeat();
     for (const stop of stopLoops) stop();
     // The server stops before memory drains so no API write lands after the last commit is flushed;
@@ -122,10 +123,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
       const result = await tunnel.stop();
       if (!result.ok) throw new Error(result.error);
     });
-    step(() => shutdownRuns(db))
-      .then(() => step(() => drained))
-      .then(() => step(() => serverDrain))
+    step(() => serverDrain)
       .then(() => stopTunnel)
+      .then(() => step(() => shutdownRuns(db)))
+      .then(() => step(() => drained))
       .then(() => step(stopMemory))
       .finally(() => process.exit(0));
   });
