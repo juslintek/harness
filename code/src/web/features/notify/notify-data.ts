@@ -3,6 +3,9 @@ import { CHANNELS, type PrefView, prefSchema, type TargetView } from "../../../s
 
 export const prefsSchema: z.ZodType<PrefView[]> = z.array(prefSchema);
 
+export const orgUrl = (path: string, org: string): string =>
+  `${path}?org=${encodeURIComponent(org)}`;
+
 export const targetsSchema: z.ZodType<TargetView[]> = z.array(
   z.object({ id: z.string(), channel: z.enum(CHANNELS), label: z.string() }),
 );

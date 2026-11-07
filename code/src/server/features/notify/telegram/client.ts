@@ -23,7 +23,10 @@ function base(): string {
 // The token is part of the URL path, so a proxy or a library error can echo it back: every
 // string leaving this file is scrubbed.
 function failure(res: Response, data: Record<string, unknown> | null, token: string): Failure {
-  const text = typeof data?.description === "string" ? data.description.slice(0, 120) : "";
+  const text =
+    typeof data?.description === "string"
+      ? data.description.replaceAll(token, "***").slice(0, 120)
+      : "";
   const reason = `telegram: ${res.status} ${text}`.trim().replaceAll(token, "***");
   // 403 means the user blocked the bot or it was removed from the chat: it will never work again.
   if (res.status === 403) return { ok: false, retry: false, gone: true, reason };

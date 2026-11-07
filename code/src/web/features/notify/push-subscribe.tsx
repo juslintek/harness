@@ -1,9 +1,8 @@
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../../api";
 import { ErrorLine } from "../auth/error-line";
-import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
-import { createdSchema, pushKeySchema, subscriptionSchema } from "./notify-data";
+import { createdSchema, orgUrl, pushKeySchema, subscriptionSchema } from "./notify-data";
 import { applicationServerKey, needsHomeScreen, type PushState, pushState } from "./notify-logic";
 
 type View = PushState | "loading";
@@ -12,6 +11,21 @@ async function existingSubscription(): Promise<PushSubscription | null> {
   if (!("serviceWorker" in navigator)) return null;
   const registration = await navigator.serviceWorker.getRegistration();
   return registration ? registration.pushManager.getSubscription() : null;
+}
+
+export async function getOrCreateSubscription(
+  registration: ServiceWorkerRegistration,
+  key: BufferSource,
+): Promise<{ subscription: PushSubscription; created: boolean }> {
+  const existing = await registration.pushManager.getSubscription();
+  if (existing) return { subscription: existing, created: false };
+  return {
+    subscription: await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: key,
+    }),
+    created: true,
+  };
 }
 
 async function readState(): Promise<PushState> {
@@ -26,39 +40,29 @@ async function readState(): Promise<PushState> {
 }
 
 // Posting the same subscription again returns the stored row, which is how unsubscribe finds its id.
-const saveSubscription = (sub: PushSubscription): Promise<{ id: string }> =>
-  api("/api/notify/push/subscribe", createdSchema, {
+const saveSubscription = (sub: PushSubscription, org: string): Promise<{ id: string }> =>
+  api(orgUrl("/api/notify/push/subscribe", org), createdSchema, {
     method: "POST",
     body: subscriptionSchema.parse(sub.toJSON()),
   });
 
-async function subscribeThisDevice(): Promise<PushState> {
+async function subscribeThisDevice(org: string): Promise<PushState> {
   const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
   await navigator.serviceWorker.ready;
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return permission === "denied" ? "denied" : "ready";
   const { key } = await api("/api/notify/push/key", pushKeySchema);
-  const sub = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: applicationServerKey(key),
-  });
+  const { subscription: sub, created } = await getOrCreateSubscription(
+    registration,
+    Uint8Array.from(applicationServerKey(key)).buffer,
+  );
   try {
-    await saveSubscription(sub);
+    await saveSubscription(sub, org);
   } catch (err) {
-    // A browser subscription the server does not know would read as "on" while nothing arrives.
-    await sub.unsubscribe();
+    if (created) await sub.unsubscribe();
     throw err;
   }
   return "subscribed";
-}
-
-async function unsubscribeThisDevice(): Promise<PushState> {
-  const sub = await existingSubscription();
-  if (!sub) return "ready";
-  const { id } = await saveSubscription(sub);
-  await api(`/api/notify/targets/${encodeURIComponent(id)}`, ignored, { method: "DELETE" });
-  await sub.unsubscribe();
-  return "ready";
 }
 
 function Unsupported(): preact.JSX.Element {
@@ -79,11 +83,17 @@ function Unsupported(): preact.JSX.Element {
 const STATUS: Record<Exclude<View, "unsupported" | "loading">, string> = {
   denied:
     "Notifications are blocked for this site. Allow them in the browser's site settings, then reload this page.",
-  subscribed: "Push is on for this device.",
+  subscribed: "Push is active in this browser.",
   ready: "Push is off for this device.",
 };
 
-export function PushSubscribe({ onChange }: { onChange: () => void }): preact.JSX.Element {
+export function PushSubscribe({
+  org,
+  onChange,
+}: {
+  org: string;
+  onChange: () => void;
+}): preact.JSX.Element {
   const [view, setView] = useState<View>("loading");
   const action = useAction();
   useEffect(() => {
@@ -102,13 +112,21 @@ export function PushSubscribe({ onChange }: { onChange: () => void }): preact.JS
       {view === "unsupported" && <Unsupported />}
       {view !== "unsupported" && view !== "loading" && <p>{STATUS[view]}</p>}
       {view === "ready" && (
-        <button type="button" disabled={action.busy} onClick={() => change(subscribeThisDevice)}>
+        <button
+          type="button"
+          disabled={action.busy}
+          onClick={() => change(() => subscribeThisDevice(org))}
+        >
           Enable push on this device
         </button>
       )}
       {view === "subscribed" && (
-        <button type="button" disabled={action.busy} onClick={() => change(unsubscribeThisDevice)}>
-          Turn push off for this device
+        <button
+          type="button"
+          disabled={action.busy}
+          onClick={() => change(() => subscribeThisDevice(org))}
+        >
+          Enable push for this organization
         </button>
       )}
       <ErrorLine message={action.error} />

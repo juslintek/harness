@@ -90,6 +90,15 @@ test("a Telegram error that echoes the token is scrubbed", async () => {
   expect(JSON.stringify(res)).toContain("***");
 });
 
+test("a truncated Telegram error does not leak a token prefix", async () => {
+  mock.sendReplies.push({
+    status: 400,
+    json: { ok: false, description: `${"a".repeat(112)}${mock.token}` },
+  });
+  const res = await deliver();
+  expect(res).toEqual({ ok: false, retry: false, reason: `telegram: 400 ${"a".repeat(112)}***` });
+});
+
 test("a wrong token is permanent and never appears in the failure", async () => {
   setSecret("telegram.bot_token", "999:wrong-secret", home);
   const res = await deliver();

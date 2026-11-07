@@ -6,8 +6,9 @@ import { useAction } from "../auth/use-action";
 import { prefsSchema } from "./notify-data";
 import { CHANNEL_LABELS, gridRows, KIND_LABELS, withPref } from "./notify-logic";
 
-export function PrefsGrid(): preact.JSX.Element {
-  const loaded = useLoad(() => api("/api/notify/prefs", prefsSchema), []);
+export function PrefsGrid({ org }: { org: string }): preact.JSX.Element {
+  const url = `/api/notify/prefs?org=${encodeURIComponent(org)}`;
+  const loaded = useLoad(() => api(url, prefsSchema), [org]);
   const [prefs, setPrefs] = useState<PrefView[]>([]);
   const action = useAction();
   useEffect(() => {
@@ -16,7 +17,7 @@ export function PrefsGrid(): preact.JSX.Element {
   const toggle = (next: PrefView): Promise<void> =>
     action.run(async () => {
       try {
-        setPrefs(await api("/api/notify/prefs", prefsSchema, { method: "PUT", body: next }));
+        setPrefs(await api(url, prefsSchema, { method: "PUT", body: next }));
       } catch (err) {
         setPrefs((cur) => withPref(cur, { ...next, enabled: !next.enabled }));
         throw err;

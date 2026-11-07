@@ -167,6 +167,17 @@ test("a dm notifies the other human, and nobody when the other side is an agent"
   expect(w.push.calls).toHaveLength(1);
 });
 
+test("a chat secret crossing the notification body limit is redacted before clipping", async () => {
+  const w = world();
+  postMessage(w.db, {
+    channelId: openDm(w.db, w.alice, w.admin).id,
+    authorId: w.alice,
+    body: `${"x".repeat(194)} ghp_${"a".repeat(36)} trailing text`,
+  });
+  await w.stop();
+  expect(w.push.calls[0]?.n.body).not.toContain("ghp_");
+});
+
 test("a dm that also mentions the other person sends one notification", async () => {
   const w = world();
   const handle = getMember(w.db, w.admin)?.handle as string;

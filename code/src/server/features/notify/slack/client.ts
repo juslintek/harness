@@ -25,7 +25,8 @@ function scrub(text: string, token: string): string {
 }
 
 function failure(res: Response, data: Record<string, unknown> | null, token: string): Failure {
-  const error = typeof data?.error === "string" ? data.error.slice(0, 80) : `http ${res.status}`;
+  const error =
+    typeof data?.error === "string" ? scrub(data.error, token).slice(0, 80) : `http ${res.status}`;
   const retry = res.status === 429 || res.status >= 500 || TRANSIENT.has(error);
   return { ok: false, retry, reason: scrub(`slack: ${error}`, token) };
 }

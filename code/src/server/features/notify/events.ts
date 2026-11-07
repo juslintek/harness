@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { ApprovalView } from "../../../shared/runs";
 import { type ChatEvent, onMessage } from "../chat/api";
 import { onApprovalChange } from "../guard/api";
+import { redact } from "../logs/api";
 import { getOrg } from "../orgs/api";
 import { onRunEvent } from "../runtimes/api";
 import type { Dispatcher } from "./dispatcher";
@@ -10,8 +11,10 @@ import { approvalRecipients, chatRecipients, orgAdmins, runOrgId } from "./recip
 type Send = Dispatcher["notify"];
 
 const BODY_MAX = 200;
-const clip = (text: string): string =>
-  text.length > BODY_MAX ? `${text.slice(0, BODY_MAX - 1)}…` : text;
+const clip = (text: string): string => {
+  const safe = redact(text);
+  return safe.length > BODY_MAX ? `${safe.slice(0, BODY_MAX - 1)}…` : safe;
+};
 
 function onApproval(db: Database, send: Send, a: ApprovalView): void {
   if (a.status !== "pending") return;

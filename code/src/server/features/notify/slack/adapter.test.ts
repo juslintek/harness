@@ -78,6 +78,13 @@ test("a Slack error that echoes the token is scrubbed", async () => {
   expect(JSON.stringify(res)).toContain("***");
 });
 
+test("a truncated Slack error does not leak a token prefix", async () => {
+  setSecret("slack.bot_token", mock.botToken, home);
+  mock.postReplies.push({ json: { ok: false, error: `${"a".repeat(70)}${mock.botToken}` } });
+  const res = await slackNotifier(home).deliver(target, note, "https://h.test");
+  expect(res).toEqual({ ok: false, retry: false, reason: `slack: ${"a".repeat(70)}***` });
+});
+
 test("an unreachable Slack is retryable", async () => {
   setSecret("slack.bot_token", mock.botToken, home);
   process.env.SLACK_API_URL = "http://127.0.0.1:1";

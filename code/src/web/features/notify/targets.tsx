@@ -4,25 +4,29 @@ import { BridgeLinkCode } from "../../bridge-link-code";
 import { ErrorLine } from "../auth/error-line";
 import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
-import { targetsSchema } from "./notify-data";
+import { orgUrl, targetsSchema } from "./notify-data";
 import { CHANNEL_LABELS } from "./notify-logic";
 import { PushSubscribe } from "./push-subscribe";
 import { ValueForm, WebhookForm } from "./target-forms";
 
 function AddForm({
   channel,
+  org,
   onAdded,
 }: {
   channel: Channel;
+  org: string;
   onAdded: () => void;
 }): preact.JSX.Element {
-  if (channel === "push") return <PushSubscribe onChange={onAdded} />;
-  if (channel === "telegram") return <BridgeLinkCode kind="telegram" onLinked={onAdded} />;
-  if (channel === "webhook") return <WebhookForm onAdded={onAdded} />;
+  if (channel === "push") return <PushSubscribe org={org} onChange={onAdded} />;
+  if (channel === "telegram")
+    return <BridgeLinkCode kind="telegram" org={org} onLinked={onAdded} />;
+  if (channel === "webhook") return <WebhookForm org={org} onAdded={onAdded} />;
   if (channel === "email") {
     return (
       <ValueForm
         channel="email"
+        org={org}
         field="address"
         label="Email address"
         hint="Needs SMTP to be set up on the integrations page."
@@ -33,6 +37,7 @@ function AddForm({
   return (
     <ValueForm
       channel="slack"
+      org={org}
       field="userId"
       label="Slack user id"
       hint="The member id from your Slack profile (it starts with U). The bot sends you a direct message."
@@ -43,12 +48,14 @@ function AddForm({
 
 function ChannelBlock({
   channel,
+  org,
   items,
   busy,
   onRemove,
   onAdded,
 }: {
   channel: Channel;
+  org: string;
   items: TargetView[];
   busy: boolean;
   onRemove: (t: TargetView) => void;
@@ -78,17 +85,20 @@ function ChannelBlock({
           ))}
         </ul>
       )}
-      <AddForm channel={channel} onAdded={onAdded} />
+      <AddForm channel={channel} org={org} onAdded={onAdded} />
     </section>
   );
 }
 
-export function Targets(): preact.JSX.Element {
-  const targets = useLoad(() => api("/api/notify/targets", targetsSchema), []);
+export function Targets({ org }: { org: string }): preact.JSX.Element {
+  const targetsUrl = orgUrl("/api/notify/targets", org);
+  const targets = useLoad(() => api(targetsUrl, targetsSchema), [org]);
   const action = useAction();
   const remove = (t: TargetView): Promise<void> =>
     action.run(async () => {
-      await api(`/api/notify/targets/${encodeURIComponent(t.id)}`, ignored, { method: "DELETE" });
+      await api(orgUrl(`/api/notify/targets/${encodeURIComponent(t.id)}`, org), ignored, {
+        method: "DELETE",
+      });
       targets.reload();
     });
   return (
@@ -99,6 +109,7 @@ export function Targets(): preact.JSX.Element {
         <ChannelBlock
           key={channel}
           channel={channel}
+          org={org}
           items={targets.data?.filter((t) => t.channel === channel) ?? []}
           busy={action.busy}
           onRemove={(t) => {

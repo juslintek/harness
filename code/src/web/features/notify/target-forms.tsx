@@ -3,10 +3,11 @@ import { api } from "../../api";
 import { CopyButton } from "../../copy-button";
 import { ErrorLine } from "../auth/error-line";
 import { useAction } from "../auth/use-action";
-import { createdSchema, webhookAddedSchema } from "./notify-data";
+import { createdSchema, orgUrl, webhookAddedSchema } from "./notify-data";
 
 interface ValueFormProps {
   channel: "email" | "slack";
+  org: string;
   field: "address" | "userId";
   label: string;
   hint: string;
@@ -21,7 +22,10 @@ export function ValueForm(props: ValueFormProps): preact.JSX.Element {
     action
       .run(async () => {
         const body = { channel: props.channel, value: { [props.field]: value.trim() } };
-        await api("/api/notify/targets", createdSchema, { method: "POST", body });
+        await api(orgUrl("/api/notify/targets", props.org), createdSchema, {
+          method: "POST",
+          body,
+        });
         setValue("");
         props.onAdded();
       })
@@ -83,7 +87,13 @@ function SecretOnce({
   );
 }
 
-export function WebhookForm({ onAdded }: { onAdded: () => void }): preact.JSX.Element {
+export function WebhookForm({
+  org,
+  onAdded,
+}: {
+  org: string;
+  onAdded: () => void;
+}): preact.JSX.Element {
   const [url, setUrl] = useState("");
   const [added, setAdded] = useState<{ secret: string; note: string } | null>(null);
   const action = useAction();
@@ -92,7 +102,12 @@ export function WebhookForm({ onAdded }: { onAdded: () => void }): preact.JSX.El
     action
       .run(async () => {
         const body = { channel: "webhook", url: url.trim() };
-        setAdded(await api("/api/notify/targets", webhookAddedSchema, { method: "POST", body }));
+        setAdded(
+          await api(orgUrl("/api/notify/targets", org), webhookAddedSchema, {
+            method: "POST",
+            body,
+          }),
+        );
         setUrl("");
         onAdded();
       })
