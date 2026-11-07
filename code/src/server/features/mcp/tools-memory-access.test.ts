@@ -1,11 +1,13 @@
 import "../../test-support/no-git-env";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { startMemory } from "../memory/api";
+import { reconcile } from "../memory/reconcile";
+import { vaultDir, writeNoteFileAtomic } from "../memory/vault";
 import { call, type Db, listen, tokenFor, type World, world } from "./test-kit";
 
 let db: Db;
@@ -47,11 +49,21 @@ test("view lists an old nested folder under newer notes, and matches the folder 
   const dev = w.agent(w.a.id, "dev");
   const mem = (args: Record<string, unknown>) =>
     call(server, tokenOf(dev.id, w.a.id), "memory", args);
-  await mem({ action: "create", path: "/memories/org/old_dir/n.md", file_text: "# Old\nx" });
-  await mem({ action: "create", path: "/memories/org/oldxdir/m.md", file_text: "# Other\nx" });
+  await stop();
+  stop = async () => {};
+  const orgDir = join(vaultDir(home), "orgs", w.a.id, "org");
+  mkdirSync(orgDir, { recursive: true, mode: 0o700 });
+  const oldTime = Date.now() - 200_000;
+  const writeNote = (disk: string, title: string, updated: number): void => {
+    const time = JSON.stringify(new Date(updated).toISOString());
+    writeNoteFileAtomic(home, disk, `---\nupdated: ${time}\n---\n\n# ${title}\nx\n`, null);
+  };
+  writeNote(`orgs/${w.a.id}/org/old_dir/n.md`, "Old", oldTime);
+  writeNote(`orgs/${w.a.id}/org/oldxdir/m.md`, "Other", oldTime);
   for (let i = 0; i < 101; i++) {
-    await mem({ action: "create", path: `/memories/org/new${i}.md`, file_text: `# New ${i}\nx` });
+    writeNote(`orgs/${w.a.id}/org/new${i}.md`, `New ${i}`, oldTime + (i + 1) * 1_000);
   }
+  reconcile(db, home);
   const listed = await mem({ action: "view", path: "/memories/org/old_dir" });
   expect(listed.isError).toBe(false);
   expect(listed.text).toContain("/memories/org/old_dir/n.md");
