@@ -108,6 +108,8 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     if (stopping) return;
     stopping = true;
+    tunnel.beginShutdown();
+    const serverDrain = server.stop();
     const drained = stopHeartbeat();
     for (const stop of stopLoops) stop();
     // The server stops before memory drains so no API write lands after the last commit is flushed;
@@ -122,8 +124,8 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     });
     step(() => shutdownRuns(db))
       .then(() => step(() => drained))
+      .then(() => step(() => serverDrain))
       .then(() => stopTunnel)
-      .then(() => step(() => server.stop(true)))
       .then(() => step(stopMemory))
       .finally(() => process.exit(0));
   });

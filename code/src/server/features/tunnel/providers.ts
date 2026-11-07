@@ -27,6 +27,7 @@ export interface Tunnel {
   running: () => Provider | null;
   start: (provider: Provider) => Promise<StartResult>;
   stop: () => Promise<StartResult>;
+  beginShutdown: () => void;
 }
 
 const DEFAULT_URL_TIMEOUT_MS = 20000;
@@ -55,7 +56,12 @@ const render = (command: Command): string => [command.bin, ...command.args].join
 
 type Child = Subprocess<"ignore", "pipe", "pipe">;
 type RunningTunnel = { provider: Provider; child: Child | null };
-type TunnelState = { current: RunningTunnel | null; starting: Promise<StartResult> | null };
+type TunnelState = {
+  current: RunningTunnel | null;
+  starting: Promise<StartResult> | null;
+  stopping: Promise<StartResult> | null;
+  shuttingDown: boolean;
+};
 
 function spawn(deps: TunnelDeps, command: Command): Child {
   const path = deps.bin ? join(deps.bin, command.bin) : command.bin;
@@ -107,7 +113,7 @@ async function quickTunnelUrl(child: Child, timeoutMs: number): Promise<string |
 }
 
 export function createTunnel(deps: TunnelDeps): Tunnel {
-  const state: TunnelState = { current: null, starting: null };
+  const state: TunnelState = { current: null, starting: null, stopping: null, shuttingDown: false };
   return {
     detect: () => detectProviders(deps.bin, deps.env),
     commands: (provider) => {
@@ -117,6 +123,9 @@ export function createTunnel(deps: TunnelDeps): Tunnel {
     running: () => state.current?.provider ?? null,
     start: (provider) => startTunnel(deps, state, provider),
     stop: () => stopTunnel(deps, state),
+    beginShutdown: () => {
+      state.shuttingDown = true;
+    },
   };
 }
 
@@ -125,7 +134,7 @@ function startTunnel(
   state: TunnelState,
   provider: Provider,
 ): Promise<StartResult> {
-  if (state.current || state.starting)
+  if (state.shuttingDown || state.current || state.starting || state.stopping)
     return Promise.resolve({ ok: false, status: 409, error: "a tunnel is already running" });
   const starting = runStart(deps, state, provider);
   state.starting = starting;
@@ -152,7 +161,14 @@ async function startCloudflare(deps: TunnelDeps, state: TunnelState): Promise<St
   } catch {
     return { ok: false, status: 502, error: "cloudflared could not be run" };
   }
-  const origin = await quickTunnelUrl(child, deps.urlTimeoutMs ?? DEFAULT_URL_TIMEOUT_MS);
+  let origin: string | null;
+  try {
+    origin = await quickTunnelUrl(child, deps.urlTimeoutMs ?? DEFAULT_URL_TIMEOUT_MS);
+  } catch {
+    child.kill();
+    await child.exited;
+    return { ok: false, status: 502, error: "cloudflared could not provide a tunnel url" };
+  }
   if (!origin) {
     child.kill();
     await child.exited;
@@ -172,7 +188,16 @@ async function startCloudflare(deps: TunnelDeps, state: TunnelState): Promise<St
   return { ok: true, origin };
 }
 
-async function stopTunnel(deps: TunnelDeps, state: TunnelState): Promise<StartResult> {
+function stopTunnel(deps: TunnelDeps, state: TunnelState): Promise<StartResult> {
+  if (state.stopping) return state.stopping;
+  const stopping = runStopTunnel(deps, state);
+  state.stopping = stopping;
+  return stopping.finally(() => {
+    if (state.stopping === stopping) state.stopping = null;
+  });
+}
+
+async function runStopTunnel(deps: TunnelDeps, state: TunnelState): Promise<StartResult> {
   await state.starting;
   const running = state.current;
   if (!running) return { ok: true, origin: null };
@@ -182,6 +207,6 @@ async function stopTunnel(deps: TunnelDeps, state: TunnelState): Promise<StartRe
   }
   const command = stopCommand(running.provider, deps.port);
   const result = command ? await runToEnd(deps, command) : { ok: true as const, origin: null };
-  if (result.ok) state.current = null;
+  if (result.ok && state.current === running) state.current = null;
   return result;
 }

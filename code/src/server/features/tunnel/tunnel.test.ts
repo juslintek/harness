@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -215,6 +215,19 @@ test("concurrent starts launch only one cloudflared child", async () => {
   expect((calls().match(/pid /g) ?? []).length).toBe(1);
 });
 
+test("concurrent stops share cleanup and do not clear a replacement tunnel", async () => {
+  const { calls, tunnel } = setup({ env: { FAKE_TAILSCALE_DELAY_STOP: "1" } });
+  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
+  const firstStop = tunnel.stop();
+  const secondStop = tunnel.stop();
+  await firstStop;
+  expect((await tunnel.start("cloudflare")).ok).toBe(true);
+  await secondStop;
+  expect(tunnel.running()).toBe("cloudflare");
+  expect(calls().match(/tailscale serve --bg 4100 off/g)).toHaveLength(1);
+  await tunnel.stop();
+});
+
 test("stop waits for an in-flight cloudflare start then kills its child", async () => {
   const { calls, tunnel } = setup();
   const starting = tunnel.start("cloudflare");
@@ -243,6 +256,35 @@ test("a cloudflared child is stopped when saving its origin fails", async () => 
   expect(pid).toBeGreaterThan(0);
   expect(() => process.kill(pid, 0)).toThrow();
   expect(tunnel.running()).toBeNull();
+});
+
+test("a stderr reader failure stops the cloudflared child", async () => {
+  const { calls, tunnel } = setup();
+  const read = spyOn(ReadableStreamDefaultReader.prototype, "read").mockImplementation(async () => {
+    while (!calls().includes("pid ")) await Bun.sleep(1);
+    throw new Error("stderr read failed");
+  });
+  try {
+    expect(await tunnel.start("cloudflare")).toMatchObject({
+      ok: false,
+      status: 502,
+      error: "cloudflared could not provide a tunnel url",
+    });
+  } finally {
+    read.mockRestore();
+  }
+  const pid = Number(/pid (\d+)/.exec(calls())?.[1]);
+  expect(pid).toBeGreaterThan(0);
+  expect(() => process.kill(pid, 0)).toThrow();
+  expect(tunnel.running()).toBeNull();
+});
+
+test("shutdown rejects a tunnel start before spawning a child", async () => {
+  const { app, calls, tunnel } = setup({ stepUpAt: Date.now() });
+  await post(app, "/setup", { provider: "cloudflare" });
+  tunnel.beginShutdown();
+  expect((await post(app, "/start", { confirm: true, confirmPublic: true })).status).toBe(409);
+  expect(calls()).toBe("");
 });
 
 test("stop without a running tunnel leaves stored Tailscale configuration alone", async () => {
