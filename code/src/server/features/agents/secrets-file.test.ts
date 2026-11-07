@@ -26,6 +26,29 @@ test("file is 0600 and the directory 0700", () => {
   expect(statSync(home).mode & 0o777).toBe(0o700);
 });
 
+test("large values survive the atomic write", () => {
+  const home = freshHome();
+  const secret = "x".repeat(1024 * 1024);
+  setSecret("smtp.password", secret, home);
+  expect(getSecret("smtp.password", home)).toBe(secret);
+});
+
+test("deleting a secret reapplies the backup exclusion", () => {
+  const home = freshHome();
+  const excluded: string[] = [];
+  const original = backup.exclude;
+  backup.exclude = async (file) => {
+    excluded.push(file);
+  };
+  try {
+    setSecret("smtp.password", "one", home);
+    deleteSecret("smtp.password", home);
+  } finally {
+    backup.exclude = original;
+  }
+  expect(excluded).toEqual([join(home, "secrets.json"), join(home, "secrets.json")]);
+});
+
 test("two names do not clobber each other", () => {
   const home = freshHome();
   setSecret("one", "1", home);

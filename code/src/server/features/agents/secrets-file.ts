@@ -7,7 +7,7 @@ import {
   readFileSync,
   renameSync,
   unlinkSync,
-  writeSync,
+  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
@@ -119,7 +119,7 @@ function writeSecrets(home: string, next: Record<string, string>): void {
   const tmp = `${storePath(home)}.${process.pid}.${crypto.randomUUID()}.tmp`;
   const fd = openSync(tmp, "wx", 0o600);
   try {
-    writeSync(fd, JSON.stringify(next));
+    writeFileSync(fd, JSON.stringify(next));
     fsyncSync(fd);
     closeSync(fd);
     renameSync(tmp, storePath(home));
@@ -173,7 +173,10 @@ export function setSecret(name: string, value: string, home: string = loadConfig
 export function deleteSecret(name: string, home: string = loadConfig().home): void {
   checkName(name);
   const { [name]: removed, ...rest } = readSecrets(home);
-  if (removed !== undefined) writeSecrets(home, rest);
+  if (removed !== undefined) {
+    writeSecrets(home, rest);
+    void excludeFromBackup(home);
+  }
 }
 
 export function secretNames(home: string = loadConfig().home): string[] {

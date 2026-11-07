@@ -215,7 +215,11 @@ function expect(reply: Reply, ok: number): Reply {
 
 async function authenticate(link: Link, user: string, password: string): Promise<void> {
   const token = Buffer.from(`\0${noBreaks("user", user)}\0${password}`, "utf8").toString("base64");
-  await command(link, `AUTH PLAIN ${token}`, 235);
+  link.send(`AUTH PLAIN ${token}\r\n`);
+  const reply = await link.reply();
+  if (reply.code !== 235) {
+    throw new SmtpError(`SMTP authentication failed (${reply.code})`, reply.code < 500);
+  }
 }
 
 async function session(

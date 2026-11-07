@@ -10,6 +10,7 @@ export interface SmtpFakeOpts {
   dataReply?: string;
   // Reply to RCPT TO.
   rcptReply?: string;
+  authReply?: (command: string) => string;
   // Close the connection as soon as DATA is accepted.
   dropInData?: boolean;
   // Never answer the greeting.
@@ -79,7 +80,7 @@ function onCommand(srv: Server, socket: Sock, s: Session, cmd: string): void {
     upgrade(srv, socket);
   } else if (verb === "AUTH") {
     srv.out.auths.push(Buffer.from(cmd.split(" ")[2] ?? "", "base64").toString("utf8"));
-    reply(socket, "235 ok");
+    reply(socket, srv.opts.authReply?.(cmd) ?? "235 ok");
   } else if (verb === "MAIL") {
     s.from = address;
     reply(socket, "250 ok");

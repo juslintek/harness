@@ -86,6 +86,18 @@ test("a 5xx is not retried, a 4xx is, and neither reason holds the password", as
   expect(b).toMatchObject({ ok: false, retry: true });
 });
 
+test("SMTP AUTH rejection never includes the encoded credentials", async () => {
+  const env = await setup({
+    authReply: (command) => `535 refused ${command.split(" ")[2]}`,
+  });
+  configure(env.db, env.home);
+  const result = await emailNotifier(env).deliver(target, note, "https://h");
+  expect(result).toEqual({ ok: false, retry: false, reason: "SMTP authentication failed (535)" });
+  expect(JSON.stringify(result)).not.toContain(
+    Buffer.from(`\0mailer\0${PASSWORD}`).toString("base64"),
+  );
+});
+
 test("a dropped connection is retryable", async () => {
   const env = await setup({ dropInData: true });
   configure(env.db, env.home);
