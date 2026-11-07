@@ -44,16 +44,19 @@ export function emailNotifier(env: { db: Database; home: string }): Notifier {
 export function emailCodeSender(
   db: Database,
   home: string,
-): ((email: string, code: string) => void) | null {
+): ((email: string, code: string) => Promise<void>) | null {
   const cfg = loadSmtpConfig(db);
   if (!cfg) return null;
-  return (email, code) => {
-    void sendConfigured(cfg, home, {
-      to: email,
-      subject: "[harness] your sign-in code",
-      text: `Your harness sign-in code is ${code}.`,
-    }).then((result) => {
-      if (!result.ok) console.error("email code delivery failed:", result.reason);
-    });
+  return async (email, code) => {
+    try {
+      const result = await sendConfigured(cfg, home, {
+        to: email,
+        subject: "[harness] your sign-in code",
+        text: `Your harness sign-in code is ${code}.`,
+      });
+      if (!result.ok) console.error("email code delivery failed");
+    } catch {
+      console.error("email code delivery failed");
+    }
   };
 }

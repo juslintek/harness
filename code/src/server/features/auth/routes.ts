@@ -89,7 +89,7 @@ function loginRoutes(app: Hono, deps: AuthDeps): void {
       queueMicrotask(() => {
         Promise.resolve()
           .then(() => deps.deliverEmailCode(email, code))
-          .catch((err: unknown) => console.error("email code delivery failed", err));
+          .catch(() => console.error("email code delivery failed"));
       });
     const outcome = requestEmailCode(db, body.email, deliver);
     return outcome === "sent" ? c.json({ ok: true }) : c.json({ error: "too many attempts" }, 429);

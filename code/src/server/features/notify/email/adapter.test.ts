@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Notification, Target } from "../../../../shared/notify";
@@ -109,4 +109,38 @@ test("the code sender is null until SMTP is configured, then mails known users o
   expect(fake?.mails).toHaveLength(1);
   expect(fake?.mails[0]?.to).toEqual(["ada@example.test"]);
   expect(fake?.mails[0]?.data).toMatch(/\r\n\r\nYour harness sign-in code is \d{6}\./);
+});
+
+test("code delivery logs a fixed error when SMTP rejects the message", async () => {
+  const env = await setup({ dataReply: "550 refused code 123456" });
+  configure(env.db, env.home);
+  const logged: string[] = [];
+  const originalError = console.error;
+  console.error = (...values: unknown[]) => logged.push(values.join(" "));
+  try {
+    const send = emailCodeSender(env.db, env.home);
+    if (!send) throw new Error("sender missing after configuration");
+    await send("ada@example.test", "123456");
+  } finally {
+    console.error = originalError;
+  }
+  expect(logged).toEqual(["email code delivery failed"]);
+});
+
+test("code delivery catches secret-store read failures without exposing their contents", async () => {
+  const env = await setup();
+  configure(env.db, env.home);
+  writeFileSync(join(env.home, "secrets.json"), "invalid code 123456");
+  const logged: string[] = [];
+  const originalError = console.error;
+  console.error = (...values: unknown[]) => logged.push(values.join(" "));
+  try {
+    const send = emailCodeSender(env.db, env.home);
+    if (!send) throw new Error("sender missing after configuration");
+    await send("ada@example.test", "123456");
+  } finally {
+    console.error = originalError;
+  }
+  expect(logged).toEqual(["email code delivery failed"]);
+  expect(logged.join(" ")).not.toContain("123456");
 });
