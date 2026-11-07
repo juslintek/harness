@@ -207,8 +207,10 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", adminRoutes(deps));
 }
 
-// The fallback while no mail server is configured: the operator reads the code from the log.
 export function consoleEmailCode(email: string, code: string): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("email code delivery unavailable: SMTP is not configured");
+  }
   console.log(`email code for ${email}: ${code}`);
 }
 

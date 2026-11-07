@@ -3,6 +3,7 @@ import { beforeEach, expect, test } from "bun:test";
 import { healthSchema } from "../shared/health";
 import { migrate, openDb } from "./db/db";
 import { migrations } from "./db/migrations";
+import { createUser } from "./features/auth/api";
 import { mintRunToken } from "./features/mcp/api";
 import { createApp } from "./http";
 import { sessionHeaders } from "./test-support/app-kit";
@@ -46,6 +47,34 @@ test("health stays public and keeps security headers", async () => {
   expect(res.status).toBe(200);
   expect(healthSchema.parse(await res.json()).instanceId).toBe("abc");
   expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+});
+
+test("production email login never prints a code when SMTP is unconfigured", async () => {
+  const previousEnvironment = process.env.NODE_ENV;
+  const originalLog = console.log;
+  const originalError = console.error;
+  const output: string[] = [];
+  process.env.NODE_ENV = "production";
+  console.log = (...values: unknown[]) => output.push(values.join(" "));
+  console.error = (...values: unknown[]) => output.push(values.join(" "));
+  try {
+    createUser(db, { email: "ada@example.test", name: "Ada", instanceAdmin: false });
+    expect(
+      (
+        await send("/api/auth/email/request", post({ email: "ada@example.test" }), {
+          ...JSON_HEADER,
+          origin: ORIGIN,
+        })
+      ).status,
+    ).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(output.join(" ")).not.toMatch(/email code for|\b\d{6}\b/);
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+    if (previousEnvironment === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousEnvironment;
+  }
 });
 
 test("/api/agents without cookie is 401, with a run bearer token still 401", async () => {
