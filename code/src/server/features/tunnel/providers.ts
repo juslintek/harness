@@ -26,9 +26,7 @@ export interface Tunnel {
   commands: (provider: Provider) => { start: string; stop: string | null };
   running: () => Provider | null;
   start: (provider: Provider) => Promise<StartResult>;
-  // Without `fallback` only what this process started is undone; with it, a tailscale
-  // serve/funnel config left by an earlier run is reset too.
-  stop: (fallback?: Provider) => Promise<StartResult>;
+  stop: () => Promise<StartResult>;
 }
 
 const DEFAULT_URL_TIMEOUT_MS = 20000;
@@ -45,14 +43,19 @@ function startCommand(provider: Provider, port: number): Command {
 }
 
 // A quick tunnel is a child process that dies with its stop; tailscale keeps its config in the daemon.
-function stopCommand(provider: Provider): Command | null {
+function stopCommand(provider: Provider, port: number): Command | null {
   if (provider === "cloudflare") return null;
-  return { bin: "tailscale", args: [provider === "tailscale-serve" ? "serve" : "funnel", "reset"] };
+  return {
+    bin: "tailscale",
+    args: [provider === "tailscale-serve" ? "serve" : "funnel", "--bg", String(port), "off"],
+  };
 }
 
 const render = (command: Command): string => [command.bin, ...command.args].join(" ");
 
 type Child = Subprocess<"ignore", "pipe", "pipe">;
+type RunningTunnel = { provider: Provider; child: Child | null };
+type TunnelState = { current: RunningTunnel | null; starting: Promise<StartResult> | null };
 
 function spawn(deps: TunnelDeps, command: Command): Child {
   const path = deps.bin ? join(deps.bin, command.bin) : command.bin;
@@ -104,56 +107,81 @@ async function quickTunnelUrl(child: Child, timeoutMs: number): Promise<string |
 }
 
 export function createTunnel(deps: TunnelDeps): Tunnel {
-  let current: { provider: Provider; child: Child | null } | null = null;
-
-  async function startCloudflare(command: Command): Promise<StartResult> {
-    let child: Child;
-    try {
-      child = spawn(deps, command);
-    } catch {
-      return { ok: false, status: 502, error: "cloudflared could not be run" };
-    }
-    const origin = await quickTunnelUrl(child, deps.urlTimeoutMs ?? DEFAULT_URL_TIMEOUT_MS);
-    if (!origin) {
-      child.kill();
-      return { ok: false, status: 502, error: "cloudflared gave no tunnel url" };
-    }
-    writeTunnelConfig(deps.home, { provider: "cloudflare", origin });
-    current = { provider: "cloudflare", child };
-    void child.exited.then(() => {
-      if (current?.child === child) current = null;
-    });
-    return { ok: true, origin };
-  }
-
+  const state: TunnelState = { current: null, starting: null };
   return {
     detect: () => detectProviders(deps.bin, deps.env),
     commands: (provider) => {
-      const stop = stopCommand(provider);
+      const stop = stopCommand(provider, deps.port);
       return { start: render(startCommand(provider, deps.port)), stop: stop && render(stop) };
     },
-    running: () => current?.provider ?? null,
-    async start(provider) {
-      if (current) return { ok: false, status: 409, error: "a tunnel is already running" };
-      const command = startCommand(provider, deps.port);
-      if (provider === "cloudflare") return startCloudflare(command);
-      const result = await runToEnd(deps, command);
-      if (result.ok) current = { provider, child: null };
-      return result;
-    },
-    async stop(fallback) {
-      const provider = current?.provider ?? fallback;
-      const child = current?.child ?? null;
-      if (child) {
-        child.kill();
-        await child.exited;
-      }
-      const command = provider ? stopCommand(provider) : null;
-      const result = command
-        ? await runToEnd(deps, command)
-        : ({ ok: true, origin: null } as const);
-      if (result.ok) current = null;
-      return result;
-    },
+    running: () => state.current?.provider ?? null,
+    start: (provider) => startTunnel(deps, state, provider),
+    stop: () => stopTunnel(deps, state),
   };
+}
+
+function startTunnel(
+  deps: TunnelDeps,
+  state: TunnelState,
+  provider: Provider,
+): Promise<StartResult> {
+  if (state.current || state.starting)
+    return Promise.resolve({ ok: false, status: 409, error: "a tunnel is already running" });
+  const starting = runStart(deps, state, provider);
+  state.starting = starting;
+  return starting.finally(() => {
+    if (state.starting === starting) state.starting = null;
+  });
+}
+
+async function runStart(
+  deps: TunnelDeps,
+  state: TunnelState,
+  provider: Provider,
+): Promise<StartResult> {
+  if (provider === "cloudflare") return startCloudflare(deps, state);
+  const result = await runToEnd(deps, startCommand(provider, deps.port));
+  if (result.ok) state.current = { provider, child: null };
+  return result;
+}
+
+async function startCloudflare(deps: TunnelDeps, state: TunnelState): Promise<StartResult> {
+  let child: Child;
+  try {
+    child = spawn(deps, startCommand("cloudflare", deps.port));
+  } catch {
+    return { ok: false, status: 502, error: "cloudflared could not be run" };
+  }
+  const origin = await quickTunnelUrl(child, deps.urlTimeoutMs ?? DEFAULT_URL_TIMEOUT_MS);
+  if (!origin) {
+    child.kill();
+    await child.exited;
+    return { ok: false, status: 502, error: "cloudflared gave no tunnel url" };
+  }
+  try {
+    writeTunnelConfig(deps.home, { provider: "cloudflare", origin });
+  } catch {
+    child.kill();
+    await child.exited;
+    return { ok: false, status: 502, error: "cloudflared tunnel could not be saved" };
+  }
+  state.current = { provider: "cloudflare", child };
+  void child.exited.then(() => {
+    if (state.current?.child === child) state.current = null;
+  });
+  return { ok: true, origin };
+}
+
+async function stopTunnel(deps: TunnelDeps, state: TunnelState): Promise<StartResult> {
+  await state.starting;
+  const running = state.current;
+  if (!running) return { ok: true, origin: null };
+  if (running.child) {
+    running.child.kill();
+    await running.child.exited;
+  }
+  const command = stopCommand(running.provider, deps.port);
+  const result = command ? await runToEnd(deps, command) : { ok: true as const, origin: null };
+  if (result.ok) state.current = null;
+  return result;
 }

@@ -74,7 +74,7 @@ export function tunnelRoutes(tunnel: Tunnel, home: string): Hono<AuthEnv> {
   });
 
   app.delete("/", requireStepUp, async (c) => {
-    const result = await tunnel.stop(readTunnelConfig(home)?.provider);
+    const result = await tunnel.stop();
     if (!result.ok) return c.json({ error: result.error }, result.status);
     return c.json({ running: null });
   });

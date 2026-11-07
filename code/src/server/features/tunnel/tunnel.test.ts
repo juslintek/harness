@@ -74,9 +74,12 @@ test("GET detects tailscale and cloudflared and lists the exact commands without
   expect(body.running).toBeNull();
   expect(body.commands["tailscale-serve"]).toEqual({
     start: `tailscale serve --bg ${PORT}`,
-    stop: "tailscale serve reset",
+    stop: `tailscale serve --bg ${PORT} off`,
   });
-  expect(body.commands["tailscale-funnel"]?.start).toBe(`tailscale funnel --bg ${PORT}`);
+  expect(body.commands["tailscale-funnel"]).toEqual({
+    start: `tailscale funnel --bg ${PORT}`,
+    stop: `tailscale funnel --bg ${PORT} off`,
+  });
   expect(body.commands.cloudflare).toEqual({
     start: `cloudflared tunnel --url http://127.0.0.1:${PORT}`,
     stop: null,
@@ -157,7 +160,7 @@ test("public providers need confirmPublic, and nothing runs without it", async (
   }
 });
 
-test("start serve runs tailscale serve --bg with the port, and stop resets it", async () => {
+test("start serve runs tailscale serve --bg with the port, and stop disables that port", async () => {
   const { app, calls, tunnel } = setup({ stepUpAt: Date.now() });
   await post(app, "/setup", { provider: "tailscale-serve", hostname: "mac.tail1234.ts.net" });
   const res = await post(app, "/start", { confirm: true });
@@ -166,16 +169,16 @@ test("start serve runs tailscale serve --bg with the port, and stop resets it", 
   expect(tunnel.running()).toBe("tailscale-serve");
   expect((await post(app, "/start", { confirm: true })).status).toBe(409);
   expect((await app.request("/", { method: "DELETE" })).status).toBe(200);
-  expect(calls()).toBe(`tailscale serve --bg ${PORT}\ntailscale serve reset\n`);
+  expect(calls()).toBe(`tailscale serve --bg ${PORT}\ntailscale serve --bg ${PORT} off\n`);
   expect(tunnel.running()).toBeNull();
 });
 
-test("start funnel with confirmPublic runs tailscale funnel --bg, stop resets funnel", async () => {
+test("start funnel with confirmPublic runs tailscale funnel --bg, stop disables that port", async () => {
   const { app, calls } = setup({ stepUpAt: Date.now() });
   await post(app, "/setup", { provider: "tailscale-funnel", hostname: "mac.tail1234.ts.net" });
   expect((await post(app, "/start", { confirm: true, confirmPublic: true })).status).toBe(200);
   await app.request("/", { method: "DELETE" });
-  expect(calls()).toBe(`tailscale funnel --bg ${PORT}\ntailscale funnel reset\n`);
+  expect(calls()).toBe(`tailscale funnel --bg ${PORT}\ntailscale funnel --bg ${PORT} off\n`);
 });
 
 test("a failing tailscale start is reported and leaves nothing marked running", async () => {
@@ -204,9 +207,47 @@ test("cloudflare start parses the quick tunnel url from stderr and stop leaves n
   expect(() => process.kill(pid, 0)).toThrow();
 });
 
-test("stop without a running tunnel unexposes the stored tailscale provider only", async () => {
+test("concurrent starts launch only one cloudflared child", async () => {
+  const { calls, tunnel } = setup();
+  const results = await Promise.all([tunnel.start("cloudflare"), tunnel.start("cloudflare")]);
+  expect(results.filter((result) => result.ok)).toHaveLength(1);
+  expect(results.find((result) => !result.ok)).toMatchObject({ status: 409 });
+  expect((calls().match(/pid /g) ?? []).length).toBe(1);
+});
+
+test("stop waits for an in-flight cloudflare start then kills its child", async () => {
+  const { calls, tunnel } = setup();
+  const starting = tunnel.start("cloudflare");
+  const stopping = tunnel.stop();
+  const [startResult, stopResult] = await Promise.all([starting, stopping]);
+  expect(startResult.ok).toBe(true);
+  expect(stopResult.ok).toBe(true);
+  expect(tunnel.running()).toBeNull();
+  const pid = Number(/pid (\d+)/.exec(calls())?.[1]);
+  expect(() => process.kill(pid, 0)).toThrow();
+});
+
+test("a cloudflared child is stopped when saving its origin fails", async () => {
+  const { home, calls } = setup();
+  const tunnel = createTunnel({
+    home: join(home, "missing"),
+    port: PORT,
+    bin: FAKE_BIN,
+    env: { FAKE_BIN_LOG: join(home, "calls.log") },
+    urlTimeoutMs: 5000,
+  });
+  tunnels.push(tunnel);
+  const result = await tunnel.start("cloudflare");
+  expect(result).toMatchObject({ ok: false, status: 502 });
+  const pid = Number(/pid (\d+)/.exec(calls())?.[1]);
+  expect(pid).toBeGreaterThan(0);
+  expect(() => process.kill(pid, 0)).toThrow();
+  expect(tunnel.running()).toBeNull();
+});
+
+test("stop without a running tunnel leaves stored Tailscale configuration alone", async () => {
   const { app, calls } = setup({ stepUpAt: Date.now() });
   await post(app, "/setup", { provider: "tailscale-funnel", hostname: "mac.tail1234.ts.net" });
   expect((await app.request("/", { method: "DELETE" })).status).toBe(200);
-  expect(calls()).toBe("tailscale funnel reset\n");
+  expect(calls()).toBe("");
 });

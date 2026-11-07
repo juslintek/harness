@@ -95,8 +95,6 @@ const stopLoops = [
   hiring.stop,
   startNotify(db, { home: config.home, origin: bound.rp.origin }),
   startBridges(db, { home: config.home, origin: bound.rp.origin }),
-  // A tunnel this process started must not outlive it.
-  () => tunnel.stop(),
 ];
 
 console.log(`harness listening on ${server.url}`);
@@ -118,8 +116,13 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
       Promise.resolve()
         .then(run)
         .catch((err: unknown) => console.error("shutdown failed", err));
+    const stopTunnel = step(async () => {
+      const result = await tunnel.stop();
+      if (!result.ok) throw new Error(result.error);
+    });
     step(() => shutdownRuns(db))
       .then(() => step(() => drained))
+      .then(() => stopTunnel)
       .then(() => step(() => server.stop(true)))
       .then(() => step(stopMemory))
       .finally(() => process.exit(0));
