@@ -5,7 +5,7 @@ import { migrate, openDb } from "./db/db";
 import { migrations } from "./db/migrations";
 import { createUser } from "./features/auth/api";
 import { mintRunToken } from "./features/mcp/api";
-import { createApp } from "./http";
+import { consoleEmailCode, createApp } from "./http";
 import { sessionHeaders } from "./test-support/app-kit";
 
 const PORT = 4100;
@@ -49,7 +49,7 @@ test("health stays public and keeps security headers", async () => {
   expect(res.headers.get("x-content-type-options")).toBe("nosniff");
 });
 
-test("production email login never prints a code when SMTP is unconfigured", async () => {
+test("email login prints codes only in development when SMTP is unconfigured", async () => {
   const previousEnvironment = process.env.NODE_ENV;
   const originalLog = console.log;
   const originalError = console.error;
@@ -69,6 +69,16 @@ test("production email login never prints a code when SMTP is unconfigured", asy
     ).toBe(200);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(output.join(" ")).not.toMatch(/email code for|\b\d{6}\b/);
+
+    process.env.NODE_ENV = "test";
+    expect(() => consoleEmailCode("ada@example.test", "123456")).toThrow(
+      "email code delivery unavailable: SMTP is not configured",
+    );
+    expect(output.join(" ")).not.toMatch(/email code for|\b\d{6}\b/);
+
+    process.env.NODE_ENV = "development";
+    consoleEmailCode("ada@example.test", "123456");
+    expect(output.join(" ")).toContain("email code for ada@example.test: 123456");
   } finally {
     console.log = originalLog;
     console.error = originalError;

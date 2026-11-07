@@ -213,7 +213,7 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
 }
 
 export function consoleEmailCode(email: string, code: string): void {
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV !== "development") {
     throw new Error("email code delivery unavailable: SMTP is not configured");
   }
   console.log(`email code for ${email}: ${code}`);
