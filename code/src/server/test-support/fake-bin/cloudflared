@@ -3,5 +3,5 @@
 # the real one, then idles until killed (the sleep cap keeps a leaked process from living long).
 echo "cloudflared $*" >> "${FAKE_BIN_LOG:-/dev/null}"
 echo "pid $$" >> "${FAKE_BIN_LOG:-/dev/null}"
-echo "INF |  https://quiet-fake-words.trycloudflare.com  |" >&2
+echo "INF |  ${FAKE_CLOUDFLARE_ORIGIN:-https://quiet-fake-words.trycloudflare.com}  |" >&2
 exec sleep 60

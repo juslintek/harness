@@ -18,7 +18,10 @@ export interface TunnelConfig {
 
 const tunnelConfigSchema: z.ZodType<TunnelConfig> = z.object({
   provider: providerSchema,
-  origin: z.string().optional(),
+  origin: z
+    .url({ protocol: /^https$/ })
+    .transform((value) => new URL(value).origin)
+    .optional(),
 });
 
 const tunnelFile = (home: string): string => join(home, "tunnel.json");

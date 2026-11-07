@@ -57,6 +57,7 @@
   "session expired",
   "step-up failed",
   "step_up_required",
+  "stop the tunnel before changing its setup",
   "team not in org",
   "team or member not in org",
   "temporarily_unavailable",

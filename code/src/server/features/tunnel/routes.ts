@@ -18,8 +18,8 @@ const startBody = z.object({
   confirmPublic: z.boolean().optional(),
 });
 
-const restartWarning = (origin: string | null): string =>
-  `Restart harness for the new origin to apply. Passkeys are bound to the origin hostname, so a passkey enrolled on localhost does not work on ${origin ?? "the tunnel origin"}: enrol a new one there with a recovery code or an email code.`;
+const originWarning = (origin: string | null): string =>
+  `The origin applies when the tunnel starts; no restart is needed. Passkeys are bound to the hostname, so a localhost passkey does not work on ${origin ?? "the tunnel origin"}: enrol a new one there with a recovery code or an email code. Localhost remains available to manage or restart the tunnel.`;
 
 export function tunnelRoutes(tunnel: Tunnel, home: string): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
@@ -38,6 +38,7 @@ export function tunnelRoutes(tunnel: Tunnel, home: string): Hono<AuthEnv> {
   app.post("/setup", requireStepUp, async (c) => {
     const body = await parseBody(c, setupBody);
     if (body instanceof Response) return body;
+    if (tunnel.busy()) return c.json({ error: "stop the tunnel before changing its setup" }, 409);
     if (!body.hostname && body.provider !== "cloudflare") {
       return c.json({ error: "hostname required" }, 400);
     }
@@ -46,8 +47,8 @@ export function tunnelRoutes(tunnel: Tunnel, home: string): Hono<AuthEnv> {
     return c.json({
       provider: body.provider,
       origin: origin ?? null,
-      restartRequired: true,
-      warning: restartWarning(origin ?? null),
+      restartRequired: false,
+      warning: originWarning(origin ?? null),
     });
   });
 
@@ -68,8 +69,8 @@ export function tunnelRoutes(tunnel: Tunnel, home: string): Hono<AuthEnv> {
     return c.json({
       running: config.provider,
       origin,
-      restartRequired: true,
-      warning: restartWarning(origin),
+      restartRequired: false,
+      warning: originWarning(origin),
     });
   });
 

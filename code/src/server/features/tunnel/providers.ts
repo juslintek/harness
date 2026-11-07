@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { Subprocess } from "bun";
 import { z } from "zod";
-import { type Provider, writeTunnelConfig } from "./config";
+import { type Provider, readTunnelConfig, writeTunnelConfig } from "./config";
 import { type Detected, detectProviders } from "./detect";
 
 interface Command {
@@ -27,6 +27,8 @@ export interface Tunnel {
   detect: () => Promise<Detected>;
   commands: (provider: Provider) => { start: string; stop: string | null };
   running: () => Provider | null;
+  origin: () => string | null;
+  busy: () => boolean;
   start: (provider: Provider) => Promise<StartResult>;
   stop: () => Promise<StartResult>;
   beginShutdown: () => void;
@@ -57,7 +59,7 @@ function stopCommand(provider: Provider, port: number): Command | null {
 const render = (command: Command): string => [command.bin, ...command.args].join(" ");
 
 type Child = Subprocess<"ignore", "pipe", "pipe">;
-type RunningTunnel = { provider: Provider; child: Child | null };
+type RunningTunnel = { provider: Provider; child: Child | null; origin: string | null };
 type TunnelState = {
   current: RunningTunnel | null;
   starting: Promise<StartResult> | null;
@@ -172,6 +174,8 @@ export function createTunnel(deps: TunnelDeps): Tunnel {
       return { start: render(startCommand(provider, deps.port)), stop: stop && render(stop) };
     },
     running: () => state.current?.provider ?? null,
+    origin: () => state.current?.origin ?? null,
+    busy: () => Boolean(state.current || state.starting || state.stopping || state.shuttingDown),
     start: (provider) => startTunnel(deps, state, provider),
     stop: () => stopTunnel(deps, state),
     beginShutdown: () => {
@@ -200,8 +204,12 @@ async function runStart(
   provider: Provider,
 ): Promise<StartResult> {
   if (provider === "cloudflare") return startCloudflare(deps, state);
+  const config = readTunnelConfig(deps.home);
+  const origin = config?.provider === provider ? (config.origin ?? null) : null;
   const result = await runToEnd(deps, startCommand(provider, deps.port));
-  if (result.ok) state.current = { provider, child: null };
+  if (result.ok) {
+    state.current = { provider, child: null, origin };
+  }
   return result;
 }
 
@@ -232,7 +240,7 @@ async function startCloudflare(deps: TunnelDeps, state: TunnelState): Promise<St
     await child.exited;
     return { ok: false, status: 502, error: "cloudflared tunnel could not be saved" };
   }
-  state.current = { provider: "cloudflare", child };
+  state.current = { provider: "cloudflare", child, origin };
   void child.exited.then(() => {
     if (state.current?.child === child) state.current = null;
   });

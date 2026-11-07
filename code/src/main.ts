@@ -23,7 +23,8 @@ import {
 import { startTracking } from "./server/features/tracking/api";
 import { createTunnel } from "./server/features/tunnel/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
-import { consoleEmailCode, createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
+import { consoleEmailCode, MAX_REQUEST_BODY_BYTES } from "./server/http";
+import { createOriginApp } from "./server/origin-app";
 import { closeRealtimeSockets, type WsData, websocket, wireRealtime } from "./server/realtime";
 import { drainStops } from "./server/shutdown";
 import { staticResponse } from "./server/ui-dist";
@@ -46,7 +47,7 @@ recoverRuns(db);
 await sweepStaleScratch(config.home);
 
 // With HARNESS_PORT=0 the real port is only known after binding, and the origin and run deps derive from it.
-let app: ReturnType<typeof createApp>;
+let app: ReturnType<typeof createOriginApp>;
 const server = Bun.serve<WsData>({
   hostname: config.host,
   port: config.port,
@@ -70,19 +71,26 @@ const server = Bun.serve<WsData>({
 const bound =
   config.port === 0 ? loadConfig({ ...process.env, HARNESS_PORT: `${server.port}` }) : config;
 const tunnel = createTunnel({ home: bound.home, port: bound.port });
-app = createApp({
-  db,
-  home: bound.home,
-  port: bound.port,
-  rp: bound.rp,
-  trustProxy: bound.trustProxy,
-  // Resolved per request, so saving SMTP settings applies without a restart.
-  deliverEmailCode: (email, code) =>
-    (emailCodeSender(db, bound.home) ?? consoleEmailCode)(email, code),
-  instanceId,
-  version: "0.0.0",
-  tunnel,
-});
+const currentOrigin = (): string =>
+  (process.env.HARNESS_ORIGIN ? new URL(process.env.HARNESS_ORIGIN).origin : undefined) ??
+  tunnel.origin() ??
+  `http://localhost:${bound.port}`;
+app = createOriginApp(
+  {
+    db,
+    home: bound.home,
+    port: bound.port,
+    rp: bound.rp,
+    trustProxy: bound.trustProxy,
+    // Resolved per request, so saving SMTP settings applies without a restart.
+    deliverEmailCode: (email, code) =>
+      (emailCodeSender(db, bound.home) ?? consoleEmailCode)(email, code),
+    instanceId,
+    version: "0.0.0",
+    tunnel,
+  },
+  currentOrigin,
+);
 startTailers(db, 60000, defaultTailSources(join(config.home, "worktrees")));
 
 wireRealtime(db, server);
@@ -94,14 +102,14 @@ const stopLoops = [
   ...[startRouter, startBudgets, startTracking].map((start) => start(db)),
   startHiring(db, hiring.deps),
   hiring.stop,
-  startNotify(db, { home: config.home, origin: bound.rp.origin }),
-  startBridges(db, { home: config.home, origin: bound.rp.origin }),
+  startNotify(db, { home: config.home, origin: currentOrigin }),
+  startBridges(db, { home: config.home, origin: currentOrigin() }),
 ];
 
 console.log(`harness listening on ${server.url}`);
 
 const firstRun = firstRunEnrollment(db, ENROLLMENT_TTL_MS);
-if (firstRun) console.log(`first-run enrollment: ${bound.rp.origin}/#/enroll/${firstRun}`);
+if (firstRun) console.log(`first-run enrollment: ${currentOrigin()}/#/enroll/${firstRun}`);
 
 // Agent groups are detached, so the terminal's Ctrl-C does not reach them.
 let stopping = false;

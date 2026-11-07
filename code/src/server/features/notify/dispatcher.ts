@@ -13,7 +13,7 @@ const MAX_SENDS_PER_WINDOW = 30;
 
 export interface DispatcherDeps {
   home: string;
-  origin: string;
+  origin: string | (() => string);
   adapters?: Partial<Record<Channel, Notifier>>;
   now?: () => number;
   backoffMs?: readonly number[];

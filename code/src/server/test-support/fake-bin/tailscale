@@ -1,6 +1,9 @@
 #!/bin/sh
 # Stand-in for the real CLI: records argv and prints canned output, never touches a network.
 echo "tailscale $*" >> "${FAKE_BIN_LOG:-/dev/null}"
+if [ -n "$FAKE_TAILSCALE_DELAY_START" ] && [ "$2" = "--bg" ] && [ "$4" != "off" ]; then
+  sleep 0.1
+fi
 if [ -n "$FAKE_TAILSCALE_DELAY_STOP" ] && [ "$4" = "off" ]; then
   stop_count=$(grep -c ' off$' "$FAKE_BIN_LOG")
   if [ "$stop_count" -eq 1 ]; then sleep 0.05; else sleep 0.5; fi

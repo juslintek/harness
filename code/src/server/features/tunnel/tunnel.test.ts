@@ -57,7 +57,7 @@ test("setup writes tunnel.json only and starts nothing", async () => {
   });
   expect(res.status).toBe(200);
   const body = (await res.json()) as { restartRequired: boolean; warning: string };
-  expect(body.restartRequired).toBe(true);
+  expect(body.restartRequired).toBe(false);
   expect(body.warning).toContain("passkey");
   expect(body.warning).toContain("mac.tail1234.ts.net");
   expect(tunnelJson(home)).toEqual({
@@ -163,7 +163,7 @@ test("cloudflare start parses the quick tunnel url from stderr and stop leaves n
   expect(res.status).toBe(200);
   const body = (await res.json()) as { origin: string; restartRequired: boolean };
   expect(body.origin).toBe("https://quiet-fake-words.trycloudflare.com");
-  expect(body.restartRequired).toBe(true);
+  expect(body.restartRequired).toBe(false);
   expect(tunnelJson(home)).toEqual({ provider: "cloudflare", origin: body.origin });
   expect(calls()).toContain(`cloudflared tunnel --url http://127.0.0.1:${PORT}\n`);
   const pid = Number(/pid (\d+)/.exec(calls())?.[1]);
@@ -259,4 +259,18 @@ test("stop without a running tunnel leaves stored Tailscale configuration alone"
   await post(app, "/setup", { provider: "tailscale-funnel", hostname: "mac.tail1234.ts.net" });
   expect((await app.request("/", { method: "DELETE" })).status).toBe(200);
   expect(calls()).toBe("");
+});
+
+test("setup cannot replace the selected origin while its start command is pending", async () => {
+  const { app, calls, tunnel, home } = setup({
+    stepUpAt: Date.now(),
+    env: { FAKE_TAILSCALE_DELAY_START: "1" },
+  });
+  await post(app, "/setup", { provider: "tailscale-serve", hostname: "mac.tail1234.ts.net" });
+  const starting = post(app, "/start", { confirm: true });
+  while (!calls().includes("tailscale serve --bg")) await Bun.sleep(1);
+  expect((await post(app, "/setup", { provider: "cloudflare" })).status).toBe(409);
+  expect((await starting).status).toBe(200);
+  expect(tunnel.origin()).toBe("https://mac.tail1234.ts.net");
+  expect(tunnelJson(home)).toEqual({ provider: "tailscale-serve", origin: tunnel.origin() });
 });

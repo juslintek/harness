@@ -50,7 +50,7 @@ export interface OutboxDeps {
   db: Database;
   home: string;
   adapters: Record<Channel, Notifier>;
-  origin: string;
+  origin: string | (() => string);
   now: () => number;
   backoffMs: readonly number[];
 }
@@ -85,7 +85,8 @@ export function createOutbox(deps: OutboxDeps): Outbox {
     n: Notification,
   ): Promise<{ result: DeliverResult; attempts: number }> {
     for (let attempts = 1; ; attempts++) {
-      const result = await safeDeliver(adapters[target.channel], target, n, origin);
+      const base = typeof origin === "function" ? origin() : origin;
+      const result = await safeDeliver(adapters[target.channel], target, n, base);
       const wait = backoffMs[attempts - 1];
       if (result.ok || !result.retry || wait === undefined) return { result, attempts };
       if (stopped) return { result: { ok: false, retry: false, reason: "stopped" }, attempts };

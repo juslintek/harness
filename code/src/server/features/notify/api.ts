@@ -30,7 +30,7 @@ export {
 
 export interface NotifyDeps extends Partial<Omit<DispatcherDeps, "origin" | "home">> {
   home: string;
-  origin: string;
+  origin: string | (() => string);
 }
 
 // Keyed by db so a second app (tests, gates) never reaches another one's adapters.
