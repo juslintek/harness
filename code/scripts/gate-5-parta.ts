@@ -7,9 +7,10 @@ import type { AgentSpec } from "../src/server/features/agents/api";
 import { listAgents } from "../src/server/features/agents/api";
 import { listApprovals } from "../src/server/features/guard/api";
 import { startHeartbeat } from "../src/server/features/heartbeat/api";
-import { listRunEvents } from "../src/server/features/logs/api";
+import { listRunEvents, redact } from "../src/server/features/logs/api";
 import { addAgentMember, listOrgsForUser, memberForUser } from "../src/server/features/orgs/api";
 import {
+  getRun,
   killRun,
   liveRuns,
   type RunDeps,
@@ -43,6 +44,13 @@ const ASK = "git branch -D gate5-old";
 // An L1 ask (force-deleting a branch), so the guard raises an L3 approval before anything runs.
 const CLAUDE_PROMPT = `Run exactly this one shell command and nothing else: ${ASK}\nThen answer with the single word done. It is fine if the command reports an error.`;
 const FAKE = join(import.meta.dir, "fake-acp-agent.ts");
+
+export function partAMode(argv: string[]): "fake" | "real" {
+  if (argv.includes("--fake") && argv.includes("--real")) {
+    throw new Error("--fake and --real cannot be used together");
+  }
+  return argv.includes("--fake") ? "fake" : "real";
+}
 
 const fakeSpec: AgentSpec = {
   id: "fake",
@@ -99,7 +107,17 @@ export function scratchRepo(root: string): string {
 function pendingFor(inst: Instance, runId: string): Promise<string> {
   return waitFor(
     "a pending approval",
-    () => listApprovals(inst.db, "pending").find((a) => a.runId === runId)?.id,
+    () => {
+      const approval = listApprovals(inst.db, "pending").find((a) => a.runId === runId);
+      if (approval) return approval.id;
+      const run = getRun(inst.db, runId);
+      if (run && ["completed", "failed", "blocked", "cancelled", "killed"].includes(run.state)) {
+        throw new Error(
+          `run ended before approval (${run.state}): ${redact(run.reason ?? "no reason")}`,
+        );
+      }
+      return undefined;
+    },
     300_000,
   );
 }

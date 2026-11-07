@@ -1,6 +1,6 @@
 // Phase 5 gate: reach (web push, email, Slack, Telegram, webhooks, remote MCP with OAuth,
 // Claude Desktop link). Runs Part A (automated verification) by default, or Part B (--live).
-import { ASSERTIONS, runPartA } from "./gate-5-parta";
+import { ASSERTIONS, partAMode, runPartA } from "./gate-5-parta";
 import { runPartB } from "./gate-5-partb";
 
 function capArg(argv: string[]): number | undefined {
@@ -17,7 +17,10 @@ async function main(): Promise<void> {
     return;
   }
 
-  const real = argv.includes("--real");
+  const mode = partAMode(argv);
+  const fake = mode === "fake";
+  const real = mode === "real";
+  console.log(`Gate 5 Part A mode: ${fake ? "fake offline" : "real Claude"}.`);
   const capUsd = capArg(argv);
   const result = await runPartA({ real, ...(capUsd === undefined ? {} : { capUsd }) });
 
