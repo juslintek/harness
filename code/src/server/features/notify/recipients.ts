@@ -3,8 +3,7 @@ import type { ApprovalView } from "../../../shared/runs";
 import { type ChatEvent, channelMemberIds } from "../chat/api";
 import { getMember, getProject, listMembers, listOrgsForUser, memberForUser } from "../orgs/api";
 
-// The org a run belongs to, resolved like the approval routes do: the stamped org first, then
-// the project's, then the member's.
+// Project ownership determines who may decide approvals, even for a grantee org's agent.
 export function runOrgId(db: Database, runId: string): string | null {
   const run = db
     .query<
@@ -13,9 +12,9 @@ export function runOrgId(db: Database, runId: string): string | null {
     >("SELECT org_id, member_id, project_id FROM runs WHERE id = ?")
     .get(runId);
   if (!run) return null;
-  if (run.org_id) return run.org_id;
   const project = run.project_id === null ? null : getProject(db, run.project_id);
   if (project) return project.orgId;
+  if (run.org_id) return run.org_id;
   return run.member_id === null ? null : (getMember(db, run.member_id)?.orgId ?? null);
 }
 
