@@ -29,12 +29,15 @@ async function reply(opts: PollOptions, chatId: number, text: string): Promise<v
 
 // Linking also stores a push-style notify target, so the same /link gives the member DMs.
 async function link(opts: PollOptions, msg: Message, from: number, code: string): Promise<void> {
-  const memberId = opts.codes.redeem(code);
+  const memberId = opts.codes.redeem("telegram", code);
   if (!memberId) {
     await reply(opts, msg.chat.id, "That code is invalid or expired. Create a new one in the app.");
     return;
   }
-  linkExternalUser(opts.db, "telegram", String(from), memberId);
+  if (!linkExternalUser(opts.db, "telegram", String(from), memberId)) {
+    await reply(opts, msg.chat.id, "This Telegram account is already linked to another member.");
+    return;
+  }
   addTarget(opts.db, memberId, "telegram", { chatId: String(msg.chat.id) });
   await reply(opts, msg.chat.id, "Linked. Your messages in bridged groups now appear in the app.");
 }
@@ -44,7 +47,7 @@ async function handleUpdate(opts: PollOptions, update: TelegramUpdate): Promise<
   if (!msg?.from || msg.from.is_bot || !msg.text) return;
   if (msg.chat.type === "private") {
     const code = LINK_COMMAND.exec(msg.text)?.[1];
-    if (code) await link(opts, msg, msg.from.id, code);
+    if (code && msg.chat.id === msg.from.id) await link(opts, msg, msg.from.id, code);
     return;
   }
   if (msg.chat.type !== "group" && msg.chat.type !== "supergroup") return;

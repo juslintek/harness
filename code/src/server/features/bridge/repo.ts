@@ -79,16 +79,16 @@ export function bridgeByExternal(
   return r ? view(r) : null;
 }
 
-// Replace, not ignore: the person who really owns the external id can always re-claim it.
 export function linkExternalUser(
   db: Database,
   kind: BridgeKind,
   externalUserId: string,
   memberId: string,
-): void {
+): boolean {
   db.query(
-    "INSERT OR REPLACE INTO bridge_users (kind, external_user_id, member_id) VALUES (?, ?, ?)",
+    "INSERT INTO bridge_users (kind, external_user_id, member_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
   ).run(kind, externalUserId, memberId);
+  return memberOfExternal(db, kind, externalUserId) === memberId;
 }
 
 export function memberOfExternal(

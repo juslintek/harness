@@ -2,9 +2,14 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { migrate, openDb } from "../../db/db";
+import { migrations } from "../../db/migrations";
+import { seedMember } from "../../test-support/bridge-kit";
 import { type SlackMock, startSlackMock, until } from "../../test-support/slack-mock";
 import { setSecret } from "../agents/api";
 import type { InboundMessage } from "./inbound";
+import { createLinkCodes } from "./link-codes";
+import { linkExternalUser, memberOfExternal } from "./repo";
 import { startSlackSocket } from "./slack";
 
 let mock: SlackMock;
@@ -45,6 +50,38 @@ test("acks every envelope and passes plain human messages on", async () => {
   expect(mock.acks).toEqual(["e1", "e2", "e3", "e4", "e5"]);
   expect(got).toEqual([{ kind: "slack", externalChannel: "C1", externalUser: "U1", text: "hi" }]);
   expect(mock.opens[0]?.auth).toBe(`Bearer ${mock.appToken}`);
+});
+
+test("only a Slack slash command in a one-to-one DM can redeem a link code", async () => {
+  setSecret("slack.bot_token", mock.botToken, home);
+  const db = openDb(":memory:");
+  migrate(db, migrations);
+  const member = seedMember(db, "slack-link");
+  const codes = createLinkCodes(() => 1_000_000);
+  const { code } = codes.issue("slack", member.memberId);
+  stop = startSlackSocket({
+    home,
+    onMessage: () => {},
+    onLink: (userId, value) => {
+      const memberId = codes.redeem("slack", value);
+      return memberId ? linkExternalUser(db, "slack", userId, memberId) : false;
+    },
+  });
+  await until(() => mock.sockets() === 1);
+  mock.push(
+    { command: "/link", text: code, user_id: "U1", channel_id: "G1" },
+    "group-code",
+    "slash_commands",
+  );
+  mock.push(
+    { command: "/link", text: code, user_id: "U1", channel_id: "D1" },
+    "private-code",
+    "slash_commands",
+  );
+  await until(() => mock.acks.length === 2 && mock.posts.length === 1);
+  expect(memberOfExternal(db, "slack", "U1")).toBe(member.memberId);
+  expect(mock.posts[0]?.body).toMatchObject({ channel: "D1" });
+  expect(mock.posts[0]?.body.text).toContain("Linked");
 });
 
 test("reopens the connection after a drop, then backs off 1s to 30s while opens fail", async () => {

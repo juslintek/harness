@@ -7,9 +7,9 @@ const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const LENGTH = 8;
 
 export interface LinkCodes {
-  issue(memberId: string): { code: string; expiresAt: number };
+  issue(kind: "slack" | "telegram", memberId: string): { code: string; expiresAt: number };
   // One use only: a redeemed or expired code returns null.
-  redeem(code: string): string | null;
+  redeem(kind: "slack" | "telegram", code: string): string | null;
 }
 
 const digest = (code: string): string =>
@@ -25,16 +25,16 @@ function randomCode(): string {
 export function createLinkCodes(now: () => number = Date.now): LinkCodes {
   const pending = new Map<string, { memberId: string; expiresAt: number }>();
   return {
-    issue(memberId) {
+    issue(kind, memberId) {
       for (const [key, entry] of pending) if (entry.expiresAt <= now()) pending.delete(key);
       if (pending.size >= MAX_PENDING) pending.delete(pending.keys().next().value as string);
       const code = randomCode();
       const expiresAt = now() + TTL_MS;
-      pending.set(digest(code), { memberId, expiresAt });
+      pending.set(`${kind}:${digest(code)}`, { memberId, expiresAt });
       return { code, expiresAt };
     },
-    redeem(code) {
-      const key = digest(code);
+    redeem(kind, code) {
+      const key = `${kind}:${digest(code)}`;
       const entry = pending.get(key);
       pending.delete(key);
       return entry && entry.expiresAt > now() ? entry.memberId : null;

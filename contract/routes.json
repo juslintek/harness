@@ -463,6 +463,20 @@
   },
   {
     "method": "POST",
+    "path": "/api/bridge/slack/link-code",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
     "path": "/api/bridge/telegram/link-code",
     "policy": {
       "admin": false,

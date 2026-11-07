@@ -5,6 +5,7 @@ import { api, useLoad } from "../../api";
 import { ErrorLine } from "../auth/error-line";
 import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
+import { BridgeLinkCode } from "./link-code";
 
 type Kind = "slack" | "telegram";
 
@@ -31,44 +32,7 @@ const EXTERNAL_LABELS: Record<Kind, string> = {
 };
 
 function LinkOwnSlack({ slug }: { slug: string }): preact.JSX.Element {
-  const [userId, setUserId] = useState("");
-  const [done, setDone] = useState(false);
-  const action = useAction();
-  const submit = (e: Event): void => {
-    e.preventDefault();
-    action
-      .run(async () => {
-        const body = { kind: "slack", externalUserId: userId.trim(), org: slug };
-        await api("/api/bridge/users", ignored, { method: "POST", body });
-        setDone(true);
-      })
-      .catch((err: unknown) => console.error(err));
-  };
-  return (
-    <form class="row" onSubmit={submit}>
-      <label>
-        Your Slack user id
-        <input
-          value={userId}
-          required
-          maxLength={64}
-          onInput={(e) => {
-            setUserId(e.currentTarget.value);
-            setDone(false);
-          }}
-        />
-      </label>
-      <button type="submit" disabled={action.busy}>
-        Link my Slack user
-      </button>
-      <p class="muted hint" role="status">
-        {done
-          ? "Linked. Messages you write in a bridged Slack channel are posted as you."
-          : "Messages from a Slack user that is not linked to a member are ignored."}
-      </p>
-      <ErrorLine message={action.error} />
-    </form>
-  );
+  return <BridgeLinkCode kind="slack" org={slug} />;
 }
 
 function NewLink({

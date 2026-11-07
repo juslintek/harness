@@ -1,10 +1,11 @@
 import { useState } from "preact/hooks";
+import { linkCodeSchema } from "../../../shared/bridge";
 import { api } from "../../api";
 import { CopyButton } from "../../copy-button";
 import { fmtTime } from "../../format";
 import { ErrorLine } from "../auth/error-line";
 import { useAction } from "../auth/use-action";
-import { createdSchema, linkCodeSchema, webhookAddedSchema } from "./notify-data";
+import { createdSchema, webhookAddedSchema } from "./notify-data";
 
 interface ValueFormProps {
   channel: "email" | "slack";

@@ -8,6 +8,7 @@ import {
 import { createEcho, handleInbound } from "./inbound";
 import { linkCodesFor } from "./link-codes";
 import { type Senders, startOutbound } from "./outbound";
+import { linkExternalUser } from "./repo";
 import { bridgeRoutes } from "./routes";
 import { startSlackSocket } from "./slack";
 import { startTelegramPoll } from "./telegram";
@@ -39,7 +40,14 @@ export function startBridges(db: Database, deps: BridgeDeps): () => Promise<void
   const echo = createEcho();
   const unsubscribe = startOutbound(db, echo, senders(deps.home));
   const stopSlack = slackConfigured(deps.home)
-    ? startSlackSocket({ home: deps.home, onMessage: (msg) => handleInbound(db, echo, msg) })
+    ? startSlackSocket({
+        home: deps.home,
+        onMessage: (msg) => handleInbound(db, echo, msg),
+        onLink: (userId, code) => {
+          const memberId = linkCodesFor(db).redeem("slack", code);
+          return memberId ? linkExternalUser(db, "slack", userId, memberId) : false;
+        },
+      })
     : null;
   const stopTelegram = telegramConfigured(deps.home)
     ? startTelegramPoll({ db, home: deps.home, echo, codes: linkCodesFor(db) })

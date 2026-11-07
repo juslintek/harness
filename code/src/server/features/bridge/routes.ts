@@ -6,12 +6,11 @@ import { type AuthEnv, requireStepUp } from "../auth/api";
 import { getChannel } from "../chat/api";
 import { getOrgBySlug, listOrgsForUser, memberForUser, orgAccess, roleAtLeast } from "../orgs/api";
 import { linkCodesFor } from "./link-codes";
-import { bridgesOfOrg, getBridge, linkBridge, linkExternalUser, unlinkBridge } from "./repo";
+import { bridgesOfOrg, getBridge, linkBridge, unlinkBridge } from "./repo";
 
 const kind = z.enum(["slack", "telegram"]);
 const external = z.string().trim().min(1).max(64);
 const linkBody = z.object({ channelId: z.string().min(1).max(64), kind, externalId: external });
-const userBody = z.object({ kind, externalUserId: external, org: z.string().max(64).optional() });
 
 function isOrgAdmin(db: Database, c: Context<AuthEnv>, orgId: string): boolean {
   const role = orgAccess(db, c.get("actor").userId, orgId);
@@ -63,22 +62,15 @@ export function bridgeRoutes(db: Database): Hono<AuthEnv> {
     return c.json({ ok: true });
   });
 
-  app.post("/users", async (c) => {
-    const body = await parseBody(c, userBody);
-    if (body instanceof Response) return body;
-    const userId = c.get("actor").userId;
-    const member = memberFor(db, userId, body.org);
-    if (!member) return notFound(c);
-    linkExternalUser(db, body.kind, body.externalUserId, member.id);
-    return c.json({ ok: true });
-  });
+  app.post("/users", (c) => c.json({ error: "link_code_required" }, 410));
 
-  // The code proves a Telegram account belongs to this member once the bot receives it.
-  app.post("/telegram/link-code", (c) => {
-    const member = memberFor(db, c.get("actor").userId, c.req.query("org"));
-    if (!member) return notFound(c);
-    return c.json(linkCodesFor(db).issue(member.id));
-  });
+  for (const provider of ["slack", "telegram"] as const) {
+    app.post(`/${provider}/link-code`, (c) => {
+      const member = memberFor(db, c.get("actor").userId, c.req.query("org"));
+      if (!member) return notFound(c);
+      return c.json(linkCodesFor(db).issue(provider, member.id));
+    });
+  }
 
   return app;
 }

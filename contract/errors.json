@@ -40,6 +40,7 @@
   "invalid_scope",
   "invalid_target",
   "last_owner",
+  "link_code_required",
   "member not in org",
   "no live run",
   "no login command",

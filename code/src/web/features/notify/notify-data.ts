@@ -31,8 +31,3 @@ export const webhookAddedSchema: z.ZodType<WebhookAdded> = z.object({
   secret: z.string(),
   note: z.string(),
 });
-
-export const linkCodeSchema: z.ZodType<{ code: string; expiresAt: number }> = z.object({
-  code: z.string(),
-  expiresAt: z.number(),
-});

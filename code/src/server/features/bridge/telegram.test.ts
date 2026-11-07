@@ -14,7 +14,7 @@ import { postMessage, wireChat } from "../chat/api";
 import { listTargets } from "../notify/api";
 import { startBridges } from "./api";
 import { createEcho } from "./inbound";
-import { createLinkCodes } from "./link-codes";
+import { createLinkCodes, linkCodesFor } from "./link-codes";
 import { linkBridge, linkExternalUser, memberOfExternal } from "./repo";
 import { bridgeRoutes } from "./routes";
 import { startTelegramPoll } from "./telegram";
@@ -117,7 +117,7 @@ test("/link with a valid code links the user and stores a notify target, a reuse
   const clock = 1_000_000;
   const codes = createLinkCodes(() => clock);
   stop = startTelegramPoll({ db, home, echo: createEcho(), codes });
-  const { code } = codes.issue(ada.memberId);
+  const { code } = codes.issue("telegram", ada.memberId);
   mock.enqueue(privateChat(55, `/link ${code}`));
   await until(() => mock.sent.length === 1);
   expect(memberOfExternal(db, "telegram", "55")).toBe(ada.memberId);
@@ -131,7 +131,7 @@ test("/link with a valid code links the user and stores a notify target, a reuse
 test("an expired code is refused", async () => {
   let clock = 1_000_000;
   const codes = createLinkCodes(() => clock);
-  const { code, expiresAt } = codes.issue(ada.memberId);
+  const { code, expiresAt } = codes.issue("telegram", ada.memberId);
   expect(expiresAt - clock).toBe(10 * 60_000);
   clock = expiresAt;
   stop = startTelegramPoll({ db, home, echo: createEcho(), codes });
@@ -148,6 +148,47 @@ test("the link-code route issues an 8 char code for the signed-in member", async
   expect(res.status).toBe(200);
   expect(body.code).toMatch(/^[A-Z2-9]{8}$/);
   expect(body.expiresAt).toBeGreaterThan(Date.now());
+});
+
+test("Slack link codes are issued only for a member of the requested org", async () => {
+  const app = withActor(bridgeRoutes(db), { userId: ada.userId });
+  const res = await app.request("/slack/link-code?org=ada", { method: "POST" });
+  const body = (await res.json()) as { code: string; expiresAt: number };
+  expect(res.status).toBe(200);
+  expect(linkCodesFor(db).redeem("telegram", body.code)).toBeNull();
+  expect(linkCodesFor(db).redeem("slack", body.code)).toBe(ada.memberId);
+  expect((await app.request("/slack/link-code?org=other", { method: "POST" })).status).toBe(404);
+});
+
+test("codes are provider-bound and a mismatched redemption does not consume them", () => {
+  const codes = createLinkCodes(() => 1_000_000);
+  const { code } = codes.issue("slack", ada.memberId);
+  expect(codes.redeem("telegram", code)).toBeNull();
+  expect(codes.redeem("slack", code)).toBe(ada.memberId);
+  expect(codes.redeem("slack", code)).toBeNull();
+});
+
+test("a private Telegram sender cannot be replaced by an arbitrary private chat sender", async () => {
+  const codes = createLinkCodes(() => 1_000_000);
+  const { code } = codes.issue("telegram", ada.memberId);
+  stop = startTelegramPoll({ db, home, echo: createEcho(), codes });
+  mock.enqueue({
+    message: { text: `/link ${code}`, chat: { id: 55, type: "private" }, from: { id: 56 } },
+  });
+  await until(() => mock.polls.some((p) => p.offset === 101));
+  expect(memberOfExternal(db, "telegram", "56")).toBeNull();
+});
+
+test("a verified Telegram account already mapped to another member cannot be reassigned", async () => {
+  const bob = seedMember(db, "bob");
+  linkExternalUser(db, "telegram", "55", ada.memberId);
+  const codes = createLinkCodes(() => 1_000_000);
+  const { code } = codes.issue("telegram", bob.memberId);
+  stop = startTelegramPoll({ db, home, echo: createEcho(), codes });
+  mock.enqueue(privateChat(55, `/link ${code}`));
+  await until(() => mock.sent.length === 1);
+  expect(memberOfExternal(db, "telegram", "55")).toBe(ada.memberId);
+  expect(mock.sent[0]?.text).toContain("already linked");
 });
 
 test("polling backs off 1s up to 30s on failures and the token never reaches the log", async () => {

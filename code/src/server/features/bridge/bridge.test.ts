@@ -241,13 +241,9 @@ test("creating a link needs a fresh step-up", async () => {
   expect(await res.json()).toEqual({ error: "step_up_required" });
 });
 
-test("a member links their own Slack id, and relinking replaces it", async () => {
+test("raw external IDs cannot overwrite a member's linked Slack identity", async () => {
   const w = world();
-  const res = await call(api(w, w.ada), "POST", "/users", {
-    kind: "slack",
-    externalUserId: "U42",
-  });
-  expect(res.status).toBe(200);
+  linkExternalUser(w.db, "slack", "U42", w.ada.memberId);
   const owner = (id: string): string | undefined =>
     w.db
       .query<{ member_id: string }, [string]>(
@@ -255,6 +251,11 @@ test("a member links their own Slack id, and relinking replaces it", async () =>
       )
       .get(id)?.member_id;
   expect(owner("U42")).toBe(w.ada.memberId);
-  await call(api(w, w.bob), "POST", "/users", { kind: "slack", externalUserId: "U42" });
-  expect(owner("U42")).toBe(w.bob.memberId);
+  const res = await call(api(w, w.bob), "POST", "/users", {
+    kind: "slack",
+    externalUserId: "U42",
+  });
+  expect(res.status).toBe(410);
+  expect(await res.json()).toEqual({ error: "link_code_required" });
+  expect(owner("U42")).toBe(w.ada.memberId);
 });

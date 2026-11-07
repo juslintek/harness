@@ -15,7 +15,7 @@ export interface SlackMock {
   // Number of upcoming apps.connections.open calls that fail.
   failOpens: { n: number };
   sockets: () => number;
-  push: (payload: unknown, envelopeId?: string) => void;
+  push: (payload: unknown, envelopeId?: string, type?: string) => void;
   drop: () => void;
   stop: () => Promise<void>;
 }
@@ -100,8 +100,8 @@ export function startSlackMock(botToken = "xoxb-test-bot", appToken = "xapp-test
     ...state,
     url: `http://127.0.0.1:${server.port}`,
     sockets: () => live.size,
-    push: (payload, envelopeId = Bun.randomUUIDv7()) => {
-      const text = JSON.stringify({ envelope_id: envelopeId, type: "events_api", payload });
+    push: (payload, envelopeId = Bun.randomUUIDv7(), type = "events_api") => {
+      const text = JSON.stringify({ envelope_id: envelopeId, type, payload });
       for (const ws of live) ws.send(text);
     },
     drop: () => {
