@@ -233,6 +233,37 @@ test("stop cancels a pending retry, logs it and resolves at once", async () => {
   expect(fake.calls).toHaveLength(1);
 });
 
+test("stop does not schedule a retry when an in-flight delivery returns late", async () => {
+  const { db, memberId } = setup();
+  let resolveDelivery!: (result: { ok: false; retry: true; reason: string }) => void;
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => (markStarted = resolve));
+  const pending = new Promise<{ ok: false; retry: true; reason: string }>(
+    (resolve) => (resolveDelivery = resolve),
+  );
+  const slow = createDispatcher(db, {
+    home: "/nonexistent",
+    origin: "https://h.test",
+    adapters: {
+      push: {
+        channel: "push",
+        deliver: async () => {
+          markStarted();
+          return pending;
+        },
+      },
+    },
+    backoffMs: [60_000],
+  });
+  addTarget(db, memberId, "push", push);
+  slow.notify([memberId], note());
+  await started;
+  const stopping = slow.stop();
+  resolveDelivery({ ok: false, retry: true, reason: "503" });
+  await stopping;
+  expect(logs(db)).toEqual([{ status: "failed", attempts: 1, reason: "stopped" }]);
+});
+
 test("notifyMembers reaches the dispatcher of its db, and never throws without one", async () => {
   const { db, memberId } = setup();
   notifyMembers(db, [memberId], note());

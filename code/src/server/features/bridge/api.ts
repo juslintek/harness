@@ -53,7 +53,6 @@ export function startBridges(db: Database, deps: BridgeDeps): () => Promise<void
     ? startTelegramPoll({ db, home: deps.home, echo, codes: linkCodesFor(db) })
     : null;
   return async () => {
-    unsubscribe();
-    await Promise.all([stopSlack?.(), stopTelegram?.()]);
+    await Promise.all([unsubscribe(), stopSlack?.(), stopTelegram?.()]);
   };
 }

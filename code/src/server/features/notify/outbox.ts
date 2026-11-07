@@ -88,6 +88,7 @@ export function createOutbox(deps: OutboxDeps): Outbox {
       const result = await safeDeliver(adapters[target.channel], target, n, origin);
       const wait = backoffMs[attempts - 1];
       if (result.ok || !result.retry || wait === undefined) return { result, attempts };
+      if (stopped) return { result: { ok: false, retry: false, reason: "stopped" }, attempts };
       if (!(await sleep(wait))) {
         return { result: { ok: false, retry: false, reason: "stopped" }, attempts };
       }
