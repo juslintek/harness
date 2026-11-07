@@ -36,18 +36,27 @@ async function send(
   target: Target,
   n: Notification,
   base: string,
+  checkEndpoint: typeof safeEndpoint,
 ): Promise<DeliverResult> {
   const { endpoint = "", p256dh = "", auth = "" } = target.value;
   const keys = decodeKeys(p256dh, auth);
-  const safe = keys ? await safeEndpoint(endpoint) : null;
-  if (!keys || !safe) {
+  if (!keys) {
     return { ok: false, retry: false, gone: true, reason: "invalid push subscription" };
+  }
+  const check = await checkEndpoint(endpoint);
+  if (!check.ok) {
+    return {
+      ok: false,
+      retry: check.retry,
+      ...(!check.retry ? { gone: true } : {}),
+      reason: "invalid push subscription",
+    };
   }
   const subject = base.startsWith("https:") ? base : "mailto:push@localhost";
   const url = `${base}${n.path}`;
   const payload = JSON.stringify({ title: n.title, body: n.body, url, tag: n.tag });
   try {
-    const status = await requestEndpoint(safe, {
+    const status = await requestEndpoint(check.endpoint, {
       method: "POST",
       timeoutMs: TIMEOUT_MS,
       headers: {
@@ -65,6 +74,12 @@ async function send(
   }
 }
 
-export function pushNotifier(env: PushEnv): Notifier {
-  return { channel: "push", deliver: (target, n, base) => send(env, target, n, base) };
+export function pushNotifier(
+  env: PushEnv,
+  checkEndpoint: typeof safeEndpoint = safeEndpoint,
+): Notifier {
+  return {
+    channel: "push",
+    deliver: (target, n, base) => send(env, target, n, base, checkEndpoint),
+  };
 }

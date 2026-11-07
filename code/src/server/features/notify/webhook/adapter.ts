@@ -65,9 +65,9 @@ export function webhookNotifier(home: string, timeoutMs: number = TIMEOUT_MS): N
       const { url, secretName } = target.value;
       const secret = secretName ? getSecret(secretName, home) : undefined;
       if (!url || !secret) return { ok: false, retry: false, reason: "webhook secret missing" };
-      const endpoint = await safeEndpoint(url);
-      if (!endpoint) return { ok: false, retry: false, reason: "webhook url refused" };
-      return post(endpoint, secret, n, base, timeoutMs);
+      const check = await safeEndpoint(url);
+      if (!check.ok) return { ok: false, retry: check.retry, reason: "webhook url refused" };
+      return post(check.endpoint, secret, n, base, timeoutMs);
     },
   };
 }

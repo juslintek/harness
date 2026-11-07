@@ -49,6 +49,8 @@ export interface Endpoint {
   address?: string;
 }
 
+type EndpointCheck = { ok: true; endpoint: Endpoint } | { ok: false; retry: boolean };
+
 interface Request {
   method: string;
   headers: Record<string, string>;
@@ -64,26 +66,35 @@ function testLoopback(url: URL): boolean {
   );
 }
 
-export async function safeEndpoint(raw: string): Promise<Endpoint | null> {
-  if (raw.length > 2048) return null;
+export async function safeEndpoint(
+  raw: string,
+  resolve: typeof lookup = lookup,
+): Promise<EndpointCheck> {
+  if (raw.length > 2048) return { ok: false, retry: false };
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    return null;
+    return { ok: false, retry: false };
   }
-  if (url.username || url.password) return null;
-  if (testLoopback(url)) return { url };
-  if (url.protocol !== "https:") return null;
+  if (url.username || url.password) return { ok: false, retry: false };
+  if (testLoopback(url)) return { ok: true, endpoint: { url } };
+  if (url.protocol !== "https:") return { ok: false, retry: false };
   const hostname = url.hostname.replace(/^\[|\]$/g, "");
-  if (isIP(hostname)) return isBlockedIp(hostname) ? null : { url, address: hostname };
+  if (isIP(hostname)) {
+    return isBlockedIp(hostname)
+      ? { ok: false, retry: false }
+      : { ok: true, endpoint: { url, address: hostname } };
+  }
   try {
-    const addresses = await lookup(hostname, { all: true });
-    if (!addresses.length || addresses.some(({ address }) => isBlockedIp(address))) return null;
+    const addresses = await resolve(hostname, { all: true });
+    if (!addresses.length || addresses.some(({ address }) => isBlockedIp(address))) {
+      return { ok: false, retry: false };
+    }
     const address = addresses[0]?.address;
-    return address ? { url, address } : null;
+    return address ? { ok: true, endpoint: { url, address } } : { ok: false, retry: false };
   } catch {
-    return null;
+    return { ok: false, retry: true };
   }
 }
 
@@ -96,7 +107,7 @@ export function pinnedLookup(address: string): LookupFunction {
 }
 
 export async function endpointProblem(raw: string): Promise<string | null> {
-  return (await safeEndpoint(raw)) ? null : "endpoint is not a public HTTPS address";
+  return (await safeEndpoint(raw)).ok ? null : "endpoint is not a public HTTPS address";
 }
 
 export async function requestEndpoint(endpoint: Endpoint, request: Request): Promise<number> {

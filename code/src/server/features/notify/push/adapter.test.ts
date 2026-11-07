@@ -105,6 +105,16 @@ test("an unreachable endpoint retries, a bad subscription is dropped", async () 
   });
 });
 
+test("a temporary DNS failure retries without dropping the push subscription", async () => {
+  const { target, home } = await setup(201);
+  const notifier = pushNotifier({ home }, async () => ({ ok: false, retry: true }));
+  expect(await notifier.deliver(target, note(), "https://h")).toEqual({
+    ok: false,
+    retry: true,
+    reason: "invalid push subscription",
+  });
+});
+
 test.each([
   "https://127.0.0.1/push",
   "https://10.0.0.5/push",
