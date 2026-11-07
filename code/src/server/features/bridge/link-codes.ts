@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { randomInt } from "node:crypto";
 
 const TTL_MS = 10 * 60_000;
 const MAX_PENDING = 1000;
@@ -16,8 +17,7 @@ const digest = (code: string): string =>
   new Bun.CryptoHasher("sha256").update(code.trim().toUpperCase()).digest("hex");
 
 function randomCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(LENGTH));
-  return Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join("");
+  return Array.from({ length: LENGTH }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
 }
 
 // Memory only: a restart invalidates pending codes, which is fine for a 10 minute window, and
