@@ -98,6 +98,24 @@ test("SMTP AUTH rejection never includes the encoded credentials", async () => {
   );
 });
 
+test("SMTP errors after authentication never include the encoded credentials", async () => {
+  const encoded = Buffer.from(`\0mailer\0${PASSWORD}`).toString("base64");
+  const env = await setup({ rcptReply: `550 refused ${encoded}` });
+  configure(env.db, env.home);
+  const result = await emailNotifier(env).deliver(target, note, "https://h");
+  expect(result).toMatchObject({ ok: false, retry: false });
+  expect(JSON.stringify(result)).not.toContain(encoded);
+});
+
+test("unexpected SMTP AUTH replies are not retryable", async () => {
+  const env = await setup({ authReply: () => "334 continue" });
+  configure(env.db, env.home);
+  expect(await emailNotifier(env).deliver(target, note, "https://h")).toMatchObject({
+    ok: false,
+    retry: false,
+  });
+});
+
 test("a dropped connection is retryable", async () => {
   const env = await setup({ dropInData: true });
   configure(env.db, env.home);

@@ -218,7 +218,10 @@ async function authenticate(link: Link, user: string, password: string): Promise
   link.send(`AUTH PLAIN ${token}\r\n`);
   const reply = await link.reply();
   if (reply.code !== 235) {
-    throw new SmtpError(`SMTP authentication failed (${reply.code})`, reply.code < 500);
+    throw new SmtpError(
+      `SMTP authentication failed (${reply.code})`,
+      reply.code >= 400 && reply.code < 500,
+    );
   }
 }
 
@@ -246,10 +249,14 @@ async function session(
 }
 
 // Never lets the password reach a caller, whatever a server echoes back.
-function scrub(err: unknown, password: string | undefined): SmtpError {
+function scrub(err: unknown, password: string | undefined, user: string | undefined): SmtpError {
   const base = err instanceof SmtpError ? err : new SmtpError("smtp failed", true);
-  if (!password) return base;
-  return new SmtpError(base.message.replaceAll(password, "***"), base.retry);
+  const secrets = [
+    password,
+    user && password ? Buffer.from(`\0${user}\0${password}`, "utf8").toString("base64") : undefined,
+  ].filter((secret): secret is string => secret !== undefined);
+  const message = secrets.reduce((text, secret) => text.replaceAll(secret, "***"), base.message);
+  return message === base.message ? base : new SmtpError(message, base.retry);
 }
 
 export async function sendMail(cfg: SmtpConfig, mail: Mail, opts: SendOpts = {}): Promise<void> {
@@ -265,7 +272,7 @@ export async function sendMail(cfg: SmtpConfig, mail: Mail, opts: SendOpts = {})
     link = await openLink(cfg, opts, opts.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     await session(link, cfg, mail, opts, message);
   } catch (err) {
-    throw scrub(err, opts.password);
+    throw scrub(err, opts.password, cfg.user);
   } finally {
     link?.close();
   }
