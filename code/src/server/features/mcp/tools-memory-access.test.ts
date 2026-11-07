@@ -1,13 +1,11 @@
 import "../../test-support/no-git-env";
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { startMemory } from "../memory/api";
-import { reconcile } from "../memory/reconcile";
-import { vaultDir, writeNoteFileAtomic } from "../memory/vault";
 import { call, type Db, listen, tokenFor, type World, world } from "./test-kit";
 
 let db: Db;
@@ -50,20 +48,21 @@ test("view lists an old nested folder under newer notes, and matches the folder 
   const mem = (args: Record<string, unknown>) =>
     call(server, tokenOf(dev.id, w.a.id), "memory", args);
   await stop();
-  stop = async () => {};
-  const orgDir = join(vaultDir(home), "orgs", w.a.id, "org");
+  const orgDir = join(home, "memory", "orgs", w.a.id, "org");
   mkdirSync(orgDir, { recursive: true, mode: 0o700 });
+  mkdirSync(join(orgDir, "old_dir"), { recursive: true, mode: 0o700 });
+  mkdirSync(join(orgDir, "oldxdir"), { recursive: true, mode: 0o700 });
   const oldTime = Date.now() - 200_000;
-  const writeNote = (disk: string, title: string, updated: number): void => {
+  const writeNote = (file: string, title: string, updated: number): void => {
     const time = JSON.stringify(new Date(updated).toISOString());
-    writeNoteFileAtomic(home, disk, `---\nupdated: ${time}\n---\n\n# ${title}\nx\n`, null);
+    writeFileSync(file, `---\nupdated: ${time}\n---\n\n# ${title}\nx\n`, { mode: 0o600 });
   };
-  writeNote(`orgs/${w.a.id}/org/old_dir/n.md`, "Old", oldTime);
-  writeNote(`orgs/${w.a.id}/org/oldxdir/m.md`, "Other", oldTime);
+  writeNote(join(orgDir, "old_dir/n.md"), "Old", oldTime);
+  writeNote(join(orgDir, "oldxdir/m.md"), "Other", oldTime);
   for (let i = 0; i < 101; i++) {
-    writeNote(`orgs/${w.a.id}/org/new${i}.md`, `New ${i}`, oldTime + (i + 1) * 1_000);
+    writeNote(join(orgDir, `new${i}.md`), `New ${i}`, oldTime + (i + 1) * 1_000);
   }
-  reconcile(db, home);
+  stop = startMemory(db, { home });
   const listed = await mem({ action: "view", path: "/memories/org/old_dir" });
   expect(listed.isError).toBe(false);
   expect(listed.text).toContain("/memories/org/old_dir/n.md");
