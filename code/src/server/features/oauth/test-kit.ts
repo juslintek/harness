@@ -1,5 +1,7 @@
 import { expect } from "bun:test";
+import { createApp } from "../../http";
 import { type ApiKit, bootApi } from "../../test-support/api-kit";
+import { createSoftAuthenticator } from "../../test-support/soft-authenticator";
 
 export const ORIGIN: string = "http://localhost:4100";
 export const RESOURCE: string = `${ORIGIN}/mcp/remote`;
@@ -36,10 +38,15 @@ export interface OauthKit {
   api: ApiKit;
   owner: Awaited<ReturnType<ApiKit["user"]>>;
   org: { id: string; slug: string; owner: { id: string } };
+  authn: ReturnType<typeof createSoftAuthenticator>;
+  restart: () => ReturnType<typeof createApp>;
   // The public endpoints as a client outside the browser calls them: Host only, no cookie.
   post: (path: string, body: unknown, form?: boolean) => Promise<Response>;
   get: (path: string) => Promise<Response>;
   register: (redirectUris?: string[]) => Promise<string>;
+  consentBody: (clientId: string, challenge: string, extra?: Record<string, unknown>) => object;
+  consentOptions: (body: object) => Promise<Response>;
+  consentVerify: (body: object, challengeId: string, response: unknown) => Promise<Response>;
   consent: (
     clientId: string,
     challenge: string,
@@ -66,10 +73,25 @@ function exchangeWith(post: OauthKit["post"]): OauthKit["exchange"] {
     );
 }
 
-export async function bootOauth(): Promise<OauthKit> {
-  const api = bootApi();
-  const owner = await api.user({ stepUp: true });
-  const org = api.org(owner, "acme");
+async function registerTestPasskey(
+  api: ApiKit,
+  owner: Awaited<ReturnType<ApiKit["user"]>>,
+  authn: ReturnType<typeof createSoftAuthenticator>,
+): Promise<void> {
+  const response = await api.call(owner, "POST", "/api/auth/passkeys/options", {});
+  const options = (await response.json()) as Parameters<typeof authn.create>[0] & {
+    challengeId: string;
+  };
+  const credential = await authn.create(options);
+  const verified = await api.call(owner, "POST", "/api/auth/passkeys/verify", {
+    challengeId: options.challengeId,
+    response: credential,
+    name: "OAuth test",
+  });
+  expect(verified.status).toBe(200);
+}
+
+function publicRequests(api: ApiKit): Pick<OauthKit, "post" | "get" | "register"> {
   const headers = { host: "localhost:4100" };
   const post: OauthKit["post"] = (path, body, form = false) =>
     Promise.resolve(
@@ -92,31 +114,80 @@ export async function bootOauth(): Promise<OauthKit> {
     });
     return ((await res.json()) as { client_id: string }).client_id;
   };
-  // Each grant needs its own passkey tap; this stamps a new, strictly later one before a consent.
-  let lastTap = 0;
-  const tap = (): void => {
-    lastTap = Math.max(Date.now(), lastTap + 1);
-    api.db.query("UPDATE sessions SET step_up_at = ?").run(lastTap);
-  };
+  return { post, get, register };
+}
+
+function consentRequests(
+  api: ApiKit,
+  owner: Awaited<ReturnType<ApiKit["user"]>>,
+  org: OauthKit["org"],
+  authn: ReturnType<typeof createSoftAuthenticator>,
+): Pick<OauthKit, "consentBody" | "consentOptions" | "consentVerify" | "consent"> {
+  const consentBody: OauthKit["consentBody"] = (clientId, challenge, extra = {}) => ({
+    client_id: clientId,
+    redirect_uri: REDIRECT,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    resource: RESOURCE,
+    org_id: org.id,
+    granted: ["board", "chat"],
+    state: "xyz",
+    ...extra,
+  });
+  const consentOptions: OauthKit["consentOptions"] = (body) =>
+    api.call(owner, "POST", "/oauth/consent/options", body);
+  const consentVerify: OauthKit["consentVerify"] = (body, challengeId, response) =>
+    api.call(owner, "POST", "/oauth/consent/verify", { ...body, challengeId, response });
   const consent: OauthKit["consent"] = (clientId, challenge, extra = {}, freshTap = true) => {
-    if (freshTap) tap();
-    return api.call(owner, "POST", "/oauth/consent", {
-      client_id: clientId,
-      redirect_uri: REDIRECT,
-      code_challenge: challenge,
-      code_challenge_method: "S256",
-      resource: RESOURCE,
-      org_id: org.id,
-      granted: ["board", "chat"],
-      state: "xyz",
-      ...extra,
-    });
+    const body = consentBody(clientId, challenge, extra);
+    if (!freshTap) return api.call(owner, "POST", "/oauth/consent", body);
+    return (async () => {
+      const optionsResponse = await consentOptions(body);
+      if (!optionsResponse.ok) return optionsResponse;
+      const options = (await optionsResponse.json()) as Parameters<typeof authn.get>[0];
+      const response = await authn.get(options);
+      const id = (options as typeof options & { challengeId: string }).challengeId;
+      const verified = await consentVerify(body, id, response);
+      if (!verified.ok) return verified;
+      return api.call(owner, "POST", "/oauth/consent", body);
+    })();
   };
+  return { consentBody, consentOptions, consentVerify, consent };
+}
+
+export async function bootOauth(): Promise<OauthKit> {
+  const api = bootApi();
+  const owner = await api.user({ stepUp: true });
+  const org = api.org(owner, "acme");
+  const rp = { id: "localhost", name: "Harness", origin: ORIGIN };
+  const restart: OauthKit["restart"] = () =>
+    createApp({
+      db: api.db,
+      home: "/unused",
+      port: 4100,
+      rp,
+      instanceId: "i",
+      version: "1",
+    });
+  const authn = createSoftAuthenticator(rp);
+  await registerTestPasskey(api, owner, authn);
+  const publicApi = publicRequests(api);
+  const consentApi = consentRequests(api, owner, org, authn);
   const authorize: OauthKit["authorize"] = async (clientId, challenge) => {
-    const res = await consent(clientId, challenge);
+    const res = await consentApi.consent(clientId, challenge);
     const redirect = new URL(((await res.json()) as { redirect: string }).redirect);
     return redirect.searchParams.get("code") ?? "";
   };
-  const exchange = exchangeWith(post);
-  return { api, owner, org, post, get, register, consent, authorize, exchange };
+  const exchange = exchangeWith(publicApi.post);
+  return {
+    api,
+    owner,
+    org,
+    authn,
+    restart,
+    ...publicApi,
+    ...consentApi,
+    authorize,
+    exchange,
+  };
 }

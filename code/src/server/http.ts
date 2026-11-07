@@ -180,10 +180,15 @@ function mountOauth(app: Hono, deps: AppDeps): void {
   const { db } = deps;
   const oauth = { db, origin: deps.rp.origin };
   app.route("/", oauthPublicRoutes(oauth));
-  for (const path of ["/oauth/consent", "/oauth/deny"]) {
+  for (const path of [
+    "/oauth/consent",
+    "/oauth/consent/options",
+    "/oauth/consent/verify",
+    "/oauth/deny",
+  ]) {
     app.use(path, mutationOriginGuard(deps.rp.origin), sessionMiddleware(db, deps.rp.origin));
   }
-  app.route("/oauth", consentRoutes(db, deps.rp.origin, Date.now));
+  app.route("/oauth", consentRoutes(db, deps.rp.origin, deps.rp, Date.now));
 }
 
 function mountSessionRoutes(app: Hono, deps: AppDeps): void {

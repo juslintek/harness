@@ -1,9 +1,13 @@
 import { useState } from "preact/hooks";
+import { z } from "zod";
 import { clientInfoSchema, consentResultSchema } from "../../../shared/oauth";
 import { api, useLoad } from "../../api";
 import { ErrorLine } from "../auth/error-line";
 import { me } from "../auth/me";
 import { useAction } from "../auth/use-action";
+import { authenticate, requestChallengeSchema } from "../auth/webauthn";
+
+const verifiedSchema = z.object({ ok: z.literal(true) });
 
 const SCOPE_LABELS: Record<string, string> = {
   board: "Read and change tasks on the board",
@@ -48,6 +52,19 @@ function denyBody(params: URLSearchParams): object {
     redirect_uri: params.get("redirect_uri") ?? "",
     ...optional(params, "state"),
   };
+}
+
+async function approve(body: object): Promise<string> {
+  const options = await api("/oauth/consent/options", requestChallengeSchema, {
+    method: "POST",
+    body,
+  });
+  const response = await authenticate(options);
+  await api("/oauth/consent/verify", verifiedSchema, {
+    method: "POST",
+    body: { ...body, challengeId: options.challengeId, response },
+  });
+  return (await api("/oauth/consent", consentResultSchema, { method: "POST", body })).redirect;
 }
 
 function Choices(props: {
@@ -109,8 +126,11 @@ export function ConsentPage(): preact.JSX.Element {
   const answer = (path: "consent" | "deny"): Promise<void> =>
     action.run(async () => {
       const body = path === "consent" ? approveBody(params, orgId, granted) : denyBody(params);
-      const result = await api(`/oauth/${path}`, consentResultSchema, { method: "POST", body });
-      location.assign(result.redirect);
+      const redirect =
+        path === "consent"
+          ? await approve(body)
+          : (await api("/oauth/deny", consentResultSchema, { method: "POST", body })).redirect;
+      location.assign(redirect);
     });
   if (client.error) {
     return (

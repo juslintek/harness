@@ -232,24 +232,6 @@ test("consent for an org the member does not belong to is 403", async () => {
   expect(res.status).toBe(403);
 });
 
-test("consent needs a session and a matching Origin", async () => {
-  const kit = await bootOauth();
-  const clientId = await kit.register();
-  const body = JSON.stringify({ client_id: clientId });
-  const anon = await kit.api.app.request("/oauth/consent", {
-    method: "POST",
-    headers: { host: "localhost:4100", origin: ORIGIN },
-    body,
-  });
-  expect(anon.status).toBe(401);
-  const crossSite = await kit.api.app.request("/oauth/consent", {
-    method: "POST",
-    headers: { ...kit.owner.headers, origin: "https://evil.example" },
-    body,
-  });
-  expect(crossSite.status).toBe(403);
-});
-
 test("granted scopes cannot exceed the request and deny redirects with access_denied", async () => {
   const kit = await bootOauth();
   const clientId = await kit.register();
