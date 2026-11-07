@@ -1,6 +1,14 @@
 import { expect, test } from "bun:test";
+import {
+  bootOauth,
+  flow,
+  ORIGIN,
+  pkce,
+  REDIRECT,
+  RESOURCE,
+  type Tokens,
+} from "../../test-support/oauth-kit";
 import { verifyAccessToken } from "./api";
-import { bootOauth, flow, ORIGIN, pkce, REDIRECT, RESOURCE, type Tokens } from "./test-kit";
 
 test("metadata documents advertise S256, both grants and the exact endpoints", async () => {
   const { get } = await bootOauth();

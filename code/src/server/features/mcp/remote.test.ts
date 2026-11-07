@@ -2,10 +2,9 @@ import { afterEach, expect, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { ApiKit } from "../../test-support/api-kit";
+import { flow } from "../../test-support/oauth-kit";
 import { createTask } from "../board/api";
 import { listChannels } from "../chat/api";
-import { mintLocalLinkToken } from "../oauth/api";
-import { flow } from "../oauth/test-kit";
 import { createProject, removeMember } from "../orgs/api";
 import { mintRunToken, type TokenScope } from "./api";
 import { REMOTE_TOOLS } from "./tools-remote";
@@ -213,47 +212,6 @@ function post(w: Awaited<ReturnType<typeof world>>, path: string, host: string, 
     headers: { host, ...(auth ? { authorization: `Bearer ${auth}` } : {}) },
   });
 }
-
-test("Desktop tokens only open /mcp/local on a literal loopback Host", async () => {
-  const kit = await boot();
-  const desktop = mintLocalLinkToken(kit.api.db, kit.org.owner.id, kit.org.id);
-  expect(
-    (
-      await kit.api.app.request("/mcp/remote", {
-        method: "POST",
-        headers: { host: "localhost:4100", authorization: `Bearer ${desktop}` },
-      })
-    ).status,
-  ).toBe(401);
-  expect(
-    (
-      await kit.api.app.request("/mcp/local", {
-        method: "POST",
-        headers: { host: "localhost:4100", authorization: `Bearer ${desktop}` },
-      })
-    ).status,
-  ).toBe(403);
-  expect(
-    (
-      await kit.api.app.request("/mcp/local", {
-        method: "POST",
-        headers: { host: "127.0.0.1:4100", authorization: `Bearer ${kit.token}` },
-      })
-    ).status,
-  ).toBe(401);
-  for (const headers of [
-    { "x-forwarded-host": "public.example" },
-    { "x-forwarded-proto": "https" },
-    { forwarded: "host=public.example" },
-    { via: "1.1 public-proxy" },
-  ]) {
-    const res = await kit.api.app.request("/mcp/local", {
-      method: "POST",
-      headers: { host: "127.0.0.1:4100", authorization: `Bearer ${desktop}`, ...headers },
-    });
-    expect(res.status).toBe(403);
-  }
-});
 
 test("401 points at the protected resource metadata, run tokens never open the remote endpoint", async () => {
   const w = await world();

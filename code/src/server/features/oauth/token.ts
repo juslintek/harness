@@ -6,12 +6,12 @@ import {
   consumeCode,
   findToken,
   insertToken,
-  localClientId,
   memberLive,
   newSecret,
   revokeFamily,
   revokeToken,
 } from "./repo";
+import { localClientId } from "./repo-local";
 
 const VERIFIER = /^[A-Za-z0-9\-._~]{43,128}$/;
 

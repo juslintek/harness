@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { bootOauth, type OauthKit, ORIGIN, pkce, REDIRECT } from "./test-kit";
+import { bootOauth, type OauthKit, ORIGIN, pkce, REDIRECT } from "../../test-support/oauth-kit";
 
 async function consentProof(kit: OauthKit, body: object) {
   const response = await kit.consentOptions(body);

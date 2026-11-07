@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
+import { bootOauth, flow } from "../../test-support/oauth-kit";
 import { mintLocalLinkToken, revokeLocalLinkTokens, verifyAccessToken } from "./api";
-import { bootOauth, flow } from "./test-kit";
 
 test("a token whose member left the org stops verifying on the next call", async () => {
   const { kit, tokens } = await flow();

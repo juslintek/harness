@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { Hono } from "hono";
+import { bootOauth, ORIGIN, pkce, REDIRECT } from "../../test-support/oauth-kit";
 import { verifyAccessToken } from "./api";
 import { oauthPublicRoutes } from "./routes";
-import { bootOauth, ORIGIN, pkce, REDIRECT } from "./test-kit";
 
 interface Tokens {
   access_token: string;

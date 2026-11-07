@@ -272,35 +272,3 @@ export function liveAccessToken(db: Database, token: string, now: number): Token
   if (row?.kind !== "access" || row.revokedAt !== null || row.expiresAt <= now) return null;
   return memberLive(db, row.memberId, row.orgId) ? row : null;
 }
-
-const LOCAL_CLIENT_NAME = "Claude Desktop (local)";
-
-export function isLocalClient(db: Database, clientId: string): boolean {
-  return (
-    db
-      .query<{ one: number }, [string, string]>(
-        "SELECT 1 AS one FROM oauth_clients WHERE id = ? AND name = ? AND redirect_uris = '[]'",
-      )
-      .get(clientId, LOCAL_CLIENT_NAME) !== null
-  );
-}
-
-export function localClientId(db: Database, now: number): string {
-  const found = db
-    .query<{ id: string }, [string]>(
-      "SELECT id FROM oauth_clients WHERE name = ? AND redirect_uris = '[]'",
-    )
-    .get(LOCAL_CLIENT_NAME);
-  return found?.id ?? insertClient(db, LOCAL_CLIENT_NAME, [], now);
-}
-
-// Revokes every Desktop-link token of one member, in any org, without creating the client row.
-export function revokeLocalTokens(db: Database, memberId: string, now: number): number {
-  return db
-    .query(
-      `UPDATE oauth_tokens SET revoked_at = ?
-        WHERE member_id = ? AND revoked_at IS NULL
-          AND client_id IN (SELECT id FROM oauth_clients WHERE name = ? AND redirect_uris = '[]')`,
-    )
-    .run(now, memberId, LOCAL_CLIENT_NAME).changes;
-}

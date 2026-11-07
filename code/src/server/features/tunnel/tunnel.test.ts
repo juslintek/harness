@@ -1,62 +1,11 @@
-import { afterEach, expect, spyOn, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { expect, spyOn, test } from "bun:test";
+import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Hono } from "hono";
 import { bootApi } from "../../test-support/api-kit";
 import { withActor } from "../../test-support/app-kit";
-import type { AuthEnv } from "../auth/api";
-import { createTunnel, type Tunnel, tunnelRoutes } from "./api";
-
-// Only these stubs are ever executed: they record argv and print canned output.
-const FAKE_BIN = join(import.meta.dir, "../../test-support/fake-bin");
-const PORT = 4100;
-
-const tunnels: Tunnel[] = [];
-afterEach(async () => {
-  for (const tunnel of tunnels.splice(0)) await tunnel.stop();
-});
-
-function setup(
-  opts: { stepUpAt?: number; env?: Record<string, string>; statusTimeoutMs?: number } = {},
-): {
-  app: Hono<AuthEnv>;
-  home: string;
-  calls: () => string;
-  tunnel: Tunnel;
-} {
-  const home = mkdtempSync(join(tmpdir(), "harness-tunnel-"));
-  const log = join(home, "calls.log");
-  writeFileSync(log, "");
-  const tunnel = createTunnel({
-    home,
-    port: PORT,
-    bin: FAKE_BIN,
-    env: { FAKE_BIN_LOG: log, ...opts.env },
-    ...(opts.statusTimeoutMs === undefined ? {} : { statusTimeoutMs: opts.statusTimeoutMs }),
-    urlTimeoutMs: 5000,
-  });
-  tunnels.push(tunnel);
-  const session = opts.stepUpAt === undefined ? {} : { stepUpAt: opts.stepUpAt };
-  return {
-    app: withActor(tunnelRoutes(tunnel, home), session),
-    home,
-    calls: () => readFileSync(log, "utf8"),
-    tunnel,
-  };
-}
-
-const post = (app: Hono<AuthEnv>, path: string, body: unknown): Promise<Response> =>
-  Promise.resolve(
-    app.request(path, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  );
-
-const tunnelJson = (home: string): unknown =>
-  JSON.parse(readFileSync(join(home, "tunnel.json"), "utf8"));
+import { createTunnel, tunnelRoutes } from "./api";
+import { FAKE_BIN, PORT, post, setup, trackTunnel, tunnelJson } from "./test-kit";
 
 test("GET detects tailscale and cloudflared and lists the exact commands without running them", async () => {
   const { app, calls } = setup();
@@ -188,63 +137,6 @@ test("start funnel with confirmPublic runs tailscale funnel --bg, stop disables 
   );
 });
 
-test("stop preserves a Tailscale mapping whose backend changed", async () => {
-  const { tunnel, calls } = setup({ env: { FAKE_TAILSCALE_BACKEND: "http://127.0.0.1:9999" } });
-  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
-  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
-  expect(calls()).toBe("tailscale serve --bg 4100\ntailscale serve status --json\n");
-  expect(tunnel.running()).toBe("tailscale-serve");
-});
-
-test("stop preserves a Tailscale listener with another configured path", async () => {
-  const { tunnel, calls } = setup({
-    env: {
-      FAKE_TAILSCALE_BACKEND: "http://127.0.0.1:9999",
-      FAKE_TAILSCALE_EXTRA_PATH: "/other",
-    },
-  });
-  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
-  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
-  expect(calls()).toBe("tailscale serve --bg 4100\ntailscale serve status --json\n");
-  expect(tunnel.running()).toBe("tailscale-serve");
-});
-
-test("stop preserves a Tailscale listener on another HTTPS port", async () => {
-  const { tunnel, calls } = setup({ env: { FAKE_TAILSCALE_WEB_KEY: "mac.tail1234.ts.net:8443" } });
-  expect((await tunnel.start("tailscale-funnel")).ok).toBe(true);
-  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
-  expect(calls()).toBe("tailscale funnel --bg 4100\ntailscale funnel status --json\n");
-  expect(tunnel.running()).toBe("tailscale-funnel");
-});
-
-test("stop leaves unrelated Tailscale listeners and paths in place", async () => {
-  const { tunnel, calls } = setup({
-    env: {
-      FAKE_TAILSCALE_EXTRA_PATH: "/other",
-      FAKE_TAILSCALE_EXTRA_WEB_KEY: "mac.tail1234.ts.net:8443",
-    },
-  });
-  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
-  expect(await tunnel.stop()).toMatchObject({ ok: true });
-  expect(calls()).toBe(
-    "tailscale serve --bg 4100\ntailscale serve status --json\ntailscale serve --bg 4100 off\n",
-  );
-});
-
-test("stop refuses a Tailscale listener whose Serve or Funnel mode changed", async () => {
-  const { tunnel, calls } = setup({ env: { FAKE_TAILSCALE_ALLOW_FUNNEL: "1" } });
-  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
-  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
-  expect(calls()).toBe("tailscale serve --bg 4100\ntailscale serve status --json\n");
-});
-
-test("stop refuses an HTTP listener that replaced the HTTPS mapping", async () => {
-  const { tunnel, calls } = setup({ env: { FAKE_TAILSCALE_HTTP_443: "1" } });
-  expect((await tunnel.start("tailscale-serve")).ok).toBe(true);
-  expect(await tunnel.stop()).toMatchObject({ ok: false, status: 409 });
-  expect(calls()).toBe("tailscale serve --bg 4100\ntailscale serve status --json\n");
-});
-
 test("status timeout kills an unresponsive Tailscale process before cleanup", async () => {
   const { tunnel, calls } = setup({
     env: { FAKE_TAILSCALE_HANG_STATUS: "1" },
@@ -324,7 +216,7 @@ test("a cloudflared child is stopped when saving its origin fails", async () => 
     env: { FAKE_BIN_LOG: join(home, "calls.log") },
     urlTimeoutMs: 5000,
   });
-  tunnels.push(tunnel);
+  trackTunnel(tunnel);
   const result = await tunnel.start("cloudflare");
   expect(result).toMatchObject({ ok: false, status: 502 });
   const pid = Number(/pid (\d+)/.exec(calls())?.[1]);

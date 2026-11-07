@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { consentRoutes, grantRoutes } from "./consent";
-import { isLocalClient, liveAccessToken, revokeLocalTokens } from "./repo";
+import { liveAccessToken } from "./repo";
+import { isLocalClient, revokeLocalTokens } from "./repo-local";
 import { oauthPublicRoutes } from "./routes";
 import { mintLocalToken } from "./token";
 

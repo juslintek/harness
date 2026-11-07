@@ -1,7 +1,7 @@
 import { expect } from "bun:test";
-import { createApp } from "../../http";
-import { type ApiKit, bootApi } from "../../test-support/api-kit";
-import { createSoftAuthenticator } from "../../test-support/soft-authenticator";
+import { createApp } from "../http";
+import { type ApiKit, bootApi } from "./api-kit";
+import { createSoftAuthenticator } from "./soft-authenticator";
 
 export const ORIGIN: string = "http://localhost:4100";
 export const RESOURCE: string = `${ORIGIN}/mcp/remote`;
