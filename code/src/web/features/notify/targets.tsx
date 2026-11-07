@@ -1,12 +1,13 @@
 import { CHANNELS, type Channel, type TargetView } from "../../../shared/notify";
 import { api, useLoad } from "../../api";
+import { BridgeLinkCode } from "../../bridge-link-code";
 import { ErrorLine } from "../auth/error-line";
 import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
 import { targetsSchema } from "./notify-data";
 import { CHANNEL_LABELS } from "./notify-logic";
 import { PushSubscribe } from "./push-subscribe";
-import { TelegramLink, ValueForm, WebhookForm } from "./target-forms";
+import { ValueForm, WebhookForm } from "./target-forms";
 
 function AddForm({
   channel,
@@ -16,7 +17,7 @@ function AddForm({
   onAdded: () => void;
 }): preact.JSX.Element {
   if (channel === "push") return <PushSubscribe onChange={onAdded} />;
-  if (channel === "telegram") return <TelegramLink onLinked={onAdded} />;
+  if (channel === "telegram") return <BridgeLinkCode kind="telegram" onLinked={onAdded} />;
   if (channel === "webhook") return <WebhookForm onAdded={onAdded} />;
   if (channel === "email") {
     return (

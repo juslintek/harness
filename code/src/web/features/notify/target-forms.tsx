@@ -1,8 +1,6 @@
 import { useState } from "preact/hooks";
-import { linkCodeSchema } from "../../../shared/bridge";
 import { api } from "../../api";
 import { CopyButton } from "../../copy-button";
-import { fmtTime } from "../../format";
 import { ErrorLine } from "../auth/error-line";
 import { useAction } from "../auth/use-action";
 import { createdSchema, webhookAddedSchema } from "./notify-data";
@@ -121,39 +119,5 @@ export function WebhookForm({ onAdded }: { onAdded: () => void }): preact.JSX.El
         <ErrorLine message={action.error} />
       </form>
     </>
-  );
-}
-
-export function TelegramLink({ onLinked }: { onLinked: () => void }): preact.JSX.Element {
-  const [issued, setIssued] = useState<{ code: string; expiresAt: number } | null>(null);
-  const action = useAction();
-  const request = (): void => {
-    action
-      .run(async () => {
-        setIssued(await api("/api/bridge/telegram/link-code", linkCodeSchema, { method: "POST" }));
-      })
-      .catch((err: unknown) => console.error(err));
-  };
-  return (
-    <div>
-      <button type="button" disabled={action.busy} onClick={request}>
-        Get a Telegram link code
-      </button>
-      <ErrorLine message={action.error} />
-      {issued && (
-        <div class="card" role="status">
-          <p>
-            Send this message to the harness bot in Telegram: <code>/link {issued.code}</code>
-          </p>
-          <p class="muted">
-            The code works once and expires at {fmtTime(issued.expiresAt)}. The chat appears in the
-            list when the bot has received it.
-          </p>
-          <button type="button" onClick={onLinked}>
-            Refresh the list
-          </button>
-        </div>
-      )}
-    </div>
   );
 }

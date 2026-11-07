@@ -1,10 +1,10 @@
 import { useState } from "preact/hooks";
-import { linkCodeSchema } from "../../../shared/bridge";
-import { api } from "../../api";
-import { CopyButton } from "../../copy-button";
-import { fmtTime } from "../../format";
-import { ErrorLine } from "../auth/error-line";
-import { useAction } from "../auth/use-action";
+import { linkCodeSchema } from "../shared/bridge";
+import { api } from "./api";
+import { CopyButton } from "./copy-button";
+import { ErrorLine } from "./features/auth/error-line";
+import { useAction } from "./features/auth/use-action";
+import { fmtTime } from "./format";
 
 export function BridgeLinkCode({
   kind,
@@ -42,6 +42,7 @@ export function BridgeLinkCode({
           </p>
           <CopyButton text={`/link ${issued.code}`} label={`Copy the ${provider} link command`} />
           <p class="muted">The code works once and expires at {fmtTime(issued.expiresAt)}.</p>
+          {kind === "telegram" && <p class="muted">Refresh after the bot receives your message.</p>}
           {onLinked && (
             <button type="button" onClick={onLinked}>
               Refresh the list

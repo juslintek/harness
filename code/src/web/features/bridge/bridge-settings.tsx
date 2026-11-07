@@ -2,10 +2,10 @@ import { useState } from "preact/hooks";
 import { z } from "zod";
 import { type ChannelView, channelListSchema } from "../../../shared/chat";
 import { api, useLoad } from "../../api";
+import { BridgeLinkCode } from "../../bridge-link-code";
 import { ErrorLine } from "../auth/error-line";
 import { ignored } from "../auth/me";
 import { useAction } from "../auth/use-action";
-import { BridgeLinkCode } from "./link-code";
 
 type Kind = "slack" | "telegram";
 
