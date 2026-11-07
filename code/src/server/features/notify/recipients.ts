@@ -18,7 +18,7 @@ export function runOrgId(db: Database, runId: string): string | null {
   return run.member_id === null ? null : (getMember(db, run.member_id)?.orgId ?? null);
 }
 
-export function orgAdmins(db: Database, orgId: string): string[] {
+function orgAdmins(db: Database, orgId: string): string[] {
   return listMembers(db, orgId)
     .filter((m) => m.kind === "human" && (m.role === "owner" || m.role === "admin"))
     .map((m) => m.id);
@@ -26,7 +26,7 @@ export function orgAdmins(db: Database, orgId: string): string[] {
 
 // Notifications are addressed to members and the instance admin is a user. Use their seat in the
 // run's org, else their oldest one, so their own preferences and targets apply.
-function instanceAdminMembers(db: Database, orgId: string): string[] {
+export function instanceAdminMembers(db: Database, orgId: string): string[] {
   const admins = db
     .query<{ id: string }, []>("SELECT id FROM users WHERE instance_admin = 1")
     .all();

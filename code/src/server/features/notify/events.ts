@@ -6,7 +6,7 @@ import { redact } from "../logs/api";
 import { getOrg } from "../orgs/api";
 import { onRunEvent } from "../runtimes/api";
 import type { Dispatcher } from "./dispatcher";
-import { approvalRecipients, chatRecipients, orgAdmins, runOrgId } from "./recipients";
+import { approvalRecipients, chatRecipients, instanceAdminMembers, runOrgId } from "./recipients";
 
 type Send = Dispatcher["notify"];
 
@@ -38,7 +38,7 @@ function onChat(db: Database, send: Send, e: ChatEvent): void {
   const base = {
     orgId: e.channel.orgId,
     body: clip(e.message.body),
-    path: `/#/o/${slug}/chat`,
+    path: `/#/o/${encodeURIComponent(slug)}/chat/${encodeURIComponent(e.channel.id)}`,
     tag: `message:${e.message.id}`,
   };
   send(dm, { ...base, kind: "dm", title: `Message from ${from}` });
@@ -50,7 +50,7 @@ function onRun(db: Database, send: Send, runId: string, kind: string, body?: str
   if (kind !== "run" || !body?.startsWith("blocked")) return;
   const orgId = runOrgId(db, runId);
   if (orgId === null) return;
-  send(orgAdmins(db, orgId), {
+  send(instanceAdminMembers(db, orgId), {
     kind: "run_blocked",
     orgId,
     title: "Run blocked",

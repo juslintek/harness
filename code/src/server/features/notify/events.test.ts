@@ -2,10 +2,12 @@ import type { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { createApp } from "../../http";
 import { seedMember } from "../../test-support/bridge-kit";
-import { listChannels, openDm, postMessage, wireChat } from "../chat/api";
+import { createSession } from "../auth/api";
+import { createGroup, listChannels, openDm, postMessage, wireChat } from "../chat/api";
 import { type ActionRequest, checkAction, decideApproval, listApprovals } from "../guard/api";
-import { addAgentMember, addHumanMember, getMember } from "../orgs/api";
+import { addAgentMember, addHumanMember, getMember, getOrg } from "../orgs/api";
 import { setPolicy } from "../policies/api";
 import { addTarget, startNotify } from "./api";
 import { type FakeNotifier, fakeNotifier } from "./fake-notifier";
@@ -135,6 +137,28 @@ function orgChannel(w: World, memberId: string): string {
   return listChannels(w.db, memberId).find((c) => c.kind === "org")?.id as string;
 }
 
+async function linkedMessages(w: World, channelId: string): Promise<unknown> {
+  const call = w.push.calls[0];
+  expect(call?.n.path).toBe(`/#/o/${getOrg(w.db, w.orgA)?.slug}/chat/${channelId}`);
+  const parts = new URL(call?.n.path as string, "http://localhost:4100").hash.slice(2).split("/");
+  expect(parts[3]).toBe(channelId);
+  const member = getMember(w.db, call?.target.memberId as string);
+  const { token } = createSession(w.db, member?.userId as string, "passkey", null);
+  const app = createApp({
+    db: w.db,
+    home: "/unused",
+    port: 4100,
+    rp: { id: "localhost", name: "Harness", origin: "http://localhost:4100" },
+    instanceId: "i",
+    version: "1",
+  });
+  const response = await app.request(`/api/channels/${parts[3]}/messages`, {
+    headers: { host: "localhost:4100", cookie: `harness_session=${token}` },
+  });
+  expect(response.status).toBe(200);
+  return response.json();
+}
+
 test("a mention notifies the human mentioned, never the author, never an agent", async () => {
   const w = world();
   const channelId = orgChannel(w, w.alice);
@@ -152,8 +176,9 @@ test("a mention notifies the human mentioned, never the author, never an agent",
 
 test("a dm notifies the other human, and nobody when the other side is an agent", async () => {
   const w = world();
-  postMessage(w.db, {
-    channelId: openDm(w.db, w.alice, w.admin).id,
+  const channelId = openDm(w.db, w.alice, w.admin).id;
+  const message = postMessage(w.db, {
+    channelId,
     authorId: w.alice,
     body: "ping",
   });
@@ -165,6 +190,20 @@ test("a dm notifies the other human, and nobody when the other side is an agent"
   await w.stop();
   expect(who(w, "dm")).toEqual([w.admin]);
   expect(w.push.calls).toHaveLength(1);
+  expect(await linkedMessages(w, channelId)).toMatchObject([{ id: message.id, body: "ping" }]);
+});
+
+test("a group mention links its recipient to the channel containing the message", async () => {
+  const w = world();
+  const channel = createGroup(w.db, w.orgA, "Planning", [w.plain], w.alice);
+  const message = postMessage(w.db, {
+    channelId: channel.id,
+    authorId: w.alice,
+    body: `hello @${getMember(w.db, w.plain)?.handle}`,
+  });
+  await w.stop();
+  expect(who(w, "mention")).toEqual([w.plain]);
+  expect(await linkedMessages(w, channel.id)).toMatchObject([{ id: message.id }]);
 });
 
 test("a chat secret crossing the notification body limit is redacted before clipping", async () => {
