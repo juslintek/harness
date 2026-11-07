@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 import { bootOauth, flow } from "../../test-support/oauth-kit";
-import { mintLocalLinkToken, revokeLocalLinkTokens, verifyAccessToken } from "./api";
+import {
+  mintLocalLinkToken,
+  revokeLocalLinkToken,
+  revokeLocalLinkTokens,
+  verifyAccessToken,
+} from "./api";
 
 test("a token whose member left the org stops verifying on the next call", async () => {
   const { kit, tokens } = await flow();
@@ -75,4 +80,15 @@ test("revokeLocalLinkTokens kills the member's desktop tokens and leaves other m
   expect(revokeLocalLinkTokens(kit.api.db, kit.org.owner.id)).toBe(1);
   expect(verifyAccessToken(kit.api.db, mine)).toBeNull();
   expect(verifyAccessToken(kit.api.db, theirs)).not.toBeNull();
+});
+
+test("revoking a stored Desktop token preserves ordinary OAuth and independent grant families", async () => {
+  const { kit, tokens } = await flow();
+  const first = mintLocalLinkToken(kit.api.db, kit.org.owner.id, kit.org.id);
+  const independent = mintLocalLinkToken(kit.api.db, kit.org.owner.id, kit.org.id);
+  expect(revokeLocalLinkToken(kit.api.db, tokens.access_token)).toBe(0);
+  expect(revokeLocalLinkToken(kit.api.db, first)).toBe(1);
+  expect(verifyAccessToken(kit.api.db, first)).toBeNull();
+  expect(verifyAccessToken(kit.api.db, independent)).not.toBeNull();
+  expect(verifyAccessToken(kit.api.db, tokens.access_token)).not.toBeNull();
 });

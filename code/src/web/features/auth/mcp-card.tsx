@@ -3,9 +3,9 @@ import { type GrantView, grantViewSchema } from "../../../shared/oauth";
 import { api, useLoad } from "../../api";
 import { CopyButton } from "../../copy-button";
 import { fmtTime } from "../../format";
-import { ErrorLine } from "../auth/error-line";
-import { ignored } from "../auth/me";
-import { useAction } from "../auth/use-action";
+import { ErrorLine } from "./error-line";
+import { ignored } from "./me";
+import { useAction } from "./use-action";
 
 const grantsSchema: z.ZodType<GrantView[]> = z.array(grantViewSchema);
 

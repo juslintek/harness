@@ -1,9 +1,9 @@
 import type { Database } from "bun:sqlite";
 import { dirname, join } from "node:path";
 import { Hono } from "hono";
-import { deleteSecret, setSecret } from "../agents/api";
+import { deleteSecret, getSecret, setSecret } from "../agents/api";
 import { type AuthEnv, requireStepUp } from "../auth/api";
-import { mintLocalLinkToken, revokeLocalLinkTokens } from "../oauth/api";
+import { mintLocalLinkToken, revokeLocalLinkToken } from "../oauth/api";
 import { getOrgBySlug, listOrgsForUser, type MemberRow, memberForUser } from "../orgs/api";
 import {
   ConfigError,
@@ -19,8 +19,10 @@ const TOKEN_SECRET = "desktop.token";
 
 const STDIO_SCRIPT = join(dirname(import.meta.path), "../../../../scripts/mcp-stdio.ts");
 
-function ownMembers(db: Database, userId: string): MemberRow[] {
-  return listOrgsForUser(db, userId).flatMap((org) => memberForUser(db, org.id, userId) ?? []);
+function clearDesktopToken(db: Database, home: string): void {
+  const token = getSecret(TOKEN_SECRET, home);
+  if (token) revokeLocalLinkToken(db, token);
+  deleteSecret(TOKEN_SECRET, home);
 }
 
 function pickMember(db: Database, userId: string, slug: string | undefined): MemberRow | null {
@@ -46,16 +48,16 @@ export function integrationRoutes(db: Database, home: string, port: number): Hon
       if (error instanceof ConfigError) return c.json({ error: error.message }, 409);
       throw error;
     }
-    // One live token at a time, so a repeated link does not leave older ones valid.
-    revokeLocalLinkTokens(db, member.id);
-    setSecret(TOKEN_SECRET, mintLocalLinkToken(db, member.id, member.orgId), home);
+    clearDesktopToken(db, home);
+    const token = mintLocalLinkToken(db, member.id, member.orgId);
     try {
+      setSecret(TOKEN_SECRET, token, home);
       linkConfig(path, {
         command: process.execPath,
         args: [STDIO_SCRIPT, "--home", home, "--port", String(port)],
       });
     } catch (error) {
-      revokeLocalLinkTokens(db, member.id);
+      revokeLocalLinkToken(db, token);
       deleteSecret(TOKEN_SECRET, home);
       throw error;
     }
@@ -63,10 +65,7 @@ export function integrationRoutes(db: Database, home: string, port: number): Hon
   });
 
   app.delete("/claude-desktop/link", requireStepUp, (c) => {
-    for (const member of ownMembers(db, c.get("actor").userId)) {
-      revokeLocalLinkTokens(db, member.id);
-    }
-    deleteSecret(TOKEN_SECRET, home);
+    clearDesktopToken(db, home);
     const path = desktopConfigPath();
     try {
       unlinkConfig(path);

@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { consentRoutes, grantRoutes } from "./consent";
-import { liveAccessToken } from "./repo";
+import { findToken, liveAccessToken, revokeFamily } from "./repo";
 import { isLocalClient, revokeLocalTokens } from "./repo-local";
 import { oauthPublicRoutes } from "./routes";
 import { mintLocalToken } from "./token";
@@ -60,4 +60,13 @@ export function revokeLocalLinkTokens(
   now: number = Date.now(),
 ): number {
   return revokeLocalTokens(db, memberId, now);
+}
+
+export function revokeLocalLinkToken(
+  db: Database,
+  token: string,
+  now: number = Date.now(),
+): number {
+  const row = findToken(db, token);
+  return row && isLocalClient(db, row.clientId) ? revokeFamily(db, row.family, now) : 0;
 }

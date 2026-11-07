@@ -14,6 +14,7 @@ import {
 } from "./codes";
 import {
   hostGuard,
+  isDirectLoopback,
   mutationOriginGuard,
   originGuard,
   requireInstanceAdmin,
@@ -40,7 +41,7 @@ import {
 } from "./sessions";
 import { countUsers, createUser, findUserByEmail, getUser } from "./users";
 
-export type { AuthEnv } from "./middleware";
+export type { AuthEnv, PeerServer } from "./middleware";
 export type { Rp } from "./passkeys";
 export type { Session, SessionInfo } from "./sessions";
 export type { User } from "./users";
@@ -61,6 +62,7 @@ export {
   hasFreshStepUp,
   hasPasskey,
   hostGuard,
+  isDirectLoopback,
   listSessions,
   loginOptions,
   mutationOriginGuard,

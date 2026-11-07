@@ -8,8 +8,8 @@ import { createApp } from "../../http";
 import { sessionHeaders } from "../../test-support/app-kit";
 import { getSecret } from "../agents/api";
 import { wireChat } from "../chat/api";
-import { verifyAccessToken } from "../oauth/api";
-import { createOrg } from "../orgs/api";
+import { mintLocalLinkToken, verifyAccessToken } from "../oauth/api";
+import { createOrg, memberForUser } from "../orgs/api";
 import { desktopConfigPath } from "./desktop";
 
 const ORIGIN = "http://localhost:4100";
@@ -51,7 +51,7 @@ async function boot(opts: { admin?: boolean; stepUp?: boolean } = {}) {
   });
   const call = (method: string, path = "/api/integrations/claude-desktop/link") =>
     app.request(path, { method, headers: who.headers });
-  return { db, call, org };
+  return { db, app, who, call, org };
 }
 
 const ours = (): { args: string[]; command: string } =>
@@ -176,3 +176,40 @@ test("the config path follows the platform unless overridden", () => {
   expect(desktopConfigPath({}, "linux")).toMatch(/\.config\/Claude\/claude_desktop_config\.json$/);
   expect(desktopConfigPath({ CLAUDE_DESKTOP_CONFIG: "/x/y.json" }, "darwin")).toBe("/x/y.json");
 });
+
+test.each([false, true])(
+  "relink and unlink revoke the stored token across admins: %s",
+  async (otherAdmin) => {
+    const { app, who, call, db, org } = await boot();
+    expect((await call("POST")).status).toBe(200);
+    const first = getSecret("desktop.token", home) as string;
+    const next = otherAdmin
+      ? await sessionHeaders(db, { admin: true, stepUp: true, origin: ORIGIN })
+      : who;
+    const secondOrg = createOrg(db, {
+      name: "second",
+      slug: "second",
+      ownerUserId: next.userId,
+      ownerName: "Second",
+      ownerHandle: "second",
+    });
+    const member = memberForUser(db, secondOrg.id, next.userId);
+    if (!member) throw new Error("missing second member");
+    const independent = mintLocalLinkToken(db, member.id, secondOrg.id);
+    const relink = await app.request("/api/integrations/claude-desktop/link?org=second", {
+      method: "POST",
+      headers: next.headers,
+    });
+    expect(relink.status).toBe(200);
+    const second = getSecret("desktop.token", home) as string;
+    expect(verifyAccessToken(db, first)).toBeNull();
+    expect(verifyAccessToken(db, second)?.orgId).toBe(secondOrg.id);
+    expect(verifyAccessToken(db, independent)).not.toBeNull();
+    // The original admin may have no membership in the linked token's organization.
+    expect((await call("DELETE")).status).toBe(200);
+    expect(verifyAccessToken(db, second)).toBeNull();
+    expect(verifyAccessToken(db, independent)).not.toBeNull();
+    expect(getSecret("desktop.token", home)).toBeUndefined();
+    expect(org.id).not.toBe(secondOrg.id);
+  },
+);

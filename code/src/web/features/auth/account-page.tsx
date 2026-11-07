@@ -5,6 +5,7 @@ import { PrefsGrid } from "../notify/prefs";
 import { Targets } from "../notify/targets";
 import { selectedSlug } from "../orgs/org-switcher";
 import { ErrorLine } from "./error-line";
+import { McpCard } from "./mcp-card";
 import { me } from "./me";
 import { PasskeysList } from "./passkeys-list";
 import { RecoveryCodes } from "./recovery-codes";
@@ -78,6 +79,7 @@ export function AccountPage(): preact.JSX.Element {
           <Targets key={org.slug} org={org.slug} />
         </>
       )}
+      <McpCard />
       <PasskeysList />
       <Recovery />
       <SessionsList />

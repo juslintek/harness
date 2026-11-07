@@ -23,10 +23,14 @@ test("Desktop tokens only open /mcp/local on a literal loopback Host", async () 
   ).toBe(403);
   expect(
     (
-      await kit.api.app.request("/mcp/local", {
-        method: "POST",
-        headers: { host: "127.0.0.1:4100", authorization: `Bearer ${tokens.access_token}` },
-      })
+      await kit.api.app.request(
+        "/mcp/local",
+        {
+          method: "POST",
+          headers: { host: "127.0.0.1:4100", authorization: `Bearer ${tokens.access_token}` },
+        },
+        { server: { requestIP: () => ({ address: "127.0.0.1" }) } },
+      )
     ).status,
   ).toBe(401);
   for (const headers of [
@@ -35,10 +39,14 @@ test("Desktop tokens only open /mcp/local on a literal loopback Host", async () 
     { forwarded: "host=public.example" },
     { via: "1.1 public-proxy" },
   ]) {
-    const res = await kit.api.app.request("/mcp/local", {
-      method: "POST",
-      headers: { host: "127.0.0.1:4100", authorization: `Bearer ${desktop}`, ...headers },
-    });
+    const res = await kit.api.app.request(
+      "/mcp/local",
+      {
+        method: "POST",
+        headers: { host: "127.0.0.1:4100", authorization: `Bearer ${desktop}`, ...headers },
+      },
+      { server: { requestIP: () => ({ address: "127.0.0.1" }) } },
+    );
     expect(res.status).toBe(403);
   }
 });
