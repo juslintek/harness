@@ -27,6 +27,40 @@ interface Granted {
   redirectedState: string | null;
 }
 
+async function consentGrant(
+  w: World,
+  clientId: string,
+  challenge: string,
+  resource: string,
+): Promise<Response | null> {
+  const grant = {
+    client_id: clientId,
+    redirect_uri: REDIRECT,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    resource,
+    org_id: w.orgId,
+    granted: ["board", "chat"],
+    state: "s1",
+  };
+  const optionsRes = await w.inst.client.call("POST", "/oauth/consent/options", {
+    cookie: w.admin.cookie,
+    body: grant,
+  });
+  if (!optionsRes.ok) return null;
+  const options = (await optionsRes.json()) as Parameters<typeof w.inst.authn.get>[0] & {
+    challengeId: string;
+  };
+  const response = await w.inst.authn.get(options);
+  const verified = await w.inst.client.call("POST", "/oauth/consent/verify", {
+    cookie: w.admin.cookie,
+    body: { ...grant, challengeId: options.challengeId, response },
+  });
+  return verified.ok
+    ? w.inst.client.call("POST", "/oauth/consent", { cookie: w.admin.cookie, body: grant })
+    : null;
+}
+
 // Register, authorize, consent with a fresh passkey tap, exchange the code with the PKCE verifier.
 async function oauthToken(w: World): Promise<Granted | null> {
   const { client } = w.inst;
@@ -51,21 +85,8 @@ async function oauthToken(w: World): Promise<Granted | null> {
     authorize.status === 302,
     `authorize hands over to the consent page (${authorize.status})`,
   );
-  await stepUp(w.inst, w.admin.cookie);
-  const consent = await client.call("POST", "/oauth/consent", {
-    cookie: w.admin.cookie,
-    body: {
-      client_id: clientId,
-      redirect_uri: REDIRECT,
-      code_challenge: challenge,
-      code_challenge_method: "S256",
-      resource,
-      org_id: w.orgId,
-      granted: ["board", "chat"],
-      state: "s1",
-    },
-  });
-  if (consent.status !== 200) return null;
+  const consent = await consentGrant(w, clientId, challenge, resource);
+  if (consent?.status !== 200) return null;
   const redirect = new URL(((await consent.json()) as { redirect: string }).redirect);
   const tokenRes = await client.call("POST", "/oauth/token", {
     form: true,

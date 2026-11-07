@@ -1919,6 +1919,34 @@
   },
   {
     "method": "POST",
+    "path": "/oauth/consent/options",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/consent/verify",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
     "path": "/oauth/deny",
     "policy": {
       "admin": false,
