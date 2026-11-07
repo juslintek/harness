@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { z } from "zod";
 import { type Health, healthSchema } from "../shared/health";
@@ -177,6 +178,21 @@ function mountMcp(app: Hono, deps: AppDeps): void {
     deps.db,
     { harnessHome: deps.home, tracking: trackingPort },
     deps.rp.origin,
+  );
+  app.use(
+    "/mcp/remote",
+    cors({
+      origin: "*",
+      allowMethods: ["POST", "OPTIONS"],
+      allowHeaders: [
+        "content-type",
+        "authorization",
+        "mcp-protocol-version",
+        "mcp-session-id",
+        "last-event-id",
+      ],
+      exposeHeaders: ["www-authenticate", "mcp-protocol-version", "mcp-session-id"],
+    }),
   );
   app.all("/mcp/remote", (c) => remote(c.req.raw));
 }
