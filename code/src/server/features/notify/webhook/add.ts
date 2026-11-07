@@ -2,8 +2,8 @@ import type { Database } from "bun:sqlite";
 import type { Context } from "hono";
 import { z } from "zod";
 import { setSecret } from "../../agents/api";
+import { endpointProblem } from "../endpoint/api";
 import { insertTarget } from "../targets-repo";
-import { webhookUrlProblem } from "./ssrf";
 
 export interface WebhookTargetBody {
   channel: "webhook";
@@ -28,7 +28,7 @@ export async function addWebhookTarget(
   memberId: string,
   body: WebhookTargetBody,
 ): Promise<Response> {
-  const problem = await webhookUrlProblem(body.url);
+  const problem = await endpointProblem(body.url);
   if (problem) return c.json({ error: problem }, 400);
   const id = Bun.randomUUIDv7();
   const secretName = `webhook.${id}`;

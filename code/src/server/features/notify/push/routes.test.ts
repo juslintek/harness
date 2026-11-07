@@ -54,12 +54,16 @@ test("subscribe rejects a plain http endpoint, a long one and bad keys", async (
   const rx = newReceiver();
   const keys = { p256dh: rx.p256dh, auth: rx.auth };
   expect((await post(app, { endpoint: "http://example.test/p", keys })).status).toBe(400);
-  expect((await post(app, { endpoint: `https://x.test/${"a".repeat(2100)}`, keys })).status).toBe(
-    400,
-  );
   expect(
-    (await post(app, { endpoint: "https://x.test/p", keys: { p256dh: "AA", auth: rx.auth } }))
-      .status,
+    (await post(app, { endpoint: `https://93.184.216.34/${"a".repeat(2100)}`, keys })).status,
   ).toBe(400);
-  expect((await post(app, { endpoint: "https://x.test/p" })).status).toBe(400);
+  expect(
+    (
+      await post(app, {
+        endpoint: "https://93.184.216.34/p",
+        keys: { p256dh: "AA", auth: rx.auth },
+      })
+    ).status,
+  ).toBe(400);
+  expect((await post(app, { endpoint: "https://93.184.216.34/p" })).status).toBe(400);
 });

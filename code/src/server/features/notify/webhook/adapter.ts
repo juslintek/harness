@@ -1,8 +1,8 @@
 import type { DeliverResult, Notification, Target } from "../../../../shared/notify";
 import { getSecret } from "../../agents/api";
+import { type Endpoint, requestEndpoint, safeEndpoint } from "../endpoint/api";
 import type { Notifier } from "../port";
 import { sign } from "./sign";
-import { webhookUrlProblem } from "./ssrf";
 
 const TIMEOUT_MS = 5000;
 
@@ -27,7 +27,7 @@ function payload(n: Notification, base: string): string {
 }
 
 async function post(
-  url: string,
+  endpoint: Endpoint,
   secret: string,
   n: Notification,
   base: string,
@@ -36,10 +36,9 @@ async function post(
   const body = payload(n, base);
   const timestamp = Math.floor(Date.now() / 1000);
   try {
-    const res = await fetch(url, {
+    const status = await requestEndpoint(endpoint, {
       method: "POST",
-      redirect: "manual",
-      signal: AbortSignal.timeout(timeoutMs),
+      timeoutMs,
       headers: {
         "content-type": "application/json",
         "x-harness-timestamp": String(timestamp),
@@ -48,7 +47,7 @@ async function post(
       },
       body,
     });
-    return classify(res.status);
+    return classify(status);
   } catch (err) {
     // Only the error class is reported: a message can echo the url.
     return {
@@ -66,9 +65,9 @@ export function webhookNotifier(home: string, timeoutMs: number = TIMEOUT_MS): N
       const { url, secretName } = target.value;
       const secret = secretName ? getSecret(secretName, home) : undefined;
       if (!url || !secret) return { ok: false, retry: false, reason: "webhook secret missing" };
-      const problem = await webhookUrlProblem(url);
-      if (problem) return { ok: false, retry: false, reason: `webhook url refused: ${problem}` };
-      return post(url, secret, n, base, timeoutMs);
+      const endpoint = await safeEndpoint(url);
+      if (!endpoint) return { ok: false, retry: false, reason: "webhook url refused" };
+      return post(endpoint, secret, n, base, timeoutMs);
     },
   };
 }

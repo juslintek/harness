@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Notification, Target } from "../../../../shared/notify";
 import { newReceiver, startPushStub } from "../../../test-support/push-stub";
-import { stopStubs } from "../../../test-support/stub-server";
+import { startStub, stopStubs } from "../../../test-support/stub-server";
 import { pushNotifier } from "./adapter";
 
 afterAll(stopStubs);
@@ -103,4 +103,35 @@ test("an unreachable endpoint retries, a bad subscription is dropped", async () 
     ok: false,
     gone: true,
   });
+});
+
+test.each([
+  "https://127.0.0.1/push",
+  "https://10.0.0.5/push",
+  "https://169.254.169.254/latest/meta-data/",
+  "https://[::ffff:127.0.0.1]/push",
+])("private push endpoint %s is refused before a request", async (endpoint) => {
+  const { notifier, stub, target } = await setup(201);
+  const res = await notifier.deliver(
+    { ...target, value: { ...target.value, endpoint } },
+    note(),
+    "https://h.example.test",
+  );
+  expect(res).toMatchObject({ ok: false, retry: false, gone: true });
+  expect(stub.requests).toHaveLength(0);
+});
+
+test("push requests do not follow redirects", async () => {
+  const receiver = await startStub(() => new Response("received"));
+  const redirect = await startStub(
+    () => new Response(null, { status: 302, headers: { location: receiver.url } }),
+  );
+  const { notifier, target } = await setup(201);
+  const res = await notifier.deliver(
+    { ...target, value: { ...target.value, endpoint: `${redirect.url}/push` } },
+    note(),
+    "https://h.example.test",
+  );
+  expect(res).toMatchObject({ ok: false, retry: false });
+  expect(receiver.calls.n).toBe(0);
 });

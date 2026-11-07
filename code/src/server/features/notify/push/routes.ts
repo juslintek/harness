@@ -25,7 +25,7 @@ export function pushRoutes(db: Database, home: string, asCaller: AsCaller): Hono
       const body = await parseBody(c, subscribeBody);
       if (body instanceof Response) return body;
       const { endpoint, keys } = body;
-      if (!allowedEndpoint(endpoint) || !decodeKeys(keys.p256dh, keys.auth)) {
+      if (!(await allowedEndpoint(endpoint)) || !decodeKeys(keys.p256dh, keys.auth)) {
         return c.json({ error: "invalid subscription" }, 400);
       }
       const value = { endpoint, p256dh: keys.p256dh, auth: keys.auth };

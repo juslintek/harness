@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { isBlockedIp, webhookUrlProblem } from "./ssrf";
+import { endpointProblem, isBlockedIp } from "../endpoint/api";
 
 test("loopback, link-local, private and unique-local addresses are blocked", () => {
   for (const ip of [
@@ -32,23 +32,23 @@ test("public addresses pass", () => {
 });
 
 test("literal private urls are refused without a lookup", async () => {
-  expect(await webhookUrlProblem("https://169.254.169.254/")).not.toBeNull();
-  expect(await webhookUrlProblem("https://10.0.0.5/")).not.toBeNull();
-  expect(await webhookUrlProblem("https://[::1]/")).not.toBeNull();
-  expect(await webhookUrlProblem("https://[::ffff:127.0.0.1]/")).not.toBeNull();
-  expect(await webhookUrlProblem("https://2130706433/")).not.toBeNull();
+  expect(await endpointProblem("https://169.254.169.254/")).not.toBeNull();
+  expect(await endpointProblem("https://10.0.0.5/")).not.toBeNull();
+  expect(await endpointProblem("https://[::1]/")).not.toBeNull();
+  expect(await endpointProblem("https://[::ffff:127.0.0.1]/")).not.toBeNull();
+  expect(await endpointProblem("https://2130706433/")).not.toBeNull();
 });
 
 test("only https is accepted, plain http only for localhost under test", async () => {
-  expect(await webhookUrlProblem("http://example.com/")).not.toBeNull();
-  expect(await webhookUrlProblem("ftp://example.com/")).not.toBeNull();
-  expect(await webhookUrlProblem("not a url")).not.toBeNull();
-  expect(await webhookUrlProblem("http://127.0.0.1:9/")).toBeNull();
-  expect(await webhookUrlProblem("http://localhost:9/")).toBeNull();
-  expect(await webhookUrlProblem("http://10.0.0.5/")).not.toBeNull();
-  expect(await webhookUrlProblem("https://user:pw@example.com/")).not.toBeNull();
+  expect(await endpointProblem("http://example.com/")).not.toBeNull();
+  expect(await endpointProblem("ftp://example.com/")).not.toBeNull();
+  expect(await endpointProblem("not a url")).not.toBeNull();
+  expect(await endpointProblem("http://127.0.0.1:9/")).toBeNull();
+  expect(await endpointProblem("http://localhost:9/")).toBeNull();
+  expect(await endpointProblem("http://10.0.0.5/")).not.toBeNull();
+  expect(await endpointProblem("https://user:pw@example.com/")).not.toBeNull();
 });
 
 test("a name that resolves to a loopback address is refused", async () => {
-  expect(await webhookUrlProblem("https://localhost/")).not.toBeNull();
+  expect(await endpointProblem("https://localhost/")).not.toBeNull();
 });

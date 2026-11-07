@@ -1,4 +1,5 @@
 import type { DeliverResult, Notification, Target } from "../../../../shared/notify";
+import { endpointProblem, requestEndpoint, safeEndpoint } from "../endpoint/api";
 import type { Notifier } from "../port";
 import { encryptPayload } from "./encrypt";
 import { vapidHeader } from "./vapid";
@@ -12,16 +13,8 @@ interface PushEnv {
 }
 
 // Push services are https. Plain http is for the local stub in tests only, and only on loopback.
-export function allowedEndpoint(endpoint: string): boolean {
-  if (endpoint.length > 2048) return false;
-  try {
-    const url = new URL(endpoint);
-    if (url.protocol === "https:") return true;
-    const loopback = url.protocol === "http:" && url.hostname === "127.0.0.1";
-    return process.env.NODE_ENV === "test" && loopback;
-  } catch {
-    return false;
-  }
+export async function allowedEndpoint(endpoint: string): Promise<boolean> {
+  return endpoint.length <= 2048 && (await endpointProblem(endpoint)) === null;
 }
 
 export function decodeKeys(p256dh: string, auth: string): { ua: Buffer; auth: Buffer } | null {
@@ -46,15 +39,17 @@ async function send(
 ): Promise<DeliverResult> {
   const { endpoint = "", p256dh = "", auth = "" } = target.value;
   const keys = decodeKeys(p256dh, auth);
-  if (!keys || !allowedEndpoint(endpoint)) {
+  const safe = keys ? await safeEndpoint(endpoint) : null;
+  if (!keys || !safe) {
     return { ok: false, retry: false, gone: true, reason: "invalid push subscription" };
   }
   const subject = base.startsWith("https:") ? base : "mailto:push@localhost";
   const url = `${base}${n.path}`;
   const payload = JSON.stringify({ title: n.title, body: n.body, url, tag: n.tag });
   try {
-    const res = await fetch(endpoint, {
+    const status = await requestEndpoint(safe, {
       method: "POST",
+      timeoutMs: TIMEOUT_MS,
       headers: {
         Authorization: vapidHeader(env.home, endpoint, subject, Date.now()),
         "Content-Encoding": "aes128gcm",
@@ -63,9 +58,8 @@ async function send(
         Urgency: n.kind.startsWith("approval") ? "high" : "normal",
       },
       body: new Uint8Array(encryptPayload(Buffer.from(payload), keys.ua, keys.auth)),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    return fromStatus(res.status);
+    return fromStatus(status);
   } catch {
     return { ok: false, retry: true, reason: "push service unreachable" };
   }
