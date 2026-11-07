@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import { bootApi } from "../../test-support/api-kit";
 import { openDm } from "../chat/api";
+import { approvalView, decideApproval, findApproval } from "../guard/api";
 import { addAgentMember } from "../orgs/api";
+import { onApprovalResolved } from "./approval-wakes";
 
 async function setup() {
   const k = bootApi();
@@ -91,4 +93,47 @@ test("run now on a viewer agent is refused with a 409", async () => {
   const res = await k.call(owner, "POST", `/api/members/${agent.id}/wake`);
   expect(res.status).toBe(409);
   expect(await res.json()).toEqual({ error: "viewer" });
+});
+
+test("HTTP wakeups hide approval commands from members who cannot read the approval", async () => {
+  const { k, owner, a, agent } = await setup();
+  const plain = await k.user();
+  k.join(a.id, plain, "member", "plain");
+  const runId = Bun.randomUUIDv7();
+  const approvalId = Bun.randomUUIDv7();
+  const command = "git push private-origin private-branch";
+  k.db.run(
+    "INSERT INTO runs (id, member_id, agent_id, repo, prompt, state, created_at) VALUES (?, ?, 'fake', '/r', 'p', 'killed', ?)",
+    [runId, agent.id, Date.now()],
+  );
+  k.db.run(
+    "INSERT INTO approvals (id, run_id, action, l1, status, created_at, expires_at) VALUES (?, ?, ?, '{}', 'pending', 1, ?)",
+    [approvalId, runId, JSON.stringify({ command }), Date.now() + 60_000],
+  );
+  expect(decideApproval(k.db, approvalId, "deny", owner.userId)).toBe(true);
+  const approval = findApproval(k.db, approvalId);
+  expect(approval).not.toBeNull();
+  if (!approval) throw new Error("approval missing");
+  expect(onApprovalResolved(k.db, approvalView(approval))).toBe(true);
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: k.app.fetch });
+  try {
+    const base = `http://127.0.0.1:${server.port}`;
+    const denied = await fetch(`${base}/api/approvals/${approvalId}`, { headers: plain.headers });
+    expect(denied.status).toBe(404);
+    const response = await fetch(`${base}/api/orgs/acme/wakeups`, { headers: plain.headers });
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).not.toContain(command);
+    expect(body).not.toContain("private-origin");
+    expect(JSON.parse(body)[0].detail).toEqual({
+      kind: "command",
+      outcome: "denied",
+      approval: approvalId,
+    });
+    const stored = k.db.query<{ detail: string }, []>("SELECT detail FROM wakeups").get();
+    expect(stored?.detail).toContain(command);
+  } finally {
+    await server.stop(true);
+    k.db.close();
+  }
 });
