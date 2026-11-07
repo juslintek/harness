@@ -44,7 +44,7 @@ async function setup(opts: SmtpFakeOpts = {}): Promise<{ db: Database; home: str
   return { db, home };
 }
 
-function configure(db: Database, home: string): void {
+function configure(db: Database, home: string, password = PASSWORD): void {
   saveSmtpConfig(db, {
     host: "127.0.0.1",
     port: fake?.port ?? 0,
@@ -52,7 +52,7 @@ function configure(db: Database, home: string): void {
     user: "mailer",
     from: "harness@example.test",
   });
-  setSecret("smtp.password", PASSWORD, home);
+  setSecret("smtp.password", password, home);
 }
 
 test("deliver sends a [harness] subject and the body with an absolute link", async () => {
@@ -104,6 +104,16 @@ test("SMTP errors after authentication never include the encoded credentials", a
   configure(env.db, env.home);
   const result = await emailNotifier(env).deliver(target, note, "https://h");
   expect(result).toMatchObject({ ok: false, retry: false });
+  expect(JSON.stringify(result)).not.toContain(encoded);
+});
+
+test("SMTP scrubs the encoded credential before overlapping plaintext", async () => {
+  const password = "AG1haWxl";
+  const encoded = Buffer.from(`\0mailer\0${password}`).toString("base64");
+  const env = await setup({ rcptReply: `550 refused ${encoded}` });
+  configure(env.db, env.home, password);
+  const result = await emailNotifier(env).deliver(target, note, "https://h");
+  expect(result).toEqual({ ok: false, retry: false, reason: "server said 550 refused ***" });
   expect(JSON.stringify(result)).not.toContain(encoded);
 });
 

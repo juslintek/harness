@@ -252,8 +252,8 @@ async function session(
 function scrub(err: unknown, password: string | undefined, user: string | undefined): SmtpError {
   const base = err instanceof SmtpError ? err : new SmtpError("smtp failed", true);
   const secrets = [
-    password,
     user && password ? Buffer.from(`\0${user}\0${password}`, "utf8").toString("base64") : undefined,
+    password,
   ].filter((secret): secret is string => secret !== undefined);
   const message = secrets.reduce((text, secret) => text.replaceAll(secret, "***"), base.message);
   return message === base.message ? base : new SmtpError(message, base.retry);
