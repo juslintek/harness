@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { type AgentSpec, getSpec } from "../agents/api";
 import { releaseHeldBy } from "../board/api";
-import { expireApprovals } from "../guard/api";
+import { expireRunApprovals } from "../guard/api";
 import type { NewEvent } from "../logs/api";
 import { onGrantChanged, onMemberDemoted, onMemberRemoved } from "../orgs/api";
 import { listAcpModels } from "./acp-models";
@@ -19,7 +19,13 @@ import {
   waitForRun as wait,
 } from "./manager";
 import { reapRuns } from "./orphans";
-import { getRun as get, listRuns as list, listLiveRuns, type RunRow } from "./runs-repo";
+import {
+  getRun as get,
+  listRuns as list,
+  listLiveRuns,
+  listUnendedRuns,
+  type RunRow,
+} from "./runs-repo";
 import { scratchRepo as scratch } from "./scratch";
 import { sweepScratchCheckouts } from "./scratch-checkout";
 import { defaultBranch as defaultBranchOf } from "./worktree";
@@ -150,8 +156,8 @@ export function shutdownRuns(db: Database, graceMs?: number): Promise<void> {
 }
 
 export function recoverRuns(db: Database): void {
+  for (const run of listUnendedRuns(db)) expireRunApprovals(db, run.id);
   reapRuns(db);
-  expireApprovals(db, Number.MAX_SAFE_INTEGER);
 }
 
 export function sweepStaleScratch(home: string): Promise<void> {

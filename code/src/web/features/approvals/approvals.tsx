@@ -6,17 +6,17 @@ import { errorText } from "../../format";
 
 const listSchema = z.array(approvalViewSchema);
 
-function ApprovalItem({
-  approval,
+export function DecisionButtons({
+  id,
   onDecided,
 }: {
-  approval: ApprovalView;
+  id: string;
   onDecided: () => void;
 }): preact.JSX.Element {
   const [message, setMessage] = useState<string | null>(null);
   const decide = async (decision: "approve" | "deny"): Promise<void> => {
     try {
-      await api(`/api/approvals/${approval.id}`, approvalViewSchema, {
+      await api(`/api/approvals/${id}`, approvalViewSchema, {
         method: "POST",
         body: { decision },
       });
@@ -26,9 +26,7 @@ function ApprovalItem({
     onDecided();
   };
   return (
-    <li class="card">
-      <p class="muted">{approval.reason ?? "The guard needs a decision."}</p>
-      <pre class="command">{approval.command}</pre>
+    <>
       <div class="row">
         <button type="button" onClick={() => decide("approve")}>
           Approve
@@ -42,6 +40,22 @@ function ApprovalItem({
           {message}
         </p>
       )}
+    </>
+  );
+}
+
+function ApprovalItem({
+  approval,
+  onDecided,
+}: {
+  approval: ApprovalView;
+  onDecided: () => void;
+}): preact.JSX.Element {
+  return (
+    <li class="card">
+      <p class="muted">{approval.reason ?? "The guard needs a decision."}</p>
+      <pre class="command">{approval.command}</pre>
+      <DecisionButtons id={approval.id} onDecided={onDecided} />
     </li>
   );
 }

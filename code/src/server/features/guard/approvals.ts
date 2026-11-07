@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { ApprovalView } from "../../../shared/runs";
+import { notifyApproval } from "./approval-notifications";
 
 type ApprovalStatus = "pending" | "approved" | "denied" | "expired";
 
@@ -32,7 +33,18 @@ interface DbApproval {
 type Final = Exclude<ApprovalStatus, "pending">;
 
 // Resolved by decideApproval or by the expiry timer, whichever comes first.
-const waiters = new Map<string, (status: Final) => void>();
+const waiters = new Map<string, { db: Database; settle: (status: Final) => void }>();
+
+function announce(db: Database, id: string): void {
+  const row = getApproval(db, id);
+  if (row) notifyApproval(approvalView(row));
+}
+
+function stopApprovalWaiters(db: Database): void {
+  for (const waiter of waiters.values()) {
+    if (waiter.db === db) waiter.settle("expired");
+  }
+}
 
 export function createApproval(
   db: Database,
@@ -54,7 +66,10 @@ function markExpired(db: Database, id: string, now: number | null): boolean {
     "UPDATE approvals SET status = 'expired' WHERE id = ? AND status = 'pending' AND expires_at <= ?",
     [id, now ?? Number.MAX_SAFE_INTEGER],
   );
-  return res.changes === 1;
+  if (res.changes !== 1) return false;
+  waiters.get(id)?.settle("expired");
+  announce(db, id);
+  return true;
 }
 
 export function awaitApproval(db: Database, id: string, expiresAt: number): Promise<Final> {
@@ -66,7 +81,7 @@ export function awaitApproval(db: Database, id: string, expiresAt: number): Prom
     };
     const timer = setTimeout(
       () => {
-        markExpired(db, id, null);
+        if (markExpired(db, id, null)) return;
         const row = db
           .query<{ status: ApprovalStatus }, [string]>("SELECT status FROM approvals WHERE id = ?")
           .get(id);
@@ -74,7 +89,7 @@ export function awaitApproval(db: Database, id: string, expiresAt: number): Prom
       },
       Math.max(0, expiresAt - Date.now()),
     );
-    waiters.set(id, settle);
+    waiters.set(id, { db, settle });
   });
 }
 
@@ -91,10 +106,11 @@ export function decideApproval(
     [status, by, now, id, now],
   );
   if (res.changes === 1) {
-    waiters.get(id)?.(status);
+    waiters.get(id)?.settle(status);
+    announce(db, id);
     return true;
   }
-  if (markExpired(db, id, now)) waiters.get(id)?.("expired");
+  markExpired(db, id, now);
   return false;
 }
 
@@ -126,22 +142,30 @@ export function listApprovals(db: Database, status?: string): ApprovalRow[] {
 }
 
 export function expireApprovals(db: Database, now: number): number {
-  const res = db.run(
-    "UPDATE approvals SET status = 'expired' WHERE status = 'pending' AND expires_at <= ?",
-    [now],
-  );
-  return res.changes;
+  const ids = db
+    .query<{ id: string }, [number]>(
+      "SELECT id FROM approvals WHERE status = 'pending' AND expires_at <= ?",
+    )
+    .all(now);
+  return ids.filter(({ id }) => markExpired(db, id, now)).length;
 }
 
 // Settles live waiters too, so a killed run does not keep a decide() promise and its timer.
 export function expireRunApprovals(db: Database, runId: string): number {
+  const run = db
+    .query<{ member_id: string | null }, [string]>("SELECT member_id FROM runs WHERE id = ?")
+    .get(runId);
   const ids = db
     .query<{ id: string }, [string]>(
       "SELECT id FROM approvals WHERE run_id = ? AND status = 'pending'",
     )
     .all(runId);
   for (const { id } of ids) {
-    if (markExpired(db, id, null)) waiters.get(id)?.("expired");
+    if (run?.member_id) {
+      waiters.get(id)?.settle("expired");
+    } else {
+      markExpired(db, id, null);
+    }
   }
   return ids.length;
 }
@@ -180,5 +204,19 @@ export function approvalView(row: ApprovalRow): ApprovalView {
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
     decidedAt: row.decidedAt,
+  };
+}
+
+// The run waiter may end before the human's decision window does.
+export function startApprovalExpiry(db: Database): () => void {
+  const sweep = (): void => {
+    expireApprovals(db, Date.now());
+  };
+  sweep();
+  const timer = setInterval(sweep, 1000);
+  timer.unref();
+  return () => {
+    clearInterval(timer);
+    stopApprovalWaiters(db);
   };
 }

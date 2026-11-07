@@ -1,0 +1,41 @@
+#!/bin/sh
+# Stand-in for the real CLI: records argv and prints canned output, never touches a network.
+echo "tailscale $*" >> "${FAKE_BIN_LOG:-/dev/null}"
+if [ -n "$FAKE_TAILSCALE_DELAY_START" ] && [ "$2" = "--bg" ] && [ "$4" != "off" ]; then
+  sleep 0.1
+fi
+if [ -n "$FAKE_TAILSCALE_DELAY_STOP" ] && [ "$4" = "off" ]; then
+  stop_count=$(grep -c ' off$' "$FAKE_BIN_LOG")
+  if [ "$stop_count" -eq 1 ]; then sleep 0.05; else sleep 0.5; fi
+fi
+if [ "$1" = "status" ]; then
+  echo '{"Self":{"DNSName":"mac.tail1234.ts.net."}}'
+fi
+if [ "$2" = "status" ] && [ "$3" = "--json" ]; then
+  if [ -n "$FAKE_TAILSCALE_HANG_STATUS" ]; then
+    trap '' TERM
+    while :; do :; done
+  fi
+  extra_handler=""
+  if [ -n "$FAKE_TAILSCALE_EXTRA_PATH" ]; then
+    extra_handler=",\"${FAKE_TAILSCALE_EXTRA_PATH}\":{\"Proxy\":\"http://127.0.0.1:4100\"}"
+  fi
+  extra_web=""
+  if [ -n "$FAKE_TAILSCALE_EXTRA_WEB_KEY" ]; then
+    extra_web=",\"${FAKE_TAILSCALE_EXTRA_WEB_KEY}\":{\"Handlers\":{\"/\":{\"Proxy\":\"http://127.0.0.1:9999\"}}}"
+  fi
+  allow_funnel=false
+  if [ "$1" = "funnel" ] || [ -n "$FAKE_TAILSCALE_ALLOW_FUNNEL" ]; then
+    allow_funnel=true
+  fi
+  protocol='"HTTPS":true'
+  if [ -n "$FAKE_TAILSCALE_HTTP_443" ]; then
+    protocol='"HTTP":true'
+  fi
+  web_key=${FAKE_TAILSCALE_WEB_KEY:-mac.tail1234.ts.net:443}
+  echo "{\"TCP\":{\"443\":{${protocol}}},\"Web\":{\"${web_key}\":{\"Handlers\":{\"/\":{\"Proxy\":\"${FAKE_TAILSCALE_BACKEND:-http://127.0.0.1:4100}\"}${extra_handler}}}${extra_web}},\"AllowFunnel\":{\"${web_key}\":${allow_funnel}}}"
+fi
+if [ -n "$FAKE_TAILSCALE_FAIL" ]; then
+  echo "fake failure" >&2
+  exit 1
+fi

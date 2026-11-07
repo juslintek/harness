@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { ApprovalView } from "../../../shared/runs";
 import { appendEvent, redact } from "../logs/api";
+import { notifyApproval, onApprovalChange as onChange } from "./approval-notifications";
 import {
   type ApprovalRow,
   awaitApproval,
@@ -10,6 +11,7 @@ import {
   expireRunApprovals as expireRun,
   getApproval,
   listApprovals as list,
+  startApprovalExpiry as startExpiry,
   approvalView as toApprovalView,
 } from "./approvals";
 import { applyAutonomy } from "./autonomy";
@@ -60,11 +62,12 @@ interface GuardRun {
 
 const DEFAULT_APPROVAL_TIMEOUT_MS = 600_000;
 
-const approvalListeners = new Set<(approval: ApprovalView) => void>();
-
 export function onApprovalChange(listener: (approval: ApprovalView) => void): () => void {
-  approvalListeners.add(listener);
-  return () => approvalListeners.delete(listener);
+  return onChange(listener);
+}
+
+export function startApprovalExpiry(db: Database): () => void {
+  return startExpiry(db);
 }
 
 export function approvalView(row: ApprovalRow): ApprovalView {
@@ -73,18 +76,6 @@ export function approvalView(row: ApprovalRow): ApprovalView {
 
 export function findApproval(db: Database, id: string): ApprovalRow | null {
   return getApproval(db, id);
-}
-
-function notifyApproval(db: Database, id: string): void {
-  const row = getApproval(db, id);
-  if (!row) return;
-  for (const listener of approvalListeners) {
-    try {
-      listener(toApprovalView(row));
-    } catch (err) {
-      console.error("approval listener failed", err);
-    }
-  }
 }
 
 export function decideApproval(
@@ -100,9 +91,7 @@ export function managerDecide(
   db: Database,
   input: Parameters<typeof decideAsManager>[1],
 ): ReturnType<typeof decideAsManager> {
-  const result = decideAsManager(db, input);
-  if (result.ok) notifyApproval(db, input.approvalId);
-  return result;
+  return decideAsManager(db, input);
 }
 
 export function decidableApprovals(
@@ -214,9 +203,9 @@ async function askHuman(
     timeoutMs: approvalTimeout(opts),
   });
   opts?.onApprovalPending?.(id);
-  notifyApproval(db, id);
+  const pending = getApproval(db, id);
+  if (pending) notifyApproval(toApprovalView(pending));
   const status = await awaitApproval(db, id, expiresAt);
-  notifyApproval(db, id);
   const approved = status === "approved";
   const reason = approved ? "approved" : status === "denied" ? "denied" : "approval_timeout";
   logLayer(

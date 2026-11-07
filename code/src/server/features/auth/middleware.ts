@@ -22,20 +22,46 @@ export interface AuthEnv {
 }
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-// Agents reach the first two by the loopback address with a run token; health is for local probes.
 export const LOOPBACK_PATHS: ReadonlySet<string> = new Set([
   "/mcp",
+  "/mcp/local",
   "/api/guard/hook",
   "/api/health",
 ]);
+
+export interface PeerServer {
+  requestIP(req: Request): { address: string } | null;
+}
+
+export function isDirectLoopback(req: Request, server?: PeerServer): boolean {
+  const address = server?.requestIP(req)?.address;
+  return (
+    (address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1") &&
+    !Array.from(req.headers.keys()).some(
+      (name) =>
+        name === "forwarded" ||
+        name === "via" ||
+        name === "x-host" ||
+        name === "x-real-ip" ||
+        name.startsWith("x-forwarded-") ||
+        name.startsWith("x-original-") ||
+        name.startsWith("x-proxy-") ||
+        name.startsWith("proxy-"),
+    )
+  );
+}
 
 // Rejects DNS-rebinding: a page on evil.test resolving to 127.0.0.1 still sends its own Host.
 export function hostGuard(origin: string, port: number): MiddlewareHandler {
   const browserHost = new URL(origin).host;
   return async function hostGuard(c, next) {
     const host = c.req.header("host") ?? "";
+    const localMcp = c.req.path === "/mcp/local";
     const loopback = host === `127.0.0.1:${port}` && LOOPBACK_PATHS.has(c.req.path);
     if (host !== browserHost && !loopback) return c.json({ error: "forbidden host" }, 403);
+    if (localMcp && (!loopback || !isDirectLoopback(c.req.raw, c.env?.server))) {
+      return c.json({ error: "forbidden host" }, 403);
+    }
     await next();
   };
 }

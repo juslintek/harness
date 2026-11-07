@@ -18,7 +18,7 @@ export interface TrackingPort {
       taskId: string;
       kind: EstimateKind;
       minutes: number;
-      source: "agent";
+      source: "agent" | "human";
       byMember: string;
       rationale?: string;
     },
@@ -27,19 +27,25 @@ export interface TrackingPort {
   budgetState: (db: Database, memberId: string) => "ok" | "warn" | "paused";
 }
 
+// A remote (OAuth) caller is a human with no run, so runId is null there.
+type ToolIdentity = Omit<RunIdentity, "runId"> & { runId: string | null };
+
 export interface ToolEnv {
   db: Database;
-  identity: RunIdentity;
+  identity: ToolIdentity;
   harnessHome: string;
   tracking: TrackingPort;
 }
 
-export interface ToolCtx {
+export interface MemberCtx {
   harnessHome: string;
   db: Database;
-  runId: string;
   memberId: string;
   orgId: string;
+}
+
+export interface ToolCtx extends MemberCtx {
+  runId: string;
 }
 
 export interface CandidateCtx {
@@ -73,7 +79,7 @@ function register<S extends z.ZodRawShape, C>(
   server: McpServer,
   env: ToolEnv,
   spec: ToolSpec<S>,
-  bind: (identity: RunIdentity) => C | string,
+  bind: (identity: ToolIdentity) => C | string,
   run: (ctx: C, args: z.infer<z.ZodObject<S>>) => unknown,
 ): void {
   server.registerTool(
@@ -102,6 +108,27 @@ function register<S extends z.ZodRawShape, C>(
   );
 }
 
+function memberCtx(env: ToolEnv, identity: ToolIdentity): MemberCtx | string {
+  return identity.memberId === null || identity.orgId === null
+    ? "token has no member"
+    : {
+        db: env.db,
+        harnessHome: env.harnessHome,
+        memberId: identity.memberId,
+        orgId: identity.orgId,
+      };
+}
+
+// Tools that never read the run (board, chat) also serve remote callers, who have none.
+export function defineMemberTool<S extends z.ZodRawShape>(
+  server: McpServer,
+  env: ToolEnv,
+  spec: ToolSpec<S>,
+  run: (ctx: MemberCtx, args: z.infer<z.ZodObject<S>>) => unknown,
+): void {
+  register(server, env, spec, (identity) => memberCtx(env, identity), run);
+}
+
 // Every tool needs a member-bound token with the tool's scope; the member always comes from the
 // token, never from tool input.
 export function defineTool<S extends z.ZodRawShape>(
@@ -110,21 +137,15 @@ export function defineTool<S extends z.ZodRawShape>(
   spec: ToolSpec<S>,
   run: (ctx: ToolCtx, args: z.infer<z.ZodObject<S>>) => unknown,
 ): void {
-  const { db, harnessHome } = env;
   register(
     server,
     env,
     spec,
-    (identity) =>
-      identity.memberId === null || identity.orgId === null
-        ? "token has no member"
-        : {
-            db,
-            harnessHome,
-            runId: identity.runId,
-            memberId: identity.memberId,
-            orgId: identity.orgId,
-          },
+    (identity) => {
+      const base = memberCtx(env, identity);
+      if (typeof base === "string") return base;
+      return identity.runId === null ? "token has no run" : { ...base, runId: identity.runId };
+    },
     run,
   );
 }
@@ -142,7 +163,7 @@ export function defineCandidateTool<S extends z.ZodRawShape>(
     env,
     { ...spec, scope: "interview" },
     (identity) =>
-      identity.candidateId === null || identity.orgId === null
+      identity.candidateId === null || identity.orgId === null || identity.runId === null
         ? "token has no candidate"
         : { db, runId: identity.runId, candidateId: identity.candidateId, orgId: identity.orgId },
     run,

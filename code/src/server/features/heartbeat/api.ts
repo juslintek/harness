@@ -2,12 +2,14 @@ import type { Database } from "bun:sqlite";
 import type { WakeReason, WakeupView } from "../../../shared/heartbeat";
 import { getTask, onTaskChange } from "../board/api";
 import { channelAccess, getChannel, onMessage } from "../chat/api";
+import { onApprovalChange, startApprovalExpiry } from "../guard/api";
 import { triageWake } from "../laya/api";
 import { appendEvent } from "../logs/api";
 import { startRetro } from "../memory/api";
 import { projectAccess } from "../orgs/api";
 import { onProposalChange } from "../policies/api";
 import { isHalted, onRunEvent, type RunDeps } from "../runtimes/api";
+import { onApprovalResolved } from "./approval-wakes";
 import { runPending, sweepEnded } from "./executor";
 import { onPolicyChange } from "./policy-wakes";
 import { endedStartedRuns, failStartedWakes, listWakeups as list } from "./repo";
@@ -49,6 +51,13 @@ function listenForWakes(
         report("policy trigger", err);
       }
     }),
+    onApprovalChange((approval) => {
+      try {
+        if (onApprovalResolved(db, approval)) kick();
+      } catch (err) {
+        report("approval trigger", err);
+      }
+    }),
   ];
 }
 
@@ -79,6 +88,7 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => Promise
   kickers.add(kick);
   const offs = listenForWakes(db, deps.triage ?? triageWake, kick, report);
   offs.push(
+    startApprovalExpiry(db),
     startRetro(db, {
       enqueueWake: (memberId, reason, detail, taskId) => {
         recordWake(db, { memberId, reason, detail, taskId: taskId ?? undefined, causedBy: null });
@@ -151,6 +161,7 @@ export function listWakeups(
 ): WakeupView[] {
   return list(db, orgId, limit).map((w) => {
     const { excerpt: _text, ...detail } = (w.detail ?? {}) as Record<string, unknown>;
+    if (w.reason === "approval_resolved" && detail.kind === "command") delete detail.reason;
     return visibleTask(db, visibleChannel(db, { ...w, detail }, viewerId), viewerId);
   });
 }

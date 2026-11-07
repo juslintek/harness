@@ -5,12 +5,14 @@ import { ensureInstance, lockHome, migrate, openDb } from "./server/db/db";
 import { migrations } from "./server/db/migrations";
 import { firstRunEnrollment } from "./server/features/auth/api";
 import { wireBoard } from "./server/features/board/api";
+import { startBridges } from "./server/features/bridge/api";
 import { startBudgets } from "./server/features/budgets/api";
 import { wireChat } from "./server/features/chat/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
 import { startHiring } from "./server/features/hiring/api";
 import { wireHiring } from "./server/features/hiring/wiring";
 import { startMemory } from "./server/features/memory/api";
+import { emailCodeSender, startNotify } from "./server/features/notify/api";
 import { startRouter } from "./server/features/router/api";
 import {
   recoverRuns,
@@ -19,9 +21,12 @@ import {
   wireRuntimes,
 } from "./server/features/runtimes/api";
 import { startTracking } from "./server/features/tracking/api";
+import { createTunnel } from "./server/features/tunnel/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
-import { createApp, MAX_REQUEST_BODY_BYTES } from "./server/http";
-import { type WsData, websocket, wireRealtime } from "./server/realtime";
+import { consoleEmailCode, MAX_REQUEST_BODY_BYTES } from "./server/http";
+import { createOriginApp } from "./server/origin-app";
+import { closeRealtimeSockets, type WsData, websocket, wireRealtime } from "./server/realtime";
+import { drainStops } from "./server/shutdown";
 import { staticResponse } from "./server/ui-dist";
 import indexHtml from "./web/index.html";
 
@@ -42,7 +47,7 @@ recoverRuns(db);
 await sweepStaleScratch(config.home);
 
 // With HARNESS_PORT=0 the real port is only known after binding, and the origin and run deps derive from it.
-let app: ReturnType<typeof createApp>;
+let app: ReturnType<typeof createOriginApp>;
 const server = Bun.serve<WsData>({
   hostname: config.host,
   port: config.port,
@@ -65,15 +70,27 @@ const server = Bun.serve<WsData>({
 
 const bound =
   config.port === 0 ? loadConfig({ ...process.env, HARNESS_PORT: `${server.port}` }) : config;
-app = createApp({
-  db,
-  home: bound.home,
-  port: bound.port,
-  rp: bound.rp,
-  trustProxy: bound.trustProxy,
-  instanceId,
-  version: "0.0.0",
-});
+const tunnel = createTunnel({ home: bound.home, port: bound.port });
+const currentOrigin = (): string =>
+  (process.env.HARNESS_ORIGIN ? new URL(process.env.HARNESS_ORIGIN).origin : undefined) ??
+  tunnel.origin() ??
+  `http://localhost:${bound.port}`;
+app = createOriginApp(
+  {
+    db,
+    home: bound.home,
+    port: bound.port,
+    rp: bound.rp,
+    trustProxy: bound.trustProxy,
+    // Resolved per request, so saving SMTP settings applies without a restart.
+    deliverEmailCode: (email, code) =>
+      (emailCodeSender(db, bound.home) ?? consoleEmailCode)(email, code),
+    instanceId,
+    version: "0.0.0",
+    tunnel,
+  },
+  currentOrigin,
+);
 startTailers(db, 60000, defaultTailSources(join(config.home, "worktrees")));
 
 wireRealtime(db, server);
@@ -85,12 +102,14 @@ const stopLoops = [
   ...[startRouter, startBudgets, startTracking].map((start) => start(db)),
   startHiring(db, hiring.deps),
   hiring.stop,
+  startNotify(db, { home: config.home, origin: currentOrigin }),
+  startBridges(db, { home: config.home, origin: currentOrigin() }),
 ];
 
 console.log(`harness listening on ${server.url}`);
 
 const firstRun = firstRunEnrollment(db, ENROLLMENT_TTL_MS);
-if (firstRun) console.log(`first-run enrollment: ${bound.rp.origin}/#/enroll/${firstRun}`);
+if (firstRun) console.log(`first-run enrollment: ${currentOrigin()}/#/enroll/${firstRun}`);
 
 // Agent groups are detached, so the terminal's Ctrl-C does not reach them.
 let stopping = false;
@@ -98,17 +117,26 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     if (stopping) return;
     stopping = true;
+    tunnel.beginShutdown();
+    const serverDrain = server.stop();
+    closeRealtimeSockets();
     const drained = stopHeartbeat();
-    for (const stop of stopLoops) stop();
     // The server stops before memory drains so no API write lands after the last commit is flushed;
     // a failed step is logged and the later ones still run.
     const step = (run: () => unknown) =>
       Promise.resolve()
         .then(run)
         .catch((err: unknown) => console.error("shutdown failed", err));
-    step(() => shutdownRuns(db))
+    const loopsDrained = drainStops(stopLoops, (err) => console.error("shutdown failed", err));
+    const stopTunnel = step(async () => {
+      const result = await tunnel.stop();
+      if (!result.ok) throw new Error(result.error);
+    });
+    step(() => serverDrain)
+      .then(() => stopTunnel)
+      .then(() => step(() => shutdownRuns(db)))
       .then(() => step(() => drained))
-      .then(() => step(() => server.stop(true)))
+      .then(() => loopsDrained)
       .then(() => step(stopMemory))
       .finally(() => process.exit(0));
   });

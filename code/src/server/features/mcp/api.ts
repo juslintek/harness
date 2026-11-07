@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { createLocalHandler, createRemoteHandler } from "./remote";
 import { createHandler, type McpDeps } from "./server";
 import {
   mint,
@@ -8,6 +9,7 @@ import {
   type TokenScope,
   verify,
 } from "./tokens";
+import type { RemoteDeps } from "./tools-remote";
 
 export type { McpDeps, TokenScope };
 
@@ -34,4 +36,19 @@ export function mcpHandler(
   port: number,
 ): (req: Request) => Promise<Response> {
   return createHandler(db, deps, port);
+}
+
+export function remoteMcpHandler(
+  db: Database,
+  deps: RemoteDeps,
+  origin: string,
+): (req: Request) => Promise<Response> {
+  return createRemoteHandler(db, deps, origin);
+}
+
+export function localMcpHandler(
+  db: Database,
+  deps: RemoteDeps,
+): (req: Request) => Promise<Response> {
+  return createLocalHandler(db, deps);
 }

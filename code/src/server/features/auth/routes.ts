@@ -87,9 +87,9 @@ function loginRoutes(app: Hono, deps: AuthDeps): void {
     // Not awaited: a slow mailer would otherwise show whether the account exists.
     const deliver = (email: string, code: string): void =>
       queueMicrotask(() => {
-        Promise.resolve(deps.deliverEmailCode(email, code)).catch((err: unknown) =>
-          console.error("email code delivery failed", err),
-        );
+        Promise.resolve()
+          .then(() => deps.deliverEmailCode(email, code))
+          .catch(() => console.error("email code delivery failed"));
       });
     const outcome = requestEmailCode(db, body.email, deliver);
     return outcome === "sent" ? c.json({ ok: true }) : c.json({ error: "too many attempts" }, 429);

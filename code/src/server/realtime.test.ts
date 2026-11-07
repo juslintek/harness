@@ -11,10 +11,40 @@ import {
   gone,
 } from "./features/runtimes/manager-kit";
 import { createApp } from "./http";
-import { wireRealtime } from "./realtime";
+import { closeRealtimeSockets, websocket, wireRealtime } from "./realtime";
 import { listenDeferred, openSocket, sessionHeaders, until } from "./test-support/app-kit";
 
 afterAll(cleanup);
+
+test("shutdown closes tracked WebSockets so the server drain resolves", async () => {
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch: (request, srv) => {
+      srv.upgrade(request, { data: { topic: "runs", sessionId: "s", userId: "u", expiresAt: 0 } });
+      return new Response(null);
+    },
+    websocket,
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${server.port}`);
+  const opened = new Promise<void>((resolve, reject) => {
+    socket.onopen = () => resolve();
+    socket.onerror = () => reject(new Error("WebSocket failed to open"));
+  });
+  const closed = new Promise<CloseEvent>((resolve) => {
+    socket.onclose = resolve;
+  });
+  try {
+    await opened;
+    const drain = server.stop();
+    closeRealtimeSockets();
+    await drain;
+    expect((await closed).code).toBe(1001);
+  } finally {
+    socket.close();
+    await server.stop(true);
+  }
+});
 
 function collect(ws: WebSocket): WsMessage[] {
   const seen: WsMessage[] = [];

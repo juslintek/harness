@@ -1,0 +1,170 @@
+{
+  "notificationSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "body": {
+          "maxLength": 4000,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "approval_requested",
+            "approval_resolved",
+            "mention",
+            "dm",
+            "run_blocked"
+          ],
+          "type": "string"
+        },
+        "orgId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "format": "starts_with",
+          "pattern": "^\\/.*",
+          "type": "string"
+        },
+        "tag": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "orgId",
+        "title",
+        "body",
+        "path",
+        "tag"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "body": {
+          "maxLength": 4000,
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "approval_requested",
+            "approval_resolved",
+            "mention",
+            "dm",
+            "run_blocked"
+          ],
+          "type": "string"
+        },
+        "orgId": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "path": {
+          "format": "starts_with",
+          "pattern": "^\\/.*",
+          "type": "string"
+        },
+        "tag": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "orgId",
+        "title",
+        "body",
+        "path",
+        "tag"
+      ],
+      "type": "object"
+    }
+  },
+  "prefSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "channel": {
+          "enum": [
+            "push",
+            "email",
+            "slack",
+            "telegram",
+            "webhook"
+          ],
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "approval_requested",
+            "approval_resolved",
+            "mention",
+            "dm",
+            "run_blocked"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel",
+        "kind",
+        "enabled"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "channel": {
+          "enum": [
+            "push",
+            "email",
+            "slack",
+            "telegram",
+            "webhook"
+          ],
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "approval_requested",
+            "approval_resolved",
+            "mention",
+            "dm",
+            "run_blocked"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel",
+        "kind",
+        "enabled"
+      ],
+      "type": "object"
+    }
+  }
+}

@@ -3,11 +3,11 @@ import { z } from "zod";
 import type { ChannelView } from "../../../shared/chat";
 import { listChannels, listMessages, markRead, openDm, postMessage } from "../chat/api";
 import { findMemberByHandle, getMember, roleAtLeast } from "../orgs/api";
-import { defineTool, fail, handleOf, type ToolCtx, type ToolEnv } from "./tools-kit";
+import { defineMemberTool, fail, handleOf, type MemberCtx, type ToolEnv } from "./tools-kit";
 
 const body = z.string().min(1).max(8000);
 
-function channel(ctx: ToolCtx, ref: string): ChannelView {
+function channel(ctx: MemberCtx, ref: string): ChannelView {
   const all = listChannels(ctx.db, ctx.memberId);
   const byId = all.find((c) => c.id === ref);
   if (byId) return byId;
@@ -17,7 +17,7 @@ function channel(ctx: ToolCtx, ref: string): ChannelView {
 }
 
 function registerReads(server: McpServer, env: ToolEnv): void {
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -34,7 +34,7 @@ function registerReads(server: McpServer, env: ToolEnv): void {
         unread: c.unread,
       })),
   );
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -66,7 +66,7 @@ function registerReads(server: McpServer, env: ToolEnv): void {
 }
 
 function registerWrites(server: McpServer, env: ToolEnv): void {
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {
@@ -85,7 +85,7 @@ function registerWrites(server: McpServer, env: ToolEnv): void {
       return { id: m.id };
     },
   );
-  defineTool(
+  defineMemberTool(
     server,
     env,
     {

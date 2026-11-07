@@ -1,7 +1,11 @@
 import { useState } from "preact/hooks";
 import { z } from "zod";
 import { api } from "../../api";
+import { PrefsGrid } from "../notify/prefs";
+import { Targets } from "../notify/targets";
+import { selectedSlug } from "../orgs/org-switcher";
 import { ErrorLine } from "./error-line";
+import { McpCard } from "./mcp-card";
 import { me } from "./me";
 import { PasskeysList } from "./passkeys-list";
 import { RecoveryCodes } from "./recovery-codes";
@@ -43,6 +47,12 @@ function Recovery(): preact.JSX.Element {
 
 export function AccountPage(): preact.JSX.Element {
   const user = me.value?.user;
+  const orgs = me.value?.orgs ?? [];
+  const [orgSlug, setOrgSlug] = useState<string | null>(null);
+  const org =
+    orgs.find((item) => item.slug === orgSlug) ??
+    orgs.find((item) => item.slug === selectedSlug()) ??
+    orgs[0];
   return (
     <div class="auth-page">
       <h2>Account</h2>
@@ -51,6 +61,25 @@ export function AccountPage(): preact.JSX.Element {
           {user.name} <span class="muted">{user.email}</span>
         </p>
       )}
+      {org && (
+        <>
+          {orgs.length > 1 && (
+            <label>
+              Notification organization
+              <select value={org.slug} onChange={(e) => setOrgSlug(e.currentTarget.value)}>
+                {orgs.map((item) => (
+                  <option key={item.id} value={item.slug}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <PrefsGrid key={org.slug} org={org.slug} />
+          <Targets key={org.slug} org={org.slug} />
+        </>
+      )}
+      <McpCard />
       <PasskeysList />
       <Recovery />
       <SessionsList />

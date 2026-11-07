@@ -48,6 +48,15 @@ function mayDecide(
 
 export function approvalRoutes(db: Database, harnessHome: string): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
+  // Registered before the org-admin gate on purpose: a caller who may not decide this approval gets
+  // the same 404 as for an unknown id, so deep links do not reveal which ids exist.
+  app.get("/:id", (c) => {
+    const approval = findApproval(db, c.req.param("id"));
+    if (!approval || !mayDecide(db, c.get("actor"), approval)) {
+      return c.json({ error: "unknown approval" }, 404);
+    }
+    return c.json(approvalView(approval));
+  });
   // Someone who administers no org has nothing to do here, whatever they send.
   app.use("*", async function requireOrgAdmin(c, next) {
     const actor = c.get("actor");

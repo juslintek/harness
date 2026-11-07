@@ -1,12 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { defineTool, type ToolCtx, type ToolEnv } from "./tools-kit";
+import { defineTool, type MemberCtx, type ToolEnv } from "./tools-kit";
 import { task } from "./tools-refs";
 
 // task_create's own number is the creator's plan, so it is stored as a planner estimate as well.
 export function recordPlannerEstimate(
   env: ToolEnv,
-  ctx: ToolCtx,
+  ctx: MemberCtx,
   taskId: string,
   minutes: number | undefined,
 ): void {

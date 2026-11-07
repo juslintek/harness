@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { z } from "zod";
 import { type Health, healthSchema } from "../shared/health";
@@ -17,16 +18,26 @@ import {
 import { publicAuthRoutes } from "./features/auth/routes";
 import { accountRoutes } from "./features/auth/routes-account";
 import { boardRoutes } from "./features/board/routes";
+import { bridgeRoutes } from "./features/bridge/api";
 import { budgetGate } from "./features/budgets/api";
 import { budgetsRoutes } from "./features/budgets/routes";
 import { chatRoutes } from "./features/chat/routes";
 import { approvalRoutes } from "./features/guard/routes";
 import { wakeRoutes } from "./features/heartbeat/routes";
 import { hiringRoutes } from "./features/hiring/routes";
+import { integrationRoutes } from "./features/integrations/api";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { logsRoutes } from "./features/logs/routes";
-import { type McpDeps, mcpHandler, verifyRunToken } from "./features/mcp/api";
+import {
+  localMcpHandler,
+  type McpDeps,
+  mcpHandler,
+  remoteMcpHandler,
+  verifyRunToken,
+} from "./features/mcp/api";
 import { memoryRoutes } from "./features/memory/routes";
+import { notifyRoutes } from "./features/notify/api";
+import { consentRoutes, grantRoutes, oauthPublicRoutes } from "./features/oauth/api";
 import { orgRoutes } from "./features/orgs/routes";
 import { harnessPolicyRoutes, policiesRoutes } from "./features/policies/routes";
 import { profilesRoutes } from "./features/profiles/routes";
@@ -35,6 +46,7 @@ import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
 import { haltRoutes, runRoutes } from "./features/runtimes/routes";
 import { addEstimate, taskTrackingFields } from "./features/tracking/api";
 import { trackingRoutes } from "./features/tracking/routes";
+import { createTunnel, type Tunnel, tunnelRoutes } from "./features/tunnel/api";
 import { probeQuota, recordQuota, usageSummary } from "./features/usage/api";
 import { wsUpgrade } from "./realtime";
 import { parseBody } from "./route-kit";
@@ -52,6 +64,8 @@ export interface AppDeps {
   instanceId: string;
   version: string;
   runDeps?: RunDeps;
+  // Owned by the caller when it must stop the child process on shutdown.
+  tunnel?: Tunnel;
 }
 
 const hookBody = z.object({
@@ -102,12 +116,19 @@ function adminRoutes(deps: AppDeps): Hono {
     "/quota",
     "/router",
     "/policies",
+    "/tunnel",
+    "/integrations",
   ]) {
     app.use(`${path}/*`, requireInstanceAdmin);
   }
   app.route("/runs", runRoutes(db, runDeps));
   app.route("/approvals", approvalRoutes(db, deps.home));
   app.route("/halt", haltRoutes(db));
+  app.route(
+    "/tunnel",
+    tunnelRoutes(deps.tunnel ?? createTunnel({ home: deps.home, port: deps.port }), deps.home),
+  );
+  app.route("/integrations", integrationRoutes(db, deps.home, deps.port));
   app.route("/router", routerRoutes(db));
   app.route("/policies", harnessPolicyRoutes(db));
   app.route("/agents", agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }));
@@ -149,6 +170,49 @@ function mountMcp(app: Hono, deps: AppDeps): void {
     deps.port,
   );
   app.all("/mcp", (c) => mcp(c.req.raw));
+  const local = localMcpHandler(deps.db, { harnessHome: deps.home, tracking: trackingPort });
+  app.all("/mcp/local", (c) => local(c.req.raw));
+  // Not in LOOPBACK_PATHS: only the configured origin host reaches it. Bearer-token calls carry no
+  // cookie, and mutationOriginGuard only covers /api.
+  const remote = remoteMcpHandler(
+    deps.db,
+    { harnessHome: deps.home, tracking: trackingPort },
+    deps.rp.origin,
+  );
+  app.use(
+    "/mcp/remote",
+    cors({
+      origin: "*",
+      allowMethods: ["POST", "OPTIONS"],
+      allowHeaders: [
+        "content-type",
+        "authorization",
+        "mcp-protocol-version",
+        "mcp-session-id",
+        "last-event-id",
+      ],
+      exposeHeaders: ["www-authenticate", "mcp-protocol-version", "mcp-session-id"],
+    }),
+  );
+  app.all("/mcp/remote", (c) => remote(c.req.raw));
+}
+
+// Public: discovery, registration and the token endpoint carry no cookie, so no Origin check
+// applies, but hostGuard above still does. Consent and deny act on the signed-in human's cookie,
+// so they get the same Origin check as /api mutations.
+function mountOauth(app: Hono, deps: AppDeps): void {
+  const { db } = deps;
+  const oauth = { db, origin: deps.rp.origin };
+  app.route("/", oauthPublicRoutes(oauth));
+  for (const path of [
+    "/oauth/consent",
+    "/oauth/consent/options",
+    "/oauth/consent/verify",
+    "/oauth/deny",
+  ]) {
+    app.use(path, mutationOriginGuard(deps.rp.origin), sessionMiddleware(db, deps.rp.origin));
+  }
+  app.route("/oauth", consentRoutes(db, deps.rp.origin, deps.rp, Date.now));
 }
 
 function mountSessionRoutes(app: Hono, deps: AppDeps): void {
@@ -166,7 +230,17 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", trackingRoutes(db));
   app.route("/api", memoryRoutes(db, deps.home));
   app.route("/api", logsRoutes(db));
+  app.route("/api/notify", notifyRoutes(db, deps.home));
+  app.route("/api/bridge", bridgeRoutes(db));
+  app.route("/api/oauth", grantRoutes(db, Date.now));
   app.route("/api", adminRoutes(deps));
+}
+
+export function consoleEmailCode(email: string, code: string): void {
+  if (process.env.NODE_ENV !== "development") {
+    throw new Error("email code delivery unavailable: SMTP is not configured");
+  }
+  console.log(`email code for ${email}: ${code}`);
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -188,6 +262,7 @@ export function createApp(deps: AppDeps): Hono {
   });
   mountMcp(app, deps);
   app.route("/api/guard/hook", guardHook(db));
+  mountOauth(app, deps);
   app.use("/api/*", mutationOriginGuard(deps.rp.origin));
   app.route(
     "/api/auth",
@@ -195,8 +270,7 @@ export function createApp(deps: AppDeps): Hono {
       db,
       rp: deps.rp,
       ...(deps.trustProxy === undefined ? {} : { trustProxy: deps.trustProxy }),
-      deliverEmailCode:
-        deps.deliverEmailCode ?? ((email, code) => console.log(`email code for ${email}: ${code}`)),
+      deliverEmailCode: deps.deliverEmailCode ?? consoleEmailCode,
     }),
   );
   mountSessionRoutes(app, deps);

@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { layaHealth } from "../laya/api";
 import { bunRunner, type DiscoveredAgent, discoverAgents, type Runner } from "./discover";
 import { getKey, type Provider } from "./keys";
+import * as secrets from "./secrets-file";
 import { type AgentSpec, agentSpecs } from "./specs";
 
 export type { Provider } from "./keys";
@@ -9,6 +10,22 @@ export type { AgentSpec } from "./specs";
 
 export function getApiKey(provider: Provider): Promise<string | null> {
   return getKey(provider);
+}
+
+export function getSecret(name: string, home?: string): string | undefined {
+  return secrets.getSecret(name, home);
+}
+
+export function setSecret(name: string, value: string, home?: string): void {
+  secrets.setSecret(name, value, home);
+}
+
+export function deleteSecret(name: string, home?: string): void {
+  secrets.deleteSecret(name, home);
+}
+
+export function secretNames(home?: string): string[] {
+  return secrets.secretNames(home);
 }
 
 export interface AgentView {

@@ -1,0 +1,127 @@
+/* Styles for the notification and bridge settings screens. */
+
+.approval-page {
+  max-width: 40rem;
+  margin-inline: auto;
+}
+.approval-page .command {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.approval-page .row button {
+  flex: 1 1 8rem;
+  min-height: 2.75rem;
+}
+
+.consent {
+  max-width: 32rem;
+}
+
+.consent fieldset {
+  margin: 1rem 0;
+}
+
+.consent-scope {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  font-weight: 400;
+}
+
+/* Notification preferences and targets. */
+.grid-scroll {
+  overflow-x: auto;
+}
+
+.prefs-grid {
+  font-size: 0.9rem;
+}
+
+.prefs-grid th,
+.prefs-grid td {
+  padding-inline: 0.25rem;
+  text-align: center;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.prefs-grid th[scope="row"] {
+  text-align: left;
+  font-weight: 400;
+  white-space: normal;
+  min-width: 6.5rem;
+}
+
+.prefs-grid input[type="checkbox"] {
+  width: 1.5rem;
+  height: 1.5rem;
+  cursor: pointer;
+}
+
+.target-row {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.target-label {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.secret-once {
+  border-color: var(--error);
+}
+
+.push-box button,
+.tunnel-start button {
+  min-height: 2.75rem;
+  margin: 0.25rem 0.5rem 0.25rem 0;
+}
+
+/* Integrations. */
+.integrations {
+  max-width: 48rem;
+}
+
+.integrations code {
+  overflow-wrap: anywhere;
+}
+
+.integrations fieldset {
+  margin: 0.75rem 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.warn-box {
+  align-items: flex-start;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--error);
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.warn-box input {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.2rem;
+}
+
+.desktop-path code {
+  word-break: break-all;
+}
+
+.integrations input[type="radio"] {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+}

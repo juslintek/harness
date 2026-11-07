@@ -1,0 +1,277 @@
+import { join } from "node:path";
+import type { Subprocess } from "bun";
+import { z } from "zod";
+import { type Provider, readTunnelConfig, writeTunnelConfig } from "./config";
+import { type Detected, detectProviders } from "./detect";
+
+interface Command {
+  bin: "tailscale" | "cloudflared";
+  args: string[];
+}
+
+export interface TunnelDeps {
+  home: string;
+  port: number;
+  // A directory holding the binaries; tests point it at stubs, otherwise PATH is used.
+  bin?: string;
+  env?: Record<string, string>;
+  statusTimeoutMs?: number;
+  urlTimeoutMs?: number;
+}
+
+type StartResult =
+  | { ok: true; origin: string | null }
+  | { ok: false; status: 409 | 502; error: string };
+
+export interface Tunnel {
+  detect: () => Promise<Detected>;
+  commands: (provider: Provider) => { start: string; stop: string | null };
+  running: () => Provider | null;
+  origin: () => string | null;
+  busy: () => boolean;
+  start: (provider: Provider) => Promise<StartResult>;
+  stop: () => Promise<StartResult>;
+  beginShutdown: () => void;
+}
+
+const DEFAULT_URL_TIMEOUT_MS = 20000;
+const QUICK_TUNNEL_URL = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
+
+export const isPublic = (provider: Provider): boolean => provider !== "tailscale-serve";
+
+function startCommand(provider: Provider, port: number): Command {
+  if (provider === "cloudflare") {
+    return { bin: "cloudflared", args: ["tunnel", "--url", `http://127.0.0.1:${port}`] };
+  }
+  const verb = provider === "tailscale-serve" ? "serve" : "funnel";
+  return { bin: "tailscale", args: [verb, "--bg", String(port)] };
+}
+
+// A quick tunnel is a child process that dies with its stop; tailscale keeps its config in the daemon.
+function stopCommand(provider: Provider, port: number): Command | null {
+  if (provider === "cloudflare") return null;
+  return {
+    bin: "tailscale",
+    args: [provider === "tailscale-serve" ? "serve" : "funnel", "--bg", String(port), "off"],
+  };
+}
+
+const render = (command: Command): string => [command.bin, ...command.args].join(" ");
+
+type Child = Subprocess<"ignore", "pipe", "pipe">;
+type RunningTunnel = { provider: Provider; child: Child | null; origin: string | null };
+type TunnelState = {
+  current: RunningTunnel | null;
+  starting: Promise<StartResult> | null;
+  stopping: Promise<StartResult> | null;
+  shuttingDown: boolean;
+};
+
+function spawn(deps: TunnelDeps, command: Command, timeout?: number): Child {
+  const path = deps.bin ? join(deps.bin, command.bin) : command.bin;
+  return Bun.spawn([path, ...command.args], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, ...deps.env },
+    ...(timeout === undefined ? {} : { killSignal: "SIGKILL" }),
+    ...(timeout === undefined ? {} : { timeout }),
+  });
+}
+
+async function runToEnd(deps: TunnelDeps, command: Command): Promise<StartResult> {
+  try {
+    const child = spawn(deps, command);
+    const [stderr, code] = await Promise.all([new Response(child.stderr).text(), child.exited]);
+    if (code === 0) return { ok: true, origin: null };
+    return {
+      ok: false,
+      status: 502,
+      error: `${command.bin} exited ${code}: ${stderr.trim().slice(0, 300)}`,
+    };
+  } catch {
+    return { ok: false, status: 502, error: `${command.bin} could not be run` };
+  }
+}
+
+const tailscaleStatusSchema = z
+  .object({
+    AllowFunnel: z.record(z.string(), z.boolean()).optional(),
+    TCP: z.record(z.string(), z.object({ HTTPS: z.boolean().optional() }).passthrough()).optional(),
+    Web: z.record(
+      z.string(),
+      z
+        .object({
+          Handlers: z.record(z.string(), z.object({ Proxy: z.string().optional() }).passthrough()),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+async function ownsTailscaleMapping(
+  deps: TunnelDeps,
+  provider: "tailscale-serve" | "tailscale-funnel",
+): Promise<boolean> {
+  try {
+    const command = provider === "tailscale-serve" ? "serve" : "funnel";
+    const child = spawn(
+      deps,
+      { bin: "tailscale", args: [command, "status", "--json"] },
+      deps.statusTimeoutMs ?? 5000,
+    );
+    const [stdout, code] = await Promise.all([new Response(child.stdout).text(), child.exited]);
+    if (code !== 0) return false;
+    const status = tailscaleStatusSchema.safeParse(JSON.parse(stdout));
+    if (!status.success) return false;
+    const target = `http://127.0.0.1:${deps.port}`;
+    const entries = Object.entries(status.data.Web).filter(([key]) => key.endsWith(":443"));
+    const [entry] = entries;
+    if (entries.length !== 1 || !entry) return false;
+    const [listener, server] = entry;
+    const funnel = status.data.AllowFunnel?.[listener] === true;
+    const https = status.data.TCP?.["443"]?.HTTPS === true;
+    return (
+      server.Handlers["/"]?.Proxy === target &&
+      https &&
+      funnel === (provider === "tailscale-funnel")
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Reads stderr until the URL shows up, then keeps draining so a chatty child never blocks on a full pipe.
+async function quickTunnelUrl(child: Child, timeoutMs: number): Promise<string | null> {
+  const reader = child.stderr.getReader();
+  const decoder = new TextDecoder();
+  const deadline = Date.now() + timeoutMs;
+  let seen = "";
+  while (Date.now() < deadline) {
+    const chunk = await Promise.race([
+      reader.read(),
+      Bun.sleep(deadline - Date.now()).then(() => null),
+    ]);
+    if (!chunk || chunk.done) break;
+    seen += decoder.decode(chunk.value, { stream: true });
+    const url = QUICK_TUNNEL_URL.exec(seen)?.[0];
+    if (url) {
+      void (async () => {
+        while (!(await reader.read()).done);
+      })().catch(() => undefined);
+      return url;
+    }
+  }
+  return null;
+}
+
+export function createTunnel(deps: TunnelDeps): Tunnel {
+  const state: TunnelState = { current: null, starting: null, stopping: null, shuttingDown: false };
+  return {
+    detect: () => detectProviders(deps.bin, deps.env),
+    commands: (provider) => {
+      const stop = stopCommand(provider, deps.port);
+      return { start: render(startCommand(provider, deps.port)), stop: stop && render(stop) };
+    },
+    running: () => state.current?.provider ?? null,
+    origin: () => state.current?.origin ?? null,
+    busy: () => Boolean(state.current || state.starting || state.stopping || state.shuttingDown),
+    start: (provider) => startTunnel(deps, state, provider),
+    stop: () => stopTunnel(deps, state),
+    beginShutdown: () => {
+      state.shuttingDown = true;
+    },
+  };
+}
+
+function startTunnel(
+  deps: TunnelDeps,
+  state: TunnelState,
+  provider: Provider,
+): Promise<StartResult> {
+  if (state.shuttingDown || state.current || state.starting || state.stopping)
+    return Promise.resolve({ ok: false, status: 409, error: "a tunnel is already running" });
+  const starting = runStart(deps, state, provider);
+  state.starting = starting;
+  return starting.finally(() => {
+    if (state.starting === starting) state.starting = null;
+  });
+}
+
+async function runStart(
+  deps: TunnelDeps,
+  state: TunnelState,
+  provider: Provider,
+): Promise<StartResult> {
+  if (provider === "cloudflare") return startCloudflare(deps, state);
+  const config = readTunnelConfig(deps.home);
+  const origin = config?.provider === provider ? (config.origin ?? null) : null;
+  const result = await runToEnd(deps, startCommand(provider, deps.port));
+  if (result.ok) {
+    state.current = { provider, child: null, origin };
+  }
+  return result;
+}
+
+async function startCloudflare(deps: TunnelDeps, state: TunnelState): Promise<StartResult> {
+  let child: Child;
+  try {
+    child = spawn(deps, startCommand("cloudflare", deps.port));
+  } catch {
+    return { ok: false, status: 502, error: "cloudflared could not be run" };
+  }
+  let origin: string | null;
+  try {
+    origin = await quickTunnelUrl(child, deps.urlTimeoutMs ?? DEFAULT_URL_TIMEOUT_MS);
+  } catch {
+    child.kill();
+    await child.exited;
+    return { ok: false, status: 502, error: "cloudflared could not provide a tunnel url" };
+  }
+  if (!origin) {
+    child.kill();
+    await child.exited;
+    return { ok: false, status: 502, error: "cloudflared gave no tunnel url" };
+  }
+  try {
+    writeTunnelConfig(deps.home, { provider: "cloudflare", origin });
+  } catch {
+    child.kill();
+    await child.exited;
+    return { ok: false, status: 502, error: "cloudflared tunnel could not be saved" };
+  }
+  state.current = { provider: "cloudflare", child, origin };
+  void child.exited.then(() => {
+    if (state.current?.child === child) state.current = null;
+  });
+  return { ok: true, origin };
+}
+
+function stopTunnel(deps: TunnelDeps, state: TunnelState): Promise<StartResult> {
+  if (state.stopping) return state.stopping;
+  const stopping = runStopTunnel(deps, state);
+  state.stopping = stopping;
+  return stopping.finally(() => {
+    if (state.stopping === stopping) state.stopping = null;
+  });
+}
+
+async function runStopTunnel(deps: TunnelDeps, state: TunnelState): Promise<StartResult> {
+  await state.starting;
+  const running = state.current;
+  if (!running) return { ok: true, origin: null };
+  if (running.child) {
+    running.child.kill();
+    await running.child.exited;
+  }
+  if (
+    (running.provider === "tailscale-serve" || running.provider === "tailscale-funnel") &&
+    !(await ownsTailscaleMapping(deps, running.provider))
+  ) {
+    return { ok: false, status: 409, error: "Tailscale mapping changed or could not be verified" };
+  }
+  const command = stopCommand(running.provider, deps.port);
+  const result = command ? await runToEnd(deps, command) : { ok: true as const, origin: null };
+  if (result.ok && state.current === running) state.current = null;
+  return result;
+}
