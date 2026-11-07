@@ -1,10 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { type ApiKit, bootApi } from "../../test-support/api-kit";
+import type { ApiKit } from "../../test-support/api-kit";
 import { createTask } from "../board/api";
 import { listChannels } from "../chat/api";
 import { mintLocalLinkToken } from "../oauth/api";
+import { flow } from "../oauth/test-kit";
 import { createProject, removeMember } from "../orgs/api";
 import { mintRunToken, type TokenScope } from "./api";
 import { REMOTE_TOOLS } from "./tools-remote";
@@ -54,12 +55,12 @@ interface Boot {
   api: ApiKit;
   owner: Awaited<ReturnType<ApiKit["user"]>>;
   org: { id: string; owner: { id: string } };
+  token: string;
 }
 
 async function boot(): Promise<Boot> {
-  const api = bootApi();
-  const owner = await api.user({ stepUp: true });
-  return { api, owner, org: api.org(owner, "acme") };
+  const { kit, tokens } = await flow();
+  return { api: kit.api, owner: kit.owner, org: kit.org, token: tokens.access_token };
 }
 
 // Org A is the token's org. The same human also holds a member in org B, which is the case a
@@ -79,8 +80,12 @@ async function world(scopes: TokenScope[] = ["board", "chat"]) {
   const channelA = listChannels(db, owner)[0];
   const channelB = listChannels(db, memberB.id)[0];
   if (!channelA || !channelB) throw new Error("no channels");
-  const token = mintLocalLinkToken(db, owner, kit.org.id);
-  db.query("UPDATE oauth_tokens SET scopes = ?").run(scopes.join(" "));
+  const token = kit.token;
+  db.query("UPDATE oauth_tokens SET scopes = ? WHERE member_id = ? AND org_id = ?").run(
+    scopes.join(" "),
+    owner,
+    kit.org.id,
+  );
   return { kit, db, server, token, owner, taskA, taskB, channelA, channelB, projectB, orgB };
 }
 
@@ -112,13 +117,24 @@ test("board and chat calls work for the granted org and are attributed to the hu
     body: "hello from claude.ai",
   });
   expect(posted.isError).toBe(false);
-  const created = await call(w.server, w.token, "task_create", { project: "web", title: "new" });
+  const created = await call(w.server, w.token, "task_create", {
+    project: "web",
+    title: "new",
+    estimateMinutes: 45,
+  });
   expect(created.isError).toBe(false);
+  expect(
+    w.db
+      .query<{ source: string; by_member: string }, []>(
+        "SELECT source, by_member FROM task_estimates WHERE task_id = (SELECT id FROM tasks WHERE title = 'new')",
+      )
+      .get(),
+  ).toEqual({ source: "human", by_member: w.owner });
   const rows = w.db
-    .query<{ n: number }, []>(
-      "SELECT COUNT(*) AS n FROM events WHERE source = 'remote_mcp' AND run_id IS NULL AND agent = 'own-acme'",
+    .query<{ n: number }, [string]>(
+      "SELECT COUNT(*) AS n FROM events WHERE source = 'remote_mcp' AND run_id IS NULL AND agent = ?",
     )
-    .get();
+    .get(w.owner);
   expect(rows?.n).toBe(3);
 });
 
@@ -197,6 +213,47 @@ function post(w: Awaited<ReturnType<typeof world>>, path: string, host: string, 
     headers: { host, ...(auth ? { authorization: `Bearer ${auth}` } : {}) },
   });
 }
+
+test("Desktop tokens only open /mcp/local on a literal loopback Host", async () => {
+  const kit = await boot();
+  const desktop = mintLocalLinkToken(kit.api.db, kit.org.owner.id, kit.org.id);
+  expect(
+    (
+      await kit.api.app.request("/mcp/remote", {
+        method: "POST",
+        headers: { host: "localhost:4100", authorization: `Bearer ${desktop}` },
+      })
+    ).status,
+  ).toBe(401);
+  expect(
+    (
+      await kit.api.app.request("/mcp/local", {
+        method: "POST",
+        headers: { host: "localhost:4100", authorization: `Bearer ${desktop}` },
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await kit.api.app.request("/mcp/local", {
+        method: "POST",
+        headers: { host: "127.0.0.1:4100", authorization: `Bearer ${kit.token}` },
+      })
+    ).status,
+  ).toBe(401);
+  for (const headers of [
+    { "x-forwarded-host": "public.example" },
+    { "x-forwarded-proto": "https" },
+    { forwarded: "host=public.example" },
+    { via: "1.1 public-proxy" },
+  ]) {
+    const res = await kit.api.app.request("/mcp/local", {
+      method: "POST",
+      headers: { host: "127.0.0.1:4100", authorization: `Bearer ${desktop}`, ...headers },
+    });
+    expect(res.status).toBe(403);
+  }
+});
 
 test("401 points at the protected resource metadata, run tokens never open the remote endpoint", async () => {
   const w = await world();

@@ -18,7 +18,7 @@ export interface TrackingPort {
       taskId: string;
       kind: EstimateKind;
       minutes: number;
-      source: "agent";
+      source: "agent" | "human";
       byMember: string;
       rationale?: string;
     },

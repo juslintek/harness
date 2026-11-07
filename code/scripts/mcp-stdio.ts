@@ -10,7 +10,6 @@ import {
   type CallToolResult,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { loadConfig } from "../src/server/config";
 import { getSecret } from "../src/server/features/agents/api";
 
 // Claude Desktop starts this as a stdio MCP server. It forwards tools/list and tools/call to the
@@ -27,11 +26,19 @@ function homeArg(argv: string[]): string {
   return home ?? fail("usage: mcp-stdio.ts --home <harness home>");
 }
 
-function connectTarget(home: string): { url: URL; token: string } {
+function portArg(argv: string[]): number {
+  const at = argv.indexOf("--port");
+  const port = Number(at === -1 ? undefined : argv[at + 1]);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    fail("usage: mcp-stdio.ts --home <harness home> --port <instance port>");
+  }
+  return port;
+}
+
+function connectTarget(home: string, port: number): { url: URL; token: string } {
   const token = getSecret("desktop.token", home);
   if (!token) fail("not linked: no desktop token in secrets.json. Link again from Harness.");
-  const config = loadConfig({ ...process.env, HARNESS_HOME: home });
-  return { url: new URL("/mcp/remote", config.rp.origin), token };
+  return { url: new URL(`http://127.0.0.1:${port}/mcp/local`), token };
 }
 
 function unauthorized(error: unknown): boolean {
@@ -39,7 +46,8 @@ function unauthorized(error: unknown): boolean {
 }
 
 async function main(): Promise<void> {
-  const { url, token } = connectTarget(homeArg(process.argv.slice(2)));
+  const argv = process.argv.slice(2);
+  const { url, token } = connectTarget(homeArg(argv), portArg(argv));
   const upstream = new Client({ name: "harness-stdio-proxy", version: "1" });
   let ready: Promise<void> | undefined;
   // Connected on first use, so Claude Desktop's startup handshake never waits on the network.

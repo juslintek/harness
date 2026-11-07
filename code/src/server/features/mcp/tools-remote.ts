@@ -3,7 +3,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listChannels } from "../chat/api";
 import { appendEvent } from "../logs/api";
 import { type AccessIdentity, verifyAccessToken } from "../oauth/api";
-import { getMember } from "../orgs/api";
 import { registerBoardTools } from "./tools-board";
 import { registerChatTools } from "./tools-chat";
 import type { MemberCtx, ToolEnv, TrackingPort } from "./tools-kit";
@@ -12,7 +11,7 @@ import { project, task, visibleProjects } from "./tools-refs";
 type RemoteScope = "board" | "chat";
 
 // What a human collaborator in a chat app needs. Everything else the shared board and chat modules
-// register (checkout, release, update, depend, dm) stays disabled, and no other tool module is
+// register (checkout, release, update, depend, dm) is omitted, and no other tool module is
 // registered at all.
 export const REMOTE_TOOLS: Readonly<Record<string, RemoteScope>> = {
   board_list: "board",
@@ -89,7 +88,7 @@ function attribute(db: Database, memberId: string, name: string): void {
   appendEvent(db, {
     kind: "tool_call",
     toolName: name,
-    agent: getMember(db, memberId)?.handle ?? memberId,
+    agent: memberId,
     source: "remote_mcp",
   });
 }
@@ -102,14 +101,13 @@ function gate(server: McpServer, db: Database, token: string, who: AccessIdentit
       if (prop !== "registerTool") return Reflect.get(target, prop, target);
       return (name: string, config: never, cb: (...a: unknown[]) => unknown) => {
         const needed = REMOTE_TOOLS[name];
-        const tool = target.registerTool(name, config, (async (...a: unknown[]) => {
+        if (!needed || !who.scopes.includes(needed)) return;
+        target.registerTool(name, config, (async (...a: unknown[]) => {
           const refusal = callRefusal(db, token, who, name, a[0], home);
           if (refusal) return refuse(refusal);
           attribute(db, who.memberId, name);
           return cb(...a);
         }) as never);
-        if (!needed || !who.scopes.includes(needed)) tool.disable();
-        return tool;
       };
     },
   });
@@ -127,7 +125,11 @@ export function buildRemoteServer(
   const env: ToolEnv = {
     db,
     harnessHome: deps.harnessHome,
-    tracking: deps.tracking,
+    tracking: {
+      ...deps.tracking,
+      addEstimate: (db, estimate) =>
+        deps.tracking.addEstimate(db, { ...estimate, source: "human" }),
+    },
     identity: {
       runId: null,
       scopes,

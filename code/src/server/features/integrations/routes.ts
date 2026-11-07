@@ -28,7 +28,7 @@ function pickMember(db: Database, userId: string, slug: string | undefined): Mem
   return org ? memberForUser(db, org.id, userId) : null;
 }
 
-export function integrationRoutes(db: Database, home: string): Hono<AuthEnv> {
+export function integrationRoutes(db: Database, home: string, port: number): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
 
   app.get("/claude-desktop", (c) => {
@@ -50,7 +50,10 @@ export function integrationRoutes(db: Database, home: string): Hono<AuthEnv> {
     revokeLocalLinkTokens(db, member.id);
     setSecret(TOKEN_SECRET, mintLocalLinkToken(db, member.id, member.orgId), home);
     try {
-      linkConfig(path, { command: process.execPath, args: [STDIO_SCRIPT, "--home", home] });
+      linkConfig(path, {
+        command: process.execPath,
+        args: [STDIO_SCRIPT, "--home", home, "--port", String(port)],
+      });
     } catch (error) {
       revokeLocalLinkTokens(db, member.id);
       deleteSecret(TOKEN_SECRET, home);

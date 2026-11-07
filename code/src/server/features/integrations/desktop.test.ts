@@ -67,7 +67,7 @@ test("a missing config file is created with only the harness entry", async () =>
   expect(ours().command).toBe(process.execPath);
   expect(ours().args[0]).toMatch(/scripts\/mcp-stdio\.ts$/);
   expect(existsSync(ours().args[0] as string)).toBe(true);
-  expect(ours().args.slice(1)).toEqual(["--home", home]);
+  expect(ours().args.slice(1)).toEqual(["--home", home, "--port", "4100"]);
   expect(existsSync(`${config}.harness-backup`)).toBe(false);
 });
 

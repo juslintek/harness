@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { consentRoutes, grantRoutes } from "./consent";
-import { liveAccessToken, revokeLocalTokens } from "./repo";
+import { isLocalClient, liveAccessToken, revokeLocalTokens } from "./repo";
 import { oauthPublicRoutes } from "./routes";
 import { mintLocalToken } from "./token";
 
@@ -24,6 +24,24 @@ export function verifyAccessToken(
   return row
     ? { memberId: row.memberId, orgId: row.orgId, scopes: row.scopes, clientId: row.clientId }
     : null;
+}
+
+export function verifyRemoteAccessToken(
+  db: Database,
+  token: string,
+  now: number = Date.now(),
+): AccessIdentity | null {
+  const who = verifyAccessToken(db, token, now);
+  return who && !isLocalClient(db, who.clientId) ? who : null;
+}
+
+export function verifyLocalLinkToken(
+  db: Database,
+  token: string,
+  now: number = Date.now(),
+): AccessIdentity | null {
+  const who = verifyAccessToken(db, token, now);
+  return who && isLocalClient(db, who.clientId) ? who : null;
 }
 
 export function mintLocalLinkToken(

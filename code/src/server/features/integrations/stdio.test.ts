@@ -62,12 +62,12 @@ async function setup() {
   return { home, port: listener.port };
 }
 
-test("the stdio proxy lists the remote tools through /mcp/remote", async () => {
+test("the stdio proxy uses its saved loopback port despite a public configured origin", async () => {
   const { home, port } = await setup();
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [SCRIPT, "--home", home],
-    env: { PATH: process.env.PATH ?? "", HARNESS_PORT: String(port) },
+    args: [SCRIPT, "--home", home, "--port", String(port)],
+    env: { PATH: process.env.PATH ?? "", HARNESS_ORIGIN: "https://public.example" },
   });
   const client = new Client({ name: "desktop", version: "0" });
   cleanups.push(() => client.close());

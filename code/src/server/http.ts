@@ -27,7 +27,13 @@ import { hiringRoutes } from "./features/hiring/routes";
 import { integrationRoutes } from "./features/integrations/api";
 import { appendEvent, searchEvents } from "./features/logs/api";
 import { logsRoutes } from "./features/logs/routes";
-import { type McpDeps, mcpHandler, remoteMcpHandler, verifyRunToken } from "./features/mcp/api";
+import {
+  localMcpHandler,
+  type McpDeps,
+  mcpHandler,
+  remoteMcpHandler,
+  verifyRunToken,
+} from "./features/mcp/api";
 import { memoryRoutes } from "./features/memory/routes";
 import { notifyRoutes } from "./features/notify/api";
 import { consentRoutes, grantRoutes, oauthPublicRoutes } from "./features/oauth/api";
@@ -121,7 +127,7 @@ function adminRoutes(deps: AppDeps): Hono {
     "/tunnel",
     tunnelRoutes(deps.tunnel ?? createTunnel({ home: deps.home, port: deps.port }), deps.home),
   );
-  app.route("/integrations", integrationRoutes(db, deps.home));
+  app.route("/integrations", integrationRoutes(db, deps.home, deps.port));
   app.route("/router", routerRoutes(db));
   app.route("/policies", harnessPolicyRoutes(db));
   app.route("/agents", agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }));
@@ -163,6 +169,8 @@ function mountMcp(app: Hono, deps: AppDeps): void {
     deps.port,
   );
   app.all("/mcp", (c) => mcp(c.req.raw));
+  const local = localMcpHandler(deps.db, { harnessHome: deps.home, tracking: trackingPort });
+  app.all("/mcp/local", (c) => local(c.req.raw));
   // Not in LOOPBACK_PATHS: only the configured origin host reaches it. Bearer-token calls carry no
   // cookie, and mutationOriginGuard only covers /api.
   const remote = remoteMcpHandler(

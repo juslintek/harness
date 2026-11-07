@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { createRemoteHandler } from "./remote";
+import { createLocalHandler, createRemoteHandler } from "./remote";
 import { createHandler, type McpDeps } from "./server";
 import {
   mint,
@@ -44,4 +44,11 @@ export function remoteMcpHandler(
   origin: string,
 ): (req: Request) => Promise<Response> {
   return createRemoteHandler(db, deps, origin);
+}
+
+export function localMcpHandler(
+  db: Database,
+  deps: RemoteDeps,
+): (req: Request) => Promise<Response> {
+  return createLocalHandler(db, deps);
 }

@@ -275,6 +275,16 @@ export function liveAccessToken(db: Database, token: string, now: number): Token
 
 const LOCAL_CLIENT_NAME = "Claude Desktop (local)";
 
+export function isLocalClient(db: Database, clientId: string): boolean {
+  return (
+    db
+      .query<{ one: number }, [string, string]>(
+        "SELECT 1 AS one FROM oauth_clients WHERE id = ? AND name = ? AND redirect_uris = '[]'",
+      )
+      .get(clientId, LOCAL_CLIENT_NAME) !== null
+  );
+}
+
 export function localClientId(db: Database, now: number): string {
   const found = db
     .query<{ id: string }, [string]>(
