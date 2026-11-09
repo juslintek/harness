@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { build, hostTarget } from "../../../../scripts/build";
 import { openDb } from "../../db/db";
 import { makeHome, script, tempDir } from "../../test-support/selfupdate-kit";
-import { pidIdentity } from "../runtimes/orphans";
 import { verifyOnScratch } from "./scratch";
 import { snapshotDb } from "./snapshot";
 
@@ -27,6 +26,12 @@ const verify = (home: string, snapshot: string, bin = binary): Promise<void> =>
     timeoutMs: 15_000,
   });
 
+// The format reapRuns compares against: boot time and the leader's start time.
+function identityOf(pid: number): string {
+  const text = (...argv: string[]): string => Bun.spawnSync(argv).stdout.toString().trim();
+  return `${text("sysctl", "-n", "kern.boottime")}|${text("ps", "-o", "lstart=", "-p", `${pid}`)}`;
+}
+
 const sleepers: Bun.Subprocess[] = [];
 afterAll(() => {
   for (const proc of sleepers) process.kill(-proc.pid, "SIGKILL");
@@ -43,7 +48,7 @@ test("verifying never touches the agent runs listed in the copied db", async () 
   sleepers.push(agent);
   db.query(
     "INSERT INTO runs (id, agent_id, repo, prompt, state, created_at, pid, pid_identity) VALUES ('r1', 'a', '/r', 'p', 'running', 1, ?, ?)",
-  ).run(agent.pid, pidIdentity(agent.pid));
+  ).run(agent.pid, identityOf(agent.pid));
   const snapshot = snapshotDb(db, home, "verify");
   await verify(home, snapshot);
   expect(agent.killed).toBe(false);
