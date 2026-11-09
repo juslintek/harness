@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { mkdirSync, realpathSync, renameSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { version as ownVersion } from "../../version";
 import { type Launched, type ServerSpot, spawnServer, waitHealth, waitPidExit } from "./proc";
@@ -27,6 +27,11 @@ export interface SwapDeps {
 }
 
 const DEFAULT_DEPS: SwapDeps = { launch: spawnServer, healthMs: 30_000, oldExitMs: 60_000 };
+
+// Lets a booting server tell a swap that is still running from one that was killed.
+export function swapPidFile(home: string, request: string): string {
+  return join(home, "snapshots", `${request}-swap.pid`);
+}
 
 export function flipSymlink(link: string, target: string): void {
   mkdirSync(join(link, ".."), { recursive: true });
@@ -77,6 +82,17 @@ export async function swap(
   opts: SwapOptions,
   deps: SwapDeps = DEFAULT_DEPS,
 ): Promise<"done" | "rolled_back"> {
+  const pidFile = swapPidFile(opts.home, opts.request);
+  mkdirSync(join(pidFile, ".."), { recursive: true });
+  writeFileSync(pidFile, `${process.pid}`);
+  try {
+    return await runSwap(opts, deps);
+  } finally {
+    rmSync(pidFile, { force: true });
+  }
+}
+
+async function runSwap(opts: SwapOptions, deps: SwapDeps): Promise<"done" | "rolled_back"> {
   const newBinary = realpathSync(opts.current);
   const spot = {
     home: opts.home,

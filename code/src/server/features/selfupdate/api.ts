@@ -4,6 +4,7 @@ import type { Config } from "../../config";
 import type { AuthEnv } from "../auth/api";
 import { failInterrupted } from "./requests";
 import { pipelineRoutes } from "./routes";
+import { failStaleSwaps } from "./stale";
 import { DEFAULT_STEPS } from "./steps";
 import { parseSwapArgs, swap } from "./swap";
 import { serveVerifyOnly, VERIFY_ONLY_ENV } from "./verify-only";
@@ -29,8 +30,9 @@ export function selfupdateRoutes(
   });
 }
 
-export function startSelfupdate(db: Database, _deps: SelfupdateDeps): () => Promise<void> {
+export function startSelfupdate(db: Database, deps: SelfupdateDeps): () => Promise<void> {
   failInterrupted(db);
+  failStaleSwaps(db, deps.home);
   return async () => {};
 }
 

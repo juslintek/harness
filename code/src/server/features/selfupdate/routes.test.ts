@@ -16,7 +16,7 @@ async function app(admin: boolean) {
     liveBinary: "/bin/true",
     verifyMs: 1000,
     beginShutdown: () => {},
-    steps: { install: ["true"], check: ["false"], build: () => ["false"] },
+    steps: { install: ["sleep", "3"], check: ["false"], build: () => ["false"] },
   };
   return { db, repo, api: withActor(pipelineRoutes(db, deps), { instanceAdmin: admin }) };
 }
@@ -48,4 +48,17 @@ test("an unknown branch is 400 and a second request while one is busy is 409", a
   expect((await api.request("/requests", post({ repo, branch: "--all" }))).status).toBe(400);
   createRequest(db, { repo, branch: "main", commitSha: "a".repeat(40), createdBy: "u1" });
   expect((await api.request("/requests", post({ repo, branch: "main" }))).status).toBe(409);
+});
+
+test("two concurrent requests start one pipeline: one 202, one 409", async () => {
+  const { api, repo } = await app(true);
+  const codes = (
+    await Promise.all([
+      api.request("/requests", post({ repo, branch: "main" })),
+      api.request("/requests", post({ repo, branch: "main" })),
+    ])
+  )
+    .map((res) => res.status)
+    .sort();
+  expect(codes).toEqual([202, 409]);
 });

@@ -6,7 +6,9 @@ const KILL_GRACE_MS = 5000;
 
 export interface CommandResult {
   code: number;
+  // stdout and stderr together, for logs.
   out: string;
+  stdout: string;
 }
 
 export interface Launched {
@@ -32,7 +34,7 @@ export async function runCommand(
     Bun.readableStreamToText(proc.stdout),
     Bun.readableStreamToText(proc.stderr),
   ]);
-  return { code: await proc.exited, out: `${out}${err}`.trim() };
+  return { code: await proc.exited, out: `${out}${err}`.trim(), stdout: out.trim() };
 }
 
 const healthBody = z.object({ ok: z.literal(true), version: z.string() });
@@ -69,7 +71,7 @@ export async function waitHealth(
   throw new Error(`no healthy ${version ?? "server"} on port ${port} within ${timeoutMs} ms`);
 }
 
-function pidAlive(pid: number): boolean {
+export function pidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;

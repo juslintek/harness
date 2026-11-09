@@ -10,5 +10,6 @@ CREATE TABLE update_requests (
   created_at INTEGER NOT NULL,
   decided_by TEXT,
   decided_at INTEGER,
+  swapping_at INTEGER,
   log TEXT NOT NULL DEFAULT ''
 ) STRICT;
