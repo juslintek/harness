@@ -1,6 +1,8 @@
 import type { Database } from "bun:sqlite";
 import type { Hono } from "hono";
 import type { AuthEnv } from "../auth/api";
+import { consumePairInvite as consumeInviteFile } from "./invites";
+import { type PairAnswer, type PairDeps, pairWith as pair } from "./pairing";
 import {
   type FederationRouteDeps,
   peerRoutes as publicPeer,
@@ -10,6 +12,19 @@ import type { PeerEnv } from "./verify";
 
 export interface FederationDeps {
   home: string;
+}
+
+export function consumePairInvite(db: Database, home: string): boolean {
+  return consumeInviteFile(db, home);
+}
+
+export function pairWith(
+  db: Database,
+  home: string,
+  target: { url: string; token: string },
+  deps: PairDeps,
+): Promise<PairAnswer> {
+  return pair(db, home, target, deps);
 }
 
 export function federationRoutes(db: Database, deps: FederationRouteDeps): Hono<AuthEnv> {

@@ -9,7 +9,7 @@ import { startBridges } from "./server/features/bridge/api";
 import { startBudgets } from "./server/features/budgets/api";
 import { wireChat } from "./server/features/chat/api";
 import { startDeploy } from "./server/features/deploy/api";
-import { startFederation } from "./server/features/federation/api";
+import { consumePairInvite, startFederation } from "./server/features/federation/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
 import { startHiring } from "./server/features/hiring/api";
 import { wireHiring } from "./server/features/hiring/wiring";
@@ -45,6 +45,8 @@ lockHome(config.home);
 const db = openDb(join(config.home, "harness.db"));
 migrate(db, migrations);
 const instanceId = ensureInstance(db);
+// Before the server listens, so a deployer that sees /api/health can already pair.
+consumePairInvite(db, config.home);
 wireBoard(db);
 wireChat(db);
 wireRuntimes();

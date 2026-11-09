@@ -1,17 +1,27 @@
 import type { Database } from "bun:sqlite";
-import type { Hono } from "hono";
+import { Hono } from "hono";
 import type { AuthEnv } from "../auth/api";
-import { deployDiscoveryRoutes } from "./routes";
+import { deployRequestRoutes, type RequestRouteDeps } from "./request-routes";
+import { failInterrupted } from "./requests";
+import { deployDiscoveryRoutes, discoveryDeps } from "./routes";
 import type { DiscoveryDeps } from "./targets";
 
 export interface DeployDeps {
   home: string;
 }
 
-export function deployRoutes(_db: Database, discovery?: Partial<DiscoveryDeps>): Hono<AuthEnv> {
-  return deployDiscoveryRoutes(discovery);
+export interface DeployRouteDeps extends Omit<RequestRouteDeps, "discovery"> {
+  discovery?: Partial<DiscoveryDeps>;
 }
 
-export function startDeploy(_db: Database, _deps: DeployDeps): () => Promise<void> {
+export function deployRoutes(db: Database, deps: DeployRouteDeps): Hono<AuthEnv> {
+  const app = new Hono<AuthEnv>();
+  app.route("/", deployDiscoveryRoutes(deps.discovery));
+  app.route("/", deployRequestRoutes(db, { ...deps, discovery: discoveryDeps(deps.discovery) }));
+  return app;
+}
+
+export function startDeploy(db: Database, _deps: DeployDeps): () => Promise<void> {
+  failInterrupted(db);
   return async () => {};
 }
