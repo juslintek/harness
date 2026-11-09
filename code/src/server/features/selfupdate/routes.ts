@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { notFound, parseBody } from "../../route-kit";
 import { type AuthEnv, requireInstanceAdmin } from "../auth/api";
+import { approvalRoutes } from "./approval-routes";
 import { type PipelineDeps, runPipeline } from "./pipeline";
 import { createRequest, getRequest, hasBusyRequest } from "./requests";
 import { resolveCommit } from "./steps";
@@ -26,5 +27,6 @@ export function pipelineRoutes(db: Database, deps: PipelineDeps): Hono<AuthEnv> 
     const found = getRequest(db, c.req.param("id"));
     return found ? c.json(found) : notFound(c);
   });
+  app.route("/", approvalRoutes(db, deps));
   return app;
 }

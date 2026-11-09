@@ -24,6 +24,8 @@ export interface UpdateRequest {
   flaggedPaths: string[];
   createdBy: string;
   createdAt: number;
+  decidedBy: string | null;
+  decidedAt: number | null;
   log: string;
 }
 
@@ -37,6 +39,8 @@ interface Row {
   flagged_paths: string;
   created_by: string;
   created_at: number;
+  decided_by: string | null;
+  decided_at: number | null;
   log: string;
 }
 
@@ -54,6 +58,8 @@ function fromRow(row: Row): UpdateRequest {
     flaggedPaths: JSON.parse(row.flagged_paths) as string[],
     createdBy: row.created_by,
     createdAt: row.created_at,
+    decidedBy: row.decided_by,
+    decidedAt: row.decided_at,
     log: row.log,
   };
 }
@@ -91,6 +97,18 @@ export function setFlagged(db: Database, id: string, paths: string[]): void {
   db.query("UPDATE update_requests SET flagged_paths = ? WHERE id = ?").run(
     JSON.stringify(paths),
     id,
+  );
+}
+
+// Only a request still waiting can be decided, and only once: the WHERE makes approve and deny
+// race safely.
+export function decide(db: Database, id: string, to: "queued" | "denied", userId: string): boolean {
+  return (
+    db
+      .query(
+        "UPDATE update_requests SET status = ?, decided_by = ?, decided_at = ? WHERE id = ? AND status = 'awaiting_approval'",
+      )
+      .run(to, userId, Date.now(), id).changes === 1
   );
 }
 

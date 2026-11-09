@@ -1,6 +1,7 @@
 import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { classify } from "./classify";
+import { changedFiles } from "./diff";
 import { runCommand } from "./proc";
 
 export interface StepDeps {
@@ -37,13 +38,16 @@ export async function removeWorktree(repo: string, path: string): Promise<void> 
   );
 }
 
-async function changedPaths(repo: string, sha: string): Promise<string[]> {
-  const out = await git(["diff", "--name-only", "--no-renames", `HEAD...${sha}`], repo);
-  return out === "" ? [] : out.split("\n");
+export async function classifyChange(repo: string, sha: string): Promise<string[]> {
+  const readNew = async (path: string): Promise<string | null> => {
+    const res = await runCommand(["git", "show", `${sha}:${path}`], repo);
+    return res.code === 0 ? res.out : null;
+  };
+  return (await classify(await changedFiles(repo, sha), readNew)).flagged;
 }
 
-export async function classifyChange(repo: string, sha: string): Promise<string[]> {
-  return classify(await changedPaths(repo, sha)).flagged;
+export async function headSha(tree: string): Promise<string> {
+  return git(["rev-parse", "HEAD"], tree);
 }
 
 async function runStep(argv: string[], cwd: string, label: string): Promise<string> {

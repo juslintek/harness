@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
-import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { migrate, openDb } from "../db/db";
 import { migrations } from "../db/migrations";
 import { readPort } from "../features/selfupdate/scratch";
@@ -33,6 +33,23 @@ export async function makeRepo(version: string): Promise<string> {
   await sh(repo, "git", "add", ".");
   await sh(repo, "git", "commit", "-q", "-m", "init");
   return repo;
+}
+
+// Commits `files` on `branch` (created from the current main on first use) and goes back to main.
+export async function branchWith(
+  repo: string,
+  branch: string,
+  files: Record<string, string>,
+): Promise<void> {
+  const exists = Bun.spawnSync(["git", "rev-parse", "--verify", "--quiet", branch], { cwd: repo });
+  await sh(repo, "git", "checkout", "-q", ...(exists.exitCode === 0 ? [] : ["-b"]), branch);
+  for (const [path, body] of Object.entries(files)) {
+    mkdirSync(dirname(join(repo, path)), { recursive: true });
+    writeFileSync(join(repo, path), body);
+  }
+  await sh(repo, "git", "add", "-A");
+  await sh(repo, "git", "commit", "-q", "-m", `change ${Object.keys(files).join(" ")}`);
+  await sh(repo, "git", "checkout", "-q", "main");
 }
 
 export function script(dir: string, name: string, body: string): string {

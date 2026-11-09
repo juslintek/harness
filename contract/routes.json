@@ -2016,6 +2016,48 @@
     }
   },
   {
+    "method": "POST",
+    "path": "/api/selfupdate/requests/:id/approve",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/selfupdate/requests/:id/deny",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/selfupdate/requests/:id/review",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
     "method": "GET",
     "path": "/api/tasks/:id",
     "policy": {

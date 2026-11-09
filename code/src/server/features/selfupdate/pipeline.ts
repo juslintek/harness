@@ -8,6 +8,7 @@ import {
   addWorktree,
   classifyChange,
   expectedVersion,
+  headSha,
   removeWorktree,
   runBuild,
   runCheck,
@@ -74,6 +75,19 @@ async function startSwap(
   deps.beginShutdown();
 }
 
+// Defence in depth right before the swap: what is about to run must be the pinned commit, and
+// the diff classified now (the default branch may have moved) must not need a decision nobody made.
+async function assertStillPinned(db: Database, req: UpdateRequest, tree: string): Promise<void> {
+  const now = getRequest(db, req.id);
+  if (!now || now.commitSha !== req.commitSha || (await headSha(tree)) !== req.commitSha) {
+    throw new Error("pinned commit changed during the pipeline");
+  }
+  const flagged = await classifyChange(req.repo, now.commitSha);
+  if (flagged.length > 0 && now.decidedBy === null) {
+    throw new Error("guard paths changed without approval");
+  }
+}
+
 async function execute(
   db: Database,
   req: UpdateRequest,
@@ -82,7 +96,7 @@ async function execute(
 ): Promise<void> {
   setStatus(db, req.id, "checking");
   const flagged = await classifyChange(req.repo, req.commitSha);
-  if (flagged.length > 0) {
+  if (flagged.length > 0 && req.decidedBy === null) {
     setFlagged(db, req.id, flagged);
     setStatus(db, req.id, "awaiting_approval");
     return;
@@ -105,6 +119,7 @@ async function execute(
     version: expectedVersion(deps.steps, codeDir),
     timeoutMs: deps.verifyMs,
   });
+  await assertStillPinned(db, req, tree);
   await startSwap(db, req, deps, binary);
 }
 
