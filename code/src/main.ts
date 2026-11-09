@@ -31,6 +31,7 @@ import { createOriginApp } from "./server/origin-app";
 import { closeRealtimeSockets, type WsData, websocket, wireRealtime } from "./server/realtime";
 import { drainStops } from "./server/shutdown";
 import { staticResponse } from "./server/ui-dist";
+import { version } from "./server/version";
 import indexHtml from "./web/index.html";
 
 const ENROLLMENT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -89,7 +90,7 @@ app = createOriginApp(
     deliverEmailCode: (email, code) =>
       (emailCodeSender(db, bound.home) ?? consoleEmailCode)(email, code),
     instanceId,
-    version: "0.0.0",
+    version,
     tunnel,
   },
   currentOrigin,
