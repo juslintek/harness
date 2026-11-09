@@ -23,7 +23,7 @@ import { budgetGate } from "./features/budgets/api";
 import { budgetsRoutes } from "./features/budgets/routes";
 import { chatRoutes } from "./features/chat/routes";
 import { deployRoutes } from "./features/deploy/api";
-import { federationRoutes } from "./features/federation/api";
+import { federationRoutes, pairRoute } from "./features/federation/api";
 import { approvalRoutes } from "./features/guard/routes";
 import { wakeRoutes } from "./features/heartbeat/routes";
 import { hiringRoutes } from "./features/hiring/routes";
@@ -221,7 +221,7 @@ function mountOauth(app: Hono, deps: AppDeps): void {
 function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   const { db } = deps;
   app.use("/api/*", sessionMiddleware(db, deps.rp.origin));
-  app.route("/api/auth", accountRoutes(db, deps.rp));
+  app.route("/api/auth", accountRoutes(db, deps.rp, deps.home));
   app.route("/api", orgRoutes({ db, origin: deps.rp.origin }));
   app.route("/api", boardRoutes(db));
   app.route("/api", chatRoutes(db));
@@ -235,7 +235,7 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", logsRoutes(db));
   app.route("/api/notify", notifyRoutes(db, deps.home));
   app.route("/api/bridge", bridgeRoutes(db));
-  app.route("/api/federation", federationRoutes(db));
+  app.route("/api/federation", federationRoutes(db, { home: deps.home, ownUrl: deps.rp.origin }));
   app.route("/api/deploy", deployRoutes(db));
   app.route("/api/selfupdate", selfupdateRoutes(db, { home: deps.home, port: deps.port }));
   app.route("/api/oauth", grantRoutes(db, Date.now));
@@ -275,10 +275,12 @@ export function createApp(deps: AppDeps): Hono {
     publicAuthRoutes({
       db,
       rp: deps.rp,
+      home: deps.home,
       ...(deps.trustProxy === undefined ? {} : { trustProxy: deps.trustProxy }),
       deliverEmailCode: deps.deliverEmailCode ?? consoleEmailCode,
     }),
   );
+  app.route("/federation", pairRoute(db, deps.home));
   mountSessionRoutes(app, deps);
   app.use("/ws", sessionMiddleware(db), originGuard(deps.rp.origin));
   app.get("/ws", wsUpgrade(db));

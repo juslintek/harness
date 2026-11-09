@@ -42,6 +42,7 @@
   "invalid_request",
   "invalid_scope",
   "invalid_target",
+  "invite refused",
   "last_owner",
   "link_code_required",
   "member not in org",

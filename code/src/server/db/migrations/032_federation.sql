@@ -192,3 +192,27 @@ BEGIN INSERT OR REPLACE INTO fed_dirty (table_name, row_id, op, project_id) VALU
 CREATE TRIGGER fed_notes_d AFTER DELETE ON notes
 WHEN (SELECT value FROM fed_state WHERE key = 'applying') = '0' AND CASE WHEN OLD.scope = 'project' THEN OLD.project_id END IN (SELECT id FROM fed_live)
 BEGIN INSERT OR REPLACE INTO fed_dirty (table_name, row_id, op, project_id) VALUES ('notes', OLD.id, 'del', CASE WHEN OLD.scope = 'project' THEN OLD.project_id END); END;
+
+-- Paired instances. A revoked peer keeps its row so the UI can show it and a re-pair is explicit.
+CREATE TABLE peers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  public_key TEXT NOT NULL,
+  paired_at INTEGER NOT NULL,
+  last_seen_at INTEGER,
+  revoked_at INTEGER
+) STRICT;
+
+-- Only the sha256 of an invite token is stored; the token itself is shown once.
+CREATE TABLE fed_invites (
+  hash TEXT PRIMARY KEY,
+  created_by TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER
+) STRICT;
+
+CREATE TABLE fed_nonces (
+  nonce TEXT PRIMARY KEY,
+  at INTEGER NOT NULL
+) STRICT;
