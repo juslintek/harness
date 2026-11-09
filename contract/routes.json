@@ -281,6 +281,90 @@
   },
   {
     "method": "GET",
+    "path": "/api/auth/oidc/:id/start",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": true,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/oidc/callback",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": true,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/oidc/providers",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/oidc/providers",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/auth/oidc/providers/:id",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": true,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/oidc/providers/public",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
     "path": "/api/auth/passkeys",
     "policy": {
       "admin": false,
@@ -2016,6 +2100,20 @@
     }
   },
   {
+    "method": "GET",
+    "path": "/federation/ping",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
     "method": "ALL",
     "path": "/mcp/local",
     "policy": {
@@ -2096,20 +2194,6 @@
       "public": false,
       "rateLimited": false,
       "session": true,
-      "stepUp": false
-    }
-  },
-  {
-    "method": "GET",
-    "path": "/federation/ping",
-    "policy": {
-      "admin": false,
-      "loopback": false,
-      "orgAdmin": false,
-      "origin": false,
-      "public": true,
-      "rateLimited": false,
-      "session": false,
       "stepUp": false
     }
   },
