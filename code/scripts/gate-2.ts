@@ -13,6 +13,7 @@ import type { MemberRow } from "../src/server/features/orgs/api";
 import { listRuns, onRunEvent, shutdownRuns } from "../src/server/features/runtimes/api";
 import { createApp } from "../src/server/http";
 import { build, git, type Scene } from "./gate-2-kit";
+import { gateAgentIds } from "./gate-engine";
 import { sumTokens, watchLeftovers } from "./smoke-kit";
 
 const WAIT_MS = 30 * 60 * 1000;
@@ -37,7 +38,7 @@ function check(ok: boolean, what: string): void {
 
 async function requireLogin(db: ReturnType<typeof openDb>): Promise<void> {
   const agents = await listAgents(db);
-  for (const id of ["claude", "codex"]) {
+  for (const id of gateAgentIds()) {
     const a = agents.find((x) => x.id === id);
     if (!a?.installed || a.loggedIn !== true) {
       console.error(`FATAL: ${id} is not installed or not logged in (${JSON.stringify(a)})`);

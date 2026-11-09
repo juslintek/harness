@@ -20,6 +20,7 @@ import { refreshAcpModels } from "../src/server/features/runtimes/api";
 import type { createApp } from "../src/server/http";
 import type { DashboardView } from "../src/shared/tracking";
 import { git } from "./gate-2-kit";
+import { gateAgentIds, leadAgentId } from "./gate-engine";
 
 type Db = ReturnType<typeof openDb>;
 
@@ -60,6 +61,7 @@ export async function pickLeadModel(
   db: Db,
   runDeps: { home: string; port: number },
 ): Promise<string | null> {
+  if (leadAgentId() !== "claude") return null;
   await refreshModels(db, "claude", { listAcp: (spec) => refreshAcpModels(runDeps, spec) }).catch(
     (err: unknown) => console.error("claude model list unavailable, using the default", err),
   );
@@ -74,9 +76,9 @@ function addPair(
   leadModel: string | null,
 ): { lead: MemberRow; dev: MemberRow } {
   // The router only runs agents a person has linked, as the one-click link in the UI would.
-  for (const id of ["claude", "codex"]) setLinked(db, id, true);
+  for (const id of gateAgentIds()) setLinked(db, id, true);
   const lead = addAgentMember(db, orgId, {
-    agentId: "claude",
+    agentId: leadAgentId(),
     handle: "lead",
     displayName: "Lead",
     specialties: [],

@@ -8,7 +8,7 @@ export interface LiveFacts {
   pushDelivered: boolean;
   approvalApproved: boolean;
   passkeyStepUp: boolean;
-  claudeRunCompleted: boolean;
+  codexRunCompleted: boolean;
   phoneObservedByOperator: boolean;
 }
 
@@ -21,7 +21,7 @@ export function missingLiveEvidence(facts: LiveFacts): string[] {
     missing.push("the approval push has not been delivered to that human target");
   if (!facts.approvalApproved) missing.push("the selected approval has not been approved");
   if (!facts.passkeyStepUp) missing.push("a fresh passkey step-up by the approver is not recorded");
-  if (!facts.claudeRunCompleted) missing.push("the approval's real Claude run has not completed");
+  if (!facts.codexRunCompleted) missing.push("the approval's real Codex run has not completed");
   if (!facts.phoneObservedByOperator)
     missing.push(
       "Alice has not explicitly observed phone receipt and passkey approval; after observing, rerun with --phone-observed",
@@ -153,7 +153,7 @@ export function readFacts(
       deliveredTo(db, targetId, approvalId, approval.created_at),
     approvalApproved: approval?.status === "approved",
     passkeyStepUp: hasFreshStepUp(db, humanUserId, approval),
-    claudeRunCompleted: approval?.agent_id === "claude" && approval.run_state === "completed",
+    codexRunCompleted: approval?.agent_id === "codex" && approval.run_state === "completed",
     phoneObservedByOperator,
   };
 }
@@ -232,7 +232,7 @@ export async function runPartB(argv: string[] = process.argv.slice(2)): Promise<
   }
 
   console.log(
-    "Gate 5 Part B records are present: server, approver's push target and delivery, approved request, fresh passkey step-up, completed Claude run.",
+    "Gate 5 Part B records are present: server, approver's push target and delivery, approved request, fresh passkey step-up, completed Codex run.",
   );
   console.log(
     "The --phone-observed value is an operator declaration. The script cannot attest physical receipt, device identity, or Touch ID hardware.",

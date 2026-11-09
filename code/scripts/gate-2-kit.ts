@@ -18,6 +18,7 @@ import {
   listTeams,
   type MemberRow,
 } from "../src/server/features/orgs/api";
+import { gateAgentIds, leadAgentId } from "./gate-engine";
 
 export function git(args: string[], cwd: string): string {
   const res = Bun.spawnSync(
@@ -77,12 +78,12 @@ export function build(db: Db, root: string): Scene {
     ownerHandle: "gate",
   });
   // The router only runs agents a person has linked, as the one-click link in the UI would.
-  for (const id of ["claude", "codex"]) setLinked(db, id, true);
+  for (const id of gateAgentIds()) setLinked(db, id, true);
   const core = listTeams(db, org.id).find((t) => t.name === "Core");
   if (!core) throw new Error("no Core team");
   const agent = (agentId: string, handle: string, title: string): MemberRow =>
     addAgentMember(db, org.id, { agentId, handle, displayName: title, specialties: [] });
-  const lead = agent("claude", "lead", "Lead");
+  const lead = agent(leadAgentId(), "lead", "Lead");
   const dev = agent("codex", "dev", "Dev");
   for (const m of [lead, dev]) addToTeam(db, core.id, m.id);
   seedPositions(db, org.id, core.id, lead.id, dev.id);

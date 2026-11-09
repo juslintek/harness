@@ -1,4 +1,4 @@
-// Part A of the Phase 5 gate: no human, no real accounts. One real Claude run raises an L3 approval
+// Part A of the Phase 5 gate: no human, no real accounts. One real Codex run raises an L3 approval
 // and every channel, the HTTP decision, the OAuth client and the Desktop link are checked around it.
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -12,14 +12,12 @@ import { addAgentMember, listOrgsForUser, memberForUser } from "../src/server/fe
 import {
   getRun,
   killRun,
-  liveRuns,
   type RunDeps,
   shutdownRuns,
   startRun,
   waitForRun,
 } from "../src/server/features/runtimes/api";
 import { git } from "./gate-2-kit";
-import { claudeSpendUsd, pickLeadModel } from "./gate-3-kit";
 import {
   checkChannels,
   configureTargets,
@@ -42,7 +40,7 @@ import { checkDesktopLink, checkOauthAndMcp } from "./gate-5-mcp";
 export const ASSERTIONS = 9;
 const ASK = "git branch -D gate5-old";
 // An L1 ask (force-deleting a branch), so the guard raises an L3 approval before anything runs.
-const CLAUDE_PROMPT = `Run exactly this one shell command and nothing else: ${ASK}\nThen answer with the single word done. It is fine if the command reports an error.`;
+const CODEX_PROMPT = `Run exactly this one shell command and nothing else: ${ASK}\nThen answer with the single word done. It is fine if the command reports an error.`;
 const FAKE = join(import.meta.dir, "fake-acp-agent.ts");
 
 export function partAMode(argv: string[]): "fake" | "real" {
@@ -210,33 +208,35 @@ async function wakeScenario(w: World): Promise<void> {
   }
 }
 
-async function requireClaude(inst: Instance): Promise<void> {
-  const claude = (await listAgents(inst.db)).find((a) => a.id === "claude");
-  if (!claude?.installed || claude.loggedIn !== true) {
-    throw new Error(`claude is not installed or not logged in (${JSON.stringify(claude)})`);
+async function requireCodex(inst: Instance): Promise<void> {
+  const codex = (await listAgents(inst.db)).find((a) => a.id === "codex");
+  if (!codex?.installed || codex.loggedIn !== true) {
+    throw new Error(`codex is not installed or not logged in (${JSON.stringify(codex)})`);
   }
 }
 
-// A runaway real run is killed, not just reported afterwards.
-function watchSpend(inst: Instance, capUsd: number, tripped: string[]): () => void {
-  const timer = setInterval(() => {
-    if (claudeSpendUsd(inst.db) <= capUsd || tripped.length > 0) return;
-    tripped.push(`Claude spend passed ${capUsd} USD, runs were killed`);
-    for (const run of liveRuns(inst.db)) killRun(inst.db, run.id, "spend_cap");
-  }, 2000);
-  return () => clearInterval(timer);
+function codexUsage(inst: Instance): { input: number; output: number } {
+  const row = inst.db
+    .query<{ input: number; output: number }, []>(
+      `SELECT COALESCE(sum(gen_ai_usage_input_tokens), 0) AS input,
+              COALESCE(sum(gen_ai_usage_output_tokens), 0) AS output
+         FROM events WHERE kind = 'usage' AND agent = 'codex'`,
+    )
+    .get();
+  return { input: row?.input ?? 0, output: row?.output ?? 0 };
 }
 
 export interface PartAOptions {
   real: boolean;
-  capUsd?: number;
   root?: string;
 }
 
 export interface PartAResult {
   passed: number;
   failures: string[];
-  spendUsd: number;
+  codexInputTokens: number;
+  codexOutputTokens: number;
+  claudeSpendUsd: number;
   home: string;
 }
 
@@ -260,24 +260,19 @@ async function openWorld(root: string, mocks: Mocks, inst: Instance): Promise<Wo
 
 export async function runPartA(opts: PartAOptions): Promise<PartAResult> {
   const root = opts.root ?? mkdtempSync(join(tmpdir(), "harness-gate5-"));
-  const cap = opts.capUsd ?? 0.5;
   console.log(
-    "NODE_ENV=test is set for this process: the webhook SSRF guard and the push adapter allow plain http on loopback only then.",
+    "Gate notifications use local test fixtures only; NODE_ENV=test permits loopback HTTP for push and webhook fixtures.",
   );
   const mocks = await startMocks();
   const inst = await bootInstance({ home: join(root, "home") });
   console.log(`home ${inst.home}, ${inst.origin}`);
   const problems: string[] = [];
-  const stopWatch = watchSpend(inst, cap, problems);
   let passed = 0;
   try {
-    if (opts.real) await requireClaude(inst);
+    if (opts.real) await requireCodex(inst);
     const w = await openWorld(root, mocks, inst);
-    const model = opts.real
-      ? await pickLeadModel(inst.db, { home: inst.home, port: inst.port })
-      : null;
     const lane: Lane = opts.real
-      ? { agentId: "claude", prompt: CLAUDE_PROMPT, deps: {}, ...(model === null ? {} : { model }) }
+      ? { agentId: "codex", prompt: CODEX_PROMPT, deps: {} }
       : fakeLane(askThenSay(ASK));
     await mainScenario(w, lane);
     await wakeScenario(w);
@@ -288,10 +283,17 @@ export async function runPartA(opts: PartAOptions): Promise<PartAResult> {
   } catch (err) {
     problems.push(err instanceof Error ? err.message : String(err));
   } finally {
-    stopWatch();
     await shutdownRuns(inst.db);
     await inst.stop();
     await mocks.stop();
   }
-  return { passed, failures: problems, spendUsd: claudeSpendUsd(inst.db), home: inst.home };
+  const usage = codexUsage(inst);
+  return {
+    passed,
+    failures: problems,
+    codexInputTokens: usage.input,
+    codexOutputTokens: usage.output,
+    claudeSpendUsd: 0,
+    home: inst.home,
+  };
 }

@@ -20,6 +20,7 @@ import {
 import { onRunEvent, wireRuntimes } from "../src/server/features/runtimes/api";
 import { createApp } from "../src/server/http";
 import { git } from "./gate-2-kit";
+import { gateAgentIds, leadAgentId } from "./gate-engine";
 
 export type Db = ReturnType<typeof openDb>;
 
@@ -52,7 +53,7 @@ export function check(ok: boolean, what: string): void {
 
 async function requireLogin(db: Db): Promise<void> {
   const agents = await listAgents(db);
-  for (const id of ["claude", "codex"]) {
+  for (const id of gateAgentIds()) {
     const a = agents.find((x) => x.id === id);
     if (!a?.installed || a.loggedIn !== true) {
       console.error(`FATAL: ${id} is not installed or not logged in (${JSON.stringify(a)})`);
@@ -101,7 +102,7 @@ function scratchRepo(root: string): string {
 
 function members(db: Db, orgId: string, claudeModel: string | null): MemberRow[] {
   // The router only runs agents a person has linked, as the one-click link in the UI would.
-  for (const id of ["claude", "codex"]) setLinked(db, id, true);
+  for (const id of gateAgentIds()) setLinked(db, id, true);
   const model = claudeModel === null ? {} : { model: claudeModel };
   const add = (agentId: string, handle: string, extra: object): MemberRow =>
     addAgentMember(db, orgId, {
@@ -111,7 +112,11 @@ function members(db: Db, orgId: string, claudeModel: string | null): MemberRow[]
       specialties: [],
       ...extra,
     });
-  return [add("claude", "lead", model), add("claude", "dev", model), add("codex", "dev2", {})];
+  return [
+    add(leadAgentId(), "lead", model),
+    add(leadAgentId(), "dev", model),
+    add("codex", "dev2", {}),
+  ];
 }
 
 export function build(db: Db, root: string, claudeModel: string | null): Scene {

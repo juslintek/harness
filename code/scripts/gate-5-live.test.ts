@@ -24,7 +24,7 @@ function fixture(): Fixture {
     CREATE TABLE sessions (
       id TEXT PRIMARY KEY, user_id TEXT, step_up_at INTEGER, revoked_at INTEGER
     );
-    INSERT INTO runs VALUES ('run1', 'claude', 'completed', 'org1');
+    INSERT INTO runs VALUES ('run1', 'codex', 'completed', 'org1');
     INSERT INTO approvals VALUES ('approval1', 'run1', 'approved', 'user:user1', 100000, 120000);
     INSERT INTO members VALUES ('member1', 'org1', 'human', 'user1');
     INSERT INTO notify_targets VALUES (
@@ -44,14 +44,14 @@ function fixture(): Fixture {
 const check = (db: Database, phoneObservedByOperator = false) =>
   readFacts(db, true, "approval1", "target1", phoneObservedByOperator);
 
-test("requires a real Claude run by default and makes fake mode explicit", () => {
+test("requires a real Codex run by default and makes fake mode explicit", () => {
   expect(partAMode([])).toBe("real");
   expect(partAMode(["--real"])).toBe("real");
   expect(partAMode(["--fake"])).toBe("fake");
   expect(() => partAMode(["--fake", "--real"])).toThrow("cannot be used together");
 });
 
-test("reads approval, delivery, approver target, scoped step-up and real run from SQLite", () => {
+test("reads approval, delivery, approver target, scoped step-up and Codex run from SQLite", () => {
   const { db } = fixture();
   try {
     const facts = check(db);
@@ -61,13 +61,26 @@ test("reads approval, delivery, approver target, scoped step-up and real run fro
       pushDelivered: true,
       approvalApproved: true,
       passkeyStepUp: true,
-      claudeRunCompleted: true,
+      codexRunCompleted: true,
       phoneObservedByOperator: false,
     });
     expect(missingLiveEvidence(facts)).toEqual([
       "Alice has not explicitly observed phone receipt and passkey approval; after observing, rerun with --phone-observed",
     ]);
     expect(missingLiveEvidence(check(db, true))).toEqual([]);
+  } finally {
+    db.close();
+  }
+});
+
+test("the selected approval must belong to a completed Codex run", () => {
+  const { db, update } = fixture();
+  try {
+    update("UPDATE runs SET agent_id = 'claude' WHERE id = 'run1'", []);
+    expect(check(db).codexRunCompleted).toBe(false);
+    update("UPDATE runs SET agent_id = 'codex', state = 'running' WHERE id = 'run1'", []);
+    expect(check(db).codexRunCompleted).toBe(false);
+    expect(readFacts(db, true, "missing-approval", "target1", true).codexRunCompleted).toBe(false);
   } finally {
     db.close();
   }

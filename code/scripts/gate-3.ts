@@ -37,6 +37,7 @@ import {
   type Scene,
   writeTimeline,
 } from "./gate-3-kit";
+import { gateAgentIds } from "./gate-engine";
 import { watchLeftovers } from "./smoke-kit";
 
 const WAIT_MS = 40 * 60 * 1000;
@@ -63,7 +64,7 @@ function check(ok: boolean, what: string): void {
 
 async function requireLogin(db: Db): Promise<void> {
   const agents = await listAgents(db);
-  for (const id of ["claude", "codex"]) {
+  for (const id of gateAgentIds()) {
     const a = agents.find((x) => x.id === id);
     if (!a?.installed || a.loggedIn !== true) {
       console.error(`FATAL: ${id} is not installed or not logged in (${JSON.stringify(a)})`);
