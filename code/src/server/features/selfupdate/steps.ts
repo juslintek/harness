@@ -2,7 +2,7 @@ import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync } from "node:f
 import { join } from "node:path";
 import { classify } from "./classify";
 import { changedFiles } from "./diff";
-import { runCommand } from "./proc";
+import { type CommandResult, runCommand } from "./proc";
 
 export interface StepDeps {
   install: string[];
@@ -50,28 +50,29 @@ export async function headSha(tree: string): Promise<string> {
   return git(["rev-parse", "HEAD"], tree);
 }
 
-async function runStep(argv: string[], cwd: string, label: string): Promise<string> {
+async function runStep(argv: string[], cwd: string, label: string): Promise<CommandResult> {
   const res = await runCommand(argv, cwd);
   if (res.code !== 0)
     throw new Error(`${label} failed (exit ${res.code}): ${res.out.slice(-2000)}`);
-  return res.out;
+  return res;
 }
 
 export async function runCheck(deps: StepDeps, codeDir: string): Promise<string> {
   await runStep(deps.install, codeDir, "install");
-  return runStep(deps.check, codeDir, "check");
+  return (await runStep(deps.check, codeDir, "check")).out;
 }
 
-// The last stdout line is the binary path (scripts/build.ts prints it); it is copied under the
-// home so removing the worktree does not remove the build.
+// The last stdout line is the binary path (scripts/build.ts prints it); stderr is left out so a
+// warning cannot be mistaken for it. The binary is copied under the home so removing the worktree
+// does not remove the build.
 export async function runBuild(
   deps: StepDeps,
   codeDir: string,
   outDir: string,
   stored: string,
 ): Promise<string> {
-  const out = await runStep(deps.build(outDir), codeDir, "build");
-  const built = out.split("\n").at(-1)?.trim();
+  const { stdout } = await runStep(deps.build(outDir), codeDir, "build");
+  const built = stdout.split("\n").at(-1)?.trim();
   if (!built) throw new Error("build printed no binary path");
   mkdirSync(join(stored, ".."), { recursive: true });
   copyFileSync(built, stored);

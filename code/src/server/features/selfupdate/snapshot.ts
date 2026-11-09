@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { copyFileSync, mkdirSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 // VACUUM INTO gives a consistent copy while the server keeps writing; copying the file would not.
@@ -22,5 +22,8 @@ export function restoreSnapshot(home: string, snapshot: string): void {
   const live = join(home, "harness.db");
   rmSync(`${live}-wal`, { force: true });
   rmSync(`${live}-shm`, { force: true });
-  copyFileSync(snapshot, live);
+  // Same directory, so the rename is atomic and a kill mid-copy cannot leave a torn db.
+  const staged = `${live}.restore`;
+  copyFileSync(snapshot, staged);
+  renameSync(staged, live);
 }
