@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stand-in for the real CLI: prints canned `context ls --format json`, one object per line.
+[ "$1" = "context" ] || exit 2
+if [ -n "$FAKE_DOCKER_RAW" ]; then printf '%s\n' "$FAKE_DOCKER_RAW"; exit 0; fi
+cat <<'JSON'
+{"Name":"default","Description":"Current DOCKER_HOST based configuration","DockerEndpoint":"unix:///var/run/docker.sock","Current":true}
+{"Name":"build-box","Description":"remote builder","DockerEndpoint":"ssh://deploy@build.example.test","Current":false}
+JSON
