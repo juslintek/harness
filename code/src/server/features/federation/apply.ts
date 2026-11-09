@@ -62,7 +62,7 @@ function ownedHere(db: Database, spec: TableSpec, id: string): boolean {
   );
 }
 
-function parseData(spec: TableSpec, change: Change): Row | null {
+export function parseData(spec: TableSpec, change: Change): Row | null {
   if (change.data === null) return null;
   let data: unknown;
   try {
@@ -118,13 +118,26 @@ function put(
   if (!wins(change, localStamp(db, spec, change.row_id))) return "stale";
   if (!parentsPresent(db, spec, row)) return "rejected";
   upsert(db, spec, row, change);
-  if (bodies && typeof row.body === "string") bodies.write(row, row.body);
+  // comments and messages have a `body` column of their own; only a note's body is a file.
+  const fileBody = spec.name === "notes" && typeof row.body === "string" ? row.body : null;
+  if (bodies && fileBody !== null && !bodies.write(row, fileBody)) throw new Unfit();
   return "applied";
 }
 
-function del(db: Database, spec: TableSpec, change: Change): ApplyResult {
+function del(
+  db: Database,
+  spec: TableSpec,
+  change: Change,
+  bodies: NoteBodies | undefined,
+): ApplyResult {
   if (ownedHere(db, spec, change.row_id)) return "rejected";
   if (!wins(change, localStamp(db, spec, change.row_id))) return "stale";
+  if (spec.name === "notes" && bodies) {
+    const note = db
+      .query<{ disk: string }, [string]>("SELECT disk FROM notes WHERE id = ?")
+      .get(change.row_id);
+    if (note) bodies.remove(note.disk);
+  }
   db.run(`DELETE FROM ${spec.name} WHERE ${pkWhere(spec)}`, pkValues(change.row_id));
   db.run(
     "INSERT OR REPLACE INTO fed_tombstones (table_name, row_id, hlc, origin_instance) VALUES (?, ?, ?, ?)",
@@ -133,9 +146,12 @@ function del(db: Database, spec: TableSpec, change: Change): ApplyResult {
   return "applied";
 }
 
+// A note body that does not belong where its row says: the row is rolled back with it.
+class Unfit extends Error {}
+
 function isConstraint(e: unknown): boolean {
   const code = (e as { code?: unknown }).code;
-  return typeof code === "string" && code.startsWith("SQLITE_CONSTRAINT");
+  return e instanceof Unfit || (typeof code === "string" && code.startsWith("SQLITE_CONSTRAINT"));
 }
 
 export function applyChange(db: Database, change: Change, bodies?: NoteBodies): ApplyResult {
@@ -144,7 +160,8 @@ export function applyChange(db: Database, change: Change, bodies?: NoteBodies): 
   try {
     return db.transaction(() => {
       setApplying(db, true);
-      const result = change.op === "put" ? put(db, spec, change, bodies) : del(db, spec, change);
+      const result =
+        change.op === "put" ? put(db, spec, change, bodies) : del(db, spec, change, bodies);
       setApplying(db, false);
       return result;
     })();

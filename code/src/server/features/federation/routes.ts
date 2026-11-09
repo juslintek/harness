@@ -4,10 +4,12 @@ import { z } from "zod";
 import { ensureInstance } from "../../db/db";
 import { DomainError, notFound, parseBody } from "../../route-kit";
 import { type AuthEnv, requireInstanceAdmin, requireStepUp } from "../auth/api";
+import { feedRoutes } from "./feed";
 import { createInvite } from "./invites";
 import { fingerprint } from "./keys";
 import { acceptPair, identity, type PairDeps, pairWith } from "./pairing";
 import { listPeers, type PeerRow, revokePeer } from "./peers-repo";
+import { shareRoutes } from "./share-routes";
 import { type PeerEnv, requirePeer } from "./verify";
 
 const pairRequest = z.object({ url: z.string().max(500), token: z.string().min(1).max(200) });
@@ -30,6 +32,8 @@ export interface FederationRouteDeps extends PairDeps {
 
 export function federationRoutes(db: Database, deps: FederationRouteDeps): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
+  // Before the admin gate: shares follow project ownership, not instance adminship.
+  app.route("/shares", shareRoutes(db));
   app.use("*", requireInstanceAdmin);
   app.get("/identity", (c) => c.json(identity(db, deps.home)));
   app.get("/peers", (c) => c.json(listPeers(db).map(peerView)));
@@ -71,5 +75,6 @@ export function peerRoutes(db: Database, home: string): Hono<PeerEnv> {
   app.route("/", pairRoute(db, home));
   app.use("*", requirePeer(db));
   app.get("/ping", (c) => c.json({ ok: true, instanceId: ensureInstance(db) }));
+  app.route("/", feedRoutes(db, home));
   return app;
 }

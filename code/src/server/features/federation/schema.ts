@@ -19,9 +19,12 @@ export interface TableSpec {
   fill?: (row: Row) => Row;
 }
 
+// The note's file text travels as `body`. write is false when the note does not fit where its row
+// says it lives; remove gets the disk path of a note the change deletes.
 export interface NoteBodies {
-  read(note: Row): string;
-  write(note: Row, body: string): void;
+  read(note: Row): string | null;
+  write(note: Row, body: string): boolean;
+  remove(disk: string): void;
 }
 
 const org = { column: "org_id", table: "orgs" };

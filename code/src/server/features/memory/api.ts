@@ -15,6 +15,7 @@ import { decideLesson } from "./lessons-decide";
 import { finishAcceptedLessons } from "./lessons-recover";
 import type { Located, Viewer } from "./paths";
 import { reconcile } from "./reconcile";
+import { readNoteText, removeReplicatedNote, writeReplicatedNote } from "./replicate";
 import { startRetro } from "./retro";
 import { createNote, deleteNote, readNote, renameNote, updateNote } from "./store";
 import { MemoryError, onMemoryChange, type WriteCtx } from "./store-kit";
@@ -49,6 +50,8 @@ export {
   projectSlugs,
   proposeLessons,
   readNote,
+  readNoteText,
+  removeReplicatedNote,
   renameNote,
   resolveNotePath,
   revertWrite,
@@ -58,6 +61,7 @@ export {
   startRetro,
   updateNote,
   virtualPathOf,
+  writeReplicatedNote,
 };
 
 export function startMemory(db: Database, deps: { home: string }): () => Promise<void> {

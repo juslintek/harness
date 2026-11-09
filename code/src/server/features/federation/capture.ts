@@ -27,6 +27,12 @@ export function loadHlcState(db: Database, instanceId: string): HlcState {
   return createHlcState(instanceId, ms, counter);
 }
 
+export function saveHlcState(db: Database, state: HlcState): void {
+  db.run("INSERT OR REPLACE INTO fed_state (key, value) VALUES ('hlc', ?)", [
+    formatHlc(state.ms, state.counter, state.instanceId),
+  ]);
+}
+
 function readRow(db: Database, spec: TableSpec, id: string): Row | null {
   const sql = `SELECT ${spec.columns.join(", ")} FROM ${spec.name} WHERE ${pkWhere(spec)}`;
   const row = db.query<Row, string[]>(sql).get(...pkValues(id));
@@ -79,7 +85,8 @@ function payload(
   const data: Record<string, string | number | null> = { ...row };
   // NULL means "created here", but the receiver needs to know where home is.
   if ("home_instance" in data && data.home_instance === null) data.home_instance = instanceId;
-  if (spec.name === "notes" && bodies) data.body = bodies.read(row);
+  const body = spec.name === "notes" && bodies ? bodies.read(row) : null;
+  if (body !== null) data.body = body;
   return JSON.stringify(data);
 }
 
@@ -124,9 +131,7 @@ export function flush(
     for (const d of dirty) count += emit(db, state, bodies, wallMs, d);
     db.run("DELETE FROM fed_dirty");
     setApplying(db, false);
-    db.run("INSERT OR REPLACE INTO fed_state (key, value) VALUES ('hlc', ?)", [
-      formatHlc(state.ms, state.counter, state.instanceId),
-    ]);
+    saveHlcState(db, state);
     return count;
   })();
 }
