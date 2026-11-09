@@ -1,10 +1,12 @@
 import type { Database } from "bun:sqlite";
 import type { Hono } from "hono";
+import type { Config } from "../../config";
 import type { AuthEnv } from "../auth/api";
 import { failInterrupted } from "./requests";
 import { pipelineRoutes } from "./routes";
 import { DEFAULT_STEPS } from "./steps";
 import { parseSwapArgs, swap } from "./swap";
+import { serveVerifyOnly, VERIFY_ONLY_ENV } from "./verify-only";
 
 export interface SelfupdateDeps {
   home: string;
@@ -39,4 +41,12 @@ export async function runSwapCli(args: string[]): Promise<number> {
     console.error("swap failed", err);
     return 2;
   }
+}
+
+export function verifyOnlyRequested(): boolean {
+  return process.env[VERIFY_ONLY_ENV] === "1";
+}
+
+export function runVerifyOnly(config: Config): Promise<number> {
+  return serveVerifyOnly(config);
 }

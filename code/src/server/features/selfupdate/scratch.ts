@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync } from "node:fs";
 import { childEnv, stopProcess, waitHealth } from "./proc";
 import { copyToScratch } from "./snapshot";
+import { VERIFY_ONLY_ENV } from "./verify-only";
 
 const LISTENING = /listening on http:\/\/127\.0\.0\.1:(\d+)/;
 
@@ -12,7 +13,13 @@ export async function readPort(proc: Bun.Subprocess<"ignore", "pipe", "pipe">): 
     if (chunk.done) throw new Error(`new binary exited before listening: ${seen.slice(-500)}`);
     seen += chunk.value;
     const match = LISTENING.exec(seen);
-    if (match?.[1]) return Number(match[1]);
+    if (match?.[1]) {
+      // A child that keeps printing would block on a full pipe if nobody reads it.
+      void (async () => {
+        while (!(await reader.read()).done);
+      })().catch((err: unknown) => console.error("verify stdout drain failed", err));
+      return Number(match[1]);
+    }
   }
 }
 
@@ -30,11 +37,14 @@ export async function verifyOnScratch(opts: {
   copyToScratch(opts.snapshot, opts.scratchHome);
   const proc = Bun.spawn([opts.binary], {
     cwd: opts.scratchHome,
-    env: childEnv({ HARNESS_HOME: opts.scratchHome, HARNESS_PORT: "0" }),
+    env: childEnv({ HARNESS_HOME: opts.scratchHome, HARNESS_PORT: "0", [VERIFY_ONLY_ENV]: "1" }),
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
   });
+  Bun.readableStreamToText(proc.stderr).catch((err: unknown) =>
+    console.error("verify stderr drain failed", err),
+  );
   try {
     const port = await Promise.race([
       readPort(proc),
