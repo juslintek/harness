@@ -21,6 +21,7 @@
     "gate3": "bun scripts/gate-3.ts",
     "gate4": "bun scripts/gate-4.ts",
     "gate5": "bun scripts/gate-5.ts",
+    "gate6": "bun scripts/gate-6.ts",
     "check": "bun run lint && bun run typecheck && bun run test && bun run knip && bun run deps && bun run dup && bun run size"
   },
   "dependencies": {
