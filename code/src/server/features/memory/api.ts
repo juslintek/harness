@@ -35,6 +35,7 @@ import { watchVault } from "./watcher";
 export type { RemoteNoteEdit, RemoteNoteWriter } from "./remote";
 export type { Located, ProjectSlugs, Viewer, WriteCtx };
 
+// drainCommits is for tests that write notes through the routes and must wait before removing the home.
 export {
   agentViewer,
   backlinks,
@@ -42,6 +43,7 @@ export {
   createNote,
   decideLesson,
   deleteNote,
+  drainCommits,
   getIndexedByDisk,
   listLessons,
   logRead,

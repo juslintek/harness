@@ -24,13 +24,13 @@ export interface ApiKit {
   join: (orgId: string, who: Who, role: Role, handle: string) => MemberRow;
 }
 
-export function bootApi(): ApiKit {
+export function bootApi(home = "/unused"): ApiKit {
   const db = openDb(":memory:");
   migrate(db, migrations);
   wireChat(db);
   const app = createApp({
     db,
-    home: "/unused",
+    home,
     port: PORT,
     rp: { id: "localhost", name: "Harness", origin: ORIGIN },
     instanceId: "i",
