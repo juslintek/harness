@@ -23,7 +23,7 @@ import { budgetGate } from "./features/budgets/api";
 import { budgetsRoutes } from "./features/budgets/routes";
 import { chatRoutes } from "./features/chat/routes";
 import { deployRoutes } from "./features/deploy/api";
-import { federationRoutes, pairRoute } from "./features/federation/api";
+import { federationRoutes, peerRoutes } from "./features/federation/api";
 import { approvalRoutes } from "./features/guard/routes";
 import { wakeRoutes } from "./features/heartbeat/routes";
 import { hiringRoutes } from "./features/hiring/routes";
@@ -280,7 +280,7 @@ export function createApp(deps: AppDeps): Hono {
       deliverEmailCode: deps.deliverEmailCode ?? consoleEmailCode,
     }),
   );
-  app.route("/federation", pairRoute(db, deps.home));
+  app.route("/federation", peerRoutes(db, deps.home));
   mountSessionRoutes(app, deps);
   app.use("/ws", sessionMiddleware(db), originGuard(deps.rp.origin));
   app.get("/ws", wsUpgrade(db));

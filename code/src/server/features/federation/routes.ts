@@ -1,12 +1,14 @@
 import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
 import { z } from "zod";
+import { ensureInstance } from "../../db/db";
 import { DomainError, notFound, parseBody } from "../../route-kit";
 import { type AuthEnv, requireInstanceAdmin, requireStepUp } from "../auth/api";
 import { createInvite } from "./invites";
 import { fingerprint } from "./keys";
 import { acceptPair, identity, type PairDeps, pairWith } from "./pairing";
 import { listPeers, type PeerRow, revokePeer } from "./peers-repo";
+import { type PeerEnv, requirePeer } from "./verify";
 
 const pairRequest = z.object({ url: z.string().max(500), token: z.string().min(1).max(200) });
 
@@ -51,7 +53,7 @@ export function federationRoutes(db: Database, deps: FederationRouteDeps): Hono<
 
 // Public and unsigned: the one-time invite token in the body is the proof. Refusals look the same
 // for a wrong, used and expired token.
-export function pairRoute(db: Database, home: string): Hono {
+function pairRoute(db: Database, home: string): Hono {
   const app = new Hono();
   app.post("/pair", async (c) => {
     const answer = acceptPair(db, home, await c.req.json().catch(() => null));
@@ -59,5 +61,15 @@ export function pairRoute(db: Database, home: string): Hono {
     if (answer === "refused") return c.json({ error: "invite refused" }, 403);
     return c.json(answer);
   });
+  return app;
+}
+
+// Everything under /federation: the unsigned pairing route first, then every route that needs a
+// signed peer request.
+export function peerRoutes(db: Database, home: string): Hono<PeerEnv> {
+  const app = new Hono<PeerEnv>();
+  app.route("/", pairRoute(db, home));
+  app.use("*", requirePeer(db));
+  app.get("/ping", (c) => c.json({ ok: true, instanceId: ensureInstance(db) }));
   return app;
 }

@@ -52,3 +52,12 @@ export function revokePeer(db: Database, id: string, now: number = Date.now()): 
       .changes === 1
   );
 }
+
+export function getPeer(db: Database, id: string): PeerRow | undefined {
+  const row = db.query<Raw, [string]>("SELECT * FROM peers WHERE id = ?").get(id);
+  return row ? toPeer(row) : undefined;
+}
+
+export function touchPeer(db: Database, id: string, now: number = Date.now()): void {
+  db.run("UPDATE peers SET last_seen_at = ? WHERE id = ?", [now, id]);
+}

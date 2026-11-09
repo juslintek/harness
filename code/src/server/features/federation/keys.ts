@@ -11,13 +11,18 @@ interface InstanceKeys {
 
 // The private key lives only in secrets.json; the public half is derived from it on every call so
 // it is never stored twice.
-export function instanceKeys(home: string): InstanceKeys {
+export function privateKeyB64(home: string): string {
   let stored = getSecret(SECRET, home);
   if (stored === undefined) {
     const { privateKey } = generateKeyPairSync("ed25519");
     stored = privateKey.export({ format: "der", type: "pkcs8" }).toString("base64");
     setSecret(SECRET, stored, home);
   }
+  return stored;
+}
+
+export function instanceKeys(home: string): InstanceKeys {
+  const stored = privateKeyB64(home);
   const privateKey = createPrivateKey({
     key: Buffer.from(stored, "base64"),
     format: "der",
