@@ -1,12 +1,13 @@
 import type { Database } from "bun:sqlite";
 import type { Channel, Notification, TargetView } from "../../../shared/notify";
+import { onMemberRemoved } from "../orgs/api";
 import { createDispatcher, type Dispatcher, type DispatcherDeps } from "./dispatcher";
 import { emailCodeSender } from "./email/adapter";
 import { subscribeEvents } from "./events";
 import { effectivePrefs, setPref } from "./prefs";
 import { notifyRoutes } from "./routes";
 import { openSlackConnection, postSlackMessage, slackConfigured } from "./slack/client";
-import { deleteTarget, insertTarget, targetsOf, viewOf } from "./targets-repo";
+import { deleteTarget, insertTarget, sweepWebhookSecrets, targetsOf, viewOf } from "./targets-repo";
 import {
   getTelegramUpdates,
   sendTelegramMessage,
@@ -40,8 +41,12 @@ export function startNotify(db: Database, deps: NotifyDeps): () => Promise<void>
   const dispatcher = createDispatcher(db, deps);
   active.set(db, dispatcher);
   const unsubscribe = subscribeEvents(db, dispatcher.notify);
+  const offMember = onMemberRemoved((removedFrom) => {
+    if (removedFrom === db) sweepWebhookSecrets(db, deps.home);
+  });
   return async () => {
     unsubscribe();
+    offMember();
     active.delete(db);
     await dispatcher.stop();
   };
