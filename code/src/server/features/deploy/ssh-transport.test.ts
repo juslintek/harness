@@ -41,7 +41,7 @@ test("run builds one ssh argv with strict options and a quoted remote command", 
   const { calls, exec } = recorder();
   await sshTransport(target, exec).run(["uname", "-s"]);
   expect(calls).toEqual([
-    ["ssh", ...SAFE_OPTIONS, "-p", "2222", "-l", "deploy", "--", "10.0.0.5", "'uname' '-s'"],
+    ["ssh", ...SAFE_OPTIONS, "-p", "2222", "-l", "deploy", "--", "box", "'uname' '-s'"],
   ]);
 });
 
@@ -72,7 +72,7 @@ test("put copies a file with the final mode, then fixes the mode and creates the
     "2222",
     "--",
     localCopies[0] ?? "",
-    "deploy@10.0.0.5:/home/u/.harness/home/pair-invite",
+    "deploy@box:/home/u/.harness/home/pair-invite",
   ]);
   expect(calls[2]?.at(-1)).toBe("'chmod' '600' '/home/u/.harness/home/pair-invite'");
   expect(existsSync(localCopies[0] ?? "")).toBe(false);
@@ -80,8 +80,8 @@ test("put copies a file with the final mode, then fixes the mode and creates the
 
 test("hostile host, user, port and path values are refused before anything runs", async () => {
   const { calls, exec } = recorder();
-  for (const address of ["-oProxyCommand=id", "a b", "h;id", "h$(id)", "h'x", ""]) {
-    expect(() => sshTransport({ ...target, address }, exec)).toThrow();
+  for (const name of ["-oProxyCommand=id", "a b", "h;id", "h$(id)", "h'x", ""]) {
+    expect(() => sshTransport({ ...target, name }, exec)).toThrow();
   }
   expect(() => sshTransport({ ...target, user: "-oFoo" }, exec)).toThrow();
   expect(() => sshTransport({ ...target, user: "a;b" }, exec)).toThrow();
@@ -101,7 +101,7 @@ test("exists maps the exit code and an ipv6 host is bracketed for scp", async ()
     calls.push(argv);
     return { code: code.value, stdout: "", stderr: "" };
   };
-  const transport = sshTransport({ ...target, address: "fe80::1", user: undefined }, exec);
+  const transport = sshTransport({ ...target, name: "fe80::1", user: undefined }, exec);
   expect(await transport.exists("/x")).toBe(false);
   code.value = 0;
   expect(await transport.exists("/x")).toBe(true);

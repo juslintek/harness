@@ -36,8 +36,14 @@ export async function spawnExec(argv: string[], env?: Record<string, string>): P
 // ssh joins the command into one string for the remote shell, so every word is single-quoted.
 const quote = (word: string): string => `'${word.replaceAll("'", `'\\''`)}'`;
 
+// An ssh target is dialed by its Host alias so ~/.ssh/config applies IdentityFile, ProxyJump and
+// HostKeyAlias itself; the HostName stays what the admin sees.
+function connectName(target: TargetView): string {
+  return target.kind === "ssh" ? target.name : target.address;
+}
+
 function checkTarget(target: TargetView): void {
-  if (!HOST.test(target.address)) throw new Error("refusing an unsafe host name");
+  if (!HOST.test(connectName(target))) throw new Error("refusing an unsafe host name");
   if (target.user !== undefined && !USER.test(target.user)) {
     throw new Error("refusing an unsafe user name");
   }
@@ -58,7 +64,8 @@ function checkPath(path: string): string {
 // admin runs it by hand.
 export function sshTransport(target: TargetView, exec: Exec = spawnExec): Transport {
   checkTarget(target);
-  const { address, user, port } = target;
+  const address = connectName(target);
+  const { user, port } = target;
   const sshArgv = (command: string): string[] => [
     "ssh",
     ...OPTIONS,
