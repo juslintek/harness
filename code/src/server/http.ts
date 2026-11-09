@@ -237,7 +237,7 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api/bridge", bridgeRoutes(db));
   app.route("/api/federation", federationRoutes(db));
   app.route("/api/deploy", deployRoutes(db));
-  app.route("/api/selfupdate", selfupdateRoutes(db));
+  app.route("/api/selfupdate", selfupdateRoutes(db, { home: deps.home, port: deps.port }));
   app.route("/api/oauth", grantRoutes(db, Date.now));
   app.route("/api", adminRoutes(deps));
 }

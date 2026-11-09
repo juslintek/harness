@@ -22,7 +22,7 @@ import {
   sweepStaleScratch,
   wireRuntimes,
 } from "./server/features/runtimes/api";
-import { startSelfupdate } from "./server/features/selfupdate/api";
+import { runSwapCli, startSelfupdate } from "./server/features/selfupdate/api";
 import { startTracking } from "./server/features/tracking/api";
 import { createTunnel } from "./server/features/tunnel/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
@@ -35,6 +35,8 @@ import { version } from "./server/version";
 import indexHtml from "./web/index.html";
 
 const ENROLLMENT_TTL_MS = 24 * 60 * 60 * 1000;
+// The swap helper is this same binary started with a subcommand; it must not boot a server.
+if (Bun.argv[2] === "swap") process.exit(await runSwapCli(Bun.argv.slice(3)));
 const config = loadConfig();
 const uiDist = process.env.HARNESS_UI_DIST;
 mkdirSync(config.home, { recursive: true });

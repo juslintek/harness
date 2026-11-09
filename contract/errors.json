@@ -70,7 +70,9 @@
   "unknown provider",
   "unknown run",
   "unknown session",
+  "unknown_branch",
   "unsupported_response_type",
+  "update_in_progress",
   "upgrade failed",
   "viewer",
   "wake_cap"

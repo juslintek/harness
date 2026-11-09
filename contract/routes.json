@@ -1722,6 +1722,34 @@
     }
   },
   {
+    "method": "POST",
+    "path": "/api/selfupdate/requests",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/selfupdate/requests/:id",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
     "method": "GET",
     "path": "/api/tasks/:id",
     "policy": {
