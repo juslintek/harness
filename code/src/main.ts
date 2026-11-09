@@ -8,6 +8,8 @@ import { wireBoard } from "./server/features/board/api";
 import { startBridges } from "./server/features/bridge/api";
 import { startBudgets } from "./server/features/budgets/api";
 import { wireChat } from "./server/features/chat/api";
+import { startDeploy } from "./server/features/deploy/api";
+import { startFederation } from "./server/features/federation/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
 import { startHiring } from "./server/features/hiring/api";
 import { wireHiring } from "./server/features/hiring/wiring";
@@ -20,6 +22,7 @@ import {
   sweepStaleScratch,
   wireRuntimes,
 } from "./server/features/runtimes/api";
+import { startSelfupdate } from "./server/features/selfupdate/api";
 import { startTracking } from "./server/features/tracking/api";
 import { createTunnel } from "./server/features/tunnel/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
@@ -104,6 +107,9 @@ const stopLoops = [
   hiring.stop,
   startNotify(db, { home: config.home, origin: currentOrigin }),
   startBridges(db, { home: config.home, origin: currentOrigin() }),
+  ...[startFederation, startDeploy, startSelfupdate].map((start) =>
+    start(db, { home: config.home }),
+  ),
 ];
 
 console.log(`harness listening on ${server.url}`);

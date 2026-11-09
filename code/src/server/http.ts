@@ -22,6 +22,8 @@ import { bridgeRoutes } from "./features/bridge/api";
 import { budgetGate } from "./features/budgets/api";
 import { budgetsRoutes } from "./features/budgets/routes";
 import { chatRoutes } from "./features/chat/routes";
+import { deployRoutes } from "./features/deploy/api";
+import { federationRoutes } from "./features/federation/api";
 import { approvalRoutes } from "./features/guard/routes";
 import { wakeRoutes } from "./features/heartbeat/routes";
 import { hiringRoutes } from "./features/hiring/routes";
@@ -44,6 +46,7 @@ import { profilesRoutes } from "./features/profiles/routes";
 import { routerRoutes } from "./features/router/routes";
 import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
 import { haltRoutes, runRoutes } from "./features/runtimes/routes";
+import { selfupdateRoutes } from "./features/selfupdate/api";
 import { addEstimate, taskTrackingFields } from "./features/tracking/api";
 import { trackingRoutes } from "./features/tracking/routes";
 import { createTunnel, type Tunnel, tunnelRoutes } from "./features/tunnel/api";
@@ -232,6 +235,9 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", logsRoutes(db));
   app.route("/api/notify", notifyRoutes(db, deps.home));
   app.route("/api/bridge", bridgeRoutes(db));
+  app.route("/api/federation", federationRoutes(db));
+  app.route("/api/deploy", deployRoutes(db));
+  app.route("/api/selfupdate", selfupdateRoutes(db));
   app.route("/api/oauth", grantRoutes(db, Date.now));
   app.route("/api", adminRoutes(deps));
 }
