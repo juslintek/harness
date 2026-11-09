@@ -10,6 +10,7 @@ const TIMEOUT_MS = 15_000;
 export interface SignedInit {
   method?: string;
   json?: unknown;
+  timeoutMs?: number;
 }
 
 // The body is serialised once and the same bytes are signed and sent. The peer is re-read so a
@@ -44,6 +45,6 @@ export async function signedFetch(
     },
     ...(body === "" ? {} : { body }),
     redirect: "error",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS),
   });
 }

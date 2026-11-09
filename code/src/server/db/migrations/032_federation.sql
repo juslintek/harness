@@ -216,3 +216,12 @@ CREATE TABLE fed_nonces (
   nonce TEXT PRIMARY KEY,
   at INTEGER NOT NULL
 ) STRICT;
+
+-- Home side: who holds a task checked out from another instance, and until when. Copy side: the
+-- lease this instance holds at the home, kept so the renewal loop survives a restart.
+CREATE TABLE fed_leases (
+  task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+  holder_instance TEXT NOT NULL,
+  holder_member TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+) STRICT;

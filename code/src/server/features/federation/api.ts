@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { Hono } from "hono";
 import type { AuthEnv } from "../auth/api";
 import { consumePairInvite as consumeInviteFile } from "./invites";
+import { startLeases } from "./lease-client";
 import { type PairAnswer, type PairDeps, pairWith as pair } from "./pairing";
 import { startPull } from "./pull";
 import {
@@ -27,6 +28,7 @@ export function pairWith(
 export interface FederationDeps {
   home: string;
   pullIntervalMs?: number;
+  leaseIntervalMs?: number;
 }
 
 export function federationRoutes(db: Database, deps: FederationRouteDeps): Hono<AuthEnv> {
@@ -40,9 +42,17 @@ export function peerRoutes(db: Database, home: string): Hono<PeerEnv> {
 }
 
 export function startFederation(db: Database, deps: FederationDeps): () => Promise<void> {
-  return startPull(
+  const stopPull = startPull(
     db,
     deps.home,
     deps.pullIntervalMs === undefined ? {} : { intervalMs: deps.pullIntervalMs },
   );
+  const stopLeases = startLeases(
+    db,
+    deps.home,
+    deps.leaseIntervalMs === undefined ? {} : { intervalMs: deps.leaseIntervalMs },
+  );
+  return async () => {
+    await Promise.all([stopPull(), stopLeases()]);
+  };
 }

@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { onMemberRemoved } from "../orgs/api";
 import { checkout, moveTask, release, releaseHeldBy } from "./moves";
+import { checkoutTask, releaseTask, setRemoteTasks } from "./remote";
 import {
   addComment,
   addDependency,
@@ -18,6 +19,7 @@ import {
 } from "./repo";
 
 export type { MoveResult } from "./moves";
+export type { RemoteTasks } from "./remote";
 export type { TaskChange, TaskPatch } from "./repo";
 
 export {
@@ -25,6 +27,7 @@ export {
   addDependency,
   BoardError,
   checkout,
+  checkoutTask,
   createTask,
   getComment,
   getTask,
@@ -35,7 +38,9 @@ export {
   onTaskChange,
   release,
   releaseHeldBy,
+  releaseTask,
   removeDependency,
+  setRemoteTasks,
   taskDetail,
   updateTask,
 };

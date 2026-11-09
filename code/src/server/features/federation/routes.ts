@@ -7,6 +7,7 @@ import { type AuthEnv, requireInstanceAdmin, requireStepUp } from "../auth/api";
 import { feedRoutes } from "./feed";
 import { createInvite } from "./invites";
 import { fingerprint } from "./keys";
+import { leaseRoutes } from "./lease-routes";
 import { acceptPair, identity, type PairDeps, pairWith } from "./pairing";
 import { listPeers, type PeerRow, revokePeer } from "./peers-repo";
 import { shareRoutes } from "./share-routes";
@@ -76,5 +77,6 @@ export function peerRoutes(db: Database, home: string): Hono<PeerEnv> {
   app.use("*", requirePeer(db));
   app.get("/ping", (c) => c.json({ ok: true, instanceId: ensureInstance(db) }));
   app.route("/", feedRoutes(db, home));
+  app.route("/", leaseRoutes(db, home));
   return app;
 }

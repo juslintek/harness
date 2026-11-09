@@ -2255,6 +2255,48 @@
   },
   {
     "method": "POST",
+    "path": "/federation/lease",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/federation/lease/release",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/federation/note",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": true,
+      "rateLimited": false,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
     "path": "/federation/pair",
     "policy": {
       "admin": false,

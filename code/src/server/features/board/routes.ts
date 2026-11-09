@@ -25,13 +25,14 @@ import {
 import {
   addComment,
   addDependency,
-  checkout,
+  checkoutTask,
   createTask,
   getTask,
   listDeps,
   listTasks,
+  type MoveResult,
   moveTask,
-  release,
+  releaseTask,
   removeDependency,
   taskDetail,
   updateTask,
@@ -145,9 +146,7 @@ function taskRoutes(db: Database, app: Hono<AuthEnv>): void {
   });
 }
 
-type MoveOutcome = ReturnType<typeof checkout>;
-
-const answer = (c: Context, r: MoveOutcome): Response =>
+const answer = (c: Context, r: MoveResult): Response =>
   r.ok ? c.json(r.task) : c.json(r, r.reason === "not_found" ? 404 : 409);
 
 function moveRoutes(db: Database, app: Hono<AuthEnv>): void {
@@ -161,17 +160,17 @@ function moveRoutes(db: Database, app: Hono<AuthEnv>): void {
       moveTask(db, found.task.id, body.to, found.member.id, defined({ beforeId: body.beforeId })),
     );
   });
-  app.post("/tasks/:id/checkout", (c) => {
+  app.post("/tasks/:id/checkout", async (c) => {
     const found = taskScope(db, c, "write");
     return found instanceof Response
       ? found
-      : answer(c, checkout(db, found.task.id, found.member.id));
+      : answer(c, await checkoutTask(db, found.task.id, found.member.id));
   });
-  app.post("/tasks/:id/release", (c) => {
+  app.post("/tasks/:id/release", async (c) => {
     const found = taskScope(db, c, "write");
     return found instanceof Response
       ? found
-      : answer(c, release(db, found.task.id, found.member.id));
+      : answer(c, await releaseTask(db, found.task.id, found.member.id));
   });
 }
 

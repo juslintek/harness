@@ -15,6 +15,7 @@ import { decideLesson } from "./lessons-decide";
 import { finishAcceptedLessons } from "./lessons-recover";
 import type { Located, Viewer } from "./paths";
 import { reconcile } from "./reconcile";
+import { saveNote, setRemoteNoteWriter } from "./remote";
 import { readNoteText, removeReplicatedNote, writeReplicatedNote } from "./replicate";
 import { startRetro } from "./retro";
 import { createNote, deleteNote, readNote, renameNote, updateNote } from "./store";
@@ -31,6 +32,7 @@ import {
 } from "./viewer";
 import { watchVault } from "./watcher";
 
+export type { RemoteNoteEdit, RemoteNoteWriter } from "./remote";
 export type { Located, ProjectSlugs, Viewer, WriteCtx };
 
 export {
@@ -57,7 +59,9 @@ export {
   revertWrite,
   reviewerFor,
   runProject,
+  saveNote,
   searchNotes,
+  setRemoteNoteWriter,
   startRetro,
   updateNote,
   virtualPathOf,
