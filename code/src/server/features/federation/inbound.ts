@@ -144,14 +144,32 @@ function membersOk(ctx: Ctx, mode: Mode, change: Change, row: Row | null): boole
   return mode === "write" && home === ctx.peerId;
 }
 
+// A write peer may only speak as someone from its own stub org, stored here or sent in this page.
+function authoredByPeer(ctx: Ctx, row: Row): boolean {
+  const author = row.author_id;
+  if (typeof author !== "string") return false;
+  const orgId =
+    ctx.db
+      .query<{ org_id: string }, [string]>("SELECT org_id FROM members WHERE id = ?")
+      .get(author)?.org_id ?? ctx.incoming.get(`members:${author}`)?.org_id;
+  if (typeof orgId !== "string") return false;
+  return (
+    ctx.db.query("SELECT 1 FROM orgs WHERE id = ? AND home_instance = ?").get(orgId, ctx.peerId) !==
+    null
+  );
+}
+
 // A copy's own rows must name the copy's org, and nothing a home sends may hand a local org
 // access or ownership.
-function rowFits(ctx: Ctx, table: string, row: Row, projectId: string): boolean {
+function rowFits(ctx: Ctx, mode: Mode, table: string, row: Row, projectId: string): boolean {
   if (table === "projects")
     return row.home_instance === ctx.peerId && !isLocalOrg(ctx.db, row.org_id);
   if (table === "grants") return !isLocalOrg(ctx.db, row.org_id);
   if (table === "tasks" || table === "channels" || table === "notes") {
     return row.org_id === projectOrg(ctx, projectId);
+  }
+  if (mode === "write" && (table === "comments" || table === "messages")) {
+    return authoredByPeer(ctx, row);
   }
   return true;
 }
@@ -177,7 +195,7 @@ function permitted(ctx: Ctx, change: Change): boolean {
   if (spec.name === "members") return membersOk(ctx, mode, change, row);
   if (mode === "write" && !WRITABLE.has(spec.name)) return false;
   if (!labelHolds(ctx, spec.name, change, row)) return false;
-  return row === null || rowFits(ctx, spec.name, row, change.project_id);
+  return row === null || rowFits(ctx, mode, spec.name, row, change.project_id);
 }
 
 // Leases belong to the home: a write peer's copy of a task is stale about who holds it, so its

@@ -273,3 +273,44 @@ test("a peer with write access cannot set or clear a task's holder or checkout t
     checked_out_at: null,
   });
 });
+
+test("comments and messages from a write peer must be authored by a member of its own stub org", () => {
+  const stub = a.db
+    .query<{ id: string }, [string]>("SELECT id FROM orgs WHERE home_instance = ?")
+    .get(b.instanceId)?.id;
+  a.db.run(
+    `INSERT INTO members (id, org_id, kind, user_id, handle, display_name, role, created_at)
+     VALUES ('m-bee', ?, 'human', 'remote:m-bee', 'bee3', 'Bee', 'member', 1)`,
+    [stub ?? null],
+  );
+  const taskId = createTask(a.db, {
+    projectId: seed.projectId,
+    title: "talk",
+    createdBy: seed.memberId,
+  }).id;
+  const channelId = a.db
+    .query<{ id: string }, [string]>("SELECT id FROM channels WHERE project_id = ?")
+    .get(seed.projectId)?.id;
+  const comment = (author: string): Change =>
+    change("comments", `c-${author}`, seed.projectId, {
+      id: `c-${author}`,
+      task_id: taskId,
+      author_id: author,
+      body: "hi",
+      created_at: 1,
+    });
+  const message = (author: string): Change =>
+    change("messages", `x-${author}`, seed.projectId, {
+      id: `x-${author}`,
+      channel_id: channelId,
+      thread_root_id: null,
+      author_id: author,
+      body: "hi",
+      created_at: 1,
+      edited_at: null,
+    });
+  expect(verdict(comment(seed.memberId))).toBe(0);
+  expect(verdict(message(seed.memberId))).toBe(0);
+  expect(verdict(comment("m-bee"))).toBe(1);
+  expect(verdict(message("m-bee"))).toBe(1);
+});
