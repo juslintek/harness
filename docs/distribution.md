@@ -71,7 +71,7 @@ After pairing, every call between instances is signed. Headers:
 - `X-Harness-Instance`: the sender's instance id
 - `X-Harness-Timestamp`: milliseconds since epoch
 - `X-Harness-Nonce`: 16 random bytes, base64url
-- `X-Harness-Signature`: base64url Ed25519 signature over `METHOD\nPATH_WITH_QUERY\nTIMESTAMP\nNONCE\nsha256hex(body)`
+- `X-Harness-Signature`: base64url Ed25519 signature over `METHOD\nPATH_WITH_QUERY\nTIMESTAMP\nNONCE\nsha256hex(body)\nRECEIVER_INSTANCE_ID`, so a request signed for one peer is refused by any other
 
 The receiver refuses with one identical 401 when the instance is unknown or revoked, the timestamp is more than 5 minutes off, the signature fails, or the nonce was seen before. Nonces are kept 10 minutes and recorded only after the signature checks out. Bodies over 1 MiB are refused with 413. The requests go to the peer's public origin, under `/federation`.
 
