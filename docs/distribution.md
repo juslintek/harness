@@ -1,6 +1,6 @@
 # Distribution, federation and self-update
 
-This guide covers running Harness on more than one machine: building the binary, deploying it, pairing two instances, sharing a project between them, updating an instance from its own repo, and OIDC login. Every action that reaches outside the instance needs an instance admin, and the risky ones need a passkey touch in the last 5 minutes (step-up).
+This guide covers running Harness on more than one machine: building the binary, deploying it, pairing two instances, sharing a project between them, updating an instance from its own repo, and OIDC login. Deploy, self-update and peer management need an instance admin. Sharing a project with a peer needs only an admin of the org that owns it. The risky actions need a passkey touch in the last 5 minutes (step-up).
 
 Paths below are API paths on the instance. The UI has pages for deploy, federation and self-update that call the same routes.
 
@@ -12,7 +12,7 @@ bun run build                          # host target, writes dist/
 bun scripts/build.ts --target linux-x64 --out /some/dir
 ```
 
-Targets: `darwin-arm64`, `linux-x64`, `linux-arm64`, or `host`. `--out` defaults to `dist`. The output is `harness-<target>` and next to it `harness-<target>.sha256` in `sha256sum` format. The version baked in is the `version` from `code/package.json`. The binary is one file with the UI, migrations and PWA files inside.
+Targets: `darwin-arm64`, `linux-x64`, `linux-arm64`, or `host`. `--out` defaults to `dist`. The output is `harness-<target>` and next to it `harness-<target>.sha256` in `sha256sum` format. The version baked in is the `version` from `code/package.json`, and the git commit of the checkout is baked in too (self-update needs it). The binary is one file with the UI, migrations and PWA files inside.
 
 Configuration is the same as for `bun run dev`: `HARNESS_HOME`, `HARNESS_PORT`, `HARNESS_HOST`, `HARNESS_ORIGIN`, `HARNESS_TRUST_PROXY` (see `docs/README.md`).
 
@@ -130,12 +130,12 @@ Two things are not left to last-writer-wins. Task checkout and note writes on a 
 
 An instance can rebuild itself from a git repo and swap to the new binary. Routes are under `/api/selfupdate`, instance admin only.
 
-1. Request: `POST /api/selfupdate/requests` with `repo` and `branch`. The branch is resolved to one commit and pinned. Only one update runs at a time.
-2. Check: the diff of that commit is classified (below). If nothing needs approval, the pipeline continues. A fresh git worktree is made, then `bun install --frozen-lockfile` and `bun run check` run in `code/`.
+1. Request: `POST /api/selfupdate/requests` (step-up) with `repo` and `branch`. The branch is resolved to one commit and pinned. Only one update runs at a time.
+2. Check: the diff between the commit this binary was built from and the pinned commit is classified (below). If the running commit is unknown, every change needs approval. If nothing needs approval, the pipeline continues. A fresh git worktree is made, then `bun install --frozen-lockfile` and `bun run check` run in `code/`. The build stops if the check left the worktree dirty. Both steps run the branch's own code as your user, outside the sandbox, so a requested branch is trusted code. A diff that touches none of the flagged paths below builds and runs without approval.
 3. Build: `bun scripts/build.ts --target host`; the binary is copied to `<home>/bin/harness-<request id>`.
 4. Scratch verify: the live database is copied with `VACUUM INTO`, the new binary starts on a second port (an OS-chosen one) with its own scratch home, and must report the expected version on `/api/health`. The scratch home is deleted after.
 5. Swap: a last check that the commit is still the pinned one and that no flagged paths appeared without approval. A fresh snapshot of the database is taken, the `<home>/bin/current` symlink is flipped, and a helper process waits for the old process to exit, starts the new binary and waits for health with the new version.
-6. Rollback: if the new binary does not become healthy, the helper restores the pre-swap snapshot (deleting the stale `-wal` and `-shm` files), flips the symlink back to the previous binary and starts it. Data written between the snapshot and the failure is lost. If the previous binary also fails to start, the request is marked failed.
+6. Rollback: if the new binary does not become healthy, the helper restores the pre-swap snapshot (deleting the stale `-wal` and `-shm` files), flips the symlink back to the previous binary and starts it. Data written between the snapshot and the failure is lost. The restore is refused if the process named in `harness.lock` is still alive; the request is marked failed and the symlink is left alone. If the previous binary also fails to start, the request is marked failed.
 
 Any failure before the swap leaves the running instance and its data untouched.
 
@@ -147,8 +147,9 @@ When the diff touches any of these, the request stops at `awaiting_approval`. An
 - `src/server/features/policies/`: `routes.ts`, `proposals.ts`, `resolve.ts`
 - `src/server/features/runtimes/launch.ts`
 - `scripts/guard-hook.ts`, `.dependency-cruiser.cjs`, `biome.json`, `lefthook.yml`
+- `src/server/http.ts`, `src/server/origin-app.ts`, `src/server/features/mcp`, `package.json`, `bun.lock`, `bunfig.toml`, `tsconfig*`, `scripts/build.ts`
 - any path containing `sandbox` or `srt`
-- a migration that is deleted or renamed, or whose text mentions `approvals`, `sessions`, `passkey` or `grants`; an unreadable migration is flagged too
+- a migration that is deleted or renamed, or whose text mentions `approvals`, `sessions`, `passkey` `grants`, `users`, `members`, `policies`, `peers`, `fed_invites` or `tokens`; an unreadable migration is flagged too
 
 Paths are compared in one normal form (lowercase, `./` and `..` resolved, a leading `code/` dropped), and renames count for both old and new path.
 
@@ -158,13 +159,20 @@ An admin configures a provider with `POST /api/auth/oidc/providers` (`name`, `is
 
 Login is the authorization code flow with PKCE, `state` and `nonce`. The ID token is checked against the provider's keys (RS256 or ES256), issuer, audience, expiry and nonce, and the email must be verified.
 
+- The provider is trusted to vouch for the address. Only add providers whose issuer you control or trust.
+- The first login pins the provider and its `sub` to the user. A later login with a different provider or `sub` is refused, even with the same email. The pin survives deleting and re-adding the provider.
 - Existing users only. The email must match a user that already exists. No account is created; new users still come in through an invite.
 - An OIDC login opens a session of the same kind as an email-code login. It proves the address, not a passkey, so it starts without step-up. Actions that need step-up still need a passkey touch.
 
 ## Known gaps
 
 - No relay between grantees. A project is shared from its home to each peer; two peers do not see each other's changes except through the home, and a change on a copy reaches only the home.
-- The remote copy of a project is visible to instance admins only.
+- The stub org that holds a remote copy gets the receiving instance's admins as members at the first pull, only while the org has no members. Any admin of that stub org can then add other users.
+- Notes replicate their `disk` and `hash` fields. The receiving instance does not write the file to disk, and the hash is only used for the 409 check on the home.
+- The compiled binary cannot launch agents: the sandbox runtime, guard hook and agent CLI paths are resolved from the source tree, so a deployed copy can hold and sync data but cannot run agents.
+- A service install (systemd or launchd unit) runs `~/.harness/bin/harness`, but self-update flips `<home>/bin/current`. Updating an instance installed this way needs the unit pointed at `<home>/bin/current` by hand.
+- Member and org deletes are not replicated.
+- Deploy approvals do not expire, and old snapshots and built binaries are not cleaned up.
 - Revoking a share does not delete the copy on the peer.
 - A Tailscale Serve mapping is not restored after a restart. Set it again by hand.
 - Deploy to a real remote host has not been tested. It is covered with a local transport and fake `ssh`, `tailscale` and `docker` binaries only.
