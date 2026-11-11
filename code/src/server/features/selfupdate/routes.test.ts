@@ -7,7 +7,7 @@ import { resolveCommit } from "./steps";
 
 setDefaultTimeout(30_000);
 
-async function app(admin: boolean) {
+async function app(admin: boolean, stepUpAt: number | null = Date.now()) {
   const { home, db } = makeHome();
   const repo = await makeRepo("1.0.0");
   const deps = {
@@ -20,7 +20,7 @@ async function app(admin: boolean) {
     beginShutdown: () => {},
     steps: { install: ["sleep", "3"], check: ["false"], build: () => ["false"] },
   };
-  return { db, repo, api: withActor(pipelineRoutes(db, deps), { instanceAdmin: admin }) };
+  return { db, repo, api: withActor(pipelineRoutes(db, deps), { instanceAdmin: admin, stepUpAt }) };
 }
 
 const post = (body: unknown): RequestInit => ({
@@ -33,6 +33,14 @@ test("a non-admin gets 403", async () => {
   const { api, repo } = await app(false);
   expect((await api.request("/requests", post({ repo, branch: "main" }))).status).toBe(403);
   expect((await api.request("/requests/x")).status).toBe(403);
+});
+
+test("an admin without a fresh step-up gets 403 and nothing is queued", async () => {
+  const { api, repo, db } = await app(true, null);
+  const res = await api.request("/requests", post({ repo, branch: "main" }));
+  expect(res.status).toBe(403);
+  expect(((await res.json()) as { error: string }).error).toBe("step_up_required");
+  expect(db.query("SELECT 1 FROM update_requests").get()).toBeNull();
 });
 
 test("an admin queues a request pinned to the branch commit", async () => {
