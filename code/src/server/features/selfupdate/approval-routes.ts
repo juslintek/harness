@@ -13,7 +13,9 @@ export function approvalRoutes(db: Database, deps: PipelineDeps): Hono<AuthEnv> 
   app.get("/requests/:id/review", async (c) => {
     const req = getRequest(db, c.req.param("id"));
     if (!req) return notFound(c);
-    const stat = await diffStat(req.repo, req.commitSha).catch(() => "");
+    const stat = deps.runningCommit
+      ? await diffStat(req.repo, deps.runningCommit, req.commitSha).catch(() => "")
+      : "";
     return c.json({
       id: req.id,
       status: req.status,

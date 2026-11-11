@@ -30,10 +30,23 @@ test("reads names with spaces, newlines and quotes from a real repo, renames inc
   Bun.spawnSync(["git", "commit", "-q", "-m", "mv"], { cwd: repo });
   Bun.spawnSync(["git", "checkout", "-q", "main"], { cwd: repo });
   const sha = await resolveCommit(repo, "feature");
-  const changes = await changedFiles(repo, sha);
+  const base = await resolveCommit(repo, "main");
+  const changes = await changedFiles(repo, base, sha);
   expect(changes.map((c) => c.path).sort()).toEqual(
     [...ODD.map((n) => `code/src/${n}`), "code/src/line\nmoved.ts"].sort(),
   );
   expect(changes.find((c) => c.status.startsWith("R"))?.oldPath).toBe("code/src/moved.ts");
-  expect(await diffStat(repo, sha)).toContain("files changed");
+  expect(await diffStat(repo, base, sha)).toContain("files changed");
+});
+
+test("diffs against the given running commit, not the default branch", async () => {
+  const repo = await makeRepo("1.0.0");
+  const running = await resolveCommit(repo, "main");
+  await branchWith(repo, "later", { "code/src/server/features/guard/x.ts": "export {};\n" });
+  Bun.spawnSync(["git", "merge", "-q", "--ff-only", "later"], { cwd: repo });
+  const sha = await resolveCommit(repo, "main");
+  expect((await changedFiles(repo, running, sha)).map((c) => c.path)).toEqual([
+    "code/src/server/features/guard/x.ts",
+  ]);
+  expect(await changedFiles(repo, sha, sha)).toEqual([]);
 });

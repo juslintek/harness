@@ -3,6 +3,7 @@ import { withActor } from "../../test-support/app-kit";
 import { makeHome, makeRepo } from "../../test-support/selfupdate-kit";
 import { createRequest } from "./requests";
 import { pipelineRoutes } from "./routes";
+import { resolveCommit } from "./steps";
 
 setDefaultTimeout(30_000);
 
@@ -14,6 +15,7 @@ async function app(admin: boolean) {
     port: 1,
     pid: process.pid,
     liveBinary: "/bin/true",
+    runningCommit: await resolveCommit(repo, "main"),
     verifyMs: 1000,
     beginShutdown: () => {},
     steps: { install: ["sleep", "3"], check: ["false"], build: () => ["false"] },

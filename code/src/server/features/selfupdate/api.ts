@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { Hono } from "hono";
 import type { Config } from "../../config";
+import { commit } from "../../version";
 import type { AuthEnv } from "../auth/api";
 import { failInterrupted } from "./requests";
 import { pipelineRoutes } from "./routes";
@@ -23,6 +24,7 @@ export function selfupdateRoutes(
     ...live,
     pid: process.pid,
     liveBinary: process.execPath,
+    runningCommit: commit,
     steps: DEFAULT_STEPS,
     // The normal signal handler in main.ts drains everything in order.
     beginShutdown: () => process.kill(process.pid, "SIGTERM"),

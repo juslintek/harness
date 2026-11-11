@@ -22,7 +22,14 @@ export function parseTarget(value: string): Target {
   return found;
 }
 
-export type BuildOptions = { target: Target; out: string; version?: string };
+export type BuildOptions = { target: Target; out: string; version?: string; commit?: string };
+
+// Baked into the binary so a self-update can diff against what is actually running. Empty when
+// the source is not a git checkout.
+function headCommit(root: string): string {
+  const res = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: root, stderr: "ignore" });
+  return res.exitCode === 0 ? res.stdout.toString().trim() : "";
+}
 
 // Returns the binary path; the checksum goes next to it as <binary>.sha256 in `sha256sum` format.
 export async function build(options: BuildOptions): Promise<string> {
@@ -38,6 +45,8 @@ export async function build(options: BuildOptions): Promise<string> {
       `--target=bun-${options.target}`,
       "--define",
       `HARNESS_VERSION=${JSON.stringify(version)}`,
+      "--define",
+      `HARNESS_COMMIT=${JSON.stringify(options.commit ?? headCommit(root))}`,
       join(root, "src/main.ts"),
       "--outfile",
       outfile,

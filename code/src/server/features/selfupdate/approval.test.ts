@@ -14,17 +14,22 @@ const GUARD_FILE = "code/src/server/features/guard/x.ts";
 const post = (path: string): [string, RequestInit] => [path, { method: "POST" }];
 
 let repo = "";
+let initialSha = "";
 let marks = "";
 let home = "";
 let db: ReturnType<typeof makeHome>["db"];
 let deps: PipelineDeps;
 
-function stepsDeps(build: PipelineDeps["steps"]["build"]): PipelineDeps {
+function stepsDeps(
+  build: PipelineDeps["steps"]["build"],
+  runningCommit: string | null = initialSha,
+): PipelineDeps {
   return {
     home,
     port: 1,
     pid: process.pid,
     liveBinary: "/bin/true",
+    runningCommit,
     verifyMs: 5000,
     beginShutdown: () => {},
     steps: {
@@ -50,6 +55,7 @@ beforeEach(async () => {
   repo = await makeRepo("1.0.0");
   marks = tempDir("marks");
   ({ home, db } = makeHome());
+  initialSha = await resolveCommit(repo, "main");
   deps = stepsDeps(failingBuild);
   await branchWith(repo, "guarded", { [GUARD_FILE]: "export {};\n" });
   await branchWith(repo, "plain", { "code/src/server/features/board/x.ts": "export {};\n" });
@@ -161,20 +167,21 @@ test("a changed pinned sha is failed right before the swap", async () => {
   expect(existsSync(join(home, "bin", "current"))).toBe(false);
 });
 
-test("the diff is classified again before the swap and an unapproved guard change fails", async () => {
-  // The request is clean while main already contains the change; main then moves back, so the
-  // same commit now differs from the default branch in a guard path.
-  const guarded = await resolveCommit(repo, "guarded");
-  const initial = await resolveCommit(repo, "main");
-  Bun.spawnSync(["git", "update-ref", "refs/heads/main", guarded], { cwd: repo });
-  const req = createRequest(db, { repo, branch: "guarded", commitSha: guarded, createdBy: "u1" });
-  const binary = healthyBinary();
-  deps = stepsDeps(() => {
-    Bun.spawnSync(["git", "update-ref", "refs/heads/main", initial], { cwd: repo });
-    return ["echo", binary];
-  });
+test("a guard change already merged into main still stops, because the base is the running commit", async () => {
+  Bun.spawnSync(["git", "merge", "-q", "--ff-only", "guarded"], { cwd: repo });
+  const req = await open("main");
   await runPipeline(db, req.id, deps);
-  expect(getRequest(db, req.id)).toMatchObject({ status: "failed" });
-  expect(getRequest(db, req.id)?.reason).toContain("without approval");
-  expect(existsSync(join(home, "bin", "current"))).toBe(false);
+  expect(getRequest(db, req.id)).toMatchObject({
+    status: "awaiting_approval",
+    flaggedPaths: [GUARD_FILE],
+  });
+  expect(existsSync(join(marks, "checked"))).toBe(false);
+});
+
+test("an unknown running commit sends even a plain change to approval", async () => {
+  deps = stepsDeps(failingBuild, null);
+  const req = await open("plain");
+  await runPipeline(db, req.id, deps);
+  expect(getRequest(db, req.id)?.status).toBe("awaiting_approval");
+  expect(existsSync(join(marks, "built"))).toBe(false);
 });

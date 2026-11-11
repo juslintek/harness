@@ -171,6 +171,7 @@ describe("the full pipeline", () => {
       port: s.port,
       pid: s.pid,
       liveBinary: oldBin,
+      runningCommit: commitSha,
       verifyMs: 30_000,
       beginShutdown: () => void s.stopOld(),
       steps: {

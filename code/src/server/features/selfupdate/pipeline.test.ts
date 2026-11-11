@@ -23,6 +23,7 @@ async function run(steps: Partial<PipelineDeps["steps"]>): Promise<ReturnType<ty
     port: 1,
     pid: process.pid,
     liveBinary: "/bin/true",
+    runningCommit: commitSha,
     verifyMs: 3000,
     beginShutdown: () => {
       shutdowns++;

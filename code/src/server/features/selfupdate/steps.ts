@@ -38,12 +38,22 @@ export async function removeWorktree(repo: string, path: string): Promise<void> 
   );
 }
 
-export async function classifyChange(repo: string, sha: string): Promise<string[]> {
+export const UNKNOWN_BASE = "(running commit unknown: every change needs approval)";
+
+// The base is what the live process was built from, so a branch cannot hide a guard change by
+// sharing it with the default branch. Without a usable base nothing can be ruled out.
+export async function classifyChange(
+  repo: string,
+  sha: string,
+  running: string | null,
+): Promise<string[]> {
+  const base = running === null ? null : await resolveCommit(repo, running).catch(() => null);
+  if (base === null) return [UNKNOWN_BASE];
   const readNew = async (path: string): Promise<string | null> => {
     const res = await runCommand(["git", "show", `${sha}:${path}`], repo);
     return res.code === 0 ? res.out : null;
   };
-  return (await classify(await changedFiles(repo, sha), readNew)).flagged;
+  return (await classify(await changedFiles(repo, base, sha), readNew)).flagged;
 }
 
 export async function headSha(tree: string): Promise<string> {

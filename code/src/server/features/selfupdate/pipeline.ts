@@ -23,6 +23,8 @@ export interface PipelineDeps {
   pid: number;
   // The binary the live process runs; it is the rollback target the first time.
   liveBinary: string;
+  // The commit the live binary was built from; null when unknown (every update then needs approval).
+  runningCommit: string | null;
   steps: StepDeps;
   beginShutdown: () => void;
   verifyMs: number;
@@ -77,12 +79,17 @@ async function startSwap(
 
 // Defence in depth right before the swap: what is about to run must be the pinned commit, and
 // the diff classified now (the default branch may have moved) must not need a decision nobody made.
-async function assertStillPinned(db: Database, req: UpdateRequest, tree: string): Promise<void> {
+async function assertStillPinned(
+  db: Database,
+  req: UpdateRequest,
+  tree: string,
+  deps: PipelineDeps,
+): Promise<void> {
   const now = getRequest(db, req.id);
   if (!now || now.commitSha !== req.commitSha || (await headSha(tree)) !== req.commitSha) {
     throw new Error("pinned commit changed during the pipeline");
   }
-  const flagged = await classifyChange(req.repo, now.commitSha);
+  const flagged = await classifyChange(req.repo, now.commitSha, deps.runningCommit);
   if (flagged.length > 0 && now.decidedBy === null) {
     throw new Error("guard paths changed without approval");
   }
@@ -95,7 +102,7 @@ async function execute(
   tree: string,
 ): Promise<void> {
   setStatus(db, req.id, "checking");
-  const flagged = await classifyChange(req.repo, req.commitSha);
+  const flagged = await classifyChange(req.repo, req.commitSha, deps.runningCommit);
   if (flagged.length > 0 && req.decidedBy === null) {
     setFlagged(db, req.id, flagged);
     setStatus(db, req.id, "awaiting_approval");
@@ -119,7 +126,7 @@ async function execute(
     version: expectedVersion(deps.steps, codeDir),
     timeoutMs: deps.verifyMs,
   });
-  await assertStillPinned(db, req, tree);
+  await assertStillPinned(db, req, tree, deps);
   await startSwap(db, req, deps, binary);
 }
 
