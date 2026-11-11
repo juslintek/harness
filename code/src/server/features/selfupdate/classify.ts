@@ -11,6 +11,7 @@ const GUARDED_DIRS = [
   "src/server/features/auth",
   "src/server/features/federation",
   "src/server/features/oauth",
+  "src/server/features/mcp",
   "src/server/features/selfupdate",
 ];
 const GUARDED_FILES = new Set([
@@ -22,9 +23,17 @@ const GUARDED_FILES = new Set([
   ".dependency-cruiser.cjs",
   "biome.json",
   "lefthook.yml",
+  "src/server/http.ts",
+  "src/server/origin-app.ts",
+  "package.json",
+  "bun.lock",
+  "bunfig.toml",
+  "scripts/build.ts",
 ]);
 const MIGRATIONS = "src/server/db/migrations";
-const MIGRATION_TERMS = /approvals|sessions|passkey|grants/i;
+const MIGRATION_TERMS =
+  /approvals|sessions|passkey|grants|tokens|\b(users|members|policies|peers|fed_invites)\b/i;
+const TSCONFIG = /^tsconfig[^/]*$/;
 
 // Compared in one canonical form so case, `./`, `//`, `..` and backslashes cannot dodge the
 // prefixes. A leading `code/` is dropped because the harness app sits under it in the repo.
@@ -48,6 +57,7 @@ function guarded(path: string): boolean {
   return (
     GUARDED_DIRS.some((dir) => under(norm, dir)) ||
     GUARDED_FILES.has(norm) ||
+    TSCONFIG.test(norm) ||
     norm.includes("sandbox") ||
     norm.includes("srt")
   );

@@ -31,6 +31,15 @@ const FLAGGED: [string, Change][] = [
   ["type change in guard", { status: "T", path: G }],
   ["rename out of guard", { status: "R100", path: "code/src/lib/x.ts", oldPath: G }],
   ["rename into guard", { status: "R090", path: G, oldPath: "code/src/lib/x.ts" }],
+  ["http mounting", mod("code/src/server/http.ts")],
+  ["origin app", mod("code/src/server/origin-app.ts")],
+  ["mcp tools", mod("code/src/server/features/mcp/tools.ts")],
+  ["package.json", mod("code/package.json")],
+  ["bun.lock", mod("code/bun.lock")],
+  ["bunfig", mod("code/bunfig.toml")],
+  ["tsconfig", mod("code/tsconfig.json")],
+  ["tsconfig variant", mod("code/tsconfig.build.json")],
+  ["build script", mod("code/scripts/build.ts")],
   ["migration mentioning approvals", mod("code/src/server/db/migrations/040_x.sql")],
 ];
 
@@ -57,6 +66,19 @@ test("migration terms are matched case-insensitively and unreadable or deleted o
   expect((await classify([mod(path)], async () => null)).flagged).toEqual([path]);
   expect((await classify([mod(path)])).flagged).toEqual([path]);
   expect(await flaggedFor({ status: "D", path })).toEqual([path]);
+});
+
+test.each(["users", "members", "policies", "peers", "fed_invites", "run_tokens", "oauth_tokens"])(
+  "a migration touching %s is flagged",
+  async (table) => {
+    const path = "code/src/server/db/migrations/043_x.sql";
+    expect(await flaggedFor(mod(path), `UPDATE ${table} SET x = 1`)).toEqual([path]);
+  },
+);
+
+test("a migration on an unrelated table is not flagged", async () => {
+  const path = "code/src/server/db/migrations/044_x.sql";
+  expect(await flaggedFor(mod(path), "ALTER TABLE board_cards ADD note TEXT")).toEqual([]);
 });
 
 test("a rename reports the side that matched", async () => {
