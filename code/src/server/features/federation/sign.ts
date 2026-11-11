@@ -27,9 +27,10 @@ export function canonicalString(
   timestamp: string,
   nonce: string,
   bodySha256Hex: string,
+  sender: string,
   audience: string,
 ): string {
-  return `${method.toUpperCase()}\n${pathWithQuery}\n${timestamp}\n${nonce}\n${bodySha256Hex}\n${audience}`;
+  return `${method.toUpperCase()}\n${pathWithQuery}\n${timestamp}\n${nonce}\n${bodySha256Hex}\n${sender}\n${audience}`;
 }
 
 export function signRequest(privateKeyB64: string, parts: SignParts): SignedHeaders {
@@ -46,6 +47,7 @@ export function signRequest(privateKeyB64: string, parts: SignParts): SignedHead
     timestamp,
     nonce,
     sha256Hex(parts.body),
+    parts.instance,
     parts.audience,
   );
   return {

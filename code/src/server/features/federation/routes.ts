@@ -58,10 +58,10 @@ export function federationRoutes(db: Database, deps: FederationRouteDeps): Hono<
 
 // Public and unsigned: the one-time invite token in the body is the proof. Refusals look the same
 // for a wrong, used and expired token.
-function pairRoute(db: Database, home: string): Hono {
+function pairRoute(db: Database, home: string, ownUrl: string): Hono {
   const app = new Hono();
   app.post("/pair", async (c) => {
-    const answer = acceptPair(db, home, await c.req.json().catch(() => null));
+    const answer = acceptPair(db, home, await c.req.json().catch(() => null), ownUrl);
     if (answer === "invalid") return c.json({ error: "invalid body" }, 400);
     if (answer === "refused") return c.json({ error: "invite refused" }, 403);
     return c.json(answer);
@@ -71,9 +71,9 @@ function pairRoute(db: Database, home: string): Hono {
 
 // Everything under /federation: the unsigned pairing route first, then every route that needs a
 // signed peer request.
-export function peerRoutes(db: Database, home: string): Hono<PeerEnv> {
+export function peerRoutes(db: Database, home: string, ownUrl: string): Hono<PeerEnv> {
   const app = new Hono<PeerEnv>();
-  app.route("/", pairRoute(db, home));
+  app.route("/", pairRoute(db, home, ownUrl));
   app.use("*", requirePeer(db));
   app.get("/ping", (c) => c.json({ ok: true, instanceId: ensureInstance(db) }));
   app.route("/", feedRoutes(db, home));

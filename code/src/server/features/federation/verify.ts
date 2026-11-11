@@ -84,6 +84,7 @@ export function requirePeer(db: Database, deps: VerifyDeps = {}): MiddlewareHand
       timestamp,
       nonce,
       sha256Hex(body),
+      peer.id,
       ensureInstance(db),
     );
     if (!signatureHolds(peer.publicKey, text, signature) || !burnNonce(db, nonce, now)) {

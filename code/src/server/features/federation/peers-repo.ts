@@ -34,18 +34,25 @@ export function listPeers(db: Database): PeerRow[] {
   return db.query<Raw, []>("SELECT * FROM peers ORDER BY paired_at, id").all().map(toPeer);
 }
 
-// Pairing again with a known instance may refresh its name and url, but never swaps the key and
-// never lifts a revocation. False means the id is taken by a different key.
+// Pairing again with a known instance may refresh its name, but never swaps the key, never moves
+// the url (a url change would hand the peer's identity to whoever controls the new host) and
+// never lifts a revocation. False means the id is taken by a different key or url, the id is
+// revoked (a revoked peer is not re-admitted by pairing again), or the key already belongs to
+// another active peer.
 export function insertPeer(db: Database, peer: Omit<PeerRow, "lastSeenAt" | "revokedAt">): boolean {
-  return (
-    db.run(
-      `INSERT INTO peers (id, name, url, public_key, paired_at) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET name = excluded.name, url = excluded.url,
-         paired_at = excluded.paired_at
-       WHERE public_key = excluded.public_key`,
-      [peer.id, peer.name, peer.url, peer.publicKey, peer.pairedAt],
-    ).changes === 1
-  );
+  try {
+    return (
+      db.run(
+        `INSERT INTO peers (id, name, url, public_key, paired_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, paired_at = excluded.paired_at
+         WHERE public_key = excluded.public_key AND url = excluded.url AND revoked_at IS NULL`,
+        [peer.id, peer.name, peer.url, peer.publicKey, peer.pairedAt],
+      ).changes === 1
+    );
+  } catch (err) {
+    if (err instanceof Error && err.message.includes("UNIQUE")) return false;
+    throw err;
+  }
 }
 
 export function revokePeer(db: Database, id: string, now: number = Date.now()): boolean {

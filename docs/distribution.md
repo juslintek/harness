@@ -55,12 +55,14 @@ Limits, stated plainly:
 Two instances trust each other only after pairing.
 
 1. On instance B an admin creates an invite: `POST /api/federation/invites` (step-up). It is a random 32-byte token, valid 15 minutes, usable once. Only its hash is stored.
-2. On instance A an admin pairs: `POST /api/federation/peers/pair` with B's `url` and the token (step-up). A sends its instance id, name, URL and public key to `B/federation/pair`. B checks and burns the token in the same transaction that stores A, and answers with its own key.
+2. On instance A an admin pairs: `POST /api/federation/peers/pair` with B's `url` and the token (step-up). A sends its instance id, name, URL, public key and a proof to `B/federation/pair`. The proof is an Ed25519 signature, made with A's private key, over `JSON.stringify(["harness-pair/v2", direction, token, signer, other, url])` (the request proof has direction `request`, A's id as signer, an empty `other` and A's URL), so only the holder of the key can pair under that id and the URL cannot be swapped on the way. B checks the proof, burns the token in the same transaction that stores A, and answers with its own key, its URL and its own proof over the same array with direction `answer`, B's id as signer, A's id as `other` and B's URL. A refuses the answer if the proof fails or if the URL in the signed answer is on another origin than the one A dialed.
 3. Both sides now hold the other's Ed25519 public key. Compare the fingerprints from `GET /api/federation/identity` and `GET /api/federation/peers` if you want to check by eye.
 
 The peer URL must be `https`, with no credentials. Plain `http` is accepted only for a loopback host. Wrong, used and expired tokens all get the same refusal. A deploy leaves its code in `<home>/pair-invite`; the new instance turns it into a normal invite at boot and deletes the file.
 
 The private key is stored as `federation.key` in `secrets.json`. It never goes into the database, logs or any payload.
+
+A known instance id can never be paired again with a different key or URL, and pairing never lifts a revocation: a revoked peer that pairs again, even with the same key and URL, is refused and its invite is not used up. A revoked instance id stays revoked; there is no way to re-pair it. An active public key belongs to one peer only; migration 037 enforces that with a unique index, and on upgrade it revokes the later duplicates among active peers (the earliest pairing keeps trust, nothing is deleted). The pair answer carries the receiving instance's own origin (`HARNESS_ORIGIN`), so set it to the address peers use to reach this instance. The answer must carry that URL and it must be on the origin the dialer used; there is no exception for answers without one. Ids and tokens in a pairing must be plain `[A-Za-z0-9_-]` strings, a URL must equal its own bare origin exactly (`new URL(url).origin`: no path, no trailing slash, no query, no credentials), and the proofs sign a JSON array of their fields, so no field can be moved across a boundary.
 
 Revoke a peer with `DELETE /api/federation/peers/:id` (step-up).
 
@@ -71,7 +73,19 @@ After pairing, every call between instances is signed. Headers:
 - `X-Harness-Instance`: the sender's instance id
 - `X-Harness-Timestamp`: milliseconds since epoch
 - `X-Harness-Nonce`: 16 random bytes, base64url
-- `X-Harness-Signature`: base64url Ed25519 signature over `METHOD\nPATH_WITH_QUERY\nTIMESTAMP\nNONCE\nsha256hex(body)\nRECEIVER_INSTANCE_ID`, so a request signed for one peer is refused by any other
+- `X-Harness-Signature`: base64url Ed25519 signature over the text below, one field per line, joined with a real `\n` between fields (no trailing newline):
+
+```
+METHOD
+PATH_WITH_QUERY
+TIMESTAMP
+NONCE
+sha256hex(body)
+SENDER_INSTANCE_ID
+RECEIVER_INSTANCE_ID
+```
+
+The sender id is checked against the key it signed with, and the receiver id is its own id, so a request signed for one peer is refused by any other and a signature cannot be presented as another instance. This changes the wire format: an instance on the build before these fixes and one on this build can neither pair nor verify each other's signed calls, so upgrade all paired instances together.
 
 The receiver refuses with one identical 401 when the instance is unknown or revoked, the timestamp is more than 5 minutes off, the signature fails, or the nonce was seen before. Nonces are kept 10 minutes and recorded only after the signature checks out. Bodies over 1 MiB are refused with 413. The requests go to the peer's public origin, under `/federation`.
 
@@ -83,7 +97,7 @@ Sharing works like a local grant, to an org that stands for the other instance.
 - `DELETE /api/federation/shares/:projectId/:peerId` stops the feed.
 - `GET /api/federation/shares` lists shares you can administer.
 
-On share, the peer gets a stub org and a grant, and the whole project is queued for its first pull. Each instance pulls from the other every 5 seconds (backing off to 60 seconds on failure). A write grant lets the peer's changes to tasks, task dependencies, comments, messages and notes come back; a read grant does not. The peer cannot change orgs, projects or grants.
+On share, the peer gets a stub org and a grant, and the whole project is queued for its first pull. Each instance pulls from the other every 5 seconds (backing off to 60 seconds on failure). A write grant lets the peer's changes to tasks, task dependencies, comments, messages and notes come back; a read grant does not. The peer cannot change orgs, projects or grants. Ownership checks on a write peer are partial. Comments and messages need their stored and new author to be a member of the peer's stub org. A write peer may edit tasks that home users created, but a change that alters a stored task's creator, parent or project, or a stored message's thread root or channel, is refused as a whole; the holder and checkout time in a peer's task put are replaced by the stored values (leases go through the home). A new task must name the peer's own member as creator. When a row is applied, a task's parent must be stored in the same project and a reply's thread root must be a stored root in the same channel; a child whose parent is in another project, or whose root is in another channel or is itself a reply, is rejected. A parent and its first child can arrive in the same page, because the check reads what earlier rows of the page already stored. A stored task never changes project and a stored message never changes channel at apply either (such a put is rejected), because moving a row into a project the peer homes would let the peer delete it there and cascade over its children. A child that is sent before its parent in a page is rejected and is not sent again until it changes. A project or channel reference that is not a string is refused. Notes and task dependencies have no ownership check at all: a write peer can change any note or dependency of a granted project (this was already so before these fixes). A write peer cannot delete tasks or root messages, because deletes cascade into home users' comments, subtasks and local rows; it cancels a task by status instead. It can still delete its own comments and non-root messages.
 
 Revoking a share only stops the feed. The peer keeps the copy it already pulled. This instance cannot delete rows in another instance's database.
 
@@ -147,9 +161,12 @@ When the diff touches any of these, the request stops at `awaiting_approval`. An
 - `src/server/features/policies/`: `routes.ts`, `proposals.ts`, `resolve.ts`
 - `src/server/features/runtimes/launch.ts`
 - `scripts/guard-hook.ts`, `.dependency-cruiser.cjs`, `biome.json`, `lefthook.yml`
+- `src/main.ts`, `src/server/config.ts`, `src/server/db/migrations.ts`, `src/server/features/runtimes/decide.ts`, `src/server/features/orgs/roles.ts`, `src/server/features/orgs/routes-kit.ts` (they call `checkAction` or map roles to access). A guarded source file also guards the files that could shadow it for an extensionless import. Checked on Bun 1.4.4 with `bun run` and `bun build`: a `.tsx`, `.jsx` or `.mts` sibling, or an extensionless file with the same stem, is loaded instead of the `.ts`. A `.cts`, `.js`, `.mjs`, `.cjs` or `.json` sibling is not, but it is flagged anyway in case that order changes
 - `src/server/http.ts`, `src/server/origin-app.ts`, `src/server/features/mcp`, `package.json`, `bun.lock`, `bunfig.toml`, `tsconfig*`, `scripts/build.ts`
 - any path containing `sandbox` or `srt`
-- a migration that is deleted or renamed, or whose text mentions `approvals`, `sessions`, `passkey` `grants`, `users`, `members`, `policies`, `peers`, `fed_invites` or `tokens`; an unreadable migration is flagged too
+- any path with a character outside printable ASCII (so look-alike names such as `ſrc`, ligatures and decomposed accents), with a control character, or with a segment ending in a dot or a space, on either side of a rename: case-insensitive filesystems (APFS) fold such names onto real paths, so a branch could otherwise plant a file in a guarded directory that the path rules never see
+- any path with a `node_modules` segment, and any `package.json`, `tsconfig*`, `jsconfig.json` or `bunfig.toml` at any depth, because a nested one redirects the imports of guarded modules
+- any `.sql` file under `src/server/db` that is deleted or renamed, or whose text contains one of these as a substring (so `team_members` and `policy_rules` match): `approvals`, `sessions`, `passkey`, `grants`, `tokens`, `users`, `members`, `polic`, `peers`, `fed_invites`, `oidc_`, `oauth_`, `recovery_codes`, `email_codes`, `enrollments`, `challenges`, `notify_targets`, `instance`, `update_requests`, `deploy_requests`; an unreadable file is flagged too
 
 Paths are compared in one normal form (lowercase, `./` and `..` resolved, a leading `code/` dropped), and renames count for both old and new path.
 
@@ -160,7 +177,7 @@ An admin configures a provider with `POST /api/auth/oidc/providers` (`name`, `is
 Login is the authorization code flow with PKCE, `state` and `nonce`. The ID token is checked against the provider's keys (RS256 or ES256), issuer, audience, expiry and nonce, and the email must be verified.
 
 - The provider is trusted to vouch for the address. Only add providers whose issuer you control or trust.
-- The first login pins the provider and its `sub` to the user. A later login with a different provider or `sub` is refused, even with the same email. The pin survives deleting and re-adding the provider.
+- The first login pins the provider's issuer and the `sub` to the user. A later login with a different issuer or `sub` is refused, even with the same email. The pin is on the issuer, not on the provider entry, so deleting and re-adding a provider with the same issuer does not lock anyone out. One `(issuer, sub)` pins one user, and provider entries with the same issuer share their pins even if the client ids differ. Migration 038 carried the old pins over by issuer: pins whose provider entry was already deleted were dropped (those users pin again on their next login), and where two users shared one `(issuer, sub)` only one pin was kept, chosen arbitrarily. An instance admin can clear a pin with `DELETE /api/auth/oidc/users/:userId/identity` (step-up needed); `GET` on the same path shows it. The user then pins again on the next OIDC login.
 - Existing users only. The email must match a user that already exists. No account is created; new users still come in through an invite.
 - An OIDC login opens a session of the same kind as an email-code login. It proves the address, not a passkey, so it starts without step-up. Actions that need step-up still need a passkey touch.
 

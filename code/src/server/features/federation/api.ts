@@ -37,8 +37,8 @@ export function federationRoutes(db: Database, deps: FederationRouteDeps): Hono<
 
 // Public (pairing by invite token, everything else signed); the caller mounts it before the
 // session routes.
-export function peerRoutes(db: Database, home: string): Hono<PeerEnv> {
-  return publicPeer(db, home);
+export function peerRoutes(db: Database, home: string, ownUrl: string): Hono<PeerEnv> {
+  return publicPeer(db, home, ownUrl);
 }
 
 export function startFederation(db: Database, deps: FederationDeps): () => Promise<void> {

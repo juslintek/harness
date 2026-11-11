@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { beforeAll, expect, test } from "bun:test";
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, sign } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { build, hostTarget } from "../../../../scripts/build";
@@ -84,6 +84,22 @@ test(
 
       expect(files(targetHome)).not.toContain(join(targetHome, "pair-invite"));
       const invite = kit.puts.find((put) => put.path.endsWith("pair-invite"))?.text ?? "";
+      // A well-formed request with a valid proof, so only the used-up invite can refuse it.
+      const intruder = generateKeyPairSync("ed25519");
+      const proof = sign(
+        null,
+        Buffer.from(
+          JSON.stringify([
+            "harness-pair/v2",
+            "request",
+            invite,
+            "intruder",
+            "",
+            "http://127.0.0.1:1",
+          ]),
+        ),
+        intruder.privateKey,
+      ).toString("base64url");
       const reuse = await fetch(`http://localhost:${port}/federation/pair`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -92,9 +108,8 @@ test(
           instanceId: "intruder",
           name: "intruder",
           url: "http://127.0.0.1:1",
-          publicKey: generateKeyPairSync("ed25519")
-            .publicKey.export({ format: "der", type: "spki" })
-            .toString("base64"),
+          publicKey: intruder.publicKey.export({ format: "der", type: "spki" }).toString("base64"),
+          proof,
         }),
       });
       expect(reuse.status).toBe(403);

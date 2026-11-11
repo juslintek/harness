@@ -364,6 +364,34 @@
     }
   },
   {
+    "method": "DELETE",
+    "path": "/api/auth/oidc/users/:userId/identity",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/auth/oidc/users/:userId/identity",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
     "method": "GET",
     "path": "/api/auth/passkeys",
     "policy": {

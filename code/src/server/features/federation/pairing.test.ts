@@ -9,6 +9,7 @@ import { createApp } from "../../http";
 import { listenDeferred, sessionHeaders } from "../../test-support/app-kit";
 import { getSecret } from "../agents/api";
 import { fingerprint, parsePublicKey, publicKeyB64 } from "./keys";
+import { pairProof, pairProofHolds } from "./pair-proof";
 import { peerOrigin } from "./pairing";
 import { getPeer } from "./peers-repo";
 
@@ -112,6 +113,7 @@ test("the pair endpoint is public but refuses a wrong token and a malformed body
     name: "x",
     url: "https://x.example",
     publicKey: publicKeyB64(b.home),
+    proof: pairProof(b.home, "request", "nope", "x", "", "https://x.example"),
   };
   const headers = { "content-type": "application/json" };
   expect((await call(a, "POST", "/federation/pair", headers, body)).status).toBe(403);
@@ -202,20 +204,91 @@ test("pairing an existing instance id with another key is refused and never lift
         token: string;
       }
     ).token;
-  const pairAs = async (publicKey: string): Promise<number> =>
-    (
+  const pairAs = async (publicKey: string, url = b.origin): Promise<number> => {
+    const token = await invite();
+    // Signed with b's key either way: a hijacker holding only the public key cannot do this.
+    const proof = pairProof(b.home, "request", token, b.instanceId, "", url);
+    return (
       await call(a, "POST", "/federation/pair", headers, {
-        token: await invite(),
+        token,
         instanceId: b.instanceId,
         name: "again",
-        url: b.origin,
+        url,
         publicKey,
+        proof,
       })
     ).status;
+  };
 
   // b was revoked on a by an earlier test.
-  expect(await pairAs(hijack)).toBe(403);
+  expect(await pairAs(hijack)).toBe(400);
   expect(getPeer(a.db, b.instanceId)?.publicKey).toBe(original);
-  expect(await pairAs(original)).toBe(200);
+  expect(await pairAs(original)).toBe(403);
   expect(getPeer(a.db, b.instanceId)?.revokedAt).not.toBeNull();
+  expect(await pairAs(original, "https://m.evil.example")).toBe(403);
+  expect(getPeer(a.db, b.instanceId)?.url).toBe(b.origin);
+});
+
+test("a valid proof from a new key for a known instance id is refused and changes nothing", async () => {
+  const admin = await sessionHeaders(a.db, { admin: true, stepUp: true, origin: a.origin });
+  const token = (
+    JSON.parse((await call(a, "POST", "/api/federation/invites", admin.headers)).text) as {
+      token: string;
+    }
+  ).token;
+  const before = getPeer(a.db, b.instanceId);
+  expect(before).toBeDefined();
+  // The proof is signed by a's key, so it is valid for the key it presents; the url is b's own so only the key guard can refuse it.
+  const res = await call(
+    a,
+    "POST",
+    "/federation/pair",
+    { "content-type": "application/json" },
+    {
+      token,
+      instanceId: b.instanceId,
+      name: "swapped",
+      url: b.origin,
+      publicKey: publicKeyB64(a.home),
+      proof: pairProof(a.home, "request", token, b.instanceId, "", b.origin),
+    },
+  );
+  expect(res.status).toBe(403);
+  expect(getPeer(a.db, b.instanceId)).toEqual(before);
+});
+
+test("the pair answer carries this instance's own origin, signed", async () => {
+  const admin = await sessionHeaders(a.db, { admin: true, stepUp: true, origin: a.origin });
+  const { token } = JSON.parse(
+    (await call(a, "POST", "/api/federation/invites", admin.headers)).text,
+  ) as { token: string };
+  const newcomer = mkdtempSync(join(tmpdir(), "harness-fed-new-"));
+  const res = await call(
+    a,
+    "POST",
+    "/federation/pair",
+    { "content-type": "application/json" },
+    {
+      token,
+      instanceId: "newcomer",
+      name: "newcomer",
+      url: "https://newcomer.example",
+      publicKey: publicKeyB64(newcomer),
+      proof: pairProof(newcomer, "request", token, "newcomer", "", "https://newcomer.example"),
+    },
+  );
+  expect(res.status).toBe(200);
+  const answer = JSON.parse(res.text) as { instanceId: string; url: string; proof: string };
+  expect(answer.url).toBe(a.origin);
+  expect(
+    pairProofHolds(
+      publicKeyB64(a.home),
+      answer.proof,
+      "answer",
+      token,
+      a.instanceId,
+      "newcomer",
+      a.origin,
+    ),
+  ).toBe(true);
 });

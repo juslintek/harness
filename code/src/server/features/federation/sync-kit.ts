@@ -169,3 +169,15 @@ export const taskRow = (id: string, project: string, org: string): object => ({
   created_at: 1,
   updated_at: 1,
 });
+
+// A human member of the stub org that stands for `peer` on `host`, as the peer's own users appear there.
+export function addPeerMember(host: Node, peer: Node, id: string): void {
+  const stub = host.db
+    .query<{ id: string }, [string]>("SELECT id FROM orgs WHERE home_instance = ?")
+    .get(peer.instanceId)?.id;
+  host.db.run(
+    `INSERT INTO members (id, org_id, kind, user_id, handle, display_name, role, created_at)
+     VALUES (?, ?, 'human', ?, ?, ?, 'member', 1)`,
+    [id, stub ?? null, `remote:${id}`, id, id],
+  );
+}

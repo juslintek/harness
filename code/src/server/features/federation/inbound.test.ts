@@ -4,6 +4,7 @@ import { createProject } from "../orgs/api";
 import type { Change } from "./apply";
 import { permitInbound } from "./inbound";
 import {
+  addPeerMember,
   bootNode,
   type Node,
   pairNodes,
@@ -26,7 +27,11 @@ const change = (
   data: object,
   origin?: string,
 ): Change => peerChange(b, table, rowId, project, data, origin);
-const taskData = taskRow;
+// Created by the peer's own member, so a negative below fails for its own reason and not for authorship.
+const taskData = (id: string, project: string, org: string): object => ({
+  ...taskRow(id, project, org),
+  created_by: "m-bee",
+});
 
 beforeAll(async () => {
   [a, b] = await Promise.all([bootNode(), bootNode()]);
@@ -39,6 +44,7 @@ beforeAll(async () => {
     createdBy: seed.memberId,
   }).id;
   await shareTo(a, seed, b, "write");
+  addPeerMember(a, b, "m-bee");
 });
 
 afterAll(() => {
@@ -49,21 +55,19 @@ afterAll(() => {
 const verdict = (c: Change): number => permitInbound(a.db, b.instanceId, [c]).allowed.length;
 
 test("a well-formed task for a project granted write is allowed", () => {
-  expect(
-    verdict(
-      change("tasks", "t-new", seed.projectId, taskData("t-new", seed.projectId, seed.orgId)),
-    ),
-  ).toBe(1);
+  const task = taskData("t-new", seed.projectId, seed.orgId);
+  expect(verdict(change("tasks", "t-new", seed.projectId, task))).toBe(1);
 });
 
 test("a task row cannot be moved into, or taken from, a project the peer has no grant on", () => {
   const label = seed.projectId;
-  expect(
-    verdict(change("tasks", privateTask, label, taskData(privateTask, privateProject, seed.orgId))),
-  ).toBe(0);
-  expect(
-    verdict(change("tasks", privateTask, label, taskData(privateTask, label, seed.orgId))),
-  ).toBe(0);
+  // The stored creator is sent as is, so only the project rules can refuse these two.
+  const stored = (project: string): object => ({
+    ...taskData(privateTask, project, seed.orgId),
+    created_by: seed.memberId,
+  });
+  expect(verdict(change("tasks", privateTask, label, stored(privateProject)))).toBe(0);
+  expect(verdict(change("tasks", privateTask, label, stored(label)))).toBe(0);
   expect(verdict(change("tasks", "t2", label, taskData("t2", privateProject, seed.orgId)))).toBe(0);
   expect(
     verdict(change("tasks", "t3", privateProject, taskData("t3", privateProject, seed.orgId))),

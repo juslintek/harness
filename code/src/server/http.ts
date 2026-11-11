@@ -280,7 +280,7 @@ export function createApp(deps: AppDeps): Hono {
       deliverEmailCode: deps.deliverEmailCode ?? consoleEmailCode,
     }),
   );
-  app.route("/federation", peerRoutes(db, deps.home));
+  app.route("/federation", peerRoutes(db, deps.home, deps.rp.origin));
   mountSessionRoutes(app, deps);
   app.use("/ws", sessionMiddleware(db), originGuard(deps.rp.origin));
   app.get("/ws", wsUpgrade(db));

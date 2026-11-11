@@ -89,6 +89,42 @@ function parentsPresent(db: Database, spec: TableSpec, row: Row): boolean {
   });
 }
 
+// A task hangs under a parent of its own project and a reply under a root of its own channel.
+// Without it a write peer could hang a task under a row it can delete elsewhere (its copy
+// project) and the cascade would take the home's comments and subtasks. It is checked here, not
+// when the page is permitted, because the parent may be an earlier row of the same page.
+function parentStaysPut(db: Database, spec: TableSpec, row: Row): boolean {
+  if (spec.name === "tasks" && row.parent_id != null) {
+    const parent = db
+      .query<{ project_id: string }, [Cell]>("SELECT project_id FROM tasks WHERE id = ?")
+      .get(row.parent_id);
+    return parent?.project_id === row.project_id;
+  }
+  if (spec.name === "messages" && row.thread_root_id != null) {
+    const root = db
+      .query<{ channel_id: string; thread_root_id: string | null }, [Cell]>(
+        "SELECT channel_id, thread_root_id FROM messages WHERE id = ?",
+      )
+      .get(row.thread_root_id);
+    return root?.thread_root_id === null && root.channel_id === row.channel_id;
+  }
+  return true;
+}
+
+// A stored task keeps its project and a stored message its channel. permit judges a page against the
+// state before it, so a row put twice in one page (first in the granted project, then labelled
+// with the copy project) would otherwise be moved, leaving its children behind to be cascaded away
+// when the copy-project label deletes it.
+function staysInPlace(db: Database, spec: TableSpec, row: Row): boolean {
+  const column =
+    spec.name === "tasks" ? "project_id" : spec.name === "messages" ? "channel_id" : null;
+  if (!column) return true;
+  const stored = db
+    .query<{ place: string }, [Cell]>(`SELECT ${column} AS place FROM ${spec.name} WHERE id = ?`)
+    .get(row.id ?? null);
+  return !stored || stored.place === row[column];
+}
+
 // slug and (org_id, number) are unique per instance, but each instance picks them on its own, so a
 // replicated row can clash with a local one. The incoming row gives way: a task keeps the number it
 // already has here or takes the next free one, an org gets its id appended to the slug. Dropping
@@ -145,7 +181,8 @@ function put(
   const row = parseData(spec, change);
   if (!row || ownedHere(db, spec, change.row_id)) return "rejected";
   if (!wins(change, localStamp(db, spec, change.row_id))) return "stale";
-  if (!parentsPresent(db, spec, row)) return "rejected";
+  if (!parentsPresent(db, spec, row) || !parentStaysPut(db, spec, row)) return "rejected";
+  if (!staysInPlace(db, spec, row)) return "rejected";
   upsert(db, spec, freeOfLocalClash(db, spec, row), change);
   // comments and messages have a `body` column of their own; only a note's body is a file.
   const fileBody = spec.name === "notes" && typeof row.body === "string" ? row.body : null;

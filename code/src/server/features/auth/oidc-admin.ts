@@ -4,7 +4,14 @@ import { z } from "zod";
 import { deleteSecret, getSecret, setSecret } from "../agents/api";
 import { type AuthEnv, requireInstanceAdmin, requireStepUp } from "./middleware";
 import { isAllowedProviderUrl } from "./oidc";
-import { deleteProvider, insertProvider, listProviders, type OidcProvider } from "./oidc-repo";
+import {
+  deletePin,
+  deleteProvider,
+  insertProvider,
+  listPins,
+  listProviders,
+  type OidcProvider,
+} from "./oidc-repo";
 import { invalidBody, parseBody } from "./routes";
 
 const providerBody = z.object({
@@ -39,4 +46,11 @@ export function oidcAdminRoutes(app: Hono<AuthEnv>, db: Database, home: string):
     deleteSecret(`oidc.${id}`, home);
     return c.json({ ok: true });
   });
+  // Clearing a pin lets the user pin again on the next OIDC login, so it is an admin action.
+  app.get("/oidc/users/:userId/identity", requireInstanceAdmin, requireStepUp, (c) =>
+    c.json(listPins(db, c.req.param("userId"))),
+  );
+  app.delete("/oidc/users/:userId/identity", requireInstanceAdmin, requireStepUp, (c) =>
+    deletePin(db, c.req.param("userId")) ? c.json({ ok: true }) : c.json({ error: "no pin" }, 404),
+  );
 }

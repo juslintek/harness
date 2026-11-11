@@ -52,7 +52,7 @@ async function callback(c: Context, deps: OidcPublicDeps): Promise<Response> {
     entry,
   });
   const userId = identity ? userIdFor(deps.db, identity.email) : null;
-  if (!identity || !userId || !pinIdentity(deps.db, userId, provider.id, identity.sub)) {
+  if (!identity || !userId || !pinIdentity(deps.db, userId, provider.issuer, identity.sub)) {
     return refused(c);
   }
   return deps.login(c, userId);

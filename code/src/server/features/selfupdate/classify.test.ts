@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { type Change, classify } from "./classify";
+import { join } from "node:path";
+import { type Change, classify, GUARDED_FILES, normalise, SOURCE_EXT } from "./classify";
 
 const G = "code/src/server/features/guard/x.ts";
 const mod = (path: string): Change => ({ status: "M", path });
@@ -84,4 +85,90 @@ test("a migration on an unrelated table is not flagged", async () => {
 test("a rename reports the side that matched", async () => {
   const out = { status: "R100", path: "code/src/lib/x.ts", oldPath: G };
   expect(await flaggedFor(out)).toEqual([G]);
+});
+
+const AUTHZ_FILES = [
+  "code/src/server/features/runtimes/decide.ts",
+  "code/src/server/features/orgs/roles.ts",
+  "code/src/server/features/orgs/routes-kit.ts",
+  "code/src/main.ts",
+  "code/src/server/db/migrations.ts",
+  "code/src/server/config.ts",
+];
+
+test.each(AUTHZ_FILES)(
+  "authorization path %s is flagged as modify, delete and rename",
+  async (path) => {
+    expect(await flaggedFor(mod(path))).toEqual([path]);
+    expect(await flaggedFor({ status: "D", path })).toEqual([path]);
+    const out = { status: "R100", path: "code/src/lib/x.ts", oldPath: path };
+    expect(await flaggedFor(out)).toEqual([path]);
+    const into = { status: "R100", path, oldPath: "code/src/lib/x.ts" };
+    expect(await flaggedFor(into)).toEqual([path]);
+  },
+);
+
+test.each([
+  "oidc_providers",
+  "oidc_identities",
+  "recovery_codes",
+  "email_codes",
+  "enrollments",
+  "challenges",
+  "oauth_clients",
+  "oauth_codes",
+  "notify_targets",
+  "team_members",
+  "channel_members",
+  "bridge_users",
+  "policy_rules",
+  "update_requests",
+  "deploy_requests",
+  "instance",
+])("a migration touching snake_case table %s is flagged", async (table) => {
+  const path = "code/src/server/db/migrations/045_x.sql";
+  expect(await flaggedFor(mod(path), `INSERT INTO ${table} (a) VALUES (1)`)).toEqual([path]);
+});
+
+test("a migration outside the migrations folder but under db is content-checked", async () => {
+  const path = "code/src/server/db/seed/001_x.sql";
+  expect(await flaggedFor(mod(path), "INSERT INTO oidc_providers (id) VALUES ('x')")).toEqual([
+    path,
+  ]);
+  expect(await flaggedFor(mod(path), "select 1")).toEqual([]);
+});
+
+const SHADOW_EXT = ["ts", "tsx", "js", "jsx", "mjs", "cjs", "mts", "cts", "json", ""];
+const GUARDED_SOURCES = [...GUARDED_FILES].filter((f) => SOURCE_EXT.test(f));
+
+// For an extensionless import Bun 1.4.4 tries .tsx, .jsx, .mts and an exact extensionless file
+// before .ts, so such a sibling shadows the module (.cts and .js do not win, but are flagged too).
+test.each(GUARDED_SOURCES)("sibling extension variants of %s are flagged", async (file) => {
+  const stem = file.replace(/\.\w+$/, "");
+  for (const ext of SHADOW_EXT) {
+    const path = ext === "" ? `code/${stem}` : `code/${stem}.${ext}`;
+    expect(await flaggedFor(mod(path))).toEqual([path]);
+    expect(await flaggedFor({ status: "D", path })).toEqual([path]);
+    const out = { status: "R100", path: "code/src/lib/x.ts", oldPath: path };
+    expect(await flaggedFor(out)).toEqual([path]);
+  }
+});
+
+test("non-source guarded files still match exactly", async () => {
+  expect(await flaggedFor(mod("code/biome.ts"))).toEqual([]);
+  expect(await flaggedFor(mod("code/package.ts"))).toEqual([]);
+  expect(await flaggedFor(mod("lefthook.json"))).toEqual([]);
+});
+
+// Entries are relative to the code dir, except repo-root files like lefthook.yml. A typo in
+// this list silently leaves the real file unguarded, so every entry must be a tracked path.
+// `git ls-files` is case-sensitive; existsSync is not on APFS, so a case typo would pass it.
+const repoRoot = join(import.meta.dir, "../../../../..");
+const tracked = new Set(
+  Bun.spawnSync(["git", "ls-files"], { cwd: repoRoot }).stdout.toString().split("\n"),
+);
+
+test.each([...GUARDED_FILES])("guarded file %s is tracked and already normalised", (file) => {
+  expect(tracked.has(`code/${file}`) || tracked.has(file)).toBe(true);
+  expect(file).toBe(normalise(file));
 });

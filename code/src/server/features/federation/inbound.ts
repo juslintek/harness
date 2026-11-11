@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { type Change, parseData } from "./apply";
+import { refsAreStrings } from "./inbound-refs";
 import { type Row, specOf } from "./schema";
 
 // What a grantee may write into a project it was granted. Orgs, projects and grants stay with the
@@ -145,13 +146,12 @@ function membersOk(ctx: Ctx, mode: Mode, change: Change, row: Row | null): boole
 }
 
 // A write peer may only speak as someone from its own stub org, stored here or sent in this page.
-function authoredByPeer(ctx: Ctx, row: Row): boolean {
-  const author = row.author_id;
-  if (typeof author !== "string") return false;
+function memberOfPeer(ctx: Ctx, memberId: Row[string] | undefined): boolean {
+  if (typeof memberId !== "string") return false;
   const orgId =
     ctx.db
       .query<{ org_id: string }, [string]>("SELECT org_id FROM members WHERE id = ?")
-      .get(author)?.org_id ?? ctx.incoming.get(`members:${author}`)?.org_id;
+      .get(memberId)?.org_id ?? ctx.incoming.get(`members:${memberId}`)?.org_id;
   if (typeof orgId !== "string") return false;
   return (
     ctx.db.query("SELECT 1 FROM orgs WHERE id = ? AND home_instance = ?").get(orgId, ctx.peerId) !==
@@ -159,29 +159,93 @@ function authoredByPeer(ctx: Ctx, row: Row): boolean {
   );
 }
 
+// Deleting a task or root message cascades into home rows, and a peer could re-point one under its
+// own first, so a peer deletes neither and cannot change parent_id/thread_root_id, nor move a stored
+// row to another project or channel.
+function messageAuthorOk(ctx: Ctx, rowId: string, row: Row | null): boolean {
+  const stored = ctx.db
+    .query<
+      { author_id: string | null; thread_root_id: string | null; channel_id: string },
+      [string]
+    >("SELECT author_id, thread_root_id, channel_id FROM messages WHERE id = ?")
+    .get(rowId);
+  if (stored && !memberOfPeer(ctx, stored.author_id)) return false;
+  if (row === null) return !stored || stored.thread_root_id !== null;
+  if (stored && (row.thread_root_id ?? null) !== stored.thread_root_id) return false;
+  if (stored && row.channel_id !== stored.channel_id) return false;
+  return memberOfPeer(ctx, row.author_id);
+}
+
+function commentAuthorOk(ctx: Ctx, rowId: string, row: Row | null): boolean {
+  const stored = ctx.db
+    .query<{ author_id: string | null }, [string]>("SELECT author_id FROM comments WHERE id = ?")
+    .get(rowId);
+  if (stored && !memberOfPeer(ctx, stored.author_id)) return false;
+  return row === null || memberOfPeer(ctx, row.author_id);
+}
+
+// A task's creator is provenance: a stored task keeps its creator and parent, a new one names a
+// member of the peer's stub org. Tasks are never deleted.
+function taskAuthorOk(ctx: Ctx, rowId: string, row: Row | null): boolean {
+  const stored = ctx.db
+    .query<{ created_by: string; parent_id: string | null; project_id: string }, [string]>(
+      "SELECT created_by, parent_id, project_id FROM tasks WHERE id = ?",
+    )
+    .get(rowId);
+  if (row === null) return !stored;
+  if (!stored) return memberOfPeer(ctx, row.created_by);
+  return (
+    row.created_by === stored.created_by &&
+    (row.parent_id ?? null) === stored.parent_id &&
+    row.project_id === stored.project_id
+  );
+}
+
+// Comments and messages stay with their author: the stored row (if any) and the incoming one must
+// both be the peer's, or a write peer could rewrite or erase what a home user said.
+function authorshipOk(
+  ctx: Ctx,
+  mode: Mode,
+  table: string,
+  rowId: string,
+  row: Row | null,
+): boolean {
+  if (mode !== "write") return true;
+  if (table === "comments") return commentAuthorOk(ctx, rowId, row);
+  if (table === "messages") return messageAuthorOk(ctx, rowId, row);
+  if (table === "tasks") return taskAuthorOk(ctx, rowId, row);
+  return true;
+}
+
 // A copy's own rows must name the copy's org, and nothing a home sends may hand a local org
 // access or ownership.
-function rowFits(ctx: Ctx, mode: Mode, table: string, row: Row, projectId: string): boolean {
+function rowFits(ctx: Ctx, table: string, row: Row, projectId: string): boolean {
   if (table === "projects")
     return row.home_instance === ctx.peerId && !isLocalOrg(ctx.db, row.org_id);
   if (table === "grants") return !isLocalOrg(ctx.db, row.org_id);
   if (table === "tasks" || table === "channels" || table === "notes") {
     return row.org_id === projectOrg(ctx, projectId);
   }
-  if (mode === "write" && (table === "comments" || table === "messages")) {
-    return authoredByPeer(ctx, row);
-  }
   return true;
 }
 
 // The project a row really belongs to must be the one the change is labelled with.
 function labelHolds(ctx: Ctx, table: string, change: Change, row: Row | null): boolean {
+  if (row && !refsAreStrings(table, row)) return false;
   const stored = storedProject(ctx.db, table, change.row_id);
   const claimed = row ? projectOfRow(ctx, table, row) : stored;
   return (
     (claimed ?? change.project_id) === change.project_id &&
     (stored ?? change.project_id) === change.project_id
   );
+}
+
+// Rows of the tables a write peer may send, once the peer's mode and the row itself parsed.
+function rowAllowed(ctx: Ctx, mode: Mode, name: string, change: Change, row: Row | null): boolean {
+  if (mode === "write" && !WRITABLE.has(name)) return false;
+  if (!labelHolds(ctx, name, change, row)) return false;
+  if (!authorshipOk(ctx, mode, name, change.row_id, row)) return false;
+  return row === null || rowFits(ctx, name, row, change.project_id);
 }
 
 function permitted(ctx: Ctx, change: Change): boolean {
@@ -193,14 +257,11 @@ function permitted(ctx: Ctx, change: Change): boolean {
   if (mode === "none" || mode === "read") return false;
   if (spec.name === "orgs") return mode === "copy" && orgsOk(ctx, change, row);
   if (spec.name === "members") return membersOk(ctx, mode, change, row);
-  if (mode === "write" && !WRITABLE.has(spec.name)) return false;
-  if (!labelHolds(ctx, spec.name, change, row)) return false;
-  return row === null || rowFits(ctx, mode, spec.name, row, change.project_id);
+  return rowAllowed(ctx, mode, spec.name, change, row);
 }
 
-// Leases belong to the home: a write peer's copy of a task is stale about who holds it, so its
-// holder and checkout time are replaced by what is stored here (nothing for a new task). Only
-// /federation/lease changes them.
+// Leases belong to the home: a write peer's copy of a task is stale about who holds it, so holder
+// and checkout time are replaced by what is stored here. Only /federation/lease changes them.
 function keepHome(ctx: Ctx, change: Change): Change {
   if (change.table_name !== "tasks" || change.op !== "put" || change.data === null) return change;
   if (modeOf(ctx, change.project_id) !== "write") return change;

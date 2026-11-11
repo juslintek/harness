@@ -222,3 +222,38 @@ test("signedFetch reaches the other instance and refuses a revoked peer", async 
   expect(revokePeer(b.db, a.instanceId)).toBe(true);
   await expect(signedFetch(b.db, b.home, peer, "/federation/ping")).rejects.toThrow("revoked");
 });
+
+test("a signature made as one instance is refused when presented as another that shares its key", async () => {
+  const home = mkdtempSync(join(tmpdir(), "harness-twin-"));
+  const db = openDb(join(home, "harness.db"));
+  migrate(db, migrations);
+  // The unique index normally keeps two active peers off one key; drop it to test the signature alone.
+  db.run("DROP INDEX peers_active_public_key");
+  for (const id of ["real", "twin"]) {
+    insertPeer(db, { id, name: id, url: b.origin, publicKey: publicKeyB64(b.home), pairedAt: 1 });
+  }
+  const app = new Hono<PeerEnv>();
+  app.use("*", requirePeer(db, { now: () => clock }));
+  app.all("*", (ctx) => ctx.json({ peer: ctx.get("peerId") }));
+  const signed = signRequest(privateKeyB64(b.home), {
+    instance: "real",
+    audience: ensureInstance(db),
+    method: "GET",
+    pathWithQuery: "/federation/ping",
+    body: "",
+    timestamp: clock,
+  });
+  const as = async (instance: string): Promise<Response> =>
+    app.request("http://localhost/federation/ping", {
+      headers: {
+        "x-harness-instance": instance,
+        "x-harness-timestamp": signed.timestamp,
+        "x-harness-nonce": signed.nonce,
+        "x-harness-signature": signed.signature,
+      },
+    });
+  expect((await as("twin")).status).toBe(401);
+  const honest = await as("real");
+  expect(honest.status).toBe(200);
+  expect(await honest.json()).toEqual({ peer: "real" });
+});

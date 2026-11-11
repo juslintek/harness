@@ -54,21 +54,38 @@ export function deleteProvider(db: Database, id: string): boolean {
   return db.query("DELETE FROM oidc_providers WHERE id = ?").run(id).changes > 0;
 }
 
-// Trust on first use: the first login pins (provider, sub) to the user, later logins must match.
-// The insert is a no-op when a pin exists, so two first logins cannot both pin.
-export function pinIdentity(
-  db: Database,
-  userId: string,
-  providerId: string,
-  sub: string,
-): boolean {
+export interface OidcPin {
+  userId: string;
+  issuer: string;
+  sub: string;
+  createdAt: number;
+}
+
+// Trust on first use: the first login pins (issuer, sub) to the user, later logins must match.
+// The pin is on the issuer, not the provider row, so deleting and re-adding a provider keeps it.
+// The insert is a no-op when the user or the (issuer, sub) is already pinned, so two first logins
+// cannot both pin and one identity cannot be pinned to two users.
+export function pinIdentity(db: Database, userId: string, issuer: string, sub: string): boolean {
   db.query(
-    "INSERT OR IGNORE INTO oidc_identities (user_id, provider_id, sub, created_at) VALUES (?, ?, ?, ?)",
-  ).run(userId, providerId, sub, Date.now());
+    "INSERT OR IGNORE INTO oidc_identities (user_id, issuer, sub, created_at) VALUES (?, ?, ?, ?)",
+  ).run(userId, issuer, sub, Date.now());
   const pinned = db
-    .query<{ provider_id: string; sub: string }, [string]>(
-      "SELECT provider_id, sub FROM oidc_identities WHERE user_id = ?",
+    .query<{ issuer: string; sub: string }, [string]>(
+      "SELECT issuer, sub FROM oidc_identities WHERE user_id = ?",
     )
     .get(userId);
-  return pinned?.provider_id === providerId && pinned.sub === sub;
+  return pinned?.issuer === issuer && pinned.sub === sub;
+}
+
+export function listPins(db: Database, userId: string): OidcPin[] {
+  return db
+    .query<{ user_id: string; issuer: string; sub: string; created_at: number }, [string]>(
+      "SELECT * FROM oidc_identities WHERE user_id = ?",
+    )
+    .all(userId)
+    .map((r) => ({ userId: r.user_id, issuer: r.issuer, sub: r.sub, createdAt: r.created_at }));
+}
+
+export function deletePin(db: Database, userId: string): boolean {
+  return db.query("DELETE FROM oidc_identities WHERE user_id = ?").run(userId).changes > 0;
 }

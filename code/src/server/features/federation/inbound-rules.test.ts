@@ -3,6 +3,7 @@ import { createTask } from "../board/api";
 import type { Change } from "./apply";
 import { permitInbound } from "./inbound";
 import {
+  addPeerMember,
   bootNode,
   type Node,
   pairNodes,
@@ -115,8 +116,13 @@ test("a peer with write access cannot set or clear a task's holder or checkout t
     seed.memberId,
     held,
   ]);
+  addPeerMember(a, b, "m-grab");
   const sent = (id: string, extra: object): Record<string, unknown> => {
-    const base = taskData(id, seed.projectId, seed.orgId);
+    // A stored task keeps its creator; a new one must name the peer's own member.
+    const base = {
+      ...taskData(id, seed.projectId, seed.orgId),
+      created_by: id === held ? seed.memberId : "m-grab",
+    };
     const out = permitInbound(a.db, b.instanceId, [
       change("tasks", id, seed.projectId, { ...base, ...extra }),
     ]).allowed;

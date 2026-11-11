@@ -4,7 +4,8 @@ import { ensureInstance } from "../../db/db";
 import { DomainError } from "../../route-kit";
 import { consumeInvite } from "./invites";
 import { fingerprint, parsePublicKey, publicKeyB64 } from "./keys";
-import { insertPeer } from "./peers-repo";
+import { pairProof, pairProofHolds } from "./pair-proof";
+import { getPeer, insertPeer } from "./peers-repo";
 
 class PairError extends DomainError {}
 
@@ -29,6 +30,20 @@ export function peerOrigin(raw: string): string {
   return url.origin;
 }
 
+// A signed url must already be a bare origin (no path, query, fragment or credentials, and no
+// characters the parser would silently strip), so what was signed is what gets compared.
+function sameOrigin(raw: string): string {
+  try {
+    const { origin } = new URL(raw);
+    return origin === raw ? origin : "";
+  } catch {
+    return "";
+  }
+}
+
+const idField = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+const tokenField = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+
 const publicKeyField = z.string().refine((key) => {
   try {
     parsePublicKey(key);
@@ -39,44 +54,54 @@ const publicKeyField = z.string().refine((key) => {
 }, "not an Ed25519 public key");
 
 const pairBody = z.object({
-  token: z.string().min(1).max(200),
-  instanceId: z.string().min(1).max(100),
+  token: tokenField,
+  instanceId: idField,
   name: z.string().min(1).max(100),
   url: z.string().max(500),
   publicKey: publicKeyField,
+  proof: z.string().min(1).max(200),
 });
 
 const pairAnswer = z.object({
-  instanceId: z.string().min(1).max(100),
+  instanceId: idField,
   name: z.string().min(1).max(100),
   publicKey: publicKeyField,
+  url: z.string().min(1).max(500),
+  proof: z.string().min(1).max(200),
 });
 
 export interface PairAnswer {
   instanceId: string;
   name: string;
   publicKey: string;
+  url: string;
+  proof: string;
 }
 
 const ownName = (instanceId: string): string => `harness-${instanceId.slice(0, 8)}`;
 
-export function identity(db: Database, home: string): PairAnswer & { fingerprint: string } {
+export function identity(
+  db: Database,
+  home: string,
+): Omit<PairAnswer, "proof" | "url"> & { fingerprint: string } {
   const instanceId = ensureInstance(db);
   const publicKey = publicKeyB64(home);
   return { instanceId, name: ownName(instanceId), publicKey, fingerprint: fingerprint(publicKey) };
 }
 
 // The one-time token is the whole proof here, so it is checked and burned in the same transaction
-// that stores the peer; a body that does not parse never burns it.
+// that stores the peer; a body that does not parse never burns it. ownUrl is this instance's
+// public address, signed into the answer so the dialer can tell it reached the right host.
 export function acceptPair(
   db: Database,
   home: string,
   body: unknown,
+  ownUrl: string,
   now: number = Date.now(),
 ): PairAnswer | "invalid" | "refused" {
   const parsed = pairBody.safeParse(body);
   if (!parsed.success) return "invalid";
-  const { token, instanceId, name, url, publicKey } = parsed.data;
+  const { token, instanceId, name, url, publicKey, proof } = parsed.data;
   const own = identity(db, home);
   let origin: string;
   try {
@@ -84,14 +109,25 @@ export function acceptPair(
   } catch {
     return "invalid";
   }
+  if (origin !== url || !pairProofHolds(publicKey, proof, "request", token, instanceId, "", url)) {
+    return "invalid";
+  }
   if (instanceId === own.instanceId) return "invalid";
   const accepted = db.transaction(() => {
+    // A revoked id is turned away before the invite is touched, so the invite stays usable.
+    if (getPeer(db, instanceId)?.revokedAt != null) return false;
     if (!consumeInvite(db, token, now)) return false;
     // A key clash still burns the invite: it was used to claim an id that is not new.
     return insertPeer(db, { id: instanceId, name, url: origin, publicKey, pairedAt: now });
   })();
   return accepted
-    ? { instanceId: own.instanceId, name: own.name, publicKey: own.publicKey }
+    ? {
+        instanceId: own.instanceId,
+        name: own.name,
+        publicKey: own.publicKey,
+        url: ownUrl,
+        proof: pairProof(home, "answer", token, own.instanceId, instanceId, ownUrl),
+      }
     : "refused";
 }
 
@@ -121,6 +157,7 @@ export async function pairWith(
         name: own.name,
         url: deps.ownUrl,
         publicKey: own.publicKey,
+        proof: pairProof(home, "request", target.token, own.instanceId, "", deps.ownUrl),
       }),
       redirect: "error",
       signal: AbortSignal.timeout(PAIR_TIMEOUT_MS),
@@ -132,6 +169,15 @@ export async function pairWith(
   const answer = pairAnswer.safeParse(await res.json().catch(() => null));
   if (!answer.success) throw new PairError("peer answered with an invalid body");
   if (answer.data.instanceId === own.instanceId) throw new PairError("cannot pair with itself");
+  const { instanceId, publicKey, proof, url } = answer.data;
+  // A relay in front of the real peer cannot sign for it, so the address the peer signed must be
+  // the one we dialed.
+  if (sameOrigin(url) !== origin) {
+    throw new PairError("peer answered for a different address than the one dialed");
+  }
+  if (!pairProofHolds(publicKey, proof, "answer", target.token, instanceId, own.instanceId, url)) {
+    throw new PairError("peer could not prove it holds its key");
+  }
   // The url we dialed is stored, not one the peer claims, so a peer cannot redirect later calls.
   const stored = insertPeer(db, {
     id: answer.data.instanceId,
