@@ -34,15 +34,17 @@ export function listPeers(db: Database): PeerRow[] {
   return db.query<Raw, []>("SELECT * FROM peers ORDER BY paired_at, id").all().map(toPeer);
 }
 
-// A repeated pairing with the same instance replaces its key and clears a revocation: it can only
-// happen with a fresh invite from an admin.
-export function insertPeer(db: Database, peer: Omit<PeerRow, "lastSeenAt" | "revokedAt">): void {
-  db.run(
-    `INSERT INTO peers (id, name, url, public_key, paired_at) VALUES (?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET name = excluded.name, url = excluded.url,
-       public_key = excluded.public_key, paired_at = excluded.paired_at,
-       last_seen_at = NULL, revoked_at = NULL`,
-    [peer.id, peer.name, peer.url, peer.publicKey, peer.pairedAt],
+// Pairing again with a known instance may refresh its name and url, but never swaps the key and
+// never lifts a revocation. False means the id is taken by a different key.
+export function insertPeer(db: Database, peer: Omit<PeerRow, "lastSeenAt" | "revokedAt">): boolean {
+  return (
+    db.run(
+      `INSERT INTO peers (id, name, url, public_key, paired_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, url = excluded.url,
+         paired_at = excluded.paired_at
+       WHERE public_key = excluded.public_key`,
+      [peer.id, peer.name, peer.url, peer.publicKey, peer.pairedAt],
+    ).changes === 1
   );
 }
 

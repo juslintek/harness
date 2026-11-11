@@ -87,8 +87,8 @@ export function acceptPair(
   if (instanceId === own.instanceId) return "invalid";
   const accepted = db.transaction(() => {
     if (!consumeInvite(db, token, now)) return false;
-    insertPeer(db, { id: instanceId, name, url: origin, publicKey, pairedAt: now });
-    return true;
+    // A key clash still burns the invite: it was used to claim an id that is not new.
+    return insertPeer(db, { id: instanceId, name, url: origin, publicKey, pairedAt: now });
   })();
   return accepted
     ? { instanceId: own.instanceId, name: own.name, publicKey: own.publicKey }
@@ -133,12 +133,13 @@ export async function pairWith(
   if (!answer.success) throw new PairError("peer answered with an invalid body");
   if (answer.data.instanceId === own.instanceId) throw new PairError("cannot pair with itself");
   // The url we dialed is stored, not one the peer claims, so a peer cannot redirect later calls.
-  insertPeer(db, {
+  const stored = insertPeer(db, {
     id: answer.data.instanceId,
     name: answer.data.name,
     publicKey: answer.data.publicKey,
     url: origin,
     pairedAt: now,
   });
+  if (!stored) throw new PairError("peer id is already paired with a different key");
   return answer.data;
 }

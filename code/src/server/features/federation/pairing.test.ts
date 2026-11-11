@@ -10,6 +10,7 @@ import { listenDeferred, sessionHeaders } from "../../test-support/app-kit";
 import { getSecret } from "../agents/api";
 import { fingerprint, parsePublicKey, publicKeyB64 } from "./keys";
 import { peerOrigin } from "./pairing";
+import { getPeer } from "./peers-repo";
 
 interface Node {
   db: Database;
@@ -188,4 +189,33 @@ test("pairing urls: https, or http on a loopback host only", () => {
   ]) {
     expect(() => peerOrigin(bad)).toThrow();
   }
+});
+
+test("pairing an existing instance id with another key is refused and never lifts a revocation", async () => {
+  const admin = await sessionHeaders(a.db, { admin: true, stepUp: true, origin: a.origin });
+  const original = publicKeyB64(b.home);
+  const hijack = publicKeyB64(a.home);
+  const headers = { "content-type": "application/json" };
+  const invite = async (): Promise<string> =>
+    (
+      JSON.parse((await call(a, "POST", "/api/federation/invites", admin.headers)).text) as {
+        token: string;
+      }
+    ).token;
+  const pairAs = async (publicKey: string): Promise<number> =>
+    (
+      await call(a, "POST", "/federation/pair", headers, {
+        token: await invite(),
+        instanceId: b.instanceId,
+        name: "again",
+        url: b.origin,
+        publicKey,
+      })
+    ).status;
+
+  // b was revoked on a by an earlier test.
+  expect(await pairAs(hijack)).toBe(403);
+  expect(getPeer(a.db, b.instanceId)?.publicKey).toBe(original);
+  expect(await pairAs(original)).toBe(200);
+  expect(getPeer(a.db, b.instanceId)?.revokedAt).not.toBeNull();
 });
