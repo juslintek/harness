@@ -8,6 +8,7 @@ import { createApp } from "../../http";
 import { listenDeferred, sessionHeaders } from "../../test-support/app-kit";
 import { ensureProjectChannel } from "../chat/api";
 import { createOrg, createProject, memberForUser } from "../orgs/api";
+import type { Change } from "./apply";
 import { getPeer, type PeerRow } from "./peers-repo";
 import { type PullStats, pullPeer } from "./pull";
 import { TABLES } from "./schema";
@@ -128,3 +129,43 @@ export function stubMemberOf(node: Node, userId: string): string {
   if (!row) throw new Error("no stub member");
   return row.id;
 }
+
+// A change as the peer would send it, for judging with permitInbound.
+
+export function peerChange(
+  peer: Node,
+  table: string,
+  rowId: string,
+  project: string,
+  data: object,
+  origin: string = peer.instanceId,
+): Change {
+  return {
+    project_id: project,
+    table_name: table,
+    row_id: rowId,
+    op: "put",
+    hlc: `${String(Date.now()).padStart(13, "0")}-0000-${peer.instanceId}`,
+    origin_instance: origin,
+    data: JSON.stringify(data),
+  };
+}
+
+export const taskRow = (id: string, project: string, org: string): object => ({
+  id,
+  org_id: org,
+  project_id: project,
+  number: 9,
+  parent_id: null,
+  title: "forged",
+  description: "",
+  status: "todo",
+  rank: 1,
+  assignee_id: null,
+  holder_id: null,
+  checked_out_at: null,
+  estimate_minutes: null,
+  created_by: "x",
+  created_at: 1,
+  updated_at: 1,
+});
