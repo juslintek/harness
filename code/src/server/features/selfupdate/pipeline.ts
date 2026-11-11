@@ -6,6 +6,7 @@ import { verifyOnScratch } from "./scratch";
 import { snapshotDb } from "./snapshot";
 import {
   addWorktree,
+  assertCleanTree,
   classifyChange,
   expectedVersion,
   headSha,
@@ -111,6 +112,7 @@ async function execute(
   await addWorktree(req.repo, tree, req.commitSha);
   const codeDir = join(tree, "code");
   appendLog(db, req.id, await runCheck(deps.steps, codeDir));
+  await assertCleanTree(tree);
   setStatus(db, req.id, "building");
   const binary = await runBuild(
     deps.steps,

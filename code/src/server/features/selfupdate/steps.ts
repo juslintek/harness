@@ -67,6 +67,16 @@ async function runStep(argv: string[], cwd: string, label: string): Promise<Comm
   return res;
 }
 
+// The branch's own install and check ran in this tree; anything they rewrote would otherwise be
+// built into the binary without being part of the pinned, classified commit.
+export async function assertCleanTree(tree: string): Promise<void> {
+  const dirty = await git(["status", "--porcelain", "--untracked-files=all"], tree);
+  if (dirty !== "")
+    throw new Error(
+      `worktree is not clean after check, refusing to build:\n${dirty.slice(0, 500)}`,
+    );
+}
+
 export async function runCheck(deps: StepDeps, codeDir: string): Promise<string> {
   await runStep(deps.install, codeDir, "install");
   return (await runStep(deps.check, codeDir, "check")).out;

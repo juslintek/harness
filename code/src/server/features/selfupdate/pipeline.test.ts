@@ -55,6 +55,14 @@ describe("a pipeline that fails before the swap", () => {
     expect(existsSync(join(home, "bin"))).toBe(false);
   });
 
+  test("a check that leaves changes in the worktree stops before build", async () => {
+    const req = await run({ check: ["sh", "-c", "echo x > injected.ts"] });
+    expect(req?.status).toBe("failed");
+    expect(req?.reason).toContain("worktree is not clean");
+    expect(existsSync(join(marks, "built"))).toBe(false);
+    expect(shutdowns).toBe(0);
+  });
+
   test("a failing build stops before the scratch start", async () => {
     const req = await run({ build: () => ["sh", "-c", "echo nope; exit 1"] });
     expect(req?.status).toBe("failed");
