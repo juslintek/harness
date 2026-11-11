@@ -30,6 +30,7 @@ export async function signedFetch(
   const method = init.method ?? (init.json === undefined ? "GET" : "POST");
   const signed = signRequest(privateKeyB64(home), {
     instance: ensureInstance(db),
+    audience: current.id,
     method,
     pathWithQuery: url.pathname + url.search,
     body,

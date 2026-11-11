@@ -83,6 +83,7 @@ function signedAs(
     method: full.method,
     pathWithQuery: full.path,
     body: full.body,
+    audience: a.instanceId,
     timestamp: clock,
     ...over,
   });
@@ -141,6 +142,12 @@ test("anything altered after signing is refused with the same generic 401", asyn
     bodies.add(res.text);
   }
   expect([...bodies]).toEqual([GENERIC]);
+});
+
+test("a request signed for another instance is refused here", async () => {
+  const forB = signedAs(b, {}, { audience: c.instanceId });
+  expect(await send(forB)).toEqual({ status: 401, text: GENERIC });
+  expect((await send(signedAs(b, {}))).status).toBe(200);
 });
 
 test("a replayed nonce is refused even with a fresh timestamp window", async () => {

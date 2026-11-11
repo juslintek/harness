@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { verify } from "node:crypto";
 import type { Context, MiddlewareHandler } from "hono";
+import { ensureInstance } from "../../db/db";
 import { parsePublicKey } from "./keys";
 import { getPeer, touchPeer } from "./peers-repo";
 import { canonicalString, sha256Hex } from "./sign";
@@ -83,6 +84,7 @@ export function requirePeer(db: Database, deps: VerifyDeps = {}): MiddlewareHand
       timestamp,
       nonce,
       sha256Hex(body),
+      ensureInstance(db),
     );
     if (!signatureHolds(peer.publicKey, text, signature) || !burnNonce(db, nonce, now)) {
       return unauthorized(c);

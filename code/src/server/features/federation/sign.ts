@@ -2,6 +2,8 @@ import { createHash, createPrivateKey, randomBytes, sign } from "node:crypto";
 
 export interface SignParts {
   instance: string;
+  // The instance the request is addressed to; signed so it cannot be replayed to a third peer.
+  audience: string;
   method: string;
   pathWithQuery: string;
   body: Uint8Array | string;
@@ -25,8 +27,9 @@ export function canonicalString(
   timestamp: string,
   nonce: string,
   bodySha256Hex: string,
+  audience: string,
 ): string {
-  return `${method.toUpperCase()}\n${pathWithQuery}\n${timestamp}\n${nonce}\n${bodySha256Hex}`;
+  return `${method.toUpperCase()}\n${pathWithQuery}\n${timestamp}\n${nonce}\n${bodySha256Hex}\n${audience}`;
 }
 
 export function signRequest(privateKeyB64: string, parts: SignParts): SignedHeaders {
@@ -43,6 +46,7 @@ export function signRequest(privateKeyB64: string, parts: SignParts): SignedHead
     timestamp,
     nonce,
     sha256Hex(parts.body),
+    parts.audience,
   );
   return {
     instance: parts.instance,
