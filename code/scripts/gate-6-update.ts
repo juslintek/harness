@@ -16,7 +16,7 @@ import {
   versionAt,
 } from "../src/server/test-support/selfupdate-kit";
 import { build, hostTarget } from "./build";
-import { stepUp } from "./gate-5-kit";
+import { signIn, stepUp } from "./gate-5-kit";
 import { BUILD_VERSION, type Built } from "./gate-6-deploy";
 import { call, type GateLog, sha256, tempDir } from "./gate-6-kit";
 import {
@@ -37,12 +37,37 @@ const GUARD_FILE = "code/src/server/features/guard/gate6-marker.txt";
 const BOOT_EXIT = 'if (version.endsWith("-broken")) process.exit(3);\nconst config = loadConfig();';
 
 async function submit(live: Live, repo: string, branch: string): Promise<string> {
-  const made = await call(live.client, "POST", "/api/selfupdate/requests", live.cookie, {
+  // Queuing needs step-up; a separate session keeps live.cookie plain for the approval checks.
+  const cookie = await signIn(live);
+  await stepUp(live, cookie);
+  const made = await call(live.client, "POST", "/api/selfupdate/requests", cookie, {
     repo,
     branch,
   });
   if (made.status !== 202) throw new Error(`submit failed: ${made.status}`);
   return String(made.json.id);
+}
+
+// package.json is a flagged path, so a version bump stops for approval like any flagged change.
+async function runApproved(
+  live: Live,
+  repo: string,
+  branch: string,
+): ReturnType<typeof waitRequest> {
+  const id = await submit(live, repo, branch);
+  const held = await waitRequest(live, id, TERMINAL, CHECK_MS);
+  if (held.reply.json.status !== "awaiting_approval") return held;
+  const cookie = await signIn(live);
+  await stepUp(live, cookie);
+  const approved = await call(
+    live.client,
+    "POST",
+    `/api/selfupdate/requests/${id}/approve`,
+    cookie,
+  );
+  if (approved.status !== 202) throw new Error(`approve failed: ${approved.status}`);
+  const done = await waitRequest(live, id, TERMINAL.slice(0, -1), CHECK_MS);
+  return { ...done, statuses: [...held.statuses, ...done.statuses] };
 }
 
 function printLog(log: GateLog, label: string, text: unknown): void {
@@ -54,7 +79,7 @@ function printLog(log: GateLog, label: string, text: unknown): void {
 async function goodChange(log: GateLog, live: Live, clone: Clone): Promise<void> {
   const before = lockPid(live);
   const branch = clone.branch("good", { "code/package.json": setVersion("6.0.1-good") });
-  const seen = await waitRequest(live, await submit(live, clone.dir, branch), TERMINAL, CHECK_MS);
+  const seen = await runApproved(live, clone.dir, branch);
   printLog(log, "good change", seen.reply.json.log);
   const version = await healthVersion(live).catch(() => "unreachable");
   log.print(
@@ -74,7 +99,7 @@ async function brokenChange(log: GateLog, live: Live, clone: Clone): Promise<voi
     "code/package.json": setVersion("6.0.2-broken"),
     "code/src/main.ts": (text) => text.replace("const config = loadConfig();", BOOT_EXIT),
   });
-  const seen = await waitRequest(live, await submit(live, clone.dir, branch), TERMINAL, CHECK_MS);
+  const seen = await runApproved(live, clone.dir, branch);
   const reason = String(seen.reply.json.reason ?? "");
   printLog(log, "broken change", seen.reply.json.log);
   log.print(`statuses ${seen.statuses.join(">")}, reason: ${reason}`);
