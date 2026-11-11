@@ -180,6 +180,23 @@ function permitted(ctx: Ctx, change: Change): boolean {
   return row === null || rowFits(ctx, spec.name, row, change.project_id);
 }
 
+// Leases belong to the home: a write peer's copy of a task is stale about who holds it, so its
+// holder and checkout time are replaced by what is stored here (nothing for a new task). Only
+// /federation/lease changes them.
+function keepHome(ctx: Ctx, change: Change): Change {
+  if (change.table_name !== "tasks" || change.op !== "put" || change.data === null) return change;
+  if (modeOf(ctx, change.project_id) !== "write") return change;
+  const stored = ctx.db
+    .query<{ holder_id: string | null; checked_out_at: number | null }, [string]>(
+      "SELECT holder_id, checked_out_at FROM tasks WHERE id = ?",
+    )
+    .get(change.row_id);
+  const data = JSON.parse(change.data) as Row;
+  data.holder_id = stored?.holder_id ?? null;
+  data.checked_out_at = stored?.checked_out_at ?? null;
+  return { ...change, data: JSON.stringify(data) };
+}
+
 // Everything a peer sends is judged here before applyBatch sees it: who it claims to be, which
 // project it touches (from the row itself, never from the label alone) and whether this instance
 // gave that peer the right to write there.
@@ -195,6 +212,6 @@ export function permitInbound(
     if (row) incoming.set(`${change.table_name}:${change.row_id}`, row);
   }
   const ctx: Ctx = { db, peerId, incoming };
-  const allowed = changes.filter((c) => permitted(ctx, c));
+  const allowed = changes.filter((c) => permitted(ctx, c)).map((c) => keepHome(ctx, c));
   return { allowed, dropped: changes.length - allowed.length };
 }

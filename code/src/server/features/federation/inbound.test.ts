@@ -246,3 +246,30 @@ test("a home cannot flip, delete or reuse orgs that it does not own", () => {
     "members:m3",
   ]);
 });
+
+test("a peer with write access cannot set or clear a task's holder or checkout time", () => {
+  const held = createTask(a.db, {
+    projectId: seed.projectId,
+    title: "held",
+    createdBy: seed.memberId,
+  }).id;
+  a.db.run("UPDATE tasks SET holder_id = ?, checked_out_at = 5 WHERE id = ?", [
+    seed.memberId,
+    held,
+  ]);
+  const sent = (id: string, extra: object): Record<string, unknown> => {
+    const base = taskData(id, seed.projectId, seed.orgId);
+    const out = permitInbound(a.db, b.instanceId, [
+      change("tasks", id, seed.projectId, { ...base, ...extra }),
+    ]).allowed;
+    return JSON.parse(out[0]?.data ?? "{}");
+  };
+  expect(sent(held, { holder_id: null, checked_out_at: null })).toMatchObject({
+    holder_id: seed.memberId,
+    checked_out_at: 5,
+  });
+  expect(sent("t-grab", { holder_id: seed.memberId, checked_out_at: 9 })).toMatchObject({
+    holder_id: null,
+    checked_out_at: null,
+  });
+});
