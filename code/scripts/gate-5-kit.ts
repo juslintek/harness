@@ -3,6 +3,7 @@
 import type { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import type { Hono } from "hono";
 import { ensureInstance, migrate, openDb } from "../src/server/db/db";
 import { migrations } from "../src/server/db/migrations";
 import { createEnrollment, firstRunEnrollment } from "../src/server/features/auth/api";
@@ -142,6 +143,8 @@ export interface BootOpts {
   origin?: string;
   port?: number;
   tunnelBin?: string;
+  // Lets a gate mount routes with test-only deps ahead of the app (Gate 6 deploys over a local transport).
+  wrap?: (app: Hono, ctx: { db: Db; origin: string }) => Hono;
 }
 
 // Same wiring as main.ts for what the gate touches. The home is created here so the caller can
@@ -162,17 +165,16 @@ export async function bootInstance(opts: BootOpts): Promise<Instance> {
     port: listener.port,
     ...(opts.tunnelBin === undefined ? {} : { bin: opts.tunnelBin }),
   });
-  listener.attach(
-    createApp({
-      db,
-      home: opts.home,
-      port: listener.port,
-      rp,
-      instanceId,
-      version: "gate5",
-      tunnel,
-    }),
-  );
+  const app = createApp({
+    db,
+    home: opts.home,
+    port: listener.port,
+    rp,
+    instanceId,
+    version: "gate5",
+    tunnel,
+  });
+  listener.attach(opts.wrap ? opts.wrap(app, { db, origin }) : app);
   const stopNotify = startNotify(db, { home: opts.home, origin });
   return {
     db,
@@ -200,8 +202,11 @@ export async function enrollAdmin(inst: Instance): Promise<Session> {
   return enrollWithCode(inst, code, { email: "admin@gate5.test", name: "Gate Admin" });
 }
 
+// What a ceremony needs of an instance, so a compiled binary reached over HTTP can be driven too.
+export type Remote = Pick<Instance, "client" | "authn">;
+
 export async function enrollWithCode(
-  inst: Instance,
+  inst: Remote,
   code: string,
   who: { email: string; name: string },
 ): Promise<Session> {
@@ -217,7 +222,7 @@ export async function enrollWithCode(
 }
 
 // A new session with no step-up, the way a person signing in again would get one.
-export async function signIn(inst: Instance): Promise<string> {
+export async function signIn(inst: Remote): Promise<string> {
   const opts = await (await inst.client.call("POST", "/api/auth/login/options")).json();
   const response = await inst.authn.get(opts);
   const res = await inst.client.call("POST", "/api/auth/login/verify", {
@@ -227,7 +232,7 @@ export async function signIn(inst: Instance): Promise<string> {
   return cookieOf(res);
 }
 
-export async function stepUp(inst: Instance, cookie: string): Promise<void> {
+export async function stepUp(inst: Remote, cookie: string): Promise<void> {
   const opts = await (
     await inst.client.call("POST", "/api/auth/step-up/options", { cookie, body: {} })
   ).json();

@@ -17,6 +17,7 @@ import {
   onGrantChanged,
   revokeGrant,
 } from "./projects";
+import { adoptRemoteOrgs, ensureRemoteOrg, findRemoteOrg } from "./remote";
 import {
   addAgentMember,
   addHumanMember,
@@ -52,13 +53,16 @@ export {
   addAgentMember,
   addHumanMember,
   addToTeam,
+  adoptRemoteOrgs,
   createOrg,
   createPosition,
   createProject,
   createTeam,
   directReportsOf,
+  ensureRemoteOrg,
   findMemberByHandle,
   findMembersByHandle,
+  findRemoteOrg,
   getMember,
   getOrg,
   getOrgBySlug,

@@ -80,6 +80,9 @@ export function Header(): preact.JSX.Element {
                 <a href="#/agents">Agents</a>
                 <a href="#/search">Search</a>
                 <a href="#/integrations">Integrations</a>
+                <a href="#/federation">Federation</a>
+                <a href="#/deploy">Deploy</a>
+                <a href="#/updates">Updates</a>
               </>
             )}
             {canDecideApprovals(me.value) && <a href="#/approvals">Approvals</a>}

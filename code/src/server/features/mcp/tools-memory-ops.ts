@@ -13,8 +13,8 @@ import {
   readNote,
   renameNote,
   resolveNotePath,
+  saveNote,
   searchNotes,
-  updateNote,
   type Viewer,
   virtualPathOf,
   type WriteCtx,
@@ -166,7 +166,7 @@ async function create(op: Op, a: MemoryArgs): Promise<string> {
   return withNotice(`created ${virtualPathOf(res.note, op.slugs)}`, res.redacted);
 }
 
-function strReplace(op: Op, a: MemoryArgs): string {
+async function strReplace(op: Op, a: MemoryArgs): Promise<string> {
   const path = need(a.path, "path");
   const oldStr = need(a.old_str, "old_str");
   const note = noteOf(op, path);
@@ -174,11 +174,11 @@ function strReplace(op: Op, a: MemoryArgs): string {
   if (count === 0) return fail("old_str not found in the note");
   if (count > 1) return fail(`old_str appears ${count} times, make it unique`);
   const next = note.body.replace(oldStr, () => a.new_str ?? "");
-  const res = updateNote(op.db, op.home, op.write, note.id, note.hash, next);
+  const res = await saveNote(op.db, op.home, op.write, note.id, note.hash, next);
   return withNotice(`edited ${path}`, res.redacted);
 }
 
-function insert(op: Op, a: MemoryArgs): string {
+async function insert(op: Op, a: MemoryArgs): Promise<string> {
   const path = need(a.path, "path");
   const at = a.insert_line ?? fail("insert_line is required");
   const text = need(a.insert_text, "insert_text");
@@ -188,7 +188,7 @@ function insert(op: Op, a: MemoryArgs): string {
   if (at > lines.length) return fail(`insert_line must be 0..${lines.length}`);
   lines.splice(at, 0, ...text.split("\n"));
   const next = lines.join("\n") + (trailing ? "\n" : "");
-  const res = updateNote(op.db, op.home, op.write, note.id, note.hash, next);
+  const res = await saveNote(op.db, op.home, op.write, note.id, note.hash, next);
   return withNotice(`edited ${path}`, res.redacted);
 }
 

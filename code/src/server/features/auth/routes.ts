@@ -26,15 +26,18 @@ import {
   releaseEnrollment,
   requestEmailCode,
   type Session,
+  type User,
   useRecoveryCode,
   verifyEmailCode,
 } from "./api";
 import { setSessionCookie } from "./middleware";
+import { oidcPublicRoutes } from "./oidc-routes";
 import { rateLimit } from "./rate-limit";
 
 export interface AuthDeps {
   db: Database;
   rp: Rp;
+  home: string;
   trustProxy?: boolean;
   deliverEmailCode: (email: string, code: string) => void | Promise<void>;
 }
@@ -49,6 +52,21 @@ export async function parseBody<T>(c: Context, schema: z.ZodType<T>): Promise<T 
 export const invalidBody = (c: Context): Response => c.json({ error: "invalid body" }, 400);
 
 // Every way in ends here, so the personal org exists whichever method the user used first.
+function openSession(
+  c: Context,
+  deps: AuthDeps,
+  userId: string,
+  method: Session["method"],
+): User | null {
+  const user = getUser(deps.db, userId);
+  if (!user) return null;
+  const agent = c.req.header("user-agent")?.slice(0, 200) ?? null;
+  const { token } = createSession(deps.db, user.id, method, agent);
+  ensurePersonalOrg(deps.db, user);
+  setSessionCookie(c, deps.rp.origin, token);
+  return user;
+}
+
 function signIn(
   c: Context,
   deps: AuthDeps,
@@ -56,13 +74,8 @@ function signIn(
   method: Session["method"],
   extra: Record<string, unknown> = {},
 ): Response {
-  const user = getUser(deps.db, userId);
-  if (!user) return c.json({ error: "unauthorized" }, 401);
-  const agent = c.req.header("user-agent")?.slice(0, 200) ?? null;
-  const { token } = createSession(deps.db, user.id, method, agent);
-  ensurePersonalOrg(deps.db, user);
-  setSessionCookie(c, deps.rp.origin, token);
-  return c.json({ user, ...extra });
+  const user = openSession(c, deps, userId, method);
+  return user ? c.json({ user, ...extra }) : c.json({ error: "unauthorized" }, 401);
 }
 
 const unauthorized = (c: Context): Response => c.json({ error: "unauthorized" }, 401);
@@ -151,8 +164,27 @@ function enrollRoutes(app: Hono, deps: AuthDeps): void {
 export function publicAuthRoutes(deps: AuthDeps): Hono {
   const app = new Hono();
   const limiter = rateLimit(ATTEMPTS_PER_MINUTE, 60_000, deps.trustProxy);
-  for (const path of ["/login/*", "/email/*", "/recovery", "/enroll/*"]) app.use(path, limiter);
+  for (const path of [
+    "/login/*",
+    "/email/*",
+    "/recovery",
+    "/enroll/*",
+    "/oidc/callback",
+    "/oidc/:id/start",
+  ])
+    app.use(path, limiter);
   loginRoutes(app, deps);
   enrollRoutes(app, deps);
+  // An OIDC login opens the same kind of session as an email code: it proves the address, not a
+  // passkey, so it never unlocks step-up.
+  oidcPublicRoutes(app, {
+    db: deps.db,
+    home: deps.home,
+    origin: deps.rp.origin,
+    login: (c, userId) =>
+      openSession(c, deps, userId, "email")
+        ? c.redirect("/")
+        : c.json({ error: "unauthorized" }, 401),
+  });
   return app;
 }

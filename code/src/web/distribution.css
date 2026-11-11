@@ -1,0 +1,87 @@
+.distribution pre {
+  margin: 0.25rem 0;
+  padding: 0.5rem;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.distribution code {
+  overflow-wrap: anywhere;
+}
+
+.distribution input,
+.distribution select {
+  max-width: 100%;
+}
+
+.distribution h4,
+.distribution h5 {
+  margin: 0.75rem 0 0.25rem;
+}
+
+.sr-only {
+  position: absolute;
+  left: -9999px;
+}
+
+.secret-box {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
+.secret-box input {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+}
+
+.share-line,
+.target-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.plan-block {
+  margin: 0.5rem 0;
+}
+
+.review {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--accent);
+}
+
+.badge.done,
+.badge.approved {
+  color: var(--ok);
+}
+
+.badge.failed,
+.badge.denied,
+.badge.rolled_back {
+  color: var(--error);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

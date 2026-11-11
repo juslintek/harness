@@ -20,6 +20,7 @@ import {
 } from "./api";
 import { deletePasskey, listPasskeys } from "./credentials";
 import { SESSION_COOKIE, stepUpRequired } from "./middleware";
+import { oidcAdminRoutes } from "./oidc-admin";
 import { invalidBody, parseBody } from "./routes";
 
 function passkeyRoutes(app: Hono<AuthEnv>, db: Database, rp: Rp): void {
@@ -96,7 +97,7 @@ function sessionRoutes(app: Hono<AuthEnv>, db: Database): void {
 }
 
 // Mounted behind the session middleware, so every handler here has an actor.
-export function accountRoutes(db: Database, rp: Rp): Hono<AuthEnv> {
+export function accountRoutes(db: Database, rp: Rp, home: string): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
   app.get("/me", (c) => {
     const actor = c.get("actor");
@@ -117,5 +118,6 @@ export function accountRoutes(db: Database, rp: Rp): Hono<AuthEnv> {
   passkeyRoutes(app, db, rp);
   stepUpRoutes(app, db, rp);
   sessionRoutes(app, db);
+  oidcAdminRoutes(app, db, home);
   return app;
 }

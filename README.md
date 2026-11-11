@@ -4,5 +4,6 @@ A small self-hosted platform that drives many LLM coding agents: runs them in sa
 
 - `code/` the Bun package (server, web, shared)
 - `docs/` user and developer docs, start with `docs/README.md`
+- `docs/distribution.md` building, deploying, pairing, sharing and self-updating instances
 - `screenshots/` UI captures per milestone
 - `working-docs/` design, research notes, spikes, per-phase plans
