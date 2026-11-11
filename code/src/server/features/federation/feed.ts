@@ -59,14 +59,20 @@ interface Raw {
 
 // A peer sees a project only if this instance is its home and granted it to an org of that peer, or
 // the peer is the home of the copy held here. A change on a copy is never served to a third peer,
-// so replication does not relay.
+// so replication does not relay. Only the newest change of each row is served: older versions may
+// hold content that was edited or deleted since, and a later grantee must not get them. Rows at or
+// below the cursor cannot supersede anything newer, so the window only looks past it.
 const SCOPED = `
-  SELECT c.* FROM fed_changes c
-  WHERE c.seq > ?1 AND (
-    EXISTS (SELECT 1 FROM projects p JOIN grants g ON g.project_id = p.id JOIN orgs o ON o.id = g.org_id
-            WHERE p.id = c.project_id AND p.home_instance IS NULL AND o.home_instance = ?2)
-    OR EXISTS (SELECT 1 FROM projects p WHERE p.id = c.project_id AND p.home_instance = ?2))
-  ORDER BY c.seq LIMIT ?3`;
+  WITH scoped AS (
+    SELECT c.*, ROW_NUMBER() OVER (
+      PARTITION BY c.project_id, c.table_name, c.row_id ORDER BY c.seq DESC) AS newest
+    FROM fed_changes c
+    WHERE c.seq > ?1 AND (
+      EXISTS (SELECT 1 FROM projects p JOIN grants g ON g.project_id = p.id JOIN orgs o ON o.id = g.org_id
+              WHERE p.id = c.project_id AND p.home_instance IS NULL AND o.home_instance = ?2)
+      OR EXISTS (SELECT 1 FROM projects p WHERE p.id = c.project_id AND p.home_instance = ?2)))
+  SELECT seq, project_id, table_name, row_id, op, hlc, origin_instance, data
+  FROM scoped WHERE newest = 1 ORDER BY seq LIMIT ?3`;
 
 export function changesFor(db: Database, peerId: string, since: number, limit: number): FeedPage {
   const rows = db.query<Raw, [number, string, number]>(SCOPED).all(since, peerId, limit);

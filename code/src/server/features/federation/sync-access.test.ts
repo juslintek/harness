@@ -107,3 +107,17 @@ test("only an admin of the owning org may share, and revoking stops the feed", a
     changesFor(a.db, b.instanceId, 0, 500).changes.some((ch) => ch.projectId === seed.projectId),
   ).toBe(false);
 });
+
+test("the feed serves only the latest version of a row, so old content never reaches a new grantee", () => {
+  const secret = createTask(a.db, {
+    projectId: readProject,
+    title: "first draft",
+    createdBy: seed.memberId,
+  }).id;
+  flushPending(a.db, a.home);
+  updateTask(a.db, secret, { title: "final" }, seed.memberId);
+  flushPending(a.db, a.home);
+  const served = changesFor(a.db, b.instanceId, 0, 500).changes.filter((ch) => ch.rowId === secret);
+  expect(served.map((ch) => ch.data?.title)).toEqual(["final"]);
+  expect(JSON.stringify(changesFor(a.db, b.instanceId, 0, 500))).not.toContain("first draft");
+});
