@@ -53,3 +53,22 @@ export function insertProvider(
 export function deleteProvider(db: Database, id: string): boolean {
   return db.query("DELETE FROM oidc_providers WHERE id = ?").run(id).changes > 0;
 }
+
+// Trust on first use: the first login pins (provider, sub) to the user, later logins must match.
+// The insert is a no-op when a pin exists, so two first logins cannot both pin.
+export function pinIdentity(
+  db: Database,
+  userId: string,
+  providerId: string,
+  sub: string,
+): boolean {
+  db.query(
+    "INSERT OR IGNORE INTO oidc_identities (user_id, provider_id, sub, created_at) VALUES (?, ?, ?, ?)",
+  ).run(userId, providerId, sub, Date.now());
+  const pinned = db
+    .query<{ provider_id: string; sub: string }, [string]>(
+      "SELECT provider_id, sub FROM oidc_identities WHERE user_id = ?",
+    )
+    .get(userId);
+  return pinned?.provider_id === providerId && pinned.sub === sub;
+}

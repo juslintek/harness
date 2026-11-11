@@ -125,6 +125,50 @@ describe("oidc login", () => {
   });
 });
 
+describe("oidc identity pinning", () => {
+  const email = "pin@example.com";
+  const loginAs = async (claims: Record<string, unknown>): Promise<Response> => {
+    fake.claims = { email, ...claims };
+    const res = await finish(await begin());
+    fake.claims = {};
+    return res;
+  };
+
+  test("the first login pins the sub and a different sub for the same email is refused", async () => {
+    createUser(db, { email, name: "Pin", instanceAdmin: false });
+    expect((await loginAs({ sub: "pin-1" })).status).toBe(302);
+    const other = await loginAs({ sub: "pin-2" });
+    expect(other.status).toBe(401);
+    expect(sessionCookie(other)).toBe("");
+    expect((await loginAs({ sub: "pin-1" })).status).toBe(302);
+  });
+
+  test("the same sub from another provider is refused", async () => {
+    const created = await app.request("/api/auth/oidc/providers", {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        name: "Second",
+        issuer: fake.issuer,
+        clientId: fake.clientId,
+        clientSecret: SECRET,
+      }),
+    });
+    const secondId = ((await created.json()) as { id: string }).id;
+    const first = providerId;
+    providerId = secondId;
+    const res = await loginAs({ sub: "pin-1" });
+    providerId = first;
+    expect(res.status).toBe(401);
+  });
+
+  test("an existing user without a pin is pinned on the next login", async () => {
+    db.query("DELETE FROM oidc_identities").run();
+    expect((await loginAs({ sub: "late-1" })).status).toBe(302);
+    expect((await loginAs({ sub: "pin-1" })).status).toBe(401);
+  });
+});
+
 describe("oidc login refusals", () => {
   const now = Math.floor(Date.now() / 1000);
   const refused: [string, Partial<Pick<OidcFake, "claims" | "alg" | "signer">>][] = [

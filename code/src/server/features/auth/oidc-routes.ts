@@ -4,7 +4,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { getSecret } from "../agents/api";
 import { safeEqual } from "./admin";
 import { beginAuthorization, redeemCode, takePending } from "./oidc";
-import { getProvider, listProviders } from "./oidc-repo";
+import { getProvider, listProviders, pinIdentity } from "./oidc-repo";
 import { findUserByEmail } from "./users";
 
 export interface OidcPublicDeps {
@@ -52,7 +52,10 @@ async function callback(c: Context, deps: OidcPublicDeps): Promise<Response> {
     entry,
   });
   const userId = identity ? userIdFor(deps.db, identity.email) : null;
-  return userId ? deps.login(c, userId) : refused(c);
+  if (!identity || !userId || !pinIdentity(deps.db, userId, provider.id, identity.sub)) {
+    return refused(c);
+  }
+  return deps.login(c, userId);
 }
 
 async function start(c: Context, deps: OidcPublicDeps): Promise<Response> {
