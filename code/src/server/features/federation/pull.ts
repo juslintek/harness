@@ -48,6 +48,11 @@ function toChange(c: FeedChange): Change {
   };
 }
 
+// The cursor is the highest seq actually received, never the `next` the peer claims: a peer that
+// lies could otherwise skip rows or steer which part of its feed we ask for.
+const received = (page: FeedPage, cursor: number): number =>
+  page.changes.reduce((high, c) => Math.max(high, c.seq), cursor);
+
 // The cursor moves in the same transaction as the rows, so a failed apply leaves it where it was
 // and the page is fetched again. Local edits are flushed first: their hlc must exist before a
 // remote row can compete with them, otherwise the remote value would overwrite a newer local one.
@@ -56,6 +61,7 @@ function applyPage(
   home: string,
   peerId: string,
   page: FeedPage,
+  cursor: number,
   deps: PullDeps,
 ): PullStats {
   return db.transaction(() => {
@@ -79,7 +85,7 @@ function applyPage(
     adoptRemoteOrgs(db, instanceId);
     db.run("INSERT OR REPLACE INTO fed_state (key, value) VALUES (?, ?)", [
       cursorKey(peerId),
-      String(page.next),
+      String(received(page, cursor)),
     ]);
     return {
       applied: result.applied,
@@ -118,12 +124,13 @@ export async function pullPeer(
   let cursor = getCursor(db, peer.id);
   for (;;) {
     const page = await fetchPage(db, home, peer, cursor);
-    const stats = applyPage(db, home, peer.id, page, deps);
+    const stats = applyPage(db, home, peer.id, page, cursor, deps);
     total.applied += stats.applied;
     total.stale += stats.stale;
     total.rejected += stats.rejected;
-    if (page.changes.length < PAGE_LIMIT || page.next <= cursor) break;
-    cursor = page.next;
+    const next = received(page, cursor);
+    if (page.changes.length < PAGE_LIMIT || next <= cursor) break;
+    cursor = next;
   }
   if (total.rejected > 0) {
     console.warn(`federation: dropped ${total.rejected} changes from peer ${peer.id}`);
