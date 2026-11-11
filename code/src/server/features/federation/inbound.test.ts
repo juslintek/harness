@@ -181,3 +181,68 @@ test("a home cannot touch local projects or orgs of the instance that pulls from
   );
   expect(both.allowed.map((c) => c.table_name)).toEqual(["projects"]);
 });
+
+// b holds a local project with a stub org granted on it, and an org last written by another peer.
+function seedOrgs(): void {
+  const local = seedProject(b, "bee2");
+  b.db.run(
+    "INSERT INTO orgs (id, slug, name, created_at, home_instance, origin_instance) VALUES ('o-stub', 'peer-x', 'X', 1, 'inst-y', ?)",
+    [a.instanceId],
+  );
+  b.db.run(
+    "INSERT INTO grants (id, project_id, org_id, permission, granted_by, created_at) VALUES ('g-stub', ?, 'o-stub', 'write', 'u', 1)",
+    [local.projectId],
+  );
+  b.db.run(
+    "INSERT INTO orgs (id, slug, name, created_at, home_instance, origin_instance) VALUES ('o-z', 'z', 'Z', 1, 'inst-z', 'inst-z')",
+  );
+}
+
+test("a home cannot flip, delete or reuse orgs that it does not own", () => {
+  seedOrgs();
+  const org = (id: string, home: string | null, slug = id): object => ({
+    id,
+    slug,
+    name: id,
+    home_instance: home,
+  });
+  const project = change("projects", "p-n2", "p-n2", {
+    id: "p-n2",
+    org_id: seed.orgId,
+    key: "N2",
+    name: "n2",
+    home_instance: a.instanceId,
+    created_at: 1,
+  });
+  const allowed = (...cs: Change[]): string[] =>
+    permitInbound(
+      b.db,
+      a.instanceId,
+      [project, ...cs].map((c) => ({ ...c, origin_instance: a.instanceId })),
+    ).allowed.map((c) => `${c.table_name}:${c.row_id}`);
+  const put = (id: string, home: string | null): Change =>
+    change("orgs", id, "p-n2", org(id, home));
+  const member = (id: string, orgId: string): Change =>
+    change("members", id, "p-n2", {
+      id,
+      org_id: orgId,
+      kind: "human",
+      handle: id,
+      display_name: id,
+      role: "member",
+    });
+
+  expect(allowed(put("o-stub", a.instanceId))).toEqual(["projects:p-n2"]);
+  expect(allowed(put("o-stub", "inst-y"))).toEqual(["projects:p-n2"]);
+  expect(allowed({ ...put("o-stub", "inst-y"), op: "del", data: null })).toEqual(["projects:p-n2"]);
+  expect(allowed(put("o-z", "inst-z"))).toEqual(["projects:p-n2"]);
+  expect(allowed(put("o-new", null))).toEqual(["projects:p-n2"]);
+  expect(allowed(put("o-new", a.instanceId))).toEqual(["projects:p-n2", "orgs:o-new"]);
+  expect(allowed(member("m1", "o-z"))).toEqual(["projects:p-n2"]);
+  expect(allowed(member("m2", "o-stub"))).toEqual(["projects:p-n2"]);
+  expect(allowed(put("o-new", a.instanceId), member("m3", "o-new"))).toEqual([
+    "projects:p-n2",
+    "orgs:o-new",
+    "members:m3",
+  ]);
+});

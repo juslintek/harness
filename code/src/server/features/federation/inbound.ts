@@ -94,13 +94,48 @@ function modeOf(ctx: Ctx, projectId: string): Mode {
 const isLocalOrg = (db: Database, orgId: Row[string] | undefined): boolean =>
   db.query("SELECT 1 FROM orgs WHERE id = ? AND home_instance IS NULL").get(orgId ?? null) !== null;
 
+// An org that already exists here may be written by a peer only if that peer wrote it last, it is
+// not a local org, and it holds no grant on a local project (those are the stubs standing for
+// other peers). Otherwise a home could take over grants this instance gave to someone else.
+function peerOwnsOrg(ctx: Ctx, orgId: string): boolean {
+  const stored = ctx.db
+    .query<{ home_instance: string | null; origin_instance: string | null }, [string]>(
+      "SELECT home_instance, origin_instance FROM orgs WHERE id = ?",
+    )
+    .get(orgId);
+  if (!stored) return true;
+  if (stored.home_instance === null || stored.origin_instance !== ctx.peerId) return false;
+  return (
+    ctx.db
+      .query(
+        `SELECT 1 FROM grants g JOIN projects p ON p.id = g.project_id
+         WHERE g.org_id = ? AND p.home_instance IS NULL`,
+      )
+      .get(orgId) === null
+  );
+}
+
+// home_instance cannot be null on the wire (the sender fills in its own id), and it never changes.
+function orgsOk(ctx: Ctx, change: Change, row: Row | null): boolean {
+  if (!peerOwnsOrg(ctx, change.row_id)) return false;
+  if (row === null) return true;
+  const stored = ctx.db
+    .query<{ home_instance: string | null }, [string]>(
+      "SELECT home_instance FROM orgs WHERE id = ?",
+    )
+    .get(change.row_id);
+  return (
+    typeof row.home_instance === "string" && (!stored || stored.home_instance === row.home_instance)
+  );
+}
+
 function membersOk(ctx: Ctx, mode: Mode, change: Change, row: Row | null): boolean {
   const stored = ctx.db
     .query<{ org_id: string }, [string]>("SELECT org_id FROM members WHERE id = ?")
     .get(change.row_id)?.org_id;
   const orgId = row ? row.org_id : stored;
   if (typeof orgId !== "string" || (stored !== undefined && stored !== orgId)) return false;
-  if (mode === "copy") return !isLocalOrg(ctx.db, orgId);
+  if (mode === "copy") return peerOwnsOrg(ctx, orgId);
   const home = ctx.db
     .query<{ home_instance: string | null }, [Row[string]]>(
       "SELECT home_instance FROM orgs WHERE id = ?",
@@ -138,7 +173,7 @@ function permitted(ctx: Ctx, change: Change): boolean {
   if (change.op === "put" && row === null) return false;
   const mode = modeOf(ctx, change.project_id);
   if (mode === "none" || mode === "read") return false;
-  if (spec.name === "orgs") return mode === "copy";
+  if (spec.name === "orgs") return mode === "copy" && orgsOk(ctx, change, row);
   if (spec.name === "members") return membersOk(ctx, mode, change, row);
   if (mode === "write" && !WRITABLE.has(spec.name)) return false;
   if (!labelHolds(ctx, spec.name, change, row)) return false;
