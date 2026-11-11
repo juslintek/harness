@@ -19,6 +19,7 @@ const auth_routes = @import("../auth/routes.zig");
 const agents = @import("../agents/routes.zig");
 const hub_mod = @import("../realtime/hub.zig");
 const ws = @import("ws.zig");
+const approvals = @import("../guard/approvals.zig");
 
 /// What a running server owns on disk. On the heap because `app` holds a mutex that must not move.
 pub const Home = struct {
@@ -102,6 +103,10 @@ pub fn serveHome(
     defer hub.deinit();
     try hub.start();
     wired.hub = options.hub orelse &hub;
+    wired.home = home_path;
+    var sweeps: std.Io.Group = .init;
+    defer sweeps.cancel(io);
+    try sweeps.concurrent(io, approvals.sweepLoop, .{&home.app});
     try server.run(gpa, io, &home.app, home.health, wired, out);
 }
 

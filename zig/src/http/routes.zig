@@ -14,6 +14,7 @@ const policy = @import("policy.zig");
 const session_endpoints = @import("../auth/middleware.zig");
 const auth_routes = @import("../auth/routes.zig");
 const agents = @import("../agents/routes.zig");
+const guard_routes = @import("../guard/routes.zig");
 const mcp = @import("../mcp/server.zig");
 const logs_api = @import("../logs/api.zig");
 const usage_routes = @import("../usage/routes.zig");
@@ -40,6 +41,8 @@ pub const Services = struct {
     mcp: mcp.Deps = .{},
     /// The realtime hub; null where no WebSocket is served (the `/ws` row then answers 501).
     hub: ?*Hub = null,
+    /// HARNESS_HOME as expanded by the configuration; the approval routes refuse what touches it.
+    home: []const u8 = "",
 };
 
 /// One request as a handler sees it. `actor` is set for every row that went through the session
@@ -89,8 +92,8 @@ pub const table = [_]Route{
     .{ .method = .GET, .path = "/api/agents/keys", .handler = agents.keyStatus, .policy = .{ .session = true, .admin = true } },
     .{ .method = .POST, .path = "/api/agents/keys/:provider", .handler = agents.keySave, .policy = .{ .session = true, .admin = true, .step_up = true, .origin = true } },
     .{ .method = .GET, .path = "/api/agents/ollaya", .handler = agents.ollayaStatus, .policy = .{ .session = true, .admin = true } },
-    row(.GET, "/api/approvals", .{ .session = true }),
-    row(.POST, "/api/approvals/:id", .{ .session = true, .step_up = true, .origin = true }),
+    .{ .method = .GET, .path = "/api/approvals", .handler = guard_routes.list, .policy = .{ .session = true } },
+    .{ .method = .POST, .path = "/api/approvals/:id", .handler = guard_routes.decide, .policy = .{ .session = true, .step_up = true, .origin = true } },
     .{ .method = .POST, .path = "/api/auth/email/request", .handler = auth_routes.emailRequest, .policy = .{ .public = true, .origin = true } },
     .{ .method = .POST, .path = "/api/auth/email/verify", .handler = auth_routes.emailVerify, .policy = .{ .public = true, .origin = true } },
     .{ .method = .POST, .path = "/api/auth/enroll/:code/options", .handler = auth_routes.enrollOptions, .policy = .{ .public = true, .origin = true } },
@@ -175,7 +178,7 @@ pub const table = [_]Route{
     row(.POST, "/api/tasks/:id/move", .{ .session = true, .origin = true }),
     row(.POST, "/api/tasks/:id/release", .{ .session = true, .origin = true }),
     .{ .method = .GET, .path = "/api/usage", .handler = usage_routes.getUsage, .policy = .{ .session = true, .admin = true } },
-    row(.POST, "/api/guard/hook", .{ .public = true, .loopback = true }),
+    .{ .method = .POST, .path = "/api/guard/hook", .handler = guard_routes.hook, .policy = .{ .public = true, .loopback = true } },
     .{ .method = .any, .path = "/mcp", .handler = mcp.handle, .policy = .{ .public = true, .loopback = true } },
     .{ .method = .GET, .path = "/ws", .handler = ws.upgrade, .policy = .{ .session = true, .origin = true } },
 };

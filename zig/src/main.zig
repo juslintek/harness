@@ -99,6 +99,11 @@ test {
     _ = @import("guard/lexer.zig");
     _ = @import("guard/l1.zig");
     _ = @import("guard/eval.zig");
+    _ = @import("guard/approvals.zig");
+    _ = @import("guard/l2.zig");
+    _ = @import("guard/limits.zig");
+    _ = @import("guard/routes.zig");
+    _ = @import("guard/check.zig");
     _ = @import("heartbeat/triggers.zig");
     _ = @import("laya/client.zig");
     _ = @import("mcp/server.zig");
