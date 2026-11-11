@@ -95,6 +95,7 @@ function parentsPresent(db: Database, spec: TableSpec, row: Row): boolean {
 // the row instead would lose the project below it.
 function freeOfLocalClash(db: Database, spec: TableSpec, row: Row): Row {
   const id = row.id as string;
+  const orgId = row.org_id ?? null;
   if (spec.name === "orgs" && typeof row.slug === "string") {
     const taken = db.query("SELECT 1 FROM orgs WHERE slug = ? AND id != ?").get(row.slug, id);
     return taken ? { ...row, slug: `${row.slug}-${id.slice(-8)}` } : row;
@@ -102,7 +103,7 @@ function freeOfLocalClash(db: Database, spec: TableSpec, row: Row): Row {
   if (spec.name === "tasks") {
     const taken = db
       .query("SELECT 1 FROM tasks WHERE org_id = ? AND number = ? AND id != ?")
-      .get(row.org_id, row.number, id);
+      .get(orgId, row.number ?? null, id);
     if (!taken) return row;
     const kept = db
       .query<{ number: number }, [string]>("SELECT number FROM tasks WHERE id = ?")
@@ -111,7 +112,7 @@ function freeOfLocalClash(db: Database, spec: TableSpec, row: Row): Row {
       .query<{ n: number }, [Cell]>(
         "SELECT COALESCE(MAX(number), 0) + 1 AS n FROM tasks WHERE org_id = ?",
       )
-      .get(row.org_id);
+      .get(orgId);
     return { ...row, number: kept?.number ?? next?.n ?? 1 };
   }
   return row;

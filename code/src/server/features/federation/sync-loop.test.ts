@@ -115,7 +115,11 @@ test("the cursor stays put when applying a page fails and moves once it succeeds
 
 test("a peer cannot steer the cursor past what it actually sent", async () => {
   const before = cursorOf(b, a);
-  spy.mockImplementationOnce(async () => Response.json({ changes: [], next: 999_999 }));
+  spy.mockImplementationOnce(
+    Object.assign(async () => Response.json({ changes: [], next: 999_999 }), {
+      preconnect: real.preconnect,
+    }),
+  );
   await pullPeer(b.db, b.home, peerOn(b, a));
   expect(cursorOf(b, a)).toBe(before);
 });
