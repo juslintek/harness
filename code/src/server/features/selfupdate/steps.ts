@@ -38,7 +38,7 @@ export async function removeWorktree(repo: string, path: string): Promise<void> 
   );
 }
 
-export const UNKNOWN_BASE = "(running commit unknown: every change needs approval)";
+const UNKNOWN_BASE = "(running commit unknown: every change needs approval)";
 
 // The base is what the live process was built from, so a branch cannot hide a guard change by
 // sharing it with the default branch. Without a usable base nothing can be ruled out.
