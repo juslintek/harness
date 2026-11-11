@@ -86,7 +86,7 @@ function refuseNonRegular(path: string): void {
 
 // Content that is not a positive pid counts as stale: kill(0) would signal our own process group
 // and kill(-n) a whole group, so they must never reach the liveness check.
-function lockPid(path: string): number | null {
+export function lockPid(path: string): number | null {
   refuseNonRegular(path);
   let text: string;
   try {

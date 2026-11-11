@@ -1,7 +1,14 @@
 import type { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, readFileSync, realpathSync, symlinkSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  readFileSync,
+  realpathSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { build, hostTarget } from "../../../../scripts/build";
 import { migrate, openDb } from "../../db/db";
@@ -229,3 +236,46 @@ describe("service-managed restart", () => {
     expect(launched).toEqual([realpathSync(target)]);
   }, 30_000);
 });
+
+describe("rollback with a live owner of the db", () => {
+  test("is aborted and the request failed when the lock pid is still alive", async () => {
+    const { home, db } = makeHome();
+    const id = createRequest(db, { repo: "r", branch: "b", commitSha: "c", createdBy: "u" }).id;
+    setStatus(db, id, "swapping");
+    const snapshot = snapshotDb(db, home, `${id}-swap`);
+    createRequest(db, { repo: "r2", branch: "b", commitSha: "c", createdBy: "written-later" });
+    db.close();
+    const owner = Bun.spawn(["sleep", "30"]);
+    try {
+      writeFileSync(join(home, "harness.lock"), `${owner.pid}\n`);
+      const current = join(home, "bin", "current");
+      flipSymlink(current, newBin);
+      let launched = 0;
+      const deps: SwapDeps = {
+        launch: (binary, spot) => {
+          launched++;
+          return spawnServer(binary, spot);
+        },
+        healthMs: 1000,
+        oldExitMs: 300,
+      };
+      const opts = { ...s0(home, snapshot, id, owner.pid), current, version: NEW };
+      await expect(swap(opts, deps)).rejects.toThrow(/still owns the database/);
+      expect(launched).toBe(0);
+      const check = openDb(join(home, "harness.db"));
+      expect(getRequest(check, id)?.status).toBe("failed");
+      expect(getRequest(check, id)?.reason).toContain("rollback aborted");
+      // the row written after the snapshot is still there, so the snapshot was not restored
+      expect(
+        check.query("SELECT 1 FROM update_requests WHERE created_by = 'written-later'").get(),
+      ).not.toBeNull();
+      check.close();
+    } finally {
+      owner.kill();
+    }
+  }, 30_000);
+});
+
+function s0(home: string, snapshot: string, request: string, oldPid: number) {
+  return { oldPid, previous: oldBin, home, port: 1, snapshot, request };
+}

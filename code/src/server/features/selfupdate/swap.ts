@@ -1,8 +1,16 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { lockPid } from "../../db/db";
 import { version as ownVersion } from "../../version";
-import { type Launched, type ServerSpot, spawnServer, waitHealth, waitPidExit } from "./proc";
+import {
+  type Launched,
+  pidAlive,
+  type ServerSpot,
+  spawnServer,
+  waitHealth,
+  waitPidExit,
+} from "./proc";
 import { appendLog, setStatus, type UpdateStatus } from "./requests";
 import { restoreSnapshot } from "./snapshot";
 
@@ -53,12 +61,31 @@ function record(home: string, request: string, status: UpdateStatus, note: strin
   }
 }
 
+// The pid in harness.lock when it is alive; a lock that cannot be read counts as owned because
+// nothing proves the db is free.
+function ownerOf(home: string): number | "unreadable" | null {
+  try {
+    const pid = lockPid(join(home, "harness.lock"));
+    return pid !== null && pidAlive(pid) ? pid : null;
+  } catch {
+    return "unreadable";
+  }
+}
+
 async function rollback(opts: SwapOptions, deps: SwapDeps, reason: string): Promise<"rolled_back"> {
   const spot = {
     home: opts.home,
     port: opts.port,
     log: join(opts.home, `selfupdate-${opts.request}.log`),
   };
+  // Overwriting the db under a live process corrupts it or loses its writes. That happens when the
+  // old process outlives the drain, or a service manager restarted it after the new binary failed.
+  const owner = ownerOf(opts.home);
+  if (owner !== null) {
+    const why = `${reason}; rollback aborted, process ${owner} still owns the database`;
+    record(opts.home, opts.request, "failed", why);
+    throw new Error(why);
+  }
   restoreSnapshot(opts.home, opts.snapshot);
   flipSymlink(opts.current, opts.previous);
   const old = deps.launch(opts.previous, spot);
