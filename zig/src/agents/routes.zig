@@ -8,6 +8,7 @@ const middleware = @import("../auth/middleware.zig");
 const headers = @import("../http/headers.zig");
 const routes = @import("../http/routes.zig");
 const ids = @import("../ids.zig");
+const json = @import("../json.zig");
 const process_mod = @import("../runtimes/process.zig");
 const sqlite = @import("../db/sqlite.zig");
 const discover = @import("discover.zig");
@@ -265,11 +266,11 @@ pub fn keySave(call: *routes.Call) anyerror!void {
     if (!try freshStepUp(call)) return;
     const name = call.req.param("provider") orelse return headers.sendError(call.res, 404, "unknown provider");
     const provider = std.meta.stringToEnum(keys.Provider, name) orelse return headers.sendError(call.res, 404, "unknown provider");
-    const Body = struct { key: []const u8 };
+    const Body = struct { key: json.Str };
     const body = headers.parseBody(Body, call.req) catch return headers.sendError(call.res, 400, "invalid key");
-    if (!validKey(body.key)) return headers.sendError(call.res, 400, "invalid key");
+    if (!validKey(body.key.text)) return headers.sendError(call.res, 400, "invalid key");
     var diag: keys.Diag = .{};
-    ctx.keys.put(call.res.arena, &diag, provider, body.key) catch |err| return keysFailure(call.res, err, diag);
+    ctx.keys.put(call.res.arena, &diag, provider, body.key.text) catch |err| return keysFailure(call.res, err, diag);
     try headers.sendJson(call.res, .{ .ok = true });
 }
 

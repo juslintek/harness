@@ -2,8 +2,15 @@
 //! the Zig port has to accept and refuse exactly the same inputs. See working-docs/zig-plan.md 2.6.
 const std = @import("std");
 
-/// `s.length` in JS: UTF-16 code units. Every `.max(n)` limit in the zod schemas counts these, not
-/// bytes. Invalid UTF-8 is an error: JSON.parse could never have produced it.
+/// The length zod 4.6 enforces for string `.min(n)` and `.max(n)`: Unicode code points, so one
+/// emoji counts 1 (zod `checks.js`, `util.codePointLength`). Invalid UTF-8 is an error: JSON.parse
+/// could never have produced it. Use this for every schema limit, never `utf16Len`.
+pub fn codePoints(utf8: []const u8) error{InvalidUtf8}!usize {
+    return std.unicode.utf8CountCodepoints(utf8) catch error.InvalidUtf8;
+}
+
+/// `s.length` in JS: UTF-16 code units. Only plain `.length` checks in TS code count these (such
+/// as the guard's `src.length`), a zod limit does not. Invalid UTF-8 is an error.
 pub fn utf16Len(utf8: []const u8) error{InvalidUtf8}!usize {
     // calcUtf16LeLen indexes past the end on a truncated sequence, so validate first.
     if (!std.unicode.utf8ValidateSlice(utf8)) return error.InvalidUtf8;
@@ -188,6 +195,17 @@ pub fn coerceNumber(s: []const u8) ?f64 {
 }
 
 const testing = std.testing;
+
+test "parity: codePoints counts an emoji once and refuses invalid UTF-8" {
+    try testing.expectEqual(@as(usize, 0), try codePoints(""));
+    try testing.expectEqual(@as(usize, 5), try codePoints("hello"));
+    try testing.expectEqual(@as(usize, 1), try codePoints("\u{0105}"));
+    try testing.expectEqual(@as(usize, 1), try codePoints("\u{1F600}"));
+    try testing.expectEqual(@as(usize, 4), try codePoints("a\u{1F600}b\u{0105}"));
+    try testing.expectError(error.InvalidUtf8, codePoints("\xff"));
+    try testing.expectError(error.InvalidUtf8, codePoints("a\xc3"));
+    try testing.expectError(error.InvalidUtf8, codePoints("\xed\xa0\x80"));
+}
 
 test "parity: utf16Len counts code units, not bytes" {
     try testing.expectEqual(@as(usize, 0), try utf16Len(""));

@@ -167,14 +167,14 @@ fn decodeComponent(arena: Allocator, raw: []const u8) Allocator.Error![]const u8
     return middleware.percentDecode(arena, spaced);
 }
 
-const max_query_units = 200;
+const max_query_len = 200;
 
-/// `searchQuerySchema`: q is trimmed, then 1 to 200 UTF-16 code units. Null when invalid.
+/// `searchQuerySchema`: q is trimmed, then 1 to 200 code points. Null when invalid.
 fn validQuery(arena: Allocator, raw_query: []const u8) Allocator.Error!?[]const u8 {
     const value = try queryParam(arena, raw_query, "q") orelse return null;
     const trimmed = parity.jsTrim(value);
-    const units = parity.utf16Len(trimmed) catch return null;
-    if (units < 1 or units > max_query_units) return null;
+    const len = parity.codePoints(trimmed) catch return null;
+    if (len < 1 or len > max_query_len) return null;
     return trimmed;
 }
 
@@ -450,9 +450,9 @@ test "logs/api: the q parameter follows searchQuerySchema and Hono's query parsi
     const max = comptime "q=" ++ repeat("x", 200);
     try testing.expect((try validQuery(a, max)) != null);
     try testing.expectEqual(@as(?[]const u8, null), try validQuery(a, max ++ "x"));
-    // The limit counts UTF-16 code units: 100 emoji are 200, 101 are 202.
-    try testing.expect((try validQuery(a, "q=" ++ repeat("%F0%9F%99%82", 100))) != null);
-    try testing.expectEqual(@as(?[]const u8, null), try validQuery(a, "q=" ++ repeat("%F0%9F%99%82", 101)));
+    // The limit counts code points: 200 emoji pass (400 UTF-16 units), 201 do not.
+    try testing.expect((try validQuery(a, "q=" ++ repeat("%F0%9F%99%82", 200))) != null);
+    try testing.expectEqual(@as(?[]const u8, null), try validQuery(a, "q=" ++ repeat("%F0%9F%99%82", 201)));
 }
 
 test "logs/api: an append that runs out of memory leaves nothing behind" {
