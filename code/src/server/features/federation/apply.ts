@@ -89,6 +89,34 @@ function parentsPresent(db: Database, spec: TableSpec, row: Row): boolean {
   });
 }
 
+// slug and (org_id, number) are unique per instance, but each instance picks them on its own, so a
+// replicated row can clash with a local one. The incoming row gives way: a task keeps the number it
+// already has here or takes the next free one, an org gets its id appended to the slug. Dropping
+// the row instead would lose the project below it.
+function freeOfLocalClash(db: Database, spec: TableSpec, row: Row): Row {
+  const id = row.id as string;
+  if (spec.name === "orgs" && typeof row.slug === "string") {
+    const taken = db.query("SELECT 1 FROM orgs WHERE slug = ? AND id != ?").get(row.slug, id);
+    return taken ? { ...row, slug: `${row.slug}-${id.slice(-8)}` } : row;
+  }
+  if (spec.name === "tasks") {
+    const taken = db
+      .query("SELECT 1 FROM tasks WHERE org_id = ? AND number = ? AND id != ?")
+      .get(row.org_id, row.number, id);
+    if (!taken) return row;
+    const kept = db
+      .query<{ number: number }, [string]>("SELECT number FROM tasks WHERE id = ?")
+      .get(id);
+    const next = db
+      .query<{ n: number }, [Cell]>(
+        "SELECT COALESCE(MAX(number), 0) + 1 AS n FROM tasks WHERE org_id = ?",
+      )
+      .get(row.org_id);
+    return { ...row, number: kept?.number ?? next?.n ?? 1 };
+  }
+  return row;
+}
+
 function upsert(db: Database, spec: TableSpec, row: Row, change: Change): void {
   const data: Row = {};
   for (const col of spec.columns) if (col in row) data[col] = row[col] as Cell;
@@ -117,7 +145,7 @@ function put(
   if (!row || ownedHere(db, spec, change.row_id)) return "rejected";
   if (!wins(change, localStamp(db, spec, change.row_id))) return "stale";
   if (!parentsPresent(db, spec, row)) return "rejected";
-  upsert(db, spec, row, change);
+  upsert(db, spec, freeOfLocalClash(db, spec, row), change);
   // comments and messages have a `body` column of their own; only a note's body is a file.
   const fileBody = spec.name === "notes" && typeof row.body === "string" ? row.body : null;
   if (bodies && fileBody !== null && !bodies.write(row, fileBody)) throw new Unfit();

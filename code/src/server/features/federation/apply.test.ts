@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { applyBatch, applyChange } from "./apply";
+import { applyBatch, applyChange, type Change } from "./apply";
 import { addTask, freshDb, hlcAt, seedProject, taskChange, taskDel } from "./test-kit";
 
 function setup() {
@@ -158,5 +158,43 @@ test("a member stub gets no real identity", () => {
     )
     .get();
   expect(row).toEqual({ agent_id: "remote:m9", model: null });
+  db.close();
+});
+
+const numberOf = (db: ReturnType<typeof freshDb>, id: string): number | undefined =>
+  db.query<{ number: number }, [string]>("SELECT number FROM tasks WHERE id = ?").get(id)?.number;
+
+test("a task number taken by another task is replaced instead of dropping the task", () => {
+  const db = setup();
+  addTask(db, "local", "mine");
+  expect(numberOf(db, "local")).toBe(1);
+  expect(applyChange(db, taskChange("t1", hlcAt(100), "theirs"))).toBe("applied");
+  const renumbered = numberOf(db, "t1");
+  expect(renumbered).not.toBe(1);
+  expect(applyChange(db, taskChange("t1", hlcAt(200), "theirs again"))).toBe("applied");
+  expect(numberOf(db, "t1")).toBe(renumbered);
+  expect(numberOf(db, "local")).toBe(1);
+  db.close();
+});
+
+test("an org slug taken by a local org is replaced instead of dropping the org", () => {
+  const db = setup();
+  const org = (hlc: string): Change => ({
+    project_id: "p1",
+    table_name: "orgs",
+    row_id: "o-home",
+    op: "put",
+    hlc,
+    origin_instance: "inst-b",
+    data: JSON.stringify({ id: "o-home", slug: "acme", name: "Acme", home_instance: "inst-b" }),
+  });
+  const slugOf = (id: string): string | undefined =>
+    db.query<{ slug: string }, [string]>("SELECT slug FROM orgs WHERE id = ?").get(id)?.slug;
+  expect(applyChange(db, org(hlcAt(100)))).toBe("applied");
+  const slug = slugOf("o-home");
+  expect(slug).not.toBe("acme");
+  expect(slugOf("o1")).toBe("acme");
+  expect(applyChange(db, org(hlcAt(200)))).toBe("applied");
+  expect(slugOf("o-home")).toBe(slug);
   db.close();
 });
