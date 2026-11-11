@@ -154,7 +154,7 @@ fn nameField(v: ?std.json.Value) ?[]const u8 {
         .string => |s| s,
         else => return null,
     };
-    const len = parity.utf16Len(text) catch return null;
+    const len = parity.codePoints(text) catch return null;
     return if (len >= 1 and len <= 40) text else null;
 }
 
@@ -342,7 +342,7 @@ test "usage: POST /api/quota refuses what quotaBodySchema refuses" {
         "{\"provider\":\"cccccccccccccccccccccccccccccccccccccccccc\",\"window\":\"w\",\"usedPercent\":5}",
     };
     for (bad) |body| try testing.expectError(error.InvalidBody, h.call(postQuota, .POST, "/api/quota", body));
-    // 40 UTF-16 units pass, 41 do not; a duplicate key keeps the last value; 5.0 is an integer.
+    // 40 code points pass, 41 do not; a duplicate key keeps the last value; 5.0 is an integer.
     const forty = "0123456789012345678901234567890123456789";
     var ok = try h.call(postQuota, .POST, "/api/quota", "{\"provider\":\"" ++ forty ++ "\",\"window\":\"w\",\"usedPercent\":0,\"usedPercent\":100,\"resetsAt\":5.0}");
     ok.deinit();
@@ -354,4 +354,14 @@ test "usage: POST /api/quota refuses what quotaBodySchema refuses" {
     try testing.expectEqual(@as(i64, 5), stmt.int(1));
     try testing.expectEqualStrings("manual", (try stmt.text(2)).?);
     try testing.expect(!try stmt.step());
+    // The limit is in code points: 40 emoji pass although they are 80 UTF-16 units.
+    const emoji40 = comptime blk: {
+        const unit = "\u{1F600}";
+        var out: [unit.len * 40]u8 = undefined;
+        for (0..40) |i| @memcpy(out[i * unit.len ..][0..unit.len], unit);
+        break :blk out;
+    };
+    var astral = try h.call(postQuota, .POST, "/api/quota", "{\"provider\":\"" ++ emoji40 ++ "\",\"window\":\"w\",\"usedPercent\":1}");
+    astral.deinit();
+    try testing.expectError(error.InvalidBody, h.call(postQuota, .POST, "/api/quota", "{\"provider\":\"" ++ emoji40 ++ "\u{1F600}\",\"window\":\"w\",\"usedPercent\":1}"));
 }

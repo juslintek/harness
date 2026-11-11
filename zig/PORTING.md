@@ -11,8 +11,8 @@ use an API from memory.
 | TS | Zig 0.17 | File |
 |---|---|---|
 | `app.post(path, handler)`, `c.json(...)` | httpz route `fn (*Handler, *httpz.Request, *httpz.Response) !void`, `res.json(value, .{})`, `router.post` | [http_route.zig](cookbook/http_route.zig) |
-| `await req.json()` plus zod | `std.json.parseFromSliceLeaky` on `req.body()` with `use_last` and `ignore_unknown_fields` | [http_route.zig](cookbook/http_route.zig), [json_parity.zig](cookbook/json_parity.zig) |
-| `JSON.parse` quirks, `s.length`, `s.trim()` | `std.unicode.calcUtf16LeLen`, a JS whitespace trim | [json_parity.zig](cookbook/json_parity.zig) |
+| `await req.json()` plus zod | `headers.parseBody(T, req)` with `json.Str` for strings and `json.Enum(E)` for `z.enum`; or `std.json.Value` checked by hand (`auth/body.zig`) | [http_route.zig](cookbook/http_route.zig), [json_parity.zig](cookbook/json_parity.zig) |
+| `JSON.parse` quirks, zod string `.min(n)`/`.max(n)`, `s.trim()` | `parity.codePoints` (code points), a JS whitespace trim | [json_parity.zig](cookbook/json_parity.zig) |
 | `bun:sqlite` `db.query(sql).get(x)` | externs in `src/db/c.zig`: `prepare_v2`, `bind_*`, `step`, `column_*`, `finalize` | [sqlite.zig](cookbook/sqlite.zig) |
 | `db.transaction(fn)` | `exec("BEGIN IMMEDIATE")`, work, `COMMIT`, or `ROLLBACK` on error | [sqlite.zig](cookbook/sqlite.zig) |
 | FTS5 `MATCH ?` | same externs, bound query string, `ORDER BY rank` | [sqlite.zig](cookbook/sqlite.zig) |
@@ -40,8 +40,14 @@ Notes the table cannot hold:
 - A `*websocket.Conn` may be written and closed from any thread, but the pointer is dead after the
   handler's `close`. Clear it under the same mutex that guards writes, and only when it still equals
   the closing connection: a newer client may already have replaced it.
-- `std.json` rejects invalid UTF-8 and unknown enum names with an error, as zod does. It does not
-  count UTF-16 length: use `jsLength` for any limit TS enforces with `.max(n)`.
+- `std.json` rejects invalid UTF-8 and unknown enum names with an error, as zod does. zod 4.6 counts
+  code points for string `.min(n)` and `.max(n)` (`checks.js`, `util.codePointLength`; 80 emoji pass a
+  `.max(80)`, 81 fail), so use `parity.codePoints` for every such limit, not bytes and not UTF-16
+  units. UTF-16 units (`parity.utf16Len`) are only for a plain JS `.length` in TS code.
+- `std.json` is looser than zod on types: a `[]const u8` field also takes an array of integers (read
+  as bytes), an integer or float field takes a JSON string, an enum takes a JSON number (its index).
+  Body structs use `json.Str` and `json.Enum(E)`; `parseBody` refuses a raw `[]const u8`, number or
+  enum field at compile time.
 - `std.mem.trim` with an ASCII set leaves U+00A0, U+3000 and U+FEFF; JS `trim()` removes them.
   `jsTrim` in the cookbook has the exact set.
 - Known JS-parity divergence: `std.json` rejects a lone surrogate escape such as `{"title":"\uD800"}`

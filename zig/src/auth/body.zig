@@ -1,5 +1,5 @@
 //! Request bodies of the auth routes, validated the way code/src/shared/auth.ts does with zod:
-//! the same limits (counted in UTF-16 units), trimming, lowercasing and the email pattern; keys
+//! the same limits (counted in code points, as zod does), trimming, lowercasing and the email pattern; keys
 //! the schema does not name are dropped; any violation is `error.InvalidBody`, which the HTTP
 //! layer turns into 400 `invalid body`. Everything lives in the request arena.
 const std = @import("std");
@@ -50,10 +50,10 @@ fn string(value: Value) Error![]const u8 {
     };
 }
 
-/// `z.string().min(min).max(max)`; lengths are UTF-16 units.
+/// `z.string().min(min).max(max)`; lengths are code points.
 fn bounded(value: Value, min: usize, max: usize) Error![]const u8 {
     const text = try string(value);
-    const len = parity.utf16Len(text) catch return error.InvalidBody;
+    const len = parity.codePoints(text) catch return error.InvalidBody;
     if (len < min or len > max) return error.InvalidBody;
     return text;
 }
@@ -69,7 +69,7 @@ fn b64(map: std.json.ObjectMap, name: []const u8) Error![]const u8 {
 /// `z.string().trim().min(1).max(n)`.
 fn trimmed(value: Value, max: usize) Error![]const u8 {
     const text = parity.jsTrim(try string(value));
-    const len = parity.utf16Len(text) catch return error.InvalidBody;
+    const len = parity.codePoints(text) catch return error.InvalidBody;
     if (len < 1 or len > max) return error.InvalidBody;
     return text;
 }
@@ -302,7 +302,7 @@ test "body: a login assertion needs every field and drops unknown ones" {
     }
 }
 
-test "body: limits count UTF-16 units and the name defaults to Passkey" {
+test "body: limits count code points and the name defaults to Passkey" {
     var web = httpz.testing.init(.{});
     defer web.deinit();
     const cred = "\"response\":{\"id\":\"A\",\"rawId\":\"A\",\"type\":\"public-key\",\"clientExtensionResults\":{},\"response\":{\"clientDataJSON\":\"x\",\"attestationObject\":\"y\",\"transports\":[\"internal\"]}}";
@@ -316,14 +316,14 @@ test "body: limits count UTF-16 units and the name defaults to Passkey" {
     named.body("{\"challengeId\":\"c\",\"name\":\"  Laptop \"," ++ cred ++ "}");
     try testing.expectEqualStrings("Laptop", (try passkey(named.req)).name);
 
-    // 40 astral characters are 80 UTF-16 units (fine), 41 are 82 (too long); bytes would be 160.
+    // 80 astral characters are 80 code points (fine, though 160 UTF-16 units), 81 are too long.
     var edge = httpz.testing.init(.{});
     defer edge.deinit();
-    edge.body("{\"challengeId\":\"c\",\"name\":\"" ++ comptime repeat("\u{1F600}", 40) ++ "\"," ++ cred ++ "}");
+    edge.body("{\"challengeId\":\"c\",\"name\":\"" ++ comptime repeat("\u{1F600}", 80) ++ "\"," ++ cred ++ "}");
     _ = try passkey(edge.req);
     var over = httpz.testing.init(.{});
     defer over.deinit();
-    over.body("{\"challengeId\":\"c\",\"name\":\"" ++ comptime repeat("\u{1F600}", 41) ++ "\"," ++ cred ++ "}");
+    over.body("{\"challengeId\":\"c\",\"name\":\"" ++ comptime repeat("\u{1F600}", 81) ++ "\"," ++ cred ++ "}");
     try testing.expectError(error.InvalidBody, passkey(over.req));
 
     var blank = httpz.testing.init(.{});

@@ -20,12 +20,10 @@ pub fn parseBody(gpa: std.mem.Allocator, bytes: []const u8) !std.json.Parsed(Bod
     return std.json.parseFromSlice(Body, gpa, bytes, options);
 }
 
-/// JS `string.length` counts UTF-16 code units; `[]const u8.len` counts bytes. Length limits that
-/// the TS server enforces with zod `.max(n)` must use this. Invalid UTF-8 is an error here.
-pub fn jsLength(utf8: []const u8) error{InvalidUtf8}!usize {
-    // calcUtf16LeLen indexes past the end on a truncated sequence, so validate first.
-    if (!std.unicode.utf8ValidateSlice(utf8)) return error.InvalidUtf8;
-    return std.unicode.calcUtf16LeLen(utf8) catch error.InvalidUtf8;
+/// zod 4.6 counts Unicode code points for string `.min(n)` and `.max(n)` (one emoji is 1), not
+/// bytes (`[]const u8.len`) and not the UTF-16 units of JS `s.length`. Invalid UTF-8 is an error.
+pub fn zodLength(utf8: []const u8) error{InvalidUtf8}!usize {
+    return std.unicode.utf8CountCodepoints(utf8) catch error.InvalidUtf8;
 }
 
 /// The code points JS String.prototype.trim removes (WhiteSpace and LineTerminator in the spec).
@@ -83,16 +81,16 @@ test "json: a lone surrogate escape is rejected, unlike JSON.parse (known diverg
     try std.testing.expectEqualStrings("\u{1F600}", pair.value.title);
 }
 
-test "json: length is UTF-16 code units like JS" {
-    try std.testing.expectEqual(@as(usize, 5), try jsLength("hello"));
-    try std.testing.expectEqual(@as(usize, 2), try jsLength("\u{1F600}"));
-    try std.testing.expectEqual(@as(usize, 1), try jsLength("\u{0105}"));
+test "json: length is code points like zod" {
+    try std.testing.expectEqual(@as(usize, 5), try zodLength("hello"));
+    try std.testing.expectEqual(@as(usize, 1), try zodLength("\u{1F600}"));
+    try std.testing.expectEqual(@as(usize, 1), try zodLength("\u{0105}"));
     try std.testing.expectEqual(@as(usize, 4), "\u{0105}\u{0105}".len);
 }
 
 test "json: invalid UTF-8 is an error or left alone, never a panic" {
-    try std.testing.expectError(error.InvalidUtf8, jsLength("a\xc3"));
-    try std.testing.expectError(error.InvalidUtf8, jsLength("\xff"));
+    try std.testing.expectError(error.InvalidUtf8, zodLength("a\xc3"));
+    try std.testing.expectError(error.InvalidUtf8, zodLength("\xff"));
     try std.testing.expectEqualStrings("a\xc3", jsTrim(" a\xc3"));
     try std.testing.expectEqualStrings("\xffa", jsTrim("\xffa "));
     try std.testing.expectEqualStrings("\xc3", jsTrim("\xc3"));

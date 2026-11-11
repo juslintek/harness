@@ -133,7 +133,7 @@ test "http: mutations under /api need the exact Origin, loopback rows do not" {
         .{ .POST, "/api/health", &.{host}, 403 },
         .{ .GET, "/api/health", &.{host}, 200 },
         .{ .POST, "/mcp", &.{host}, 401 },
-        .{ .POST, "/api/guard/hook", &.{host}, 501 },
+        .{ .POST, "/api/guard/hook", &.{host}, 401 },
     };
     for (cases) |case| {
         var web = try call(&server, case[0], case[1], case[2]);
