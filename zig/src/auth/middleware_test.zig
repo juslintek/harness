@@ -373,7 +373,8 @@ test "middleware: admin rows need an instance admin, with the real session looku
     try member.expectBody("{\"error\":\"forbidden\"}");
     var owner = try chain.call(.GET, "/api/runs", admin_cookie, false);
     defer owner.deinit();
-    try owner.expectStatus(501);
+    try owner.expectStatus(200);
+    try owner.expectBody("[]");
     var unknown = try chain.call(.GET, "/api/nope", plain_cookie, false);
     defer unknown.deinit();
     try unknown.expectStatus(404);

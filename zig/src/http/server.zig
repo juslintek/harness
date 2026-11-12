@@ -18,6 +18,7 @@ const App = @import("../app.zig").App;
 const config_mod = @import("../config.zig");
 const headers = @import("headers.zig");
 const hub_mod = @import("../realtime/hub.zig");
+const runtime_manager = @import("../runtimes/manager.zig");
 const policy = @import("policy.zig");
 const routes = @import("routes.zig");
 const static = @import("static.zig");
@@ -62,6 +63,8 @@ pub const Options = struct {
     agents: ?*@import("../agents/routes.zig").Ctx = null,
     /// The realtime hub behind `/ws`. It must outlive the listener; null leaves `/ws` at 501.
     hub: ?*hub_mod.Hub = null,
+    /// The manager for run routes. It must outlive the listener and all run tasks.
+    manager: ?*runtime_manager.Manager = null,
     /// HARNESS_HOME as expanded by the configuration; empty in tests that never reach the approvals.
     home: []const u8 = "",
     threads: ?u16 = null,
@@ -355,7 +358,7 @@ fn installSignalHandlers() void {
 /// SIGINT or SIGTERM once the listener has stopped and its threads are joined.
 pub fn run(gpa: std.mem.Allocator, io: std.Io, app: *App, health: routes.Health, options: Options, out: *std.Io.Writer) !void {
     stop_requested.store(false, .release);
-    var handler = Server.init(.{ .app = app, .health = health, .hub = options.hub, .agents = options.agents, .home = options.home }, io, options);
+    var handler = Server.init(.{ .app = app, .health = health, .hub = options.hub, .agents = options.agents, .manager = options.manager, .home = options.home }, io, options);
     var running = try start(gpa, io, &handler, options);
     // Whatever fails after the listener is up, the accept thread must be joined before the server
     // is freed, so stop and deinit live in one defer.

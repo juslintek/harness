@@ -19,6 +19,8 @@ const guard_routes = @import("../guard/routes.zig");
 const mcp = @import("../mcp/server.zig");
 const logs_api = @import("../logs/api.zig");
 const usage_routes = @import("../usage/routes.zig");
+const runtime_routes = @import("../runtimes/routes.zig");
+const runtimes = @import("../runtimes/manager.zig");
 const ws = @import("ws.zig");
 const Hub = @import("../realtime/hub.zig").Hub;
 
@@ -42,6 +44,8 @@ pub const Services = struct {
     mcp: mcp.Deps = .{},
     /// The realtime hub; null where no WebSocket is served (the `/ws` row then answers 501).
     hub: ?*Hub = null,
+    /// The run manager; null in tests and server modes that do not start runtimes.
+    manager: ?*runtimes.Manager = null,
     /// HARNESS_HOME as expanded by the configuration; the approval routes refuse what touches it.
     home: []const u8 = "",
 };
@@ -84,6 +88,31 @@ pub fn health(call: *Call) anyerror!void {
     call.res.header("content-type", "application/json");
 }
 
+pub fn getHalt(call: *Call) anyerror!void {
+    const manager = call.services.manager orelse return notImplemented(call);
+    try headers.sendJson(call.res, .{ .halted = try manager.isHalted() });
+}
+
+pub fn postHalt(call: *Call) anyerror!void {
+    const manager = call.services.manager orelse return notImplemented(call);
+    const actor = call.actor orelse return headers.sendError(call.res, 401, "unauthorized");
+    if (!try session_endpoints.requireStepUp(call.res, actor, ids.nowMs(call.services.app.io))) return;
+    const bytes = call.req.body() orelse return headers.sendError(call.res, 400, "invalid body");
+    const parsed = std.json.parseFromSliceLeaky(std.json.Value, call.res.arena, bytes, .{
+        .duplicate_field_behavior = .use_last,
+        .ignore_unknown_fields = true,
+    }) catch return headers.sendError(call.res, 400, "invalid body");
+    const halted = switch (parsed) {
+        .object => |obj| switch (obj.get("halted") orelse return headers.sendError(call.res, 400, "invalid body")) {
+            .bool => |value| value,
+            else => return headers.sendError(call.res, 400, "invalid body"),
+        },
+        else => return headers.sendError(call.res, 400, "invalid body"),
+    };
+    try manager.setHalted(halted);
+    try headers.sendJson(call.res, .{ .halted = halted });
+}
+
 pub const table = [_]Route{
     .{ .method = .GET, .path = "/api/health", .handler = health, .policy = .{ .public = true, .loopback = true } },
     .{ .method = .GET, .path = "/api/agents", .handler = agents.list, .policy = .{ .session = true, .admin = true } },
@@ -117,8 +146,8 @@ pub const table = [_]Route{
     row(.GET, "/api/channels/:id/messages", .{ .session = true }),
     row(.POST, "/api/channels/:id/messages", .{ .session = true, .origin = true }),
     row(.POST, "/api/channels/:id/read", .{ .session = true, .origin = true }),
-    row(.GET, "/api/halt", .{ .session = true, .admin = true }),
-    row(.POST, "/api/halt", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
+    .{ .method = .GET, .path = "/api/halt", .handler = getHalt, .policy = .{ .session = true, .admin = true } },
+    .{ .method = .POST, .path = "/api/halt", .handler = postHalt, .policy = .{ .session = true, .admin = true, .step_up = true, .origin = true } },
     row(.POST, "/api/members/:id/wake", .{ .session = true, .origin = true }),
     .{ .method = .GET, .path = "/api/orgs", .handler = orgs.list, .policy = .{ .session = true } },
     .{ .method = .POST, .path = "/api/orgs", .handler = orgs.create, .policy = .{ .session = true, .origin = true } },
@@ -165,10 +194,10 @@ pub const table = [_]Route{
     row(.GET, "/api/router/registry", .{ .session = true, .admin = true }),
     row(.POST, "/api/router/registry/refresh", .{ .session = true, .admin = true, .origin = true }),
     row(.GET, "/api/router/route", .{ .session = true, .admin = true }),
-    row(.GET, "/api/runs", .{ .session = true, .admin = true }),
-    row(.POST, "/api/runs", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
-    row(.GET, "/api/runs/:id", .{ .session = true, .admin = true }),
-    row(.POST, "/api/runs/:id/kill", .{ .session = true, .admin = true, .step_up = true, .origin = true }),
+    .{ .method = .GET, .path = "/api/runs", .handler = runtime_routes.list, .policy = .{ .session = true, .admin = true } },
+    .{ .method = .POST, .path = "/api/runs", .handler = runtime_routes.start, .policy = .{ .session = true, .admin = true, .step_up = true, .origin = true } },
+    .{ .method = .GET, .path = "/api/runs/:id", .handler = runtime_routes.detail, .policy = .{ .session = true, .admin = true } },
+    .{ .method = .POST, .path = "/api/runs/:id/kill", .handler = runtime_routes.kill, .policy = .{ .session = true, .admin = true, .step_up = true, .origin = true } },
     .{ .method = .GET, .path = "/api/search", .handler = logs_api.search, .policy = .{ .session = true, .admin = true } },
     row(.GET, "/api/tasks/:id", .{ .session = true }),
     row(.PATCH, "/api/tasks/:id", .{ .session = true, .origin = true }),
