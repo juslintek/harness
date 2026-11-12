@@ -8,7 +8,9 @@ import { createApp } from "../../http";
 import { listenDeferred, sessionHeaders } from "../../test-support/app-kit";
 import { ensureProjectChannel } from "../chat/api";
 import { createOrg, createProject, memberForUser } from "../orgs/api";
-import type { Change } from "./apply";
+import { applyBatch, type BatchResult, type Change } from "./apply";
+import { permitInbound } from "./inbound";
+import { keyOf } from "./inbound-refs";
 import { getPeer, type PeerRow } from "./peers-repo";
 import { type PullStats, pullPeer } from "./pull";
 import { TABLES } from "./schema";
@@ -180,4 +182,42 @@ export function addPeerMember(host: Node, peer: Node, id: string): void {
      VALUES (?, ?, 'human', ?, ?, ?, 'member', 1)`,
     [id, stub ?? null, `remote:${id}`, id, id],
   );
+}
+
+export const ids = (changes: readonly Change[]): string[] => changes.map(keyOf);
+
+export const applied = (n: number): BatchResult => ({ applied: n, stale: 0, rejected: 0 });
+
+export const permutations = <T>(xs: T[]): T[][] =>
+  xs.length < 2
+    ? [xs]
+    : xs.flatMap((x, i) =>
+        permutations([...xs.slice(0, i), ...xs.slice(i + 1)]).map((rest) => [x, ...rest]),
+      );
+
+export interface PlantedKit {
+  put: (table: string, id: string, project: string, data: object) => Change;
+  run: (...changes: Change[]) => { allowed: string[]; result: BatchResult };
+  stored: (table: string, id: string) => number;
+}
+
+// Helpers for a page that `peer` sends to `home`. The nodes are read when a helper is called, so a
+// test file may build the kit at module load and let beforeAll boot the nodes later.
+export function plantedKit(home: () => Node, peer: () => Node): PlantedKit {
+  let tick = 0;
+  return {
+    // Newer than anything stored, and later than the put before it.
+    put: (table, id, project, data) => ({
+      ...peerChange(peer(), table, id, project, data),
+      hlc: `${String(Date.now() + 10_000 + ++tick).padStart(13, "0")}-0000-${peer().instanceId}`,
+    }),
+    run: (...changes) => {
+      const { allowed } = permitInbound(home().db, peer().instanceId, changes);
+      return { allowed: ids(allowed), result: applyBatch(home().db, allowed) };
+    },
+    stored: (table, id) =>
+      home()
+        .db.query<{ n: number }, [string]>(`SELECT COUNT(*) AS n FROM ${table} WHERE id = ?`)
+        .get(id)?.n ?? 0,
+  };
 }

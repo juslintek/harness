@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { type Change, parseData } from "./apply";
-import { refsAreStrings } from "./inbound-refs";
+import { type Ctx, keyOf, labelHolds, pageCtx } from "./inbound-refs";
 import { type Row, specOf } from "./schema";
 
 // What a grantee may write into a project it was granted. Orgs, projects and grants stay with the
@@ -10,58 +10,6 @@ const WRITABLE = new Set(["tasks", "task_deps", "comments", "messages", "notes"]
 
 type Mode = "none" | "read" | "write" | "copy";
 
-interface Ctx {
-  db: Database;
-  peerId: string;
-  // Rows of this page by "table:id", so a child can be judged before its parent is applied.
-  incoming: Map<string, Row>;
-}
-
-const PROJECT_OF: Record<string, string> = {
-  tasks: "SELECT project_id AS p FROM tasks WHERE id = ?",
-  channels: "SELECT project_id AS p FROM channels WHERE id = ?",
-  notes: "SELECT project_id AS p FROM notes WHERE id = ?",
-  grants: "SELECT project_id AS p FROM grants WHERE id = ?",
-  projects: "SELECT id AS p FROM projects WHERE id = ?",
-  comments:
-    "SELECT t.project_id AS p FROM comments c JOIN tasks t ON t.id = c.task_id WHERE c.id = ?",
-  messages:
-    "SELECT ch.project_id AS p FROM messages m JOIN channels ch ON ch.id = m.channel_id WHERE m.id = ?",
-  task_deps: "SELECT project_id AS p FROM tasks WHERE id = ?",
-};
-
-function storedProject(db: Database, table: string, rowId: string): string | null {
-  const id = table === "task_deps" ? (rowId.split(":")[0] as string) : rowId;
-  const sql = PROJECT_OF[table];
-  if (!sql) return null;
-  return db.query<{ p: string }, [string]>(sql).get(id)?.p ?? null;
-}
-
-function parentProject(ctx: Ctx, table: "tasks" | "channels", id: Row[string]): string | null {
-  const fromPage = ctx.incoming.get(`${table}:${id}`)?.project_id;
-  if (typeof fromPage === "string") return fromPage;
-  return typeof id === "string" ? storedProject(ctx.db, table, id) : null;
-}
-
-function projectOfRow(ctx: Ctx, table: string, row: Row): string | null {
-  const own = typeof row.project_id === "string" ? row.project_id : null;
-  switch (table) {
-    case "projects":
-      return typeof row.id === "string" ? row.id : null;
-    case "task_deps": {
-      // Both ends must sit in one project, or a dependency could reach into another.
-      const of = parentProject(ctx, "tasks", row.task_id as Row[string]);
-      return of === parentProject(ctx, "tasks", row.depends_on as Row[string]) ? of : "";
-    }
-    case "comments":
-      return parentProject(ctx, "tasks", row.task_id as Row[string]);
-    case "messages":
-      return parentProject(ctx, "channels", row.channel_id as Row[string]);
-    default:
-      return own;
-  }
-}
-
 function projectOrg(ctx: Ctx, projectId: string): string | null {
   const stored = ctx.db
     .query<{ org_id: string }, [string]>("SELECT org_id FROM projects WHERE id = ?")
@@ -70,16 +18,17 @@ function projectOrg(ctx: Ctx, projectId: string): string | null {
   return stored ?? (typeof incoming === "string" ? incoming : null);
 }
 
-function modeOf(ctx: Ctx, projectId: string): Mode {
+// `own` is the row under judgment when it is a project: a project not stored here is the peer's copy
+// only if the peer says so, in that row or in a project row of this page that passed.
+function modeOf(ctx: Ctx, projectId: string, own: Row | null = null): Mode {
   const project = ctx.db
     .query<{ home_instance: string | null }, [string]>(
       "SELECT home_instance FROM projects WHERE id = ?",
     )
     .get(projectId);
   if (!project) {
-    return ctx.incoming.get(`projects:${projectId}`)?.home_instance === ctx.peerId
-      ? "copy"
-      : "none";
+    const sent = own?.id === projectId ? own : ctx.incoming.get(`projects:${projectId}`);
+    return sent?.home_instance === ctx.peerId ? "copy" : "none";
   }
   if (project.home_instance === ctx.peerId) return "copy";
   if (project.home_instance !== null) return "none";
@@ -145,13 +94,15 @@ function membersOk(ctx: Ctx, mode: Mode, change: Change, row: Row | null): boole
   return mode === "write" && home === ctx.peerId;
 }
 
-// A write peer may only speak as someone from its own stub org, stored here or sent in this page.
+// A write peer may only speak as someone from its own stub org, stored here or sent in a member row
+// of this page. That row need not have passed: a member change goes out once per shared project, so
+// the copy labelled with a read grant is refused while the person is the same.
 function memberOfPeer(ctx: Ctx, memberId: Row[string] | undefined): boolean {
   if (typeof memberId !== "string") return false;
   const orgId =
     ctx.db
       .query<{ org_id: string }, [string]>("SELECT org_id FROM members WHERE id = ?")
-      .get(memberId)?.org_id ?? ctx.incoming.get(`members:${memberId}`)?.org_id;
+      .get(memberId)?.org_id ?? ctx.members.get(memberId)?.org_id;
   if (typeof orgId !== "string") return false;
   return (
     ctx.db.query("SELECT 1 FROM orgs WHERE id = ? AND home_instance = ?").get(orgId, ctx.peerId) !==
@@ -229,17 +180,6 @@ function rowFits(ctx: Ctx, table: string, row: Row, projectId: string): boolean 
   return true;
 }
 
-// The project a row really belongs to must be the one the change is labelled with.
-function labelHolds(ctx: Ctx, table: string, change: Change, row: Row | null): boolean {
-  if (row && !refsAreStrings(table, row)) return false;
-  const stored = storedProject(ctx.db, table, change.row_id);
-  const claimed = row ? projectOfRow(ctx, table, row) : stored;
-  return (
-    (claimed ?? change.project_id) === change.project_id &&
-    (stored ?? change.project_id) === change.project_id
-  );
-}
-
 // Rows of the tables a write peer may send, once the peer's mode and the row itself parsed.
 function rowAllowed(ctx: Ctx, mode: Mode, name: string, change: Change, row: Row | null): boolean {
   if (mode === "write" && !WRITABLE.has(name)) return false;
@@ -248,12 +188,11 @@ function rowAllowed(ctx: Ctx, mode: Mode, name: string, change: Change, row: Row
   return row === null || rowFits(ctx, name, row, change.project_id);
 }
 
-function permitted(ctx: Ctx, change: Change): boolean {
+function permitted(ctx: Ctx, change: Change, row: Row | null): boolean {
   const spec = specOf(change.table_name);
   if (!spec || change.origin_instance !== ctx.peerId) return false;
-  const row = change.op === "put" ? parseData(spec, change) : null;
   if (change.op === "put" && row === null) return false;
-  const mode = modeOf(ctx, change.project_id);
+  const mode = modeOf(ctx, change.project_id, spec.name === "projects" ? row : null);
   if (mode === "none" || mode === "read") return false;
   if (spec.name === "orgs") return mode === "copy" && orgsOk(ctx, change, row);
   if (spec.name === "members") return membersOk(ctx, mode, change, row);
@@ -278,19 +217,30 @@ function keepHome(ctx: Ctx, change: Change): Change {
 
 // Everything a peer sends is judged here before applyBatch sees it: who it claims to be, which
 // project it touches (from the row itself, never from the label alone) and whether this instance
-// gave that peer the right to write there.
+// gave that peer the right to write there. A row of the page only counts as evidence for another
+// once it has passed itself and its key is not put twice with different evidence, so the page is
+// judged in rounds until one passes nothing new, and the order the peer sent it in does not matter.
 export function permitInbound(
   db: Database,
   peerId: string,
   changes: readonly Change[],
 ): { allowed: Change[]; dropped: number } {
-  const incoming = new Map<string, Row>();
-  for (const change of changes) {
+  const rows = changes.map((change) => {
     const spec = specOf(change.table_name);
-    const row = spec && change.op === "put" ? parseData(spec, change) : null;
-    if (row) incoming.set(`${change.table_name}:${change.row_id}`, row);
+    return spec && change.op === "put" ? parseData(spec, change) : null;
+  });
+  const ctx = pageCtx(db, peerId, changes, rows);
+  const passed = new Set<number>();
+  for (let grew = true; grew; ) {
+    grew = false;
+    changes.forEach((change, i) => {
+      const row = rows[i] ?? null;
+      if (passed.has(i) || !permitted(ctx, change, row)) return;
+      passed.add(i);
+      if (row && !ctx.ambiguous.has(keyOf(change))) ctx.incoming.set(keyOf(change), row);
+      grew = true;
+    });
   }
-  const ctx: Ctx = { db, peerId, incoming };
-  const allowed = changes.filter((c) => permitted(ctx, c)).map((c) => keepHome(ctx, c));
+  const allowed = changes.filter((_, i) => passed.has(i)).map((c) => keepHome(ctx, c));
   return { allowed, dropped: changes.length - allowed.length };
 }
