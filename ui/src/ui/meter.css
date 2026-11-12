@@ -1,0 +1,42 @@
+.meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.meter-text {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font: 400 var(--text-caption) / var(--leading-caption) var(--font-body);
+  color: var(--color-ink-muted);
+}
+
+.meter-value {
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.meter-track {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--status-neutral-bg);
+}
+
+.meter-fill {
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--status-neutral);
+}
+
+.meter-fill[data-tone="success"] {
+  background: var(--status-success);
+}
+
+.meter-fill[data-tone="warning"] {
+  background: var(--status-warning);
+}
+
+.meter-fill[data-tone="danger"] {
+  background: var(--status-danger);
+}

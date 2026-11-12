@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import type { ProxyOptions } from "vite";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
@@ -25,9 +26,20 @@ const proxy = {
   "/ws": { ...forward, ws: true },
 };
 
+const here = (path: string): string => fileURLToPath(new URL(path, import.meta.url));
+
 export default defineConfig({
   plugins: [solid()],
-  server: { port: 5173, proxy },
+  resolve: {
+    alias: {
+      // The shared schemas live in code/ and import "zod" from there; one copy keeps the bundle small
+      // and the schema types identical.
+      "@shared": here("../code/src/shared"),
+      zod: here("node_modules/zod"),
+    },
+  },
+  // The design tokens and the shared schemas sit outside ui/.
+  server: { port: 5173, proxy, fs: { allow: [here("..")] } },
   preview: { port: 4173, proxy },
   build: { target: "es2022", cssCodeSplit: false },
 });

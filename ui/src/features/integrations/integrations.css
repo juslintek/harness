@@ -1,0 +1,108 @@
+.integrations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 56rem;
+  min-width: 0;
+}
+
+.integrations h1 {
+  margin: 0;
+  font: 600 var(--text-heading) / var(--leading-heading) var(--font-display);
+}
+
+.int-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.int-hint,
+.int-notice {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font: 400 var(--text-caption) / var(--leading-caption) var(--font-body);
+}
+
+.int-notice:empty {
+  display: none;
+}
+
+.int-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: var(--space-md);
+}
+
+.int-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.int-stack code {
+  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.int-stack p {
+  margin: 0;
+}
+
+.int-provider {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.int-provider legend {
+  padding: 0;
+  margin-bottom: var(--space-sm);
+  color: var(--color-ink-muted);
+  font: 500 var(--text-caption) / var(--leading-caption) var(--font-body);
+}
+
+.int-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.int-choice label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
+}
+
+.int-choice .int-hint {
+  padding-left: calc(13px + var(--space-sm));
+}
+
+.int-warn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--status-warning);
+  border-radius: var(--radius-md);
+  background: var(--status-warning-bg);
+  color: var(--status-warning);
+  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
+}
+
+.int-sep {
+  height: 1px;
+  background: var(--color-border);
+}
+
+.int-stack h3 {
+  margin: 0;
+  font: 600 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
+}

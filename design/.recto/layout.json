@@ -1,0 +1,364 @@
+{
+  "boards": {
+    "pages/account.html#acctmd0001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/account.html#acctml0001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/account.html#acctwd0001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/account.html#acctwl0001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/agents.html#agntmd0001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/agents.html#agntml0001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/agents.html#agntwd0001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/agents.html#agntwl0001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/approvals.html#apprmd0001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/approvals.html#apprml0001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/approvals.html#apprwd0001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/approvals.html#apprwl0001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/board.html#brdmd00001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/board.html#brdml00001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/board.html#brdnd00001": {
+      "x": 2430,
+      "y": 980
+    },
+    "pages/board.html#brdnl00001": {
+      "x": 2430,
+      "y": 0
+    },
+    "pages/board.html#brdpd00001": {
+      "x": 1975,
+      "y": 980
+    },
+    "pages/board.html#brdpl00001": {
+      "x": 1975,
+      "y": 0
+    },
+    "pages/board.html#brdwd00001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/board.html#brdwl00001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/chat.html#chatld00001": {
+      "x": 1975,
+      "y": 980
+    },
+    "pages/chat.html#chatll00001": {
+      "x": 1975,
+      "y": 0
+    },
+    "pages/chat.html#chatmd00001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/chat.html#chatml00001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/chat.html#chatwd00001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/chat.html#chatwl00001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/consent.html#cnstmd0001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/consent.html#cnstml0001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/consent.html#cnstwd0001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/consent.html#cnstwl0001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/dashboard.html#dashmd0001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/dashboard.html#dashml0001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/dashboard.html#dashwd0001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/dashboard.html#dashwl0001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/enroll.html#enrcd00001": {
+      "x": 1975,
+      "y": 980
+    },
+    "pages/enroll.html#enrcl00001": {
+      "x": 1975,
+      "y": 0
+    },
+    "pages/enroll.html#enrmd00001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/enroll.html#enrml00001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/enroll.html#enrwd00001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/enroll.html#enrwl00001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/hiring.html#hirdd00001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/hiring.html#hirdl00001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/hiring.html#hired00001": {
+      "x": 1975,
+      "y": 980
+    },
+    "pages/hiring.html#hirel00001": {
+      "x": 1975,
+      "y": 0
+    },
+    "pages/hiring.html#hirfd00001": {
+      "x": 2430,
+      "y": 980
+    },
+    "pages/hiring.html#hirfl00001": {
+      "x": 2430,
+      "y": 0
+    },
+    "pages/hiring.html#hirmd00001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/hiring.html#hirml00001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/integrations.html#intgmd0001": {
+      "x": 1520,
+      "y": 2380
+    },
+    "pages/integrations.html#intgml0001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/integrations.html#intgwd0001": {
+      "x": 0,
+      "y": 1330
+    },
+    "pages/integrations.html#intgwl0001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/logs.html#logsmd0001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/logs.html#logsml0001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/logs.html#logswd0001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/logs.html#logswl0001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/memory.html#memmd00001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/memory.html#memml00001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/memory.html#memwd00001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/memory.html#memwl00001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/policies.html#poldd00001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/policies.html#poldl00001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/policies.html#polmd00001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/policies.html#polml00001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/run.html#runmd00001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/run.html#runml00001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/run.html#runsd00001": {
+      "x": 1975,
+      "y": 980
+    },
+    "pages/run.html#runsl00001": {
+      "x": 1975,
+      "y": 0
+    },
+    "pages/run.html#runwd00001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/run.html#runwl00001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/runs.html#runsmd0001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/runs.html#runsml0001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/runs.html#runswd0001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/runs.html#runswl0001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/search.html#srchmd0001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/search.html#srchml0001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/search.html#srchwd0001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/search.html#srchwl0001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/settings.html#orgsdd0001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/settings.html#orgsdl0001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/settings.html#orgsmd0001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/settings.html#orgsml0001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/settings.html#orgsxd0001": {
+      "x": 1975,
+      "y": 980
+    },
+    "pages/settings.html#orgsxl0001": {
+      "x": 1975,
+      "y": 0
+    },
+    "pages/signin.html#sgnmd00001": {
+      "x": 1520,
+      "y": 980
+    },
+    "pages/signin.html#sgnml00001": {
+      "x": 1520,
+      "y": 0
+    },
+    "pages/signin.html#sgnwd00001": {
+      "x": 0,
+      "y": 980
+    },
+    "pages/signin.html#sgnwl00001": {
+      "x": 0,
+      "y": 0
+    },
+    "pages/system.html#sysdarkb01": {
+      "x": 1440,
+      "y": 0
+    },
+    "pages/system.html#sysliteb01": {
+      "x": 0,
+      "y": 0
+    }
+  }
+}

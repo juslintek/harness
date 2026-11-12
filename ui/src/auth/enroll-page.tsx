@@ -1,6 +1,8 @@
 import { createSignal, type JSX, Show } from "solid-js";
 import { z } from "zod";
 import { api } from "../api";
+import { Button, Field } from "../ui/primitives";
+import "./auth.css";
 import { createAction } from "./create-action";
 import { ErrorLine } from "./error-line";
 import { leaveLogin } from "./me";
@@ -45,44 +47,61 @@ export function EnrollPage(props: { code: string }): JSX.Element {
     });
   };
   return (
-    <Show
-      when={codes()}
-      fallback={
-        <form class="auth-page" onSubmit={submit} aria-labelledby="enroll-h">
-          <h2 id="enroll-h">Create your account</h2>
-          <ErrorLine message={action.error()} />
-          <label>
-            Your name
-            <input
-              required
-              autocomplete="name"
-              value={name()}
-              onInput={(e) => setName(e.currentTarget.value)}
-            />
-          </label>
-          <label>
-            Email
-            <input
-              type="email"
-              required
-              autocomplete="email"
-              value={email()}
-              onInput={(e) => setEmail(e.currentTarget.value)}
-            />
-          </label>
-          <button type="submit" disabled={action.busy()}>
-            Register a passkey
-          </button>
-        </form>
-      }
-    >
-      {(done) => (
-        <div class="auth-page">
-          <h2>You are enrolled</h2>
-          <RecoveryCodes codes={done()} onDone={() => void action.run(leaveLogin)} />
-          <ErrorLine message={action.error()} />
-        </div>
-      )}
-    </Show>
+    <div class="auth-screen">
+      <div class="auth-card">
+        <Show
+          when={codes()}
+          fallback={
+            <form class="auth-form" onSubmit={submit} aria-labelledby="enroll-h">
+              <div class="auth-head">
+                <span class="auth-brand">Harness</span>
+                <h2 id="enroll-h">Create your account</h2>
+              </div>
+              <ErrorLine message={action.error()} />
+              <Field label="Your name">
+                {(control) => (
+                  <input
+                    {...control()}
+                    required
+                    autocomplete="name"
+                    value={name()}
+                    onInput={(e) => setName(e.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field label="Email">
+                {(control) => (
+                  <input
+                    {...control()}
+                    type="email"
+                    required
+                    autocomplete="email"
+                    value={email()}
+                    onInput={(e) => setEmail(e.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Button type="submit" tone="primary" class="wide" disabled={action.busy()}>
+                Register a passkey
+              </Button>
+              <p class="auth-note">
+                Your browser asks you to create a passkey. You will get recovery codes next.
+              </p>
+            </form>
+          }
+        >
+          {(done) => (
+            <>
+              <div class="auth-head">
+                <span class="auth-brand">Harness</span>
+                <h2>You are enrolled</h2>
+              </div>
+              <RecoveryCodes codes={done()} onDone={() => void action.run(leaveLogin)} />
+              <ErrorLine message={action.error()} />
+            </>
+          )}
+        </Show>
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,7 @@
 import type { z } from "zod";
+import { askStepUp } from "./auth/step-up-prompt";
 import { stepUp } from "./auth/webauthn";
+import { rememberReturn } from "./return-hash";
 
 // The message routes-account.ts answers when a step-up assertion is refused on a live session.
 const STEP_UP_FAILED = "step-up failed";
@@ -43,7 +45,9 @@ const issuesOf = (body: unknown): string[] =>
 
 // The login and enroll pages answer 401 themselves (a wrong code is not an expired session).
 function sessionLost(): void {
-  if (!/^#\/(login|enroll)(?:[/?]|$)/.test(location.hash)) location.hash = "#/login";
+  if (/^#\/(login|enroll)(?:[/?]|$)/.test(location.hash)) return;
+  rememberReturn(location.hash);
+  location.hash = "#/login";
 }
 
 async function postJson(path: string, body: unknown): Promise<unknown> {
@@ -58,6 +62,8 @@ export async function api<T>(path: string, schema: z.ZodType<T>, init?: ApiInit)
   let body: unknown = await res.json().catch(() => null);
   if (res.status === 403 && errorOf(body) === "step_up_required") {
     try {
+      // The passkey prompt starts from a click, and Cancel rejects the original call.
+      await askStepUp(`${init?.method ?? "GET"} ${path}`);
       await stepUp(postJson);
     } catch (err) {
       // A cancelled prompt or a refused assertion ("step-up failed", also a 401) keeps the session;

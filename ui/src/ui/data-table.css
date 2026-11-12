@@ -1,0 +1,38 @@
+/* A real <table> inside a box that scrolls on its own, so a wide table never widens the page. */
+.table-box {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
+  text-align: left;
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--space-sm) var(--space-md) var(--space-sm) 0;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.data-table thead th {
+  font: 500 var(--text-caption) / 1 var(--font-body);
+  color: var(--color-ink-muted);
+  white-space: nowrap;
+}
+
+.data-table tbody th {
+  font-weight: 600;
+}
+
+.data-table .num,
+.data-table .mono {
+  font-family: var(--font-mono);
+}
+
+.data-table .muted {
+  color: var(--color-ink-muted);
+}
