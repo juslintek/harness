@@ -6,6 +6,10 @@ import type { PeerEnv } from "./verify";
 
 export const PAGE_LIMIT = 500;
 
+// What a pulled page may weigh. It sits well above the 1 MiB cap on a single request, so a page of
+// a few big rows fits, and is still small enough that a hostile page cannot make us hold much.
+export const MAX_PAGE_BYTES: number = 16 * 1024 * 1024;
+
 type Cell = string | number | null;
 
 export interface FeedChange {
@@ -26,18 +30,20 @@ export interface FeedPage {
 
 const cell: z.ZodType<Cell> = z.union([z.string(), z.number(), z.null()]);
 export const feedPage: z.ZodType<FeedPage> = z.object({
-  changes: z.array(
-    z.object({
-      seq: z.number().int(),
-      projectId: z.string(),
-      table: z.string(),
-      rowId: z.string(),
-      op: z.enum(["put", "del"]),
-      hlc: z.string(),
-      origin: z.string(),
-      data: z.record(z.string(), cell).nullable(),
-    }),
-  ),
+  changes: z
+    .array(
+      z.object({
+        seq: z.number().int(),
+        projectId: z.string(),
+        table: z.string(),
+        rowId: z.string(),
+        op: z.enum(["put", "del"]),
+        hlc: z.string(),
+        origin: z.string(),
+        data: z.record(z.string(), cell).nullable(),
+      }),
+    )
+    .max(PAGE_LIMIT),
   next: z.number().int(),
 });
 

@@ -6,6 +6,7 @@ import {
   pkWhere,
   type Row,
   rowId,
+  rowIdFits,
   setApplying,
   specOf,
   TABLES,
@@ -22,7 +23,8 @@ export interface Change {
   data: string | null;
 }
 
-// stale: lost to what we already have. rejected: unusable here (unknown table, missing parent, constraint).
+// stale: lost to what we already have. rejected: unusable here (unknown table, an id that does not fit
+// the table key, a value the stores cannot read back, missing parent, constraint).
 export type ApplyResult = "applied" | "stale" | "rejected";
 
 export interface BatchResult {
@@ -62,6 +64,15 @@ function ownedHere(db: Database, spec: TableSpec, id: string): boolean {
   );
 }
 
+// Rows outside the table's filter stay local. A key that is not text would reach code that treats
+// it as a string (the org slug suffix), and the table's own check refuses values the stores cannot
+// read back or write to disk.
+function fitsTable(spec: TableSpec, row: Row): boolean {
+  if (spec.only && row[spec.only.column] !== spec.only.value) return false;
+  if (!spec.pk.every((column) => typeof row[column] === "string")) return false;
+  return spec.valid ? spec.valid(row) : true;
+}
+
 export function parseData(spec: TableSpec, change: Change): Row | null {
   if (change.data === null) return null;
   let data: unknown;
@@ -77,7 +88,7 @@ export function parseData(spec: TableSpec, change: Change): Row | null {
     if (value !== null && typeof value !== "string" && typeof value !== "number") return null;
     row[key] = value;
   }
-  if (spec.only && row[spec.only.column] !== spec.only.value) return null;
+  if (!fitsTable(spec, row)) return null;
   return rowId(spec, row) === change.row_id ? row : null;
 }
 
@@ -222,7 +233,7 @@ function isConstraint(e: unknown): boolean {
 
 export function applyChange(db: Database, change: Change, bodies?: NoteBodies): ApplyResult {
   const spec = specOf(change.table_name);
-  if (!spec) return "rejected";
+  if (!spec || !rowIdFits(spec, change.row_id)) return "rejected";
   try {
     return db.transaction(() => {
       setApplying(db, true);

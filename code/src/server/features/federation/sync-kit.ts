@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { spyOn } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +10,7 @@ import { listenDeferred, sessionHeaders } from "../../test-support/app-kit";
 import { ensureProjectChannel } from "../chat/api";
 import { createOrg, createProject, memberForUser } from "../orgs/api";
 import { applyBatch, type BatchResult, type Change } from "./apply";
+import type { FeedChange } from "./feed";
 import { permitInbound } from "./inbound";
 import { keyOf } from "./inbound-refs";
 import { getPeer, type PeerRow } from "./peers-repo";
@@ -220,4 +222,53 @@ export function plantedKit(home: () => Node, peer: () => Node): PlantedKit {
         .db.query<{ n: number }, [string]>(`SELECT COUNT(*) AS n FROM ${table} WHERE id = ?`)
         .get(id)?.n ?? 0,
   };
+}
+
+// `a` pulls from `b`, which holds a write grant on a project of `a` and has a member of its own
+// there: the position a peer has to be in for a hostile page to get past permitInbound.
+export async function writePair(): Promise<{ a: Node; b: Node; seed: Seed }> {
+  const [a, b] = await Promise.all([bootNode(), bootNode()]);
+  await pairNodes(a, b);
+  const seed = seedProject(a);
+  await shareTo(a, seed, b, "write");
+  addPeerMember(a, b, "m-bee");
+  return { a, b, seed };
+}
+
+// A task the peer's own member created in the granted project, so only the rule under test refuses it.
+export const beeTask = (peer: Node, id: string, seed: Seed): Change =>
+  peerChange(peer, "tasks", id, seed.projectId, {
+    ...taskRow(id, seed.projectId, seed.orgId),
+    created_by: "m-bee",
+  });
+
+export const feedOf = (seq: number, c: Change): FeedChange => ({
+  seq,
+  projectId: c.project_id,
+  table: c.table_name,
+  rowId: c.row_id,
+  op: c.op,
+  hlc: c.hlc,
+  origin: c.origin_instance,
+  data: c.data === null ? null : JSON.parse(c.data),
+});
+
+export const cursorOf = (node: Node, peer: Node): string | undefined =>
+  node.db
+    .query<{ value: string }, [string]>("SELECT value FROM fed_state WHERE key = ?")
+    .get(`cursor:${peer.instanceId}`)?.value;
+
+// Answers the signed GET of a peer's changes feed with `answer`; every other request goes through.
+export function answerFeed(answer: (url: URL) => Response): () => void {
+  const real = globalThis.fetch;
+  const spy = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (...args: Parameters<typeof fetch>): Promise<Response> => {
+        const url = new URL(String(args[0]));
+        return url.pathname === "/federation/changes" ? answer(url) : real(...args);
+      },
+      { preconnect: real.preconnect },
+    ),
+  );
+  return () => spy.mockRestore();
 }

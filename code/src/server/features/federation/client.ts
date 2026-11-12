@@ -49,3 +49,30 @@ export async function signedFetch(
     signal: AbortSignal.timeout(init.timeoutMs ?? TIMEOUT_MS),
   });
 }
+
+// The peer sent more than we agreed to read; a smaller page may still fit.
+export class BodyTooLarge extends DomainError {
+  constructor() {
+    super("peer sent a page over the size limit");
+  }
+}
+
+// Stops reading as soon as the body is known to pass `max`, so a hostile peer cannot make us hold it.
+export async function readJsonCapped(res: Response, max: number): Promise<unknown> {
+  if (Number(res.headers.get("content-length") ?? 0) > max) {
+    await res.body?.cancel();
+    throw new BodyTooLarge();
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const chunk of res.body ?? []) {
+    size += chunk.byteLength;
+    if (size > max) throw new BodyTooLarge();
+    chunks.push(chunk);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString());
+  } catch {
+    throw new DomainError("peer sent an unreadable page");
+  }
+}

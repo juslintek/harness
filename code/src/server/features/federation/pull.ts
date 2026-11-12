@@ -5,8 +5,8 @@ import { adoptRemoteOrgs } from "../orgs/api";
 import { applyBatch, type Change } from "./apply";
 import { flushPending, noteBodies } from "./bodies";
 import { loadHlcState, saveHlcState } from "./capture";
-import { signedFetch } from "./client";
-import { type FeedChange, type FeedPage, feedPage, PAGE_LIMIT } from "./feed";
+import { BodyTooLarge, readJsonCapped, signedFetch } from "./client";
+import { type FeedChange, type FeedPage, feedPage, MAX_PAGE_BYTES, PAGE_LIMIT } from "./feed";
 import { hlcReceive } from "./hlc";
 import { permitInbound } from "./inbound";
 import { listPeers, type PeerRow } from "./peers-repo";
@@ -100,20 +100,25 @@ async function fetchPage(
   home: string,
   peer: PeerRow,
   since: number,
+  limit: number,
 ): Promise<FeedPage> {
   const res = await signedFetch(
     db,
     home,
     peer,
-    `/federation/changes?since=${since}&limit=${PAGE_LIMIT}`,
+    `/federation/changes?since=${since}&limit=${limit}`,
   );
   if (!res.ok) throw new DomainError(`peer answered ${res.status}`);
-  const page = feedPage.safeParse(await res.json());
+  const page = feedPage.safeParse(await readJsonCapped(res, MAX_PAGE_BYTES));
   if (!page.success) throw new DomainError("peer sent an unreadable page");
   return page.data;
 }
 
-// One full catch-up from one peer: pages until the feed runs dry.
+// One full catch-up from one peer: pages until the feed runs dry. An honest feed can carry big note
+// bodies, so a page over the byte cap is asked again from the same cursor for half as many rows.
+// Every page that fits doubles the size again up to PAGE_LIMIT, so a few big rows do not leave the
+// rest of the catch-up at a row or two per signed request. A single row over the cap cannot be
+// split, so that pull fails with BodyTooLarge instead.
 export async function pullPeer(
   db: Database,
   home: string,
@@ -122,15 +127,25 @@ export async function pullPeer(
 ): Promise<PullStats> {
   const total: PullStats = { applied: 0, stale: 0, rejected: 0 };
   let cursor = getCursor(db, peer.id);
+  let limit = PAGE_LIMIT;
   for (;;) {
-    const page = await fetchPage(db, home, peer, cursor);
+    let page: FeedPage;
+    try {
+      page = await fetchPage(db, home, peer, cursor, limit);
+    } catch (e) {
+      if (!(e instanceof BodyTooLarge) || limit === 1) throw e;
+      limit >>= 1;
+      continue;
+    }
     const stats = applyPage(db, home, peer.id, page, cursor, deps);
     total.applied += stats.applied;
     total.stale += stats.stale;
     total.rejected += stats.rejected;
     const next = received(page, cursor);
-    if (page.changes.length < PAGE_LIMIT || next <= cursor) break;
+    // Judged against the size this page was asked for, so it comes before the limit grows.
+    if (page.changes.length < limit || next <= cursor) break;
     cursor = next;
+    limit = Math.min(PAGE_LIMIT, limit * 2);
   }
   if (total.rejected > 0) {
     console.warn(`federation: dropped ${total.rejected} changes from peer ${peer.id}`);
