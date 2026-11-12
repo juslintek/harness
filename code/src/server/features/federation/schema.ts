@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { messagesQuery } from "../../../shared/chat";
 import { noteSummarySchema } from "../../../shared/memory";
 
 export type Cell = string | number | null;
@@ -106,6 +107,34 @@ const noteReadable = (row: Row): boolean =>
   diskMatchesRow(row) &&
   parsesAsSummary(row);
 
+const isStamp = (value: Cell | undefined): boolean => isDate(value) && Number(value) >= 1;
+
+// The chat view calls toISOString on created_at, which throws past the Date range, and the web pages
+// back with `created_at:id` of the oldest message it holds. messagesQuery refuses that cursor for a
+// time below 1 or an id outside [\w-]{1,64}, so the older history of the channel would stay out of
+// reach for every viewer. The id check parses with the route's own schema, as the notes check does,
+// because this slice cannot import the chat slice. edited_at is the other time a message carries.
+const messageReadable = (row: Row): boolean =>
+  isStamp(row.created_at) &&
+  (row.edited_at == null || isStamp(row.edited_at)) &&
+  messagesQuery.safeParse({ before: `${row.created_at}:${row.id}` }).success;
+
+// The board parses the whole task list with taskViewSchema, which refuses a rank that is not finite
+// (JSON writes an infinite one as null, and SQLite turns the text "1e999" into one). The next task
+// of an org is numbered MAX(number) + 1, so a huge number from a peer carries into every task made
+// after it: past 2 ** 53 they read back as the same number, and the chat links a task by `#` and at
+// most 9 digits. Tasks are never deleted, so one such row would stay for good. The cap sits a digit
+// below that limit because the next local number, or a clashing peer task renumbered after this
+// check, is one above the largest stored. Honest numbers start at 1; a number below that would start
+// the org's counter at or below zero, and the chat cannot link a task whose number has a minus sign.
+const MAX_TASK_NUMBER = 99_999_999;
+
+const taskReadable = (row: Row): boolean =>
+  Number.isFinite(row.rank) &&
+  typeof row.number === "number" &&
+  row.number >= 1 &&
+  row.number <= MAX_TASK_NUMBER;
+
 const org = { column: "org_id", table: "orgs" };
 const project = { column: "project_id", table: "projects" };
 const member = (column: string): Ref => ({ column, table: "members" });
@@ -174,6 +203,7 @@ export const TABLES: readonly TableSpec[] = [
       member("assignee_id"),
       member("holder_id"),
     ],
+    valid: taskReadable,
   },
   {
     name: "task_deps",
@@ -206,6 +236,7 @@ export const TABLES: readonly TableSpec[] = [
       { column: "thread_root_id", table: "messages" },
       member("author_id"),
     ],
+    valid: messageReadable,
   },
   {
     // The body lives on disk and travels as `body`, through NoteBodies.
