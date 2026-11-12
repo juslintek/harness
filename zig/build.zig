@@ -149,6 +149,7 @@ const migrations_dir = "../code/src/server/db/migrations";
 /// the numbering stops the build: the runner applies them by number and would otherwise skip or
 /// misorder a file silently. Returns the highest number; 0 when the directory is absent.
 fn addMigrations(b: *std.Build, mod: *std.Build.Module) usize {
+    b.dependOnDirectoryContents(b.path(migrations_dir));
     const io = b.graph.io;
     var dir = b.root.root_dir.handle.openDir(io, b.pathJoin(&.{ b.root.sub_path, migrations_dir }), .{ .iterate = true }) catch return 0;
     defer dir.close(io);
