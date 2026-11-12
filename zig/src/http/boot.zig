@@ -21,6 +21,7 @@ const codes = @import("../auth/codes.zig");
 const orgs_repo = @import("../orgs/repo.zig");
 const hub_mod = @import("../realtime/hub.zig");
 const ws = @import("ws.zig");
+const usage_boot = @import("../usage/boot.zig");
 const approvals = @import("../guard/approvals.zig");
 
 /// What a running server owns on disk. On the heap because `app` holds a mutex that must not move.
@@ -91,6 +92,8 @@ pub fn serveHome(
 ) !void {
     const home = try Home.open(gpa, io, home_path, held);
     defer home.close();
+    const usage = if (options.env) |env| try usage_boot.Lifecycle.start(gpa, io, &home.app, env, home_path) else null;
+    defer if (usage) |lifecycle| lifecycle.stop();
     var session_auth = auth.SessionAuth.init(&home.app, options.origin);
     var limiter = auth.RateLimiter.init(gpa, &home.app, options.trust_proxy);
     defer limiter.deinit();
@@ -132,6 +135,7 @@ pub fn serve(init: std.process.Init) u8 {
     };
     defer agents_ctx.destroy();
     serveHome(gpa, init.io, settings.home, .{
+        .env = init.environ_map,
         .host = settings.host,
         .port = settings.port,
         .origin = settings.origin,
@@ -210,4 +214,27 @@ test "boot: a failing stdout stops the listener and releases the lock" {
     var out = std.Io.Writer.failing;
     try std.testing.expectError(error.WriteFailed, serveHome(gpa, io, path, .{ .host = "127.0.0.1", .port = 0, .threads = 2 }, &held, &out));
     try expectLockGone(io, path);
+}
+
+test "boot: supplied environment starts usage and cancels it on listener failure" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const path = try tempHome(gpa, &tmp);
+    defer gpa.free(path);
+    var env = std.process.Environ.Map.init(gpa);
+    defer env.deinit();
+    var held: lock.Held = .{};
+    var out = std.Io.Writer.failing;
+    const options: server.Options = .{ .env = &env, .host = "127.0.0.1", .port = 0, .threads = 2 };
+    try std.testing.expectError(error.NoHomeDir, serveHome(gpa, io, path, options, &held, &out));
+    try expectLockGone(io, path);
+    try env.put("HOME", path);
+    const start = std.Io.Clock.awake.now(io);
+    try std.testing.expectError(error.WriteFailed, serveHome(gpa, io, path, options, &held, &out));
+    try std.testing.expect(start.durationTo(std.Io.Clock.awake.now(io)).toMilliseconds() < 5000);
+    try expectLockGone(io, path);
+    const reopened = try Home.open(gpa, io, path, &held);
+    reopened.close();
 }

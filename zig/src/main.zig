@@ -111,4 +111,5 @@ test {
     _ = @import("agents/specs.zig");
     _ = @import("runtimes/process.zig");
     _ = @import("usage/tail.zig");
+    _ = @import("usage/boot.zig");
 }

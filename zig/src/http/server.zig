@@ -43,6 +43,7 @@ pub const OnListening = struct {
 };
 
 pub const Options = struct {
+    env: ?*const std.process.Environ.Map = null,
     on_listening: ?OnListening = null,
     host: []const u8,
     /// 0 binds a free port.
