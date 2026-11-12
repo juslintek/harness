@@ -112,27 +112,34 @@ const PROJECT_OF: Record<string, string> = {
   task_deps: "SELECT project_id AS p FROM tasks WHERE id = ?",
 };
 
-function storedProject(db: Database, table: string, rowId: string): string | null {
+// A project id; null for a row that is stored here and belongs to no project (org and global notes,
+// org and dm channels, the messages in them); undefined when there is no such row, or the table
+// has no project to look up.
+type Project = string | null | undefined;
+
+function storedProject(db: Database, table: string, rowId: string): Project {
   const id = table === "task_deps" ? (rowId.split(":")[0] as string) : rowId;
   const sql = PROJECT_OF[table];
-  if (!sql) return null;
-  return db.query<{ p: string }, [string]>(sql).get(id)?.p ?? null;
+  if (!sql) return undefined;
+  const found = db.query<{ p: string | null }, [string]>(sql).get(id);
+  return found ? found.p : undefined;
 }
 
-// The stored row goes first as cheap defence in depth: labelHolds already pins a passed tasks or
-// channels row to its stored project, so a passed row of the page never disagrees with it.
-function parentProject(ctx: Ctx, table: "tasks" | "channels", id: Row[string]): string | null {
-  const stored = typeof id === "string" ? storedProject(ctx.db, table, id) : null;
-  if (stored !== null) return stored;
+// The stored row goes first, and a stored parent without a project ends the lookup there: a row of
+// the page naming its id must not give it one. labelHolds already refuses such a row, so this is
+// cheap defence in depth.
+function parentProject(ctx: Ctx, table: "tasks" | "channels", id: Row[string]): Project {
+  const stored = typeof id === "string" ? storedProject(ctx.db, table, id) : undefined;
+  if (stored !== undefined) return stored;
   const passed = ctx.incoming.get(`${table}:${id}`)?.project_id;
-  return typeof passed === "string" ? passed : null;
+  return typeof passed === "string" ? passed : undefined;
 }
 
-function projectOfRow(ctx: Ctx, table: string, row: Row): string | null {
-  const own = typeof row.project_id === "string" ? row.project_id : null;
+function projectOfRow(ctx: Ctx, table: string, row: Row): Project {
+  const own = typeof row.project_id === "string" ? row.project_id : undefined;
   switch (table) {
     case "projects":
-      return typeof row.id === "string" ? row.id : null;
+      return typeof row.id === "string" ? row.id : undefined;
     case "task_deps": {
       // Both ends must sit in one project, or a dependency could reach into another.
       const of = parentProject(ctx, "tasks", row.task_id as Row[string]);
@@ -155,16 +162,19 @@ function waitsForParent(ctx: Ctx, table: string, row: Row): boolean {
     return (
       ctx.sent.has(key) &&
       !ctx.incoming.has(key) &&
-      storedProject(ctx.db, parent, String(row[column])) === null
+      storedProject(ctx.db, parent, String(row[column])) === undefined
     );
   });
 }
 
-// The project a row really belongs to must be the one the change is labelled with.
+// The project a row really belongs to must be the one the change is labelled with. A row that is
+// stored here without a project (or sits under a parent without one) belongs to nobody, so no label
+// reaches it: only a row that is not stored yet, or one of the labelled project, may be touched.
 export function labelHolds(ctx: Ctx, table: string, change: Change, row: Row | null): boolean {
   if (row && (!refsAreStrings(table, row) || waitsForParent(ctx, table, row))) return false;
   const stored = storedProject(ctx.db, table, change.row_id);
   const claimed = row ? projectOfRow(ctx, table, row) : stored;
+  if (stored === null || claimed === null) return false;
   return (
     (claimed ?? change.project_id) === change.project_id &&
     (stored ?? change.project_id) === change.project_id
