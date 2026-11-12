@@ -94,6 +94,7 @@ test {
     _ = @import("auth/enroll.zig");
     _ = @import("auth/routes.zig");
     _ = @import("orgs/repo.zig");
+    _ = @import("orgs/routes.zig");
     _ = @import("board/repo.zig");
     _ = @import("chat/repo.zig");
     _ = @import("guard/lexer.zig");

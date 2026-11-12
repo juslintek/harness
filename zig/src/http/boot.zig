@@ -17,6 +17,8 @@ const auth = @import("../auth/middleware.zig");
 const enroll = @import("../auth/enroll.zig");
 const auth_routes = @import("../auth/routes.zig");
 const agents = @import("../agents/routes.zig");
+const codes = @import("../auth/codes.zig");
+const orgs_repo = @import("../orgs/repo.zig");
 const hub_mod = @import("../realtime/hub.zig");
 const ws = @import("ws.zig");
 const approvals = @import("../guard/approvals.zig");
@@ -98,6 +100,10 @@ pub fn serveHome(
     wired.authenticator = options.authenticator orelse session_auth.authenticator();
     wired.throttle = options.throttle orelse limiter.throttle();
     defer auth_routes.drainDeliveries(io);
+    // Every way of signing in ends with the personal org; the hook is the orgs slice's.
+    const previous_hook = codes.personal_org_hook;
+    codes.personal_org_hook = orgs_repo.personalOrgHook;
+    defer codes.personal_org_hook = previous_hook;
     var socket_access = ws.Wiring.init(&home.app, &session_auth);
     var hub = hub_mod.Hub.init(gpa, io, socket_access.access(), .{});
     defer hub.deinit();

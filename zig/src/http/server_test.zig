@@ -194,7 +194,7 @@ test "http: with an authenticator, admin rows need an admin and unknown api path
     const cases = [_]Case{
         .{ &as_member, .GET, "/api/agents", 403 },
         .{ &as_admin, .GET, "/api/agents", 501 },
-        .{ &as_member, .GET, "/api/orgs", 501 },
+        .{ &as_admin, .GET, "/api/halt", 501 },
         .{ &as_member, .GET, "/api/no-such-thing", 404 },
         .{ &as_member, .GET, "/ws", 501 },
     };
