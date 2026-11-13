@@ -121,23 +121,121 @@ struct SignInView: View {
     }
 }
 
-private enum Pane: Hashable { case account, backend }
+private enum Pane: Hashable { case account, backend, board(String) }
 
 struct MainView: View {
-    @State private var pane: Pane? = .account
+    @Environment(AppModel.self) private var model
+    @State private var pane: Pane?
+    @State private var orgSlug: String?
+    @State private var projects: [Project] = []
+    @State private var projectsPhase = Phase.loading
+    @State private var showNewOrg = false
+    @State private var showNewProject = false
+
+    private var org: Org? { model.orgs.first { $0.slug == orgSlug } ?? model.orgs.first }
 
     var body: some View {
         NavigationSplitView {
             List(selection: $pane) {
-                Label("Account", systemImage: "person.crop.circle").tag(Pane.account)
-                Label("Backend", systemImage: "server.rack").tag(Pane.backend)
+                Section("Projects") {
+                    ForEach(projects) { project in
+                        Label("\(project.name) Board", systemImage: "rectangle.3.group").tag(Pane.board(project.id))
+                    }
+                    if projectsPhase == .unavailable {
+                        Text("Not available on this backend").foregroundStyle(.secondary)
+                    } else if case .failed(let message) = projectsPhase {
+                        Text(message).foregroundStyle(.red)
+                        Button("Retry") { Task { await loadProjects() } }
+                    }
+                }
+                Section {
+                    Label("Account", systemImage: "person.crop.circle").tag(Pane.account)
+                    Label("Backend", systemImage: "server.rack").tag(Pane.backend)
+                }
             }
-            .navigationSplitViewColumnWidth(min: 160, ideal: 180)
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+            .safeAreaInset(edge: .top) {
+                if !model.orgs.isEmpty {
+                    Picker("Organisation", selection: Binding(get: { org?.slug }, set: { orgSlug = $0 })) {
+                        ForEach(model.orgs) { Text($0.name).tag(Optional($0.slug)) }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                HStack {
+                    Button("New Organisation", systemImage: "plus") { showNewOrg = true }
+                    if org != nil { Button("New Project", systemImage: "plus.rectangle") { showNewProject = true } }
+                }
+                .buttonStyle(.borderless)
+                .labelStyle(.titleAndIcon)
+                .padding(8)
+            }
         } detail: {
-            switch pane ?? .account {
-            case .account: AccountView()
-            case .backend: BackendView()
+            detail
+        }
+        .task(id: org?.id) { await loadProjects() }
+        .sheet(isPresented: $showNewOrg) {
+            TwoFieldSheet(title: "New Organisation", first: "Name", second: "Slug (lowercase letters, digits, - and _)") { name, slug in
+                guard let client = model.client else { return }
+                let created = try await client.createOrg(name: name, slug: slug)
+                await model.refresh()
+                orgSlug = created.slug
             }
+        }
+        .sheet(isPresented: $showNewProject) {
+            TwoFieldSheet(title: "New Project", first: "Key (for example WEB)", second: "Name") { key, name in
+                guard let client = model.client, let org else { return }
+                let created = try await client.createProject(orgSlug: org.slug, key: key, name: name)
+                await loadProjects()
+                pane = .board(created.id)
+            }
+        }
+    }
+
+    @ViewBuilder private var detail: some View {
+        switch pane {
+        case .account: AccountView()
+        case .backend: BackendView()
+        case .board(let id):
+            if let client = model.client, let org, let project = projects.first(where: { $0.id == id }) {
+                BoardView(client: client, org: org, project: project)
+            } else {
+                ContentUnavailableView("Select a project", systemImage: "rectangle.3.group")
+            }
+        case nil:
+            if model.orgs.isEmpty {
+                ContentUnavailableView {
+                    Label("No organisation yet", systemImage: "building.2")
+                } actions: {
+                    Button("Create Organisation") { showNewOrg = true }
+                }
+            } else if projectsPhase == .ready && projects.isEmpty {
+                ContentUnavailableView {
+                    Label("No projects yet", systemImage: "rectangle.3.group")
+                } actions: {
+                    Button("New Project") { showNewProject = true }
+                }
+            } else {
+                PhaseView(phase: projectsPhase) { Task { await loadProjects() } }
+            }
+        }
+    }
+
+    private func loadProjects() async {
+        guard let client = model.client, let org else {
+            projects = []
+            return
+        }
+        projectsPhase = .loading
+        do {
+            projects = try await client.projects(orgSlug: org.slug)
+            projectsPhase = .ready
+            if case .board(let id) = pane, projects.contains(where: { $0.id == id }) { return }
+            pane = projects.first.map { .board($0.id) } ?? (pane == .account || pane == .backend ? pane : nil)
+        } catch {
+            if !Task.isCancelled { projects = []; projectsPhase = Phase(error) }
         }
     }
 }

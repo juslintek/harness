@@ -10,6 +10,8 @@ final class AppModel {
     private(set) var loading = false
     private(set) var errorMessage: String?
 
+    var orgs: [Org] { me?.orgs ?? [] }
+
     func boot() async {
         await backend.start()
         if case .running(let port) = backend.state { client = APIClient(port: port) }

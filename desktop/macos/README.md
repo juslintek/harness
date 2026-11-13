@@ -17,10 +17,21 @@ Run the app:
 
     cd desktop/macos && HARNESS_BIN=$PWD/../../zig/zig-out/bin/harness swift run HarnessMac
 
+Against the TypeScript server instead (needs bun and `bun install` in `code/`):
+
+    cd desktop/macos && HARNESS_SERVER_DIR=$PWD/../../code swift run HarnessMac
+
+`swift test` also boots that server on a home seeded by `Tests/support/seed.ts`; it fails, not
+skips, when bun or `code/node_modules` is missing.
+
 Data lives in `~/Library/Application Support/Harness`. In the app, the sign-in
 code is printed in the Backend log, since the backend has no mail transport. The
 Backend Log window (Cmd-Shift-L, or "Show Backend Log" on the sign-in form) shows it while signed out.
 
-Not done: runs, board, chat and approvals (the backend answers 501), passkey
+The sidebar has an organisation picker and a board per project (columns, inspector, move by
+context menu or drag and drop, live refresh over WebSocket). The Zig backend answers 501 for
+these and the app says so.
+
+Not done: runs, chat and approvals, passkey
 and OIDC sign-in, an `.app` bundle with the binary in `Contents/Resources`,
 code signing, and cleanup of a backend left behind when the app is SIGKILLed.

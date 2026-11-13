@@ -15,6 +15,37 @@ private struct Failure: Error {
     let message: String
 }
 
+/// What to run for the backend. Both servers print the same listening line and read the same HARNESS_* variables.
+public struct BackendLaunch: Sendable {
+    public let executable: URL
+    public let arguments: [String]
+    public let directory: URL?
+
+    public static func zig(binary: URL) -> BackendLaunch {
+        BackendLaunch(executable: binary, arguments: ["serve"], directory: nil)
+    }
+
+    /// The TypeScript server: `bun src/main.ts serve` inside the `code/` directory.
+    public static func bun(serverDir: URL) throws -> BackendLaunch {
+        let fileManager = FileManager.default
+        let path = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin"
+        // A GUI launch has a short PATH, so the usual Homebrew locations are tried too.
+        let candidates = path.split(separator: ":").map(String.init) + ["/opt/homebrew/bin", "/usr/local/bin"]
+        guard let bun = candidates.map({ URL(fileURLWithPath: $0).appendingPathComponent("bun") })
+            .first(where: { fileManager.isExecutableFile(atPath: $0.path) })
+        else {
+            throw Failure(message: "Cannot find bun on PATH (tried \(path)). Install bun, or unset HARNESS_SERVER_DIR to use the Zig binary.")
+        }
+        guard fileManager.fileExists(atPath: serverDir.appendingPathComponent("src/main.ts").path) else {
+            throw Failure(message: "HARNESS_SERVER_DIR \(serverDir.path) has no src/main.ts.")
+        }
+        guard fileManager.fileExists(atPath: serverDir.appendingPathComponent("node_modules").path) else {
+            throw Failure(message: "\(serverDir.path) has no node_modules. Run `bun install` there.")
+        }
+        return BackendLaunch(executable: bun, arguments: ["src/main.ts", "serve"], directory: serverDir)
+    }
+}
+
 /// Splits a byte stream into lines across arbitrary chunk boundaries.
 private final class LineBuffer: @unchecked Sendable {
     private let lock = NSLock()
@@ -52,16 +83,16 @@ public final class BackendProcess {
     public private(set) var pid: Int32?
     public let home: URL
 
-    @ObservationIgnored private let binaryOverride: URL?
+    @ObservationIgnored private let launchOverride: BackendLaunch?
     @ObservationIgnored private var process: Process?
     @ObservationIgnored private var listeningPort: Int?
     @ObservationIgnored private var stopping = false
 
-    public init(home: URL? = nil, binary: URL? = nil) {
+    public init(home: URL? = nil, launch: BackendLaunch? = nil) {
         self.home = home ?? FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Harness")
-        self.binaryOverride = binary
+        self.launchOverride = launch
     }
 
     /// Returns once the state is `.running`, `.failed` or `.stopped`; never throws.
@@ -72,11 +103,12 @@ public final class BackendProcess {
         listeningPort = nil
         stopping = false
         do {
-            let binary = try resolveBinary()
+            let launch = try resolveLaunch()
             try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
             let child = Process()
-            child.executableURL = binary
-            child.arguments = ["serve"]
+            child.executableURL = launch.executable
+            child.arguments = launch.arguments
+            child.currentDirectoryURL = launch.directory
             child.environment = childEnvironment()
             child.standardInput = FileHandle.nullDevice
             let out = Pipe()
@@ -119,13 +151,17 @@ public final class BackendProcess {
         while child.isRunning, Date() < deadline { usleep(20_000) }
     }
 
-    private func resolveBinary() throws -> URL {
-        if let binaryOverride { return binaryOverride }
+    private func resolveLaunch() throws -> BackendLaunch {
+        if let launchOverride { return launchOverride }
         let fileManager = FileManager.default
-        let fromEnv = ProcessInfo.processInfo.environment["HARNESS_BIN"].flatMap { $0.isEmpty ? nil : $0 }
+        let environment = ProcessInfo.processInfo.environment
+        if let serverDir = environment["HARNESS_SERVER_DIR"], !serverDir.isEmpty {
+            return try .bun(serverDir: URL(fileURLWithPath: serverDir))
+        }
+        let fromEnv = environment["HARNESS_BIN"].flatMap { $0.isEmpty ? nil : $0 }
         let bundled = Bundle.main.resourceURL?.appendingPathComponent("harness").path
         for path in [fromEnv, bundled].compactMap({ $0 }) where fileManager.isExecutableFile(atPath: path) {
-            return URL(fileURLWithPath: path)
+            return .zig(binary: URL(fileURLWithPath: path))
         }
         throw Failure(message: """
             Cannot find the harness binary. Set HARNESS_BIN to its path \

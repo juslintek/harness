@@ -24,7 +24,7 @@ final class HarnessKitTests: XCTestCase {
     private func startBackend() async throws -> (backend: BackendProcess, client: APIClient, binary: URL) {
         let binary = try binary()
         let home = FileManager.default.temporaryDirectory.appendingPathComponent("harness-test-\(UUID().uuidString)")
-        let backend = BackendProcess(home: home, binary: binary)
+        let backend = BackendProcess(home: home, launch: .zig(binary: binary))
         addTeardownBlock { @MainActor in
             backend.stop()
             try? FileManager.default.removeItem(at: home)
@@ -158,5 +158,143 @@ final class HarnessKitTests: XCTestCase {
         }
         XCTAssertTrue(reason.contains("signal 9"), reason)
         XCTAssertNil(backend.pid)
+    }
+}
+
+private actor Events {
+    private(set) var items: [String?] = []
+    func add(_ item: String?) { items.append(item) }
+}
+
+/// Runs against the real TypeScript server. Users and sessions are written into harness.db by
+/// Tests/support/seed.ts before the server starts, since the server has no CLI enroll.
+@MainActor
+final class TSServerTests: XCTestCase {
+    private struct Seed: Decodable {
+        let userId: String
+        let cookie: String
+    }
+
+    private func fail(_ message: String) -> Error {
+        XCTFail(message)
+        return MissingBinary(description: message)
+    }
+
+    private func startServer() async throws -> (backend: BackendProcess, client: APIClient, seed: Seed) {
+        let packageRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let serverDir = packageRoot.appendingPathComponent("../../code").standardized
+        let launch: BackendLaunch
+        do {
+            launch = try .bun(serverDir: serverDir)
+        } catch {
+            // The message says what to provision: bun on PATH, and `bun install` in code/.
+            throw fail("TS server not runnable: \(error)")
+        }
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("harness-ts-test-\(UUID().uuidString)")
+        let script = packageRoot.appendingPathComponent("Tests/support/seed.ts").path
+        let seeder = Process()
+        seeder.executableURL = launch.executable
+        seeder.arguments = [script, home.path]
+        seeder.currentDirectoryURL = serverDir
+        let out = Pipe()
+        seeder.standardOutput = out
+        try seeder.run()
+        let output = out.fileHandleForReading.readDataToEndOfFile()
+        seeder.waitUntilExit()
+        guard seeder.terminationStatus == 0, let seed = try? JSONDecoder().decode(Seed.self, from: output) else {
+            throw fail("seed.ts failed with status \(seeder.terminationStatus): \(String(decoding: output, as: UTF8.self))")
+        }
+        let backend = BackendProcess(home: home, launch: launch)
+        addTeardownBlock { @MainActor in
+            backend.stop()
+            try? FileManager.default.removeItem(at: home)
+        }
+        await backend.start()
+        guard case .running(let port) = backend.state else {
+            throw fail("TS server not running: \(backend.state)\n\(backend.log.suffix(15).joined(separator: "\n"))")
+        }
+        let client = APIClient(port: port)
+        client.installSessionCookie(seed.cookie)
+        return (backend, client, seed)
+    }
+
+    func testServerStartsAndIsHealthy() async throws {
+        let (backend, client, _) = try await startServer()
+        let health = try await client.health()
+        XCTAssertTrue(health.ok)
+        XCTAssertEqual(backend.health, health)
+        let me = try await client.me()
+        XCTAssertTrue(me.orgs.isEmpty)
+    }
+
+    func testOrgProjectTasksAndMove() async throws {
+        let (_, client, seed) = try await startServer()
+        let me = try await client.me()
+        XCTAssertEqual(me.user.id, seed.userId)
+
+        let org = try await client.createOrg(name: "Acme", slug: "acme")
+        let listed = try await client.orgs()
+        XCTAssertEqual(listed.map(\.slug), ["acme"])
+        let project = try await client.createProject(orgSlug: org.slug, key: "WEB", name: "Web")
+        let projects = try await client.projects(orgSlug: org.slug)
+        XCTAssertEqual(projects, [project])
+
+        let first = try await client.createTask(projectId: project.id, title: "First", description: "details")
+        let second = try await client.createTask(projectId: project.id, title: "Second", status: .todo)
+        let tasks = try await client.tasks(projectId: project.id)
+        XCTAssertEqual(Set(tasks.map(\.id)), [first.id, second.id])
+        XCTAssertEqual(first.status, .backlog)
+
+        let moved = try await client.moveTask(id: first.id, to: .inProgress)
+        XCTAssertEqual(moved.status, .inProgress)
+        let after = try await client.tasks(projectId: project.id)
+        XCTAssertEqual(after.first { $0.id == first.id }?.status, .inProgress)
+        XCTAssertEqual(after.first { $0.id == second.id }?.status, .todo)
+
+        _ = try await client.addComment(taskId: first.id, body: "hello")
+        let detail = try await client.task(id: first.id)
+        XCTAssertEqual(detail.task.status, .inProgress)
+        XCTAssertEqual(detail.comments.map(\.body), ["hello"])
+        let refreshed = try await client.me()
+        XCTAssertEqual(refreshed.orgs.map(\.slug), ["acme"])
+    }
+
+    func testWebSocketFrameAfterTaskCreate() async throws {
+        let (_, client, _) = try await startServer()
+        let org = try await client.createOrg(name: "Live", slug: "live")
+        let project = try await client.createProject(orgSlug: org.slug, key: "LV", name: "Live")
+
+        let events = Events()
+        let watcher = Task { await client.watch(topic: "org:\(org.id)") { await events.add($0) } }
+        defer { watcher.cancel() }
+        func waitFor(_ count: Int) async throws -> Bool {
+            for _ in 0..<100 {
+                if await events.items.count >= count { return true }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            return false
+        }
+        let opened = try await waitFor(1)
+        XCTAssertTrue(opened, "WebSocket did not open within 5 s")
+        let settled = await events.items.count
+
+        _ = try await client.createTask(projectId: project.id, title: "Ping")
+        let framed = try await waitFor(settled + 1)
+        XCTAssertTrue(framed, "no frame within 5 s after creating a task")
+        let frames = await events.items.compactMap { $0 }
+        XCTAssertFalse(frames.isEmpty, "only the open event arrived, no frame")
+    }
+
+    func testUnauthenticatedClientIsRejected() async throws {
+        let (backend, _, _) = try await startServer()
+        guard case .running(let port) = backend.state else { return XCTFail("not running") }
+        let stranger = APIClient(port: port)
+        do {
+            _ = try await stranger.tasks(projectId: "does-not-matter")
+            XCTFail("unauthenticated tasks list succeeded")
+        } catch {
+            XCTAssertEqual(error as? APIError, .unauthorized)
+        }
     }
 }

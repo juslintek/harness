@@ -45,9 +45,10 @@ struct HarnessMacApp: App {
         }
         .keyboardShortcut("l", modifiers: [.command, .shift])
         .commands {
+            // Cmd-N and Cmd-R belong to New Task and Refresh on the board.
+            CommandGroup(replacing: .newItem) {}
             CommandMenu("Harness") {
-                Button("Refresh") { Task { await model.refresh() } }
-                    .keyboardShortcut("r")
+                Button("Refresh Account") { Task { await model.refresh() } }
                     .disabled(model.me == nil)
                 Button("Sign Out") { Task { await model.signOut() } }
                     .disabled(model.me == nil)
