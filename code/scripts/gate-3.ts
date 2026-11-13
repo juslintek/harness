@@ -37,13 +37,13 @@ import {
   type Scene,
   writeTimeline,
 } from "./gate-3-kit";
-import { gateAgentIds } from "./gate-engine";
+import { gateAgentIds, maxClaudeUsd } from "./gate-engine";
 import { watchLeftovers } from "./smoke-kit";
 
 const WAIT_MS = 40 * 60 * 1000;
 const SETTLE_MS = 3 * 60 * 1000;
 const MAX_RUNS = 30;
-const MAX_CLAUDE_USD = 2.5;
+
 const failures: string[] = [];
 const timeline: string[] = [];
 const t0 = Date.now();
@@ -180,8 +180,8 @@ async function waitFor(db: Db, s: Scene): Promise<void> {
       failures.push(`more than ${MAX_RUNS} runs, stopped as a loop`);
       return;
     }
-    if (claudeSpendUsd(db) > MAX_CLAUDE_USD) {
-      failures.push(`Claude spend passed ${MAX_CLAUDE_USD} USD, aborted`);
+    if (claudeSpendUsd(db) > maxClaudeUsd()) {
+      failures.push(`Claude spend passed ${maxClaudeUsd()} USD, aborted`);
       return;
     }
     await Bun.sleep(5000);

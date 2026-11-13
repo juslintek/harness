@@ -8,6 +8,8 @@ import { wireBoard } from "./server/features/board/api";
 import { startBridges } from "./server/features/bridge/api";
 import { startBudgets } from "./server/features/budgets/api";
 import { wireChat } from "./server/features/chat/api";
+import { startDeploy } from "./server/features/deploy/api";
+import { consumePairInvite, startFederation } from "./server/features/federation/api";
 import { startHeartbeat } from "./server/features/heartbeat/api";
 import { startHiring } from "./server/features/hiring/api";
 import { wireHiring } from "./server/features/hiring/wiring";
@@ -20,6 +22,12 @@ import {
   sweepStaleScratch,
   wireRuntimes,
 } from "./server/features/runtimes/api";
+import {
+  runSwapCli,
+  runVerifyOnly,
+  startSelfupdate,
+  verifyOnlyRequested,
+} from "./server/features/selfupdate/api";
 import { startTracking } from "./server/features/tracking/api";
 import { createTunnel } from "./server/features/tunnel/api";
 import { defaultTailSources, startTailers } from "./server/features/usage/api";
@@ -28,10 +36,15 @@ import { createOriginApp } from "./server/origin-app";
 import { closeRealtimeSockets, type WsData, websocket, wireRealtime } from "./server/realtime";
 import { drainStops } from "./server/shutdown";
 import { staticResponse } from "./server/ui-dist";
+import { version } from "./server/version";
 import indexHtml from "./web/index.html";
 
 const ENROLLMENT_TTL_MS = 24 * 60 * 60 * 1000;
+// The swap helper is this same binary started with a subcommand; it must not boot a server.
+if (Bun.argv[2] === "swap") process.exit(await runSwapCli(Bun.argv.slice(3)));
 const config = loadConfig();
+// The scratch verify of a new binary: migrate and answer health, start nothing else.
+if (verifyOnlyRequested()) process.exit(await runVerifyOnly(config));
 const uiDist = process.env.HARNESS_UI_DIST;
 mkdirSync(config.home, { recursive: true });
 lockHome(config.home);
@@ -39,6 +52,8 @@ lockHome(config.home);
 const db = openDb(join(config.home, "harness.db"));
 migrate(db, migrations);
 const instanceId = ensureInstance(db);
+// Before the server listens, so a deployer that sees /api/health can already pair.
+consumePairInvite(db, config.home);
 wireBoard(db);
 wireChat(db);
 wireRuntimes();
@@ -86,7 +101,7 @@ app = createOriginApp(
     deliverEmailCode: (email, code) =>
       (emailCodeSender(db, bound.home) ?? consoleEmailCode)(email, code),
     instanceId,
-    version: "0.0.0",
+    version,
     tunnel,
   },
   currentOrigin,
@@ -104,6 +119,9 @@ const stopLoops = [
   hiring.stop,
   startNotify(db, { home: config.home, origin: currentOrigin }),
   startBridges(db, { home: config.home, origin: currentOrigin() }),
+  ...[startFederation, startDeploy, startSelfupdate].map((start) =>
+    start(db, { home: config.home }),
+  ),
 ];
 
 console.log(`harness listening on ${server.url}`);

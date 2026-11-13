@@ -30,6 +30,15 @@ import runOrg from "./migrations/028_run_org.sql" with { type: "text" };
 import notify from "./migrations/029_notify.sql" with { type: "text" };
 import oauth from "./migrations/030_oauth.sql" with { type: "text" };
 import oauthConsent from "./migrations/031_oauth_consent.sql" with { type: "text" };
+import federation from "./migrations/032_federation.sql" with { type: "text" };
+import deploy from "./migrations/033_deploy.sql" with { type: "text" };
+import selfupdate from "./migrations/034_selfupdate.sql" with { type: "text" };
+import oidc from "./migrations/035_oidc.sql" with { type: "text" };
+import oidcIdentities from "./migrations/036_oidc_identities.sql" with { type: "text" };
+import peersUniqueKey from "./migrations/037_peers_unique_key.sql" with { type: "text" };
+import oidcIdentitiesIssuer from "./migrations/038_oidc_identities_issuer.sql" with {
+  type: "text",
+};
 
 export const migrations: readonly Migration[] = [
   { version: 1, sql: instance },
@@ -63,4 +72,11 @@ export const migrations: readonly Migration[] = [
   { version: 29, sql: notify },
   { version: 30, sql: oauth },
   { version: 31, sql: oauthConsent },
+  { version: 32, sql: federation },
+  { version: 33, sql: deploy },
+  { version: 34, sql: selfupdate },
+  { version: 35, sql: oidc },
+  { version: 36, sql: oidcIdentities },
+  { version: 37, sql: peersUniqueKey },
+  { version: 38, sql: oidcIdentitiesIssuer },
 ];

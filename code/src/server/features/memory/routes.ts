@@ -6,9 +6,10 @@ import type { AuthEnv } from "../auth/api";
 import { toSummary } from "./index-repo";
 import { backlinks, facets, resolveWikilink, searchNotes } from "./index-search";
 import { diskToLocated, toDisk } from "./paths";
+import { saveNote } from "./remote";
 import { memoryBody, memoryCtx, memoryError } from "./routes-kit";
 import { writeAndLessonRoutes } from "./routes-lessons";
-import { createNote, deleteNote, readNote, updateNote } from "./store";
+import { createNote, deleteNote, readNote } from "./store";
 import { locate, MemoryError } from "./store-kit";
 
 const scope = z.enum(["global", "org", "project", "agent"]);
@@ -111,7 +112,7 @@ function writeRoutes(db: Database, home: string, app: Hono<AuthEnv>): void {
     const id = c.req.param("id");
     const meta = { ...(b.type && { type: b.type }), ...(b.tags && { tags: b.tags }) };
     try {
-      return c.json(updateNote(db, home, m.write, id, b.baseHash, b.body, meta));
+      return c.json(await saveNote(db, home, m.write, id, b.baseHash, b.body, meta));
     } catch (e) {
       if (e instanceof MemoryError && e.code === "conflict") {
         return c.json({ error: "conflict", hash: readNote(db, home, m.viewer, id).hash }, 409);

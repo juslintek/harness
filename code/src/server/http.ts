@@ -22,6 +22,8 @@ import { bridgeRoutes } from "./features/bridge/api";
 import { budgetGate } from "./features/budgets/api";
 import { budgetsRoutes } from "./features/budgets/routes";
 import { chatRoutes } from "./features/chat/routes";
+import { deployRoutes } from "./features/deploy/api";
+import { federationRoutes, peerRoutes } from "./features/federation/api";
 import { approvalRoutes } from "./features/guard/routes";
 import { wakeRoutes } from "./features/heartbeat/routes";
 import { hiringRoutes } from "./features/hiring/routes";
@@ -44,6 +46,7 @@ import { profilesRoutes } from "./features/profiles/routes";
 import { routerRoutes } from "./features/router/routes";
 import { type RunDeps, refreshAcpModels } from "./features/runtimes/api";
 import { haltRoutes, runRoutes } from "./features/runtimes/routes";
+import { selfupdateRoutes } from "./features/selfupdate/api";
 import { addEstimate, taskTrackingFields } from "./features/tracking/api";
 import { trackingRoutes } from "./features/tracking/routes";
 import { createTunnel, type Tunnel, tunnelRoutes } from "./features/tunnel/api";
@@ -218,7 +221,7 @@ function mountOauth(app: Hono, deps: AppDeps): void {
 function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   const { db } = deps;
   app.use("/api/*", sessionMiddleware(db, deps.rp.origin));
-  app.route("/api/auth", accountRoutes(db, deps.rp));
+  app.route("/api/auth", accountRoutes(db, deps.rp, deps.home));
   app.route("/api", orgRoutes({ db, origin: deps.rp.origin }));
   app.route("/api", boardRoutes(db));
   app.route("/api", chatRoutes(db));
@@ -232,6 +235,9 @@ function mountSessionRoutes(app: Hono, deps: AppDeps): void {
   app.route("/api", logsRoutes(db));
   app.route("/api/notify", notifyRoutes(db, deps.home));
   app.route("/api/bridge", bridgeRoutes(db));
+  app.route("/api/federation", federationRoutes(db, { home: deps.home, ownUrl: deps.rp.origin }));
+  app.route("/api/deploy", deployRoutes(db, { home: deps.home, ownUrl: deps.rp.origin }));
+  app.route("/api/selfupdate", selfupdateRoutes(db, { home: deps.home, port: deps.port }));
   app.route("/api/oauth", grantRoutes(db, Date.now));
   app.route("/api", adminRoutes(deps));
 }
@@ -269,10 +275,12 @@ export function createApp(deps: AppDeps): Hono {
     publicAuthRoutes({
       db,
       rp: deps.rp,
+      home: deps.home,
       ...(deps.trustProxy === undefined ? {} : { trustProxy: deps.trustProxy }),
       deliverEmailCode: deps.deliverEmailCode ?? consoleEmailCode,
     }),
   );
+  app.route("/federation", peerRoutes(db, deps.home, deps.rp.origin));
   mountSessionRoutes(app, deps);
   app.use("/ws", sessionMiddleware(db), originGuard(deps.rp.origin));
   app.get("/ws", wsUpgrade(db));

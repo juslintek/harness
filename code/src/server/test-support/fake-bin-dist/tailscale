@@ -1,0 +1,11 @@
+#!/bin/sh
+# Stand-in for the real CLI: prints canned `status --json` and touches nothing.
+[ "$1" = "status" ] || exit 2
+if [ -n "$FAKE_TAILSCALE_RAW" ]; then printf '%s' "$FAKE_TAILSCALE_RAW"; exit 0; fi
+cat <<'JSON'
+{"Self":{"DNSName":"mac.tail1234.ts.net.","OS":"macOS","Online":true},
+ "Peer":{
+  "nodekey:aaa":{"HostName":"nas","DNSName":"nas.tail1234.ts.net.","OS":"linux","Online":true},
+  "nodekey:bbb":{"HostName":"laptop","DNSName":"laptop.tail1234.ts.net.","OS":"macOS","Online":false},
+  "nodekey:ccc":{"HostName":"no-dns","DNSName":"","OS":"linux","Online":true}}}
+JSON

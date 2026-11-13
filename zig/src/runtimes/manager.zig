@@ -366,7 +366,7 @@ pub const Links = struct {
     /// The guard. May block for an approval; it must wait through cancelable Io calls.
     decide: ?*const fn (ctx: ?*anyopaque, run_id: []const u8, ask: types.Ask) anyerror!types.Verdict = null,
     record_usage: ?*const fn (ctx: ?*anyopaque, db: sqlite.Db, run_id: []const u8, agent: []const u8, conversation_id: ?[]const u8, usage: []const types.UsageRecord) anyerror!void = null,
-    record_quota: ?*const fn (ctx: ?*anyopaque, db: sqlite.Db, quota: types.Quota) anyerror!void = null,
+    record_quota: ?*const fn (ctx: ?*anyopaque, db: sqlite.Db, agent: []const u8, quota: types.Quota) anyerror!void = null,
     /// Expires the run's pending approvals; runs under the lock.
     expire_approvals: ?*const fn (ctx: ?*anyopaque, db: sqlite.Db, run_id: []const u8) void = null,
     /// Seals the run's log segments and revokes its tokens; runs under the lock after the run ends.
@@ -1089,17 +1089,17 @@ fn hookDecide(ctx: *anyopaque, ask: types.Ask) anyerror!types.Verdict {
     return verdict;
 }
 
-const QuotaCtx = struct { m: *Manager, quota: types.Quota };
+const QuotaCtx = struct { m: *Manager, agent: []const u8, quota: types.Quota };
 
 fn quotaLocked(ctx: QuotaCtx, state: *app_mod.State) !void {
     const record = ctx.m.links.record_quota orelse return;
-    try record(ctx.m.links.ctx, try Manager.dbOf(state), ctx.quota);
+    try record(ctx.m.links.ctx, try Manager.dbOf(state), ctx.agent, ctx.quota);
 }
 
 fn hookQuota(ctx: *anyopaque, quota: types.Quota) anyerror!void {
     const live = liveOf(ctx);
     if (quota.used_percent >= 100) live.quota_full.store(true, .release);
-    try live.manager.app.withLock(QuotaCtx{ .m = live.manager, .quota = quota }, quotaLocked);
+    try live.manager.app.withLock(QuotaCtx{ .m = live.manager, .agent = live.agent, .quota = quota }, quotaLocked);
 }
 
 fn hookProgress(ctx: *anyopaque, tokens: i64) anyerror!void {

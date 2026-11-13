@@ -10,6 +10,8 @@ import { canDecideApprovals, me, refreshMe } from "./features/auth/me";
 import { BoardPage } from "./features/board/board-page";
 import { ChatPage } from "./features/chat/chat-page";
 import { DashboardPage } from "./features/dashboard/dashboard-page";
+import { DeployPage } from "./features/deploy/deploy-page";
+import { FederationPage } from "./features/federation/federation-page";
 import { HiringPage } from "./features/hiring/hiring-page";
 import { IntegrationsPage } from "./features/integrations/integrations-page";
 import { LogsPage } from "./features/logs/logs-page";
@@ -21,6 +23,7 @@ import { PoliciesPage } from "./features/policies/policies-page";
 import { RunPage } from "./features/runs/run-page";
 import { RunsPage } from "./features/runs/runs-page";
 import { SearchPage } from "./features/search/search-page";
+import { UpdatesPage } from "./features/selfupdate/selfupdate-page";
 import { Header } from "./header";
 import { routeParts } from "./route";
 
@@ -61,6 +64,9 @@ function adminRoute(parts: string[]): preact.JSX.Element | null {
   if (parts[0] === "agents") return <AgentsPage />;
   if (parts[0] === "search") return <SearchPage />;
   if (parts[0] === "integrations") return <IntegrationsPage />;
+  if (parts[0] === "federation") return <FederationPage />;
+  if (parts[0] === "deploy") return <DeployPage />;
+  if (parts[0] === "updates") return <UpdatesPage />;
   if (parts[0] === "runs" && parts[1]) return <RunPage id={parts[1]} key={parts[1]} />;
   return parts[0] === "runs" || parts.length === 0 ? <RunsPage /> : null;
 }

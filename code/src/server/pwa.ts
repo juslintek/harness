@@ -1,9 +1,13 @@
-const dir = new URL("../web/pwa/", import.meta.url);
+import iconPath from "../web/pwa/icon.svg" with { type: "file" };
+import manifestPath from "../web/pwa/manifest.webmanifest" with { type: "file" };
+import swPath from "../web/pwa/sw.js" with { type: "file" };
+
+// Embedded so a compiled binary serves them without the source tree.
 
 export const FILES: Record<string, { file: string; type: string }> = {
-  "/manifest.webmanifest": { file: "manifest.webmanifest", type: "application/manifest+json" },
-  "/sw.js": { file: "sw.js", type: "text/javascript; charset=utf-8" },
-  "/icon.svg": { file: "icon.svg", type: "image/svg+xml" },
+  "/manifest.webmanifest": { file: manifestPath, type: "application/manifest+json" },
+  "/sw.js": { file: swPath, type: "text/javascript; charset=utf-8" },
+  "/icon.svg": { file: iconPath, type: "image/svg+xml" },
 };
 
 // No-cache on all three so a new service worker or manifest is picked up on the next load, and
@@ -24,5 +28,5 @@ export function pwaResponse(pathname: string): Response | null {
   const headers = pwaHeaders(pathname);
   const entry = FILES[pathname];
   if (!headers || !entry) return null;
-  return new Response(Bun.file(new URL(entry.file, dir)), { headers });
+  return new Response(Bun.file(entry.file), { headers });
 }

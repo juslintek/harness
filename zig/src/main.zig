@@ -94,15 +94,22 @@ test {
     _ = @import("auth/enroll.zig");
     _ = @import("auth/routes.zig");
     _ = @import("orgs/repo.zig");
+    _ = @import("orgs/routes.zig");
     _ = @import("board/repo.zig");
     _ = @import("chat/repo.zig");
     _ = @import("guard/lexer.zig");
     _ = @import("guard/l1.zig");
     _ = @import("guard/eval.zig");
+    _ = @import("guard/approvals.zig");
+    _ = @import("guard/l2.zig");
+    _ = @import("guard/limits.zig");
+    _ = @import("guard/routes.zig");
+    _ = @import("guard/check.zig");
     _ = @import("heartbeat/triggers.zig");
     _ = @import("laya/client.zig");
     _ = @import("mcp/server.zig");
     _ = @import("agents/specs.zig");
     _ = @import("runtimes/process.zig");
     _ = @import("usage/tail.zig");
+    _ = @import("usage/boot.zig");
 }

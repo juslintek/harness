@@ -78,6 +78,23 @@ pub fn mapError(err: anyerror) Mapped {
     };
 }
 
+/// Request bodies are checked the way zod checks them, and `std.json` is looser: a `[]const u8`
+/// takes an array of integers, a number or an enum may come from a JSON string or number. A body
+/// struct therefore uses `json.Str`, `json.Enum(E)`, `bool`, `std.json.Value` (check it by hand) or
+/// a struct and optional of those; anything else is a compile error.
+fn requireStrict(comptime T: type) void {
+    switch (@typeInfo(T)) {
+        .@"struct" => |info| {
+            if (@hasDecl(T, "jsonParse")) return;
+            inline for (info.field_types) |field_type| requireStrict(field_type);
+        },
+        .optional => |info| requireStrict(info.child),
+        .bool => {},
+        .@"union" => if (T != std.json.Value) @compileError("parseBody: unions are not strict: " ++ @typeName(T)),
+        else => @compileError("parseBody: use json.Str, json.Enum, bool or std.json.Value, not " ++ @typeName(T)),
+    }
+}
+
 /// `parseBody` of route-kit.ts: the request body as JSON, last duplicate key wins and unknown keys
 /// are ignored. This is not full `JSON.parse` parity. Two known divergences, both K0 contract
 /// rulings (working-docs/zig-plan.md section 11): std.json rejects an unpaired surrogate escape
@@ -86,6 +103,7 @@ pub fn mapError(err: anyerror) Mapped {
 /// `mapError` turns into 400 `invalid body`; a missing body counts as `null` in TS and fails too.
 /// The result lives in the request arena.
 pub fn parseBody(comptime T: type, req: *httpz.Request) error{InvalidBody}!T {
+    comptime requireStrict(T);
     const body = req.body() orelse return error.InvalidBody;
     return std.json.parseFromSliceLeaky(T, req.arena, body, json.parse_options) catch error.InvalidBody;
 }
@@ -137,16 +155,25 @@ test "headers: errors map to the status of their kind and the contract message" 
 }
 
 test "headers: parseBody keeps the last duplicate key and refuses broken input" {
-    const Body = struct { id: u32, name: []const u8 };
+    const Body = struct { on: bool, name: json.Str };
     var web = httpz.testing.init(.{});
     defer web.deinit();
-    web.body("{\"id\":1,\"name\":\"a\",\"id\":2,\"extra\":true}");
+    web.body("{\"on\":false,\"name\":\"a\",\"on\":true,\"extra\":true}");
     const parsed = try parseBody(Body, web.req);
-    try std.testing.expectEqual(@as(u32, 2), parsed.id);
+    try std.testing.expect(parsed.on);
+    try std.testing.expectEqualStrings("a", parsed.name.text);
+
+    // A string field is a JSON string only: no byte array, no number.
+    for ([_][]const u8{ "{\"on\":true,\"name\":[97]}", "{\"on\":true,\"name\":1}" }) |text| {
+        var typed = httpz.testing.init(.{});
+        defer typed.deinit();
+        typed.body(text);
+        try std.testing.expectError(error.InvalidBody, parseBody(Body, typed.req));
+    }
 
     var broken = httpz.testing.init(.{});
     defer broken.deinit();
-    broken.body("{\"id\":");
+    broken.body("{\"on\":");
     try std.testing.expectError(error.InvalidBody, parseBody(Body, broken.req));
 
     var empty = httpz.testing.init(.{});

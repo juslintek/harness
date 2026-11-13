@@ -17,8 +17,65 @@ const auth = @import("../auth/middleware.zig");
 const enroll = @import("../auth/enroll.zig");
 const auth_routes = @import("../auth/routes.zig");
 const agents = @import("../agents/routes.zig");
+const codes = @import("../auth/codes.zig");
+const orgs_repo = @import("../orgs/repo.zig");
 const hub_mod = @import("../realtime/hub.zig");
+const runtime_manager = @import("../runtimes/manager.zig");
+const runtime_routes = @import("../runtimes/routes.zig");
+const runtime_types = @import("../runtimes/types.zig");
+const logs_api = @import("../logs/api.zig");
+const usage_summary = @import("../usage/summary.zig");
+const usage_quota = @import("../usage/quota.zig");
 const ws = @import("ws.zig");
+const usage_boot = @import("../usage/boot.zig");
+const approvals = @import("../guard/approvals.zig");
+
+const RuntimeLinks = struct {
+    gpa: std.mem.Allocator,
+    io: std.Io,
+    app: *App,
+    hub: *hub_mod.Hub,
+    event_mutex: std.Io.Mutex = .init,
+};
+
+fn publishRunEvent(ctx: ?*anyopaque, event: runtime_types.NewEvent) void {
+    const links: *RuntimeLinks = @ptrCast(@alignCast(ctx orelse return));
+    const id = event.run_id orelse return;
+    links.event_mutex.lockUncancelable(links.io);
+    defer links.event_mutex.unlock(links.io);
+    var arena: std.heap.ArenaAllocator = .init(links.gpa);
+    defer arena.deinit();
+    const topic = std.fmt.allocPrint(arena.allocator(), "run:{s}", .{id}) catch |err| {
+        std.log.warn("run {s}: realtime topic allocation failed: {t}", .{ id, err });
+        return;
+    };
+    _ = links.hub.registry.publish(topic, .{ .event = .{ .run_id = id, .kind = @tagName(event.kind), .ts = event.ts } }) catch |err| {
+        std.log.warn("run {s}: realtime event publish failed: {t}", .{ id, err });
+    };
+    if (runtime_routes.viewJson(arena.allocator(), links.app, id)) |json| {
+        if (json) |view_json| _ = links.hub.registry.publish("runs", .{ .run = .{ .view_json = view_json } }) catch |err| {
+            std.log.warn("run {s}: realtime view publish failed: {t}", .{ id, err });
+        };
+    } else |err| {
+        std.log.warn("run {s}: realtime view query failed: {t}", .{ id, err });
+    }
+}
+
+fn recordRunQuota(ctx: ?*anyopaque, db: sqlite.Db, agent: []const u8, quota: runtime_types.Quota) anyerror!void {
+    const links: *RuntimeLinks = @ptrCast(@alignCast(ctx orelse return error.MissingRuntimeLinks));
+    try usage_quota.insertSnapshot(db, links.io, .{
+        .provider = agent,
+        .window = @tagName(quota.window),
+        .used_percent = quota.used_percent,
+        .resets_at = quota.resets_at,
+        .source = "acp",
+    }, ids.nowMs(links.io));
+}
+
+fn recordRunUsage(ctx: ?*anyopaque, db: sqlite.Db, run_id: []const u8, agent: []const u8, conversation_id: ?[]const u8, usage: []const runtime_types.UsageRecord) anyerror!void {
+    const links: *RuntimeLinks = @ptrCast(@alignCast(ctx orelse return error.MissingRuntimeLinks));
+    try usage_summary.recordUsage(links.io, db, run_id, agent, conversation_id, "acp", usage, ids.nowMs(links.io));
+}
 
 /// What a running server owns on disk. On the heap because `app` holds a mutex that must not move.
 pub const Home = struct {
@@ -88,6 +145,8 @@ pub fn serveHome(
 ) !void {
     const home = try Home.open(gpa, io, home_path, held);
     defer home.close();
+    const usage = if (options.env) |env| try usage_boot.Lifecycle.start(gpa, io, &home.app, env, home_path) else null;
+    defer if (usage) |lifecycle| lifecycle.stop();
     var session_auth = auth.SessionAuth.init(&home.app, options.origin);
     var limiter = auth.RateLimiter.init(gpa, &home.app, options.trust_proxy);
     defer limiter.deinit();
@@ -97,12 +156,50 @@ pub fn serveHome(
     wired.authenticator = options.authenticator orelse session_auth.authenticator();
     wired.throttle = options.throttle orelse limiter.throttle();
     defer auth_routes.drainDeliveries(io);
+    // Every way of signing in ends with the personal org; the hook is the orgs slice's.
+    const previous_hook = codes.personal_org_hook;
+    codes.personal_org_hook = orgs_repo.personalOrgHook;
+    defer codes.personal_org_hook = previous_hook;
     var socket_access = ws.Wiring.init(&home.app, &session_auth);
     var hub = hub_mod.Hub.init(gpa, io, socket_access.access(), .{});
     defer hub.deinit();
     try hub.start();
     wired.hub = options.hub orelse &hub;
-    try server.run(gpa, io, &home.app, home.health, wired, out);
+    wired.home = home_path;
+    var sweeps: std.Io.Group = .init;
+    defer sweeps.cancel(io);
+    try sweeps.concurrent(io, approvals.sweepLoop, .{&home.app});
+    var link_context: RuntimeLinks = .{ .gpa = gpa, .io = io, .app = &home.app, .hub = wired.hub.? };
+    var owned_manager: ?runtime_manager.Manager = null;
+    if (options.manager) |external| {
+        wired.manager = external;
+    } else if (options.agents) |agent_ctx| {
+        const links: runtime_manager.Links = .{
+            .ctx = &link_context,
+            .append_event = logs_api.appendLinked,
+            .on_event = publishRunEvent,
+            .record_usage = recordRunUsage,
+            .record_quota = recordRunQuota,
+        };
+        owned_manager = runtime_manager.Manager.init(&home.app, links, agent_ctx.env);
+        wired.manager = &owned_manager.?;
+    }
+    var serve_error: ?anyerror = null;
+    server.run(gpa, io, &home.app, home.health, wired, out) catch |err| {
+        serve_error = err;
+    };
+    if (owned_manager) |*manager| {
+        manager.shutdown(5000) catch |err| {
+            std.log.err("runtime shutdown failed; exiting before freeing resources in use by live work: {t}", .{err});
+            std.process.exit(1);
+        };
+        manager.waitIdle() catch |err| {
+            std.log.err("runtime tasks did not join; exiting before freeing resources in use by live work: {t}", .{err});
+            std.process.exit(1);
+        };
+        manager.deinit();
+    }
+    if (serve_error) |err| return err;
 }
 
 pub fn serve(init: std.process.Init) u8 {
@@ -121,6 +218,7 @@ pub fn serve(init: std.process.Init) u8 {
     };
     defer agents_ctx.destroy();
     serveHome(gpa, init.io, settings.home, .{
+        .env = init.environ_map,
         .host = settings.host,
         .port = settings.port,
         .origin = settings.origin,
@@ -199,4 +297,27 @@ test "boot: a failing stdout stops the listener and releases the lock" {
     var out = std.Io.Writer.failing;
     try std.testing.expectError(error.WriteFailed, serveHome(gpa, io, path, .{ .host = "127.0.0.1", .port = 0, .threads = 2 }, &held, &out));
     try expectLockGone(io, path);
+}
+
+test "boot: supplied environment starts usage and cancels it on listener failure" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const path = try tempHome(gpa, &tmp);
+    defer gpa.free(path);
+    var env = std.process.Environ.Map.init(gpa);
+    defer env.deinit();
+    var held: lock.Held = .{};
+    var out = std.Io.Writer.failing;
+    const options: server.Options = .{ .env = &env, .host = "127.0.0.1", .port = 0, .threads = 2 };
+    try std.testing.expectError(error.NoHomeDir, serveHome(gpa, io, path, options, &held, &out));
+    try expectLockGone(io, path);
+    try env.put("HOME", path);
+    const start = std.Io.Clock.awake.now(io);
+    try std.testing.expectError(error.WriteFailed, serveHome(gpa, io, path, options, &held, &out));
+    try std.testing.expect(start.durationTo(std.Io.Clock.awake.now(io)).toMilliseconds() < 5000);
+    try expectLockGone(io, path);
+    const reopened = try Home.open(gpa, io, path, &held);
+    reopened.close();
 }

@@ -27,7 +27,6 @@ test("migrations 29 through 31 apply on a fresh db and their tables exist", () =
   ]) {
     expect(tables).toContain(name);
   }
-  expect(migrations.at(-1)?.version).toBe(31);
   db.close();
 });
 

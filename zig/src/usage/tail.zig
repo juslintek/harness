@@ -81,7 +81,10 @@ pub const Tailer = struct {
     pub fn run(t: *Tailer, interval_ms: i64) void {
         while (true) {
             t.io.sleep(.fromMilliseconds(interval_ms), .awake) catch return;
-            _ = t.sweep() catch |err| std.log.err("usage tail failed: {t}", .{err});
+            _ = t.sweep() catch |err| switch (err) {
+                error.Canceled => return,
+                else => std.log.err("usage tail failed: {t}", .{err}),
+            };
         }
     }
 
@@ -105,6 +108,7 @@ pub const Tailer = struct {
                     var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
                     const path = std.fmt.bufPrint(&path_buf, "{s}/{s}", .{ root_path, entry.path }) catch continue;
                     added += t.tailFile(source, entry.dir, entry.basename, path) catch |err| blk: {
+                        if (err == error.Canceled) return error.Canceled;
                         // One vanished or unreadable file must not starve the rest of the sweep.
                         std.log.warn("usage tail skipped {s}: {t}", .{ path, err });
                         break :blk 0;
@@ -336,7 +340,10 @@ pub const Tailer = struct {
         const cwd = try firstCwd(arena.allocator(), buf[0..n]) orelse return false;
         if (isUnder(cwd, d)) return true;
         var real_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-        const real_len = std.Io.Dir.cwd().realPathFile(t.io, d, &real_buf) catch return false;
+        const real_len = std.Io.Dir.cwd().realPathFile(t.io, d, &real_buf) catch |err| switch (err) {
+            error.Canceled => return error.Canceled,
+            else => return false,
+        };
         return isUnder(cwd, real_buf[0..real_len]);
     }
 };
@@ -867,4 +874,33 @@ test {
     _ = @import("quota.zig");
     _ = @import("summary.zig");
     _ = @import("routes.zig");
+}
+
+test "usage: cancellation during a fixture sweep reaches the run loop" {
+    const Pause = struct {
+        entered: std.atomic.Value(bool) = .init(false),
+
+        fn append(ctx: ?*anyopaque, db: sqlite.Db, event: types.NewEvent, now: i64) !void {
+            const self: *@This() = @ptrCast(@alignCast(ctx.?));
+            const id = ids.uuidV7(testing.io);
+            try manager.insertEventPlain(db, event, &id, now);
+            self.entered.store(true, .release);
+            try testing.io.sleep(.fromMilliseconds(10_000), .awake);
+        }
+    };
+    var pause: Pause = .{};
+    const env = try Env.create(.{ .backfill_days = 1e9, .append = Pause.append, .append_ctx = &pause });
+    defer env.destroy();
+    var buf: [512]u8 = undefined;
+    try env.write(claude_file, try claudeLine(&buf, "cancel-sweep"));
+    var future = try testing.io.concurrent(Tailer.run, .{ &env.tailer, 10 });
+    defer future.cancel(testing.io);
+    var waited: usize = 0;
+    while (waited < 200 and !pause.entered.load(.acquire)) : (waited += 1)
+        try testing.io.sleep(.fromMilliseconds(10), .awake);
+    try testing.expect(pause.entered.load(.acquire));
+    const start = std.Io.Clock.awake.now(testing.io);
+    future.cancel(testing.io);
+    try testing.expect(start.durationTo(std.Io.Clock.awake.now(testing.io)).toMilliseconds() < 1000);
+    try testing.expectEqual(@as(i64, 0), try env.usageEvents());
 }

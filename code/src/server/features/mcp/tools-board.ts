@@ -5,12 +5,12 @@ import type { Status, TaskView } from "../../../shared/board";
 import {
   addComment,
   addDependency,
-  checkout,
+  checkoutTask,
   createTask,
   listTasks,
   type MoveResult,
   moveTask,
-  release,
+  releaseTask,
   type TaskPatch,
   taskDetail,
   updateTask,
@@ -201,7 +201,7 @@ function registerWrites(server: McpServer, env: ToolEnv): void {
   );
 }
 
-function registerFlow(server: McpServer, env: ToolEnv): void {
+function registerClaim(server: McpServer, env: ToolEnv): void {
   defineMemberTool(
     server,
     env,
@@ -211,7 +211,8 @@ function registerFlow(server: McpServer, env: ToolEnv): void {
       description: "Take a task and start it",
       shape: { task: taskRef },
     },
-    (ctx, a) => moved(ctx, checkout(ctx.db, task(ctx, a.task, true).id, ctx.memberId)),
+    async (ctx, a) =>
+      moved(ctx, await checkoutTask(ctx.db, task(ctx, a.task, true).id, ctx.memberId)),
   );
   defineMemberTool(
     server,
@@ -222,8 +223,12 @@ function registerFlow(server: McpServer, env: ToolEnv): void {
       description: "Give a task you hold back",
       shape: { task: taskRef },
     },
-    (ctx, a) => moved(ctx, release(ctx.db, task(ctx, a.task, true).id, ctx.memberId)),
+    async (ctx, a) =>
+      moved(ctx, await releaseTask(ctx.db, task(ctx, a.task, true).id, ctx.memberId)),
   );
+}
+
+function registerFlow(server: McpServer, env: ToolEnv): void {
   defineMemberTool(
     server,
     env,
@@ -268,5 +273,6 @@ function registerFlow(server: McpServer, env: ToolEnv): void {
 export function registerBoardTools(server: McpServer, env: ToolEnv): void {
   registerReads(server, env);
   registerWrites(server, env);
+  registerClaim(server, env);
   registerFlow(server, env);
 }

@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Channel, Target, TargetView } from "../../../shared/notify";
-import { deleteSecret } from "../agents/api";
+import { deleteSecret, secretNames } from "../agents/api";
 
 interface Raw {
   id: string;
@@ -68,6 +68,19 @@ export function deleteTarget(
     deleteSecret(toTarget(row).value.secretName ?? `webhook.${targetId}`, home);
   }
   return true;
+}
+
+// A member's delete cascades their targets away in SQL, so their webhook secrets are found by what no row names anymore.
+export function sweepWebhookSecrets(db: Database, home?: string): void {
+  const kept = new Set(
+    db
+      .query<Raw, []>("SELECT * FROM notify_targets WHERE channel = 'webhook'")
+      .all()
+      .map((r) => toTarget(r).value.secretName ?? `webhook.${r.id}`),
+  );
+  for (const name of secretNames(home)) {
+    if (name.startsWith("webhook.") && !kept.has(name)) deleteSecret(name, home);
+  }
 }
 
 function pushHost(endpoint: string | undefined): string {
