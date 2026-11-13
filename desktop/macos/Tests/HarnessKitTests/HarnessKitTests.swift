@@ -297,4 +297,68 @@ final class TSServerTests: XCTestCase {
             XCTAssertEqual(error as? APIError, .unauthorized)
         }
     }
+
+    func testChatChannelMessagesAndMarkRead() async throws {
+        let (_, client, _) = try await startServer()
+        let org = try await client.createOrg(name: "Talk", slug: "talk")
+        let channel = try await client.createGroup(orgSlug: org.slug, name: "random")
+        let listed = try await client.channels(orgSlug: org.slug)
+        XCTAssertTrue(listed.contains(channel))
+
+        let first = try await client.postMessage(channelId: channel.id, body: "one")
+        let second = try await client.postMessage(channelId: channel.id, body: "two")
+        let messages = try await client.messages(channelId: channel.id)
+        XCTAssertEqual(messages.map(\.body), ["one", "two"])
+        XCTAssertEqual(messages.map(\.id), [first.id, second.id])
+
+        let older = try await client.messages(channelId: channel.id, before: second.cursor)
+        XCTAssertEqual(older.map(\.id), [first.id])
+
+        let reply = try await client.postMessage(channelId: channel.id, body: "in thread", threadRootId: first.id)
+        let thread = try await client.messages(channelId: channel.id, thread: first.id)
+        XCTAssertEqual(thread.map(\.id), [reply.id])
+        let topLevel = try await client.messages(channelId: channel.id)
+        XCTAssertEqual(topLevel.first { $0.id == first.id }?.replyCount, 1)
+
+        try await client.markRead(channelId: channel.id)
+        let after = try await client.channels(orgSlug: org.slug)
+        XCTAssertEqual(after.first { $0.id == channel.id }?.unread, 0)
+    }
+
+    func testWebSocketFrameAfterMessagePost() async throws {
+        let (_, client, _) = try await startServer()
+        let org = try await client.createOrg(name: "Live Talk", slug: "live-talk")
+        let channel = try await client.createGroup(orgSlug: org.slug, name: "general")
+
+        let events = Events()
+        let watcher = Task { await client.watch(topic: "org:\(org.id)") { await events.add($0) } }
+        defer { watcher.cancel() }
+        func waitFor(_ count: Int) async throws -> Bool {
+            for _ in 0..<100 {
+                if await events.items.count >= count { return true }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            return false
+        }
+        let opened = try await waitFor(1)
+        XCTAssertTrue(opened, "WebSocket did not open within 5 s")
+        let settled = await events.items.count
+
+        _ = try await client.postMessage(channelId: channel.id, body: "ping")
+        let framed = try await waitFor(settled + 1)
+        XCTAssertTrue(framed, "no frame within 5 s after posting a message")
+        let frames = await events.items.compactMap { $0 }
+        XCTAssertFalse(frames.isEmpty, "only the open event arrived, no frame")
+    }
+
+    func testUnauthenticatedMessageListIsRejected() async throws {
+        let (backend, _, _) = try await startServer()
+        guard case .running(let port) = backend.state else { return XCTFail("not running") }
+        do {
+            _ = try await APIClient(port: port).messages(channelId: "does-not-matter")
+            XCTFail("unauthenticated message list succeeded")
+        } catch {
+            XCTAssertEqual(error as? APIError, .unauthorized)
+        }
+    }
 }

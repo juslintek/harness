@@ -32,6 +32,11 @@ The sidebar has an organisation picker and a board per project (columns, inspect
 context menu or drag and drop, live refresh over WebSocket). The Zig backend answers 501 for
 these and the app says so.
 
-Not done: runs, chat and approvals, passkey
+Chat (org channels, teams, projects, groups, DMs) has a channel list with unread badges, messages with
+paging ("Load earlier"), a composer (Return sends, Shift-Return newline), threads in the inspector,
+New Channel (creates a group) and live refresh. Same 501 handling as the board.
+
+Not done: runs, approvals, chat @mentions, message editing, starting a DM, picking members for a new
+group, DM names shown as the other person, passkey
 and OIDC sign-in, an `.app` bundle with the binary in `Contents/Resources`,
 code signing, and cleanup of a backend left behind when the app is SIGKILLed.

@@ -125,6 +125,33 @@ public struct TaskDetail: Codable, Sendable, Equatable {
     public let comments: [TaskComment]
 }
 
+public struct Channel: Codable, Sendable, Equatable, Identifiable, Hashable {
+    public let id: String
+    public let orgId: String
+    public let kind: String
+    public let name: String
+    public let teamId: String?
+    public let projectId: String?
+    public let createdAt: Int
+    public let unread: Int
+}
+
+public struct Message: Codable, Sendable, Equatable, Identifiable {
+    public let id: String
+    public let channelId: String
+    public let threadRootId: String?
+    public let authorId: String?
+    public let author: MemberRef?
+    public let body: String
+    public let createdAt: Int
+    public let editedAt: Int?
+    public let replyCount: Int
+
+    public var created: Date { Date(timeIntervalSince1970: Double(createdAt) / 1000) }
+    /// The paging cursor for "messages before this one"; the id breaks ties inside one millisecond.
+    public var cursor: String { "\(createdAt):\(id)" }
+}
+
 public struct SessionInfo: Codable, Sendable, Equatable, Identifiable {
     public let id: String
     public let method: String
@@ -241,6 +268,34 @@ public final class APIClient: Sendable {
         try decode(await send("POST", "/api/tasks/\(taskId)/comments", body: ["body": body]))
     }
 
+    /// Includes the org channel, teams, projects, groups and the caller's DMs, with `unread` counts.
+    public func channels(orgSlug: String) async throws -> [Channel] {
+        try decode(await send("GET", "/api/orgs/\(orgSlug)/channels"))
+    }
+
+    /// The contract has no plain "create channel"; a group is the user-made kind, and the creator is a member.
+    public func createGroup(orgSlug: String, name: String, memberIds: [String] = []) async throws -> Channel {
+        struct Body: Encodable { let name: String; let memberIds: [String] }
+        return try decode(await send("POST", "/api/orgs/\(orgSlug)/groups", body: Body(name: name, memberIds: memberIds)))
+    }
+
+    /// Oldest first. Without `thread` the list holds top-level messages; with it, that thread's replies.
+    public func messages(channelId: String, before: String? = nil, thread: String? = nil, limit: Int = 50) async throws -> [Message] {
+        var path = "/api/channels/\(channelId)/messages?limit=\(limit)"
+        if let before { path += "&before=\(before)" }
+        if let thread { path += "&thread=\(thread)" }
+        return try decode(await send("GET", path))
+    }
+
+    public func postMessage(channelId: String, body: String, threadRootId: String? = nil) async throws -> Message {
+        struct Body: Encodable { let body: String; let threadRootId: String? }
+        return try decode(await send("POST", "/api/channels/\(channelId)/messages", body: Body(body: body, threadRootId: threadRootId)))
+    }
+
+    public func markRead(channelId: String) async throws {
+        _ = try await send("POST", "/api/channels/\(channelId)/read")
+    }
+
     /// Keeps a WebSocket on `topic` until the task is cancelled, reconnecting with a delay that doubles
     /// from 1 s to 30 s. `onEvent` gets `nil` each time a connection opens and the frame text for each
     /// frame, so callers refetch on both.
@@ -277,7 +332,7 @@ public final class APIClient: Sendable {
         try await send("GET", path)
     }
 
-    private func send(_ method: String, _ path: String, body: [String: String]? = nil) async throws -> Data {
+    private func send(_ method: String, _ path: String, body: (any Encodable)? = nil) async throws -> Data {
         guard let url = URL(string: origin + path) else { throw APIError.transport("bad path \(path)") }
         var request = URLRequest(url: url)
         request.httpMethod = method

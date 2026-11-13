@@ -121,7 +121,7 @@ struct SignInView: View {
     }
 }
 
-private enum Pane: Hashable { case account, backend, board(String) }
+private enum Pane: Hashable { case account, backend, chat, board(String) }
 
 struct MainView: View {
     @Environment(AppModel.self) private var model
@@ -137,6 +137,9 @@ struct MainView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $pane) {
+                Section {
+                    Label("Chat", systemImage: "bubble.left.and.bubble.right").tag(Pane.chat)
+                }
                 Section("Projects") {
                     ForEach(projects) { project in
                         Label("\(project.name) Board", systemImage: "rectangle.3.group").tag(Pane.board(project.id))
@@ -198,6 +201,12 @@ struct MainView: View {
         switch pane {
         case .account: AccountView()
         case .backend: BackendView()
+        case .chat:
+            if let client = model.client, let org {
+                ChatView(client: client, org: org)
+            } else {
+                ContentUnavailableView("Select an organisation", systemImage: "building.2")
+            }
         case .board(let id):
             if let client = model.client, let org, let project = projects.first(where: { $0.id == id }) {
                 BoardView(client: client, org: org, project: project)
@@ -233,7 +242,7 @@ struct MainView: View {
             projects = try await client.projects(orgSlug: org.slug)
             projectsPhase = .ready
             if case .board(let id) = pane, projects.contains(where: { $0.id == id }) { return }
-            pane = projects.first.map { .board($0.id) } ?? (pane == .account || pane == .backend ? pane : nil)
+            pane = projects.first.map { .board($0.id) } ?? (pane == .account || pane == .backend || pane == .chat ? pane : nil)
         } catch {
             if !Task.isCancelled { projects = []; projectsPhase = Phase(error) }
         }
