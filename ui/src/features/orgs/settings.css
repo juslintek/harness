@@ -13,41 +13,16 @@
   font: 600 var(--text-heading) / var(--leading-heading) var(--font-display);
 }
 
-.settings-slug,
-.mono {
+.settings-slug {
   font-family: var(--font-mono);
   font-size: var(--text-caption);
   color: var(--color-ink-muted);
-}
-
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-}
-
-.form-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-sm);
-}
-
-.form-row > .field {
-  flex: 1 1 10rem;
-  min-width: 0;
 }
 
 .form-error {
   margin: 0;
   color: var(--color-danger);
   font: 400 var(--text-caption) / var(--leading-caption) var(--font-body);
-}
-
-.sub-title {
-  margin: 0;
-  font: 500 var(--text-caption) / var(--leading-caption) var(--font-body);
-  color: var(--color-ink-muted);
 }
 
 .chips {
@@ -69,27 +44,6 @@
   border-radius: var(--radius-pill);
 }
 
-.check {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-.checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-md);
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-}
-
 .cell-select {
   height: 28px;
   padding: 0 var(--space-sm);
@@ -107,26 +61,6 @@
 
 .who small {
   color: var(--color-ink-muted);
-}
-
-.notice {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  padding: var(--space-md);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow-wrap: anywhere;
-}
-
-.notice code {
-  font-family: var(--font-mono);
-}
-
-.copy-status {
-  color: var(--color-ink-muted);
-  font-size: var(--text-caption);
 }
 
 .org-chart {
@@ -154,14 +88,14 @@
   border-radius: var(--radius-md);
 }
 
-.wide {
+.dialog.wide {
   width: min(40rem, calc(100vw - 2 * var(--space-md)));
   max-height: calc(100dvh - 2 * var(--space-md));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-overlay);
 }
 
-.wide .dialog-body {
+.dialog.wide .dialog-body {
   overflow-y: auto;
 }
 
@@ -169,8 +103,24 @@
   font-family: var(--font-mono);
 }
 
-@media (max-width: 47.99rem) {
-  .form-row > .btn {
-    flex: 1 1 100%;
-  }
+/* Flex children keep the browser's paragraph margins, which doubles the stack gap. */
+.settings .stack > p,
+.settings .stack > h3 {
+  margin: 0;
+}
+
+.settings .sub-title {
+  color: var(--color-ink);
+  font: 600 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
+}
+
+/* Ids and paths in tables read as secondary text next to the names. */
+.settings-id {
+  color: var(--color-ink-muted);
+  font: 400 var(--text-caption) / var(--leading-caption) var(--font-mono);
+}
+
+.members-section {
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
 }

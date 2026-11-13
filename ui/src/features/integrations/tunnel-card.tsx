@@ -5,8 +5,9 @@ import { ErrorLine } from "../../auth/error-line";
 import { ignored } from "../../auth/me";
 import { createLoad } from "../../load";
 import { createAction } from "../../ui/action";
-import { ConfirmDialog } from "../../ui/confirm-dialog";
-import { Button, Field, Panel, StatusBadge } from "../../ui/primitives";
+import { CopyButton, Help, StatusBadge } from "../../ui/atoms";
+import { ConfirmButton, Field, Notice, Panel } from "../../ui/molecules";
+import { ProviderOption } from "./provider-option";
 import {
   canConfirmStart,
   isPublicProvider,
@@ -14,6 +15,7 @@ import {
   type Provider,
   startBody,
 } from "./tunnel-logic";
+import { TunnelSteps } from "./tunnel-steps";
 
 const providerSchema = z.enum(["tailscale-serve", "tailscale-funnel", "cloudflare"]);
 const command = z.object({ start: z.string(), stop: z.string().nullable() });
@@ -32,149 +34,218 @@ const infoSchema = z.object({
 });
 type TunnelInfo = z.infer<typeof infoSchema>;
 
-const warningSchema = z.object({ warning: z.string() });
+const setupSchema = z.object({ warning: z.string() });
+const startSchema = z.object({ warning: z.string(), origin: z.string().nullable() });
 
-function Choice(props: { info: TunnelInfo; onSaved: (warning: string) => void }): JSX.Element {
+function Tunnel(props: { info: TunnelInfo; onChanged: () => Promise<void> }): JSX.Element {
+  const running = (): Provider | null => props.info.running;
   const [provider, setProvider] = createSignal<Provider>(
-    props.info.config?.provider ?? "tailscale-serve",
+    running() ?? props.info.config?.provider ?? "tailscale-serve",
   );
   const [hostname, setHostname] = createSignal(
     props.info.config?.origin?.replace("https://", "") ??
       props.info.detected.tailscale.dnsName ??
       "",
   );
-  const action = createAction();
-  const save = (e: SubmitEvent): void => {
-    e.preventDefault();
-    void action.run(async () => {
-      const name = hostname().trim();
-      const body = { provider: provider(), ...(name ? { hostname: name } : {}) };
-      const done = await api("/api/tunnel/setup", warningSchema, { method: "POST", body });
-      props.onSaved(done.warning);
-    });
-  };
-  return (
-    <form class="int-stack" onSubmit={save}>
-      <fieldset class="int-provider">
-        <legend>Provider</legend>
-        <For each={PROVIDERS}>
-          {(p) => (
-            <div class="int-choice">
-              <label>
-                <input
-                  type="radio"
-                  name="tunnel-provider"
-                  checked={provider() === p.id}
-                  onChange={() => setProvider(p.id)}
-                />
-                {p.label}
-              </label>
-              <p class="int-hint">
-                Command: <code>{props.info.commands[p.id].start}</code>
-                <Show when={props.info.commands[p.id].stop}>
-                  {(stop) => (
-                    <>
-                      {" "}
-                      Undo: <code>{stop()}</code>
-                    </>
-                  )}
-                </Show>
-              </p>
-            </div>
-          )}
-        </For>
-      </fieldset>
-      <Field label={`Hostname ${provider() === "cloudflare" ? "(optional)" : "(required)"}`}>
-        {(control) => (
-          <input
-            {...control()}
-            value={hostname()}
-            required={provider() !== "cloudflare"}
-            maxLength={253}
-            placeholder="machine.tailnet.ts.net"
-            onInput={(e) => setHostname(e.currentTarget.value)}
-          />
-        )}
-      </Field>
-      <div>
-        <Button type="submit" disabled={action.busy()}>
-          Save choice
-        </Button>
-      </div>
-      <p class="int-hint">Saving writes the choice only. Nothing is started or exposed.</p>
-      <ErrorLine message={action.error()} />
-    </form>
-  );
-}
-
-function Start(props: {
-  info: TunnelInfo;
-  provider: Provider;
-  onChanged: (warning: string) => void;
-}): JSX.Element {
   const [ticked, setTicked] = createSignal(false);
-  const [asking, setAsking] = createSignal(false);
+  // A Cloudflare address exists only in the start answer; Tailscale's comes from the saved config.
+  const [started, setStarted] = createSignal<{ origin: string | null; warning: string } | null>(
+    null,
+  );
   const action = createAction();
-  const go = (): void => {
-    setAsking(false);
+  const current = (): (typeof PROVIDERS)[number] =>
+    PROVIDERS.find((p) => p.id === provider()) ?? (PROVIDERS[0] as (typeof PROVIDERS)[number]);
+  const address = (): string | null => props.info.config?.origin ?? started()?.origin ?? null;
+  const start = (): void => {
     void action.run(async () => {
-      const body = startBody(props.provider, ticked());
-      props.onChanged(
-        (await api("/api/tunnel/start", warningSchema, { method: "POST", body })).warning,
-      );
+      setStarted(null);
+      const name = hostname().trim();
+      const saved = await api("/api/tunnel/setup", setupSchema, {
+        method: "POST",
+        body: { provider: provider(), ...(name ? { hostname: name } : {}) },
+      });
+      await props.onChanged();
+      const done = await api("/api/tunnel/start", startSchema, {
+        method: "POST",
+        body: startBody(provider(), ticked()),
+      });
+      setStarted({ origin: done.origin, warning: done.warning || saved.warning });
+      await props.onChanged();
     });
   };
   const stop = (): void => {
     void action.run(async () => {
       await api("/api/tunnel", ignored, { method: "DELETE" });
-      props.onChanged("Tunnel stopped.");
+      setStarted(null);
+      await props.onChanged();
     });
   };
   return (
     <div class="int-stack">
-      <h3>Start</h3>
-      <Show when={isPublicProvider(props.provider)}>
-        <label class="int-warn">
-          <input
-            type="checkbox"
-            checked={ticked()}
-            onChange={(e) => setTicked(e.currentTarget.checked)}
-          />
-          This makes the whole instance reachable from the internet. I understand and want that.
-        </label>
+      <TunnelSteps running={running() !== null} />
+      <ul class="int-plain int-detect">
+        <li>
+          Tailscale:{" "}
+          {props.info.detected.tailscale.installed ? (
+            <>
+              found
+              <Show when={props.info.detected.tailscale.dnsName}>
+                {(name) => (
+                  <>
+                    , this machine is <code>{name()}</code>
+                  </>
+                )}
+              </Show>
+            </>
+          ) : (
+            "not found"
+          )}
+        </li>
+        <li>cloudflared: {props.info.detected.cloudflared.installed ? "found" : "not found"}</li>
+      </ul>
+      <Show
+        when={running()}
+        fallback={
+          <Notice tone="info" title="Stopped" standing>
+            {props.info.config
+              ? `Saved choice: ${PROVIDERS.find((p) => p.id === props.info.config?.provider)?.name ?? ""}${props.info.config.origin ? ` at ${props.info.config.origin}` : ""}.`
+              : "Nothing saved yet."}
+          </Notice>
+        }
+      >
+        {(live) => (
+          <Notice
+            tone="success"
+            title={`Tunnel is running with ${PROVIDERS.find((p) => p.id === live())?.name ?? ""}`}
+          >
+            Passkeys are tied to the address. A passkey made on localhost does not work on the
+            tunnel address: sign in there with a recovery code or an email code, then add a passkey.
+            Localhost still works to manage or stop the tunnel.
+            <Show when={started()?.warning}>{(text) => <p>{text()}</p>}</Show>
+          </Notice>
+        )}
       </Show>
-      <div class="int-row">
-        <Button
-          tone="primary"
-          disabled={action.busy() || !canConfirmStart(props.provider, ticked())}
-          onClick={() => setAsking(true)}
+      <Show when={running() !== null && address()}>
+        {(url) => (
+          <div class="int-stack">
+            <div class="int-address">
+              <h3>Address</h3>
+              <div class="int-address-row">
+                <code>{url()}</code>
+                <CopyButton text={url()} label="Copy URL" />
+              </div>
+            </div>
+            <div class="int-row">
+              <a
+                class="btn"
+                data-tone="secondary"
+                data-size="md"
+                href={url()}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open the address
+              </a>
+            </div>
+            <Help small>
+              Use this address in <a href="#/account">Account › Remote MCP</a> (connector URL{" "}
+              <code>{url()}/mcp/remote</code>) and on your phone.
+            </Help>
+            <Show when={running() === "tailscale-serve"}>
+              <Help small>
+                Only people on your tailnet can reach this address. To change the provider or
+                hostname, stop the tunnel first.
+              </Help>
+            </Show>
+            <div class="int-sep" />
+          </div>
+        )}
+      </Show>
+      <Show when={running() === null}>
+        <fieldset class="int-provider">
+          <legend>Provider</legend>
+          <For each={PROVIDERS}>
+            {(p) => (
+              <ProviderOption
+                id={p.id}
+                label={p.label}
+                start={props.info.commands[p.id].start}
+                stop={props.info.commands[p.id].stop}
+                checked={provider() === p.id}
+                disabled={running() !== null}
+                onSelect={() => {
+                  setProvider(p.id);
+                  setTicked(false);
+                }}
+              >
+                <Show when={provider() === p.id && isPublicProvider(p.id) && running() === null}>
+                  <label class="int-check">
+                    <input
+                      type="checkbox"
+                      checked={ticked()}
+                      onChange={(e) => setTicked(e.currentTarget.checked)}
+                    />
+                    I understand the instance will be reachable from the internet
+                  </label>
+                </Show>
+              </ProviderOption>
+            )}
+          </For>
+        </fieldset>
+        <Field
+          label={`Hostname ${provider() === "cloudflare" ? "(optional)" : "(required for Tailscale)"}`}
         >
-          Start tunnel
-        </Button>
-        <Button disabled={action.busy()} onClick={stop}>
-          Stop tunnel
-        </Button>
+          {(control) => (
+            <input
+              {...control()}
+              value={hostname()}
+              disabled={running() !== null}
+              maxLength={253}
+              placeholder="machine.tailnet.ts.net"
+              onInput={(e) => setHostname(e.currentTarget.value)}
+            />
+          )}
+        </Field>
+      </Show>
+      <div class="int-stack int-tight">
+        <div class="int-row">
+          <ConfirmButton
+            tone="primary"
+            text={`Start with ${current().name}`}
+            disabled={
+              action.busy() ||
+              running() !== null ||
+              !canConfirmStart(provider(), ticked()) ||
+              (provider() !== "cloudflare" && hostname().trim() === "")
+            }
+            title="Confirm tunnel start"
+            message={`This runs ${props.info.commands[provider()].start} now and saves your choice.`}
+            confirm="Yes, start the tunnel"
+            onConfirm={start}
+          />
+          <ConfirmButton
+            text="Stop tunnel"
+            disabled={action.busy() || running() === null}
+            title="Stop remote access?"
+            message="Phones and claude.ai lose the connection to this instance. Localhost keeps working."
+            confirm="Stop tunnel"
+            onConfirm={stop}
+          />
+        </div>
+        <Show when={running() === null}>
+          <Help small>
+            Start saves your choice and starts the tunnel. Both ask for your passkey. Stop is
+            available once it runs.
+          </Help>
+        </Show>
       </div>
       <ErrorLine message={action.error()} />
-      <ConfirmDialog
-        open={asking()}
-        title="Confirm tunnel start"
-        message={`This runs ${props.info.commands[props.provider].start} now.`}
-        confirm="Yes, start the tunnel"
-        onConfirm={go}
-        onClose={() => setAsking(false)}
-      />
     </div>
   );
 }
 
 export function TunnelCard(): JSX.Element {
   const info = createLoad("/api/tunnel", infoSchema);
-  const [notice, setNotice] = createSignal<string | null>(null);
-  const changed = (text: string): void => {
-    setNotice(text);
-    void info.reload();
-  };
   return (
     <Panel
       title="Remote access (tunnel)"
@@ -190,42 +261,14 @@ export function TunnelCard(): JSX.Element {
       }
     >
       <div class="int-stack">
-        <p class="int-hint">
-          Lets your phone and claude.ai reach this instance. It is never started automatically.
-        </p>
+        <Help small>
+          A tunnel lets your phone and claude.ai reach this instance from outside your network. It
+          never starts by itself.
+        </Help>
         <ErrorLine message={info.error()} />
         <Show when={info.data()}>
-          {(d) => (
-            <>
-              <ul class="int-stack" style={{ margin: 0, padding: 0, "list-style": "none" }}>
-                <li>
-                  Tailscale:{" "}
-                  {d().detected.tailscale.installed
-                    ? `found${d().detected.tailscale.dnsName ? `, this machine is ${d().detected.tailscale.dnsName}` : ""}`
-                    : "not found"}
-                </li>
-                <li>cloudflared: {d().detected.cloudflared.installed ? "found" : "not found"}</li>
-              </ul>
-              <p>
-                Saved:{" "}
-                {d().config ? `${d().config?.provider} ${d().config?.origin ?? ""}` : "nothing"}.
-                Running: {d().running ?? "no"}.
-              </p>
-              <Choice info={d()} onSaved={changed} />
-              <Show when={d().config?.provider} keyed>
-                {(provider) => (
-                  <>
-                    <div class="int-sep" />
-                    <Start info={d()} provider={provider} onChanged={changed} />
-                  </>
-                )}
-              </Show>
-            </>
-          )}
+          {(d) => <Tunnel info={d()} onChanged={() => info.reload()} />}
         </Show>
-        <p class="int-notice" role="status">
-          {notice()}
-        </p>
       </div>
     </Panel>
   );

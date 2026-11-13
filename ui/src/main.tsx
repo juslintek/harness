@@ -2,7 +2,6 @@ import "../../design/theme.css";
 import { render } from "solid-js/web";
 import { App } from "./app";
 import "./styles.css";
-import "./ui.css";
 
 // The dark tokens are a design system block in theme.css, switched on by the mark on <html>.
 const dark = matchMedia("(prefers-color-scheme: dark)");

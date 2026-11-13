@@ -7,7 +7,7 @@ import {
 import { createEffect, For, type JSX, on, Show } from "solid-js";
 import { api } from "../../api";
 import { createLoad } from "../../load";
-import { Button } from "../../ui/primitives";
+import { Button } from "../../ui/atoms";
 import { Composer } from "./composer";
 import { createHistory, PAGE_SIZE } from "./history";
 import { LoadOlder, type MessageContext, MessageItem } from "./messages";

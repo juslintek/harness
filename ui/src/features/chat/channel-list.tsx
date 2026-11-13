@@ -1,6 +1,6 @@
 import type { ChannelKind, ChannelView } from "@shared/chat";
 import { createUniqueId, For, type JSX, Show } from "solid-js";
-import { Button } from "../../ui/primitives";
+import { Button } from "../../ui/atoms";
 
 const GROUPS: { kind: ChannelKind; title: string }[] = [
   { kind: "org", title: "Organisation" },
@@ -11,14 +11,14 @@ const GROUPS: { kind: ChannelKind; title: string }[] = [
 ];
 
 // A dm is named after both handles; the reader only needs the other one.
-export function channelLabel(c: ChannelView, myHandle: string): string {
+export function channelLabel(c: ChannelView, myHandle: string, agents?: Set<string>): string {
   if (c.kind !== "dm") return c.name;
-  return (
+  const other =
     c.name
       .split(", ")
       .filter((h) => h !== myHandle)
-      .join(", ") || c.name
-  );
+      .join(", ") || c.name;
+  return agents?.has(other) ? `${other} (agent)` : other;
 }
 
 export function ChannelList(props: {
@@ -26,6 +26,7 @@ export function ChannelList(props: {
   activeId: string | null;
   slug: string;
   myHandle: string;
+  agents: Set<string>;
   onNewGroup: () => void;
   onNewDm: () => void;
 }): JSX.Element {
@@ -47,7 +48,9 @@ export function ChannelList(props: {
                           href={`#/o/${props.slug}/chat/${c.id}`}
                           aria-current={c.id === props.activeId ? "page" : undefined}
                         >
-                          <span class="channel-name">{channelLabel(c, props.myHandle)}</span>
+                          <span class="channel-name">
+                            {channelLabel(c, props.myHandle, props.agents)}
+                          </span>
                           <Show when={c.unread > 0}>
                             <span class="unread">
                               {c.unread}

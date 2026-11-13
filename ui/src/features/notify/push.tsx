@@ -2,7 +2,7 @@ import { createSignal, type JSX, onMount, Show } from "solid-js";
 import { api } from "../../api";
 import { ErrorLine } from "../../auth/error-line";
 import { createAction } from "../../ui/action";
-import { Button } from "../../ui/primitives";
+import { Button } from "../../ui/atoms";
 import { createdSchema, orgUrl, pushKeySchema, subscriptionSchema } from "./data";
 import { applicationServerKey, needsHomeScreen, type PushState, pushState } from "./logic";
 
@@ -80,8 +80,8 @@ function Unsupported(): JSX.Element {
 const STATUS: Record<Exclude<View, "unsupported" | "loading">, string> = {
   denied:
     "Notifications are blocked for this site. Allow them in the browser's site settings, then reload this page.",
-  subscribed: "Push is active in this browser.",
-  ready: "Push is off for this device.",
+  subscribed: "Push on this browser: on.",
+  ready: "Push on this browser: off.",
 };
 
 export function PushSubscribe(props: { org: string; onChange: () => void }): JSX.Element {
@@ -108,7 +108,7 @@ export function PushSubscribe(props: { org: string; onChange: () => void }): JSX
       <Show when={status()}>{(text) => <p>{text()}</p>}</Show>
       <Show when={view() === "ready" || view() === "subscribed"}>
         <Button disabled={action.busy()} onClick={enable}>
-          {view() === "ready" ? "Enable push on this device" : "Enable push for this organization"}
+          {view() === "ready" ? "Enable push on this browser" : "Enable push for this organization"}
         </Button>
       </Show>
       <ErrorLine message={action.error()} />

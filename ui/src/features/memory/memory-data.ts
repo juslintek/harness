@@ -68,7 +68,14 @@ export const notesHash = (slug: string, id?: string): string =>
   `#/o/${slug}/memory/notes${id ? `/${id}` : ""}`;
 
 // Stored paths start with the org id, which means nothing to a reader.
-export const shownPath = (path: string): string => path.replace(/^orgs\/[^/]+\//, "");
+export const shownPath = (path: string): string =>
+  path.replace(/^orgs\/[^/]+\//, "").replace(/^org\//, "");
+
+// The server's names for a note's scope and kind, in the words the page uses.
+const SCOPE_WORDS: Record<string, string> = { org: "organisation" };
+const KIND_WORDS: Record<string, string> = { howto: "how-to" };
+export const scopeWord = (scope: string): string => SCOPE_WORDS[scope] ?? scope;
+export const kindWord = (kind: string): string => KIND_WORDS[kind] ?? kind;
 
 // The server rejects an unwritable scope; this only keeps the form from offering one. Agents never
 // write global, and only an instance admin does from the UI.
@@ -109,3 +116,20 @@ export const shownNote = <T>(data: T | null, errorStatus: number | null): T | nu
 
 // Chat and board messages share the org topic; only a memory message changes what these screens show.
 export const isMemoryMessage = (frame: WsFrame): boolean => frame.type === "memory";
+
+export const opWord = (op: NoteWriteFeedItem["op"]): string =>
+  op === "outside"
+    ? "changed outside Harness"
+    : {
+        create: "created",
+        update: "updated",
+        delete: "deleted",
+        rename: "renamed",
+        revert: "reverted",
+      }[op];
+
+// Only instance admins have a Run page; for anyone else the id would lead to a refusal.
+export const runHash = (id: string): string => `#/runs/${id}`;
+
+export const sumCounts = (counts: Record<string, number>): number =>
+  Object.values(counts).reduce((a, b) => a + b, 0);

@@ -8,7 +8,8 @@ import { ignored } from "../../auth/me";
 import { errorText } from "../../format";
 import { createLoad } from "../../load";
 import { createAction } from "../../ui/action";
-import { Button, Field, State } from "../../ui/primitives";
+import { Button } from "../../ui/atoms";
+import { Field, State } from "../../ui/molecules";
 import { FormError } from "./shared";
 
 const MAX_FALLBACKS = 3;

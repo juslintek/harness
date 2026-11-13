@@ -7,8 +7,11 @@ import { me } from "../../auth/me";
 import { authenticate, requestChallengeSchema } from "../../auth/webauthn";
 import { createLoad } from "../../load";
 import { createAction } from "../../ui/action";
-import { Button, Field } from "../../ui/primitives";
+import { Button, Help } from "../../ui/atoms";
+import { Field } from "../../ui/molecules";
+import { ConsentSummary } from "./consent-summary";
 import "./consent.css";
+import { ScopeList } from "./scope-list";
 
 const verifiedSchema = z.object({ ok: z.literal(true) });
 
@@ -81,6 +84,9 @@ export function ConsentPage(): JSX.Element {
   const [granted, setGranted] = createSignal<string[]>(requested);
   const action = createAction();
   const client = createLoad(`/api/oauth/clients/${encodeURIComponent(clientId)}`, clientInfoSchema);
+  const appName = (): string => client.data()?.name ?? "this app";
+  const orgName = (): string =>
+    me()?.orgs.find((o) => o.id === orgId())?.name ?? "your organisation";
   const toggle = (scope: string): void => {
     setGranted((now) => (now.includes(scope) ? now.filter((s) => s !== scope) : [...now, scope]));
   };
@@ -106,12 +112,13 @@ export function ConsentPage(): JSX.Element {
       >
         <section class="consent-card" aria-labelledby="consent-title">
           <p class="consent-brand">Harness</p>
-          <h1 id="consent-title">Allow access to Harness?</h1>
-          <p>
-            <strong>{client.data()?.name ?? "…"}</strong> wants to act as you. It will return you to{" "}
-            <code>{hostOf(params.get("redirect_uri") ?? "")}</code>.
-          </p>
-          <Field label="Organisation">
+          <h1 id="consent-title">Allow {appName()} to use Harness as you?</h1>
+          <ConsentSummary
+            app={appName()}
+            email={me()?.user.email ?? ""}
+            host={hostOf(params.get("redirect_uri") ?? "")}
+          />
+          <Field label="Organisation it applies to">
             {(control) => (
               <select
                 {...control()}
@@ -122,35 +129,33 @@ export function ConsentPage(): JSX.Element {
               </select>
             )}
           </Field>
-          <fieldset class="consent-scopes">
-            <legend>Permissions</legend>
-            <For each={requested}>
-              {(scope) => (
-                <label class="consent-scope">
-                  <input
-                    type="checkbox"
-                    checked={granted().includes(scope)}
-                    onChange={() => toggle(scope)}
-                  />
-                  {SCOPE_LABELS[scope]}
-                </label>
-              )}
-            </For>
-          </fieldset>
+          <ScopeList
+            legend={`${appName()} can do only what is ticked, as you, in ${orgName()}`}
+            scopes={requested.map((key) => ({ key, label: SCOPE_LABELS[key] ?? key }))}
+            granted={granted()}
+            onToggle={toggle}
+          />
+          <Show when={granted().length === 0}>
+            <Help small>Pick at least one permission to allow.</Help>
+          </Show>
           <ErrorLine message={action.error()} />
           <div class="consent-actions">
+            <Button tone="secondary" disabled={action.busy()} onClick={() => answer("deny")}>
+              Deny
+            </Button>
             <Button
               tone="primary"
               disabled={action.busy() || orgId() === "" || granted().length === 0}
               onClick={() => answer("consent")}
             >
-              Approve
-            </Button>
-            <Button tone="danger" disabled={action.busy()} onClick={() => answer("deny")}>
-              Deny
+              Allow
             </Button>
           </div>
-          <p class="consent-hint">Approving asks for your passkey.</p>
+          <Help small>
+            Allow asks for your passkey. Deny returns you to{" "}
+            {hostOf(params.get("redirect_uri") ?? "")} without giving access.
+          </Help>
+          <Help small>You can revoke this later in Account, under Remote MCP.</Help>
         </section>
       </Show>
     </main>

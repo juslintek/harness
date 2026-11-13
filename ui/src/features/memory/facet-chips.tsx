@@ -4,6 +4,7 @@ export function FacetGroup(props: {
   label: string;
   counts: Record<string, number>;
   active: string;
+  word?: ((name: string) => string) | undefined;
   onToggle: (value: string) => void;
 }): JSX.Element {
   const names = (): string[] => Object.keys(props.counts).sort();
@@ -20,7 +21,10 @@ export function FacetGroup(props: {
                 aria-pressed={props.active === name}
                 onClick={() => props.onToggle(props.active === name ? "" : name)}
               >
-                {name} <span>{props.counts[name]}</span>
+                <Show when={props.active === name}>
+                  <span aria-hidden="true">✓</span>
+                </Show>
+                {props.word ? props.word(name) : name} <span>{props.counts[name]}</span>
               </button>
             )}
           </For>

@@ -1,216 +1,39 @@
-import { type Status, type TaskView, taskViewSchema } from "@shared/board";
+import type { Status, TaskView } from "@shared/board";
+import { taskViewSchema } from "@shared/board";
 import { type OrgDetail, orgDetailSchema } from "@shared/orgs";
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  createUniqueId,
-  For,
-  type JSX,
-  onCleanup,
-  Show,
-} from "solid-js";
+import { createEffect, createMemo, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
 import { z } from "zod";
-import { api } from "../../api";
-import { createAction } from "../../auth/create-action";
-import { ErrorLine } from "../../auth/error-line";
 import { me } from "../../auth/me";
 import { createLoad } from "../../load";
 import { createTopic } from "../../realtime";
 import { routeParts } from "../../route";
-import { Button, Dialog, Field, State, StatusBadge } from "../../ui/primitives";
+import { EmptyPanel, Field, State } from "../../ui/molecules";
+import { BoardColumn } from "./board-column";
+import { BoardFilters, type Filters, NO_FILTER } from "./board-filters";
 import "./board.css";
-import { type Notice, postTask, STATUS_TONE, STATUSES } from "./move";
+import { type Notice, postTask, STATUSES, statusLabel } from "./move";
+import { NewTask } from "./new-task";
+import type { BoardCtx } from "./task-card";
 import { TaskPanel } from "./task-panel";
+import { createWakeups } from "./wakeups";
 
 const edgesSchema = z.array(z.object({ taskId: z.string(), dependsOn: z.string() }));
 const taskList = z.array(taskViewSchema);
 
 const NARROW = "(max-width: 47.99rem)";
 const isOpen = (t: TaskView): boolean => t.status !== "done" && t.status !== "cancelled";
-const fmtEstimate = (minutes: number): string =>
-  minutes >= 60 ? `${Math.round((minutes / 60) * 10) / 10}h` : `${minutes}m`;
-
-// A custom type keeps text dragged in from elsewhere from being read as a task id.
-const TASK_MIME = "application/x-harness-task";
-
-function NewTask(props: { projectId: string; onCreated: () => void }): JSX.Element {
-  const [open, setOpen] = createSignal(false);
-  const [title, setTitle] = createSignal("");
-  const action = createAction();
-  const formId = createUniqueId();
-  const submit = (e: SubmitEvent): void => {
-    e.preventDefault();
-    void action.run(async () => {
-      await api(`/api/projects/${props.projectId}/tasks`, taskViewSchema, {
-        method: "POST",
-        body: { title: title() },
-      });
-      setTitle("");
-      setOpen(false);
-      props.onCreated();
-    });
-  };
-  return (
-    <>
-      <Button tone="primary" onClick={() => setOpen(true)}>
-        New task
-      </Button>
-      <Dialog
-        open={open()}
-        onClose={() => setOpen(false)}
-        title="New task"
-        footer={
-          <>
-            <Button onClick={() => setOpen(false)}>Cancel</Button>
-            <Button
-              type="submit"
-              form={formId}
-              tone="primary"
-              disabled={action.busy() || title().trim() === ""}
-            >
-              Add
-            </Button>
-          </>
-        }
-      >
-        <form id={formId} onSubmit={submit}>
-          <Field label="Title">
-            {(control) => (
-              <input
-                {...control()}
-                value={title()}
-                required
-                maxLength={200}
-                onInput={(e) => setTitle(e.currentTarget.value)}
-              />
-            )}
-          </Field>
-          <ErrorLine message={action.error()} />
-        </form>
-      </Dialog>
-    </>
-  );
-}
-
-interface BoardCtx {
-  slug: string;
-  byId: () => Map<string, TaskView>;
-  subtasks: () => Map<string, number>;
-  blockedBy: () => Map<string, number>;
-  notice: () => Notice | null;
-  openId: () => string | undefined;
-  move: (taskId: string, to: Status, beforeId?: string) => Promise<boolean>;
-}
-
-function Card(props: { id: string; ctx: BoardCtx }): JSX.Element {
-  const task = (): TaskView => props.ctx.byId().get(props.id) as TaskView;
-  const selected = (): boolean => props.ctx.openId() === props.id;
-  const sub = (): number => props.ctx.subtasks().get(props.id) ?? 0;
-  const blocked = (): number => props.ctx.blockedBy().get(props.id) ?? 0;
-  return (
-    <li
-      class="bd-card"
-      data-task-id={props.id}
-      data-selected={selected()}
-      draggable="true"
-      onDragStart={(e) => {
-        e.dataTransfer?.setData(TASK_MIME, props.id);
-        if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-      }}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const dragged = e.dataTransfer?.getData(TASK_MIME);
-        if (dragged && dragged !== props.id) void props.ctx.move(dragged, task().status, props.id);
-      }}
-    >
-      <a
-        class="bd-card-title"
-        draggable="false"
-        href={`#/o/${props.ctx.slug}/board/${task().projectId}/${task().number}`}
-        aria-current={selected() ? "true" : undefined}
-      >
-        {task().title}
-      </a>
-      <p class="bd-card-meta">
-        <span class="bd-mono">#{task().number}</span>
-        <span>{task().assignee ? `@${task().assignee?.handle}` : "Unassigned"}</span>
-        <Show when={task().estimateMinutes !== null}>
-          <span class="bd-mono">{fmtEstimate(task().estimateMinutes ?? 0)}</span>
-        </Show>
-      </p>
-      <Show when={blocked() > 0 || sub() > 0}>
-        <p class="bd-card-note">
-          {[
-            blocked() > 0 ? `blocked by ${blocked()}` : "",
-            sub() > 0 ? `${sub()} ${sub() === 1 ? "subtask" : "subtasks"}` : "",
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-      </Show>
-      <Show when={task().holder}>
-        {(holder) => <p class="bd-card-note">held by @{holder().handle}</p>}
-      </Show>
-      <Show when={props.ctx.notice()?.taskId === props.id && !selected()}>
-        <p class="error" role="alert">
-          {props.ctx.notice()?.text}
-        </p>
-      </Show>
-    </li>
-  );
-}
-
-function Column(props: {
-  status: Status;
-  ids: string[];
-  shown: boolean;
-  ctx: BoardCtx;
-}): JSX.Element {
-  const [over, setOver] = createSignal(false);
-  return (
-    <section
-      class="bd-column"
-      data-over={over()}
-      data-shown={props.shown}
-      aria-label={props.status}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setOver(true);
-      }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setOver(false);
-        const dragged = e.dataTransfer?.getData(TASK_MIME);
-        if (dragged) void props.ctx.move(dragged, props.status);
-      }}
-    >
-      <h2 class="bd-column-head">
-        <StatusBadge tone={STATUS_TONE[props.status]} value={props.status} />
-        <span class="bd-mono muted">{props.ids.length}</span>
-      </h2>
-      <ul class="bd-plain">
-        <For each={props.ids}>{(id) => <Card id={id} ctx={props.ctx} />}</For>
-      </ul>
-    </section>
-  );
-}
 
 function BoardView(props: { detail: OrgDetail; projectId: string }): JSX.Element {
   const tasks = createLoad(`/api/projects/${props.projectId}/tasks`, taskList);
   const edges = createLoad(`/api/projects/${props.projectId}/deps`, edgesSchema);
+  const wakeups = createWakeups(props.detail.org.slug);
   const reloadAll = async (): Promise<void> => {
-    await Promise.all([tasks.reload(), edges.reload()]);
+    await Promise.all([tasks.reload(), edges.reload(), wakeups.reload()]);
   };
-  // The first open only repeats the fetches above; later ones catch what was missed while down.
-  let opened = false;
+  // Every open refetches, the first too: a task added before the subscription was registered is
+  // never pushed.
   createTopic(`org:${props.detail.org.id}`, (m) => {
-    if (m === null ? opened : m.type === "task" && m.projectId === props.projectId)
-      void reloadAll();
-    if (m === null) opened = true;
+    if (m === null || (m.type === "task" && m.projectId === props.projectId)) void reloadAll();
   });
 
   const list = (): TaskView[] => tasks.data() ?? [];
@@ -221,22 +44,35 @@ function BoardView(props: { detail: OrgDetail; projectId: string }): JSX.Element
       if (t.parentId) counts.set(t.parentId, (counts.get(t.parentId) ?? 0) + 1);
     return counts;
   });
-  const blockedBy = createMemo(() => {
-    const counts = new Map<string, number>();
+  const blockers = createMemo(() => {
+    const open = new Map<string, number[]>();
     for (const e of edges.data() ?? []) {
       const dep = byId().get(e.dependsOn);
-      if (dep && isOpen(dep)) counts.set(e.taskId, (counts.get(e.taskId) ?? 0) + 1);
+      if (dep && isOpen(dep)) open.set(e.taskId, [...(open.get(e.taskId) ?? []), dep.number]);
     }
-    return counts;
+    return open;
   });
   const openTask = createMemo(() => {
     const number = Number(routeParts()[4]);
     return number > 0 ? list().find((t) => t.number === number) : undefined;
   });
   const openId = createMemo(() => openTask()?.id);
+  const [filters, setFilters] = createSignal<Filters>(NO_FILTER);
+  const shown = (t: TaskView): boolean => {
+    const f = filters();
+    const text = f.text.trim().toLowerCase().replace(/^#/, "");
+    return (
+      (f.assignee === "" || t.assignee?.handle === f.assignee) &&
+      (!f.heldByAgent || t.holder?.kind === "agent") &&
+      (text === "" || t.title.toLowerCase().includes(text) || String(t.number) === text)
+    );
+  };
+  const handles = createMemo(() =>
+    [...new Set(list().flatMap((t) => (t.assignee ? [t.assignee.handle] : [])))].sort(),
+  );
   const idsIn = (status: Status): string[] =>
     list()
-      .filter((t) => t.status === status)
+      .filter((t) => t.status === status && shown(t))
       .sort((a, b) => a.rank - b.rank || a.number - b.number)
       .map((t) => t.id);
 
@@ -271,7 +107,8 @@ function BoardView(props: { detail: OrgDetail; projectId: string }): JSX.Element
     slug: props.detail.org.slug,
     byId,
     subtasks,
-    blockedBy,
+    blockers,
+    work: wakeups.work,
     notice,
     openId,
     move,
@@ -300,59 +137,106 @@ function BoardView(props: { detail: OrgDetail; projectId: string }): JSX.Element
   });
 
   const projectOptions = props.detail.projects;
+  const empty = (): boolean => tasks.data()?.length === 0;
   return (
-    <>
-      <div class="bd-board-head" inert={covered()}>
-        <label class="bd-board-project">
-          <span class="muted">Project</span>
-          <select
-            onChange={(e) => {
-              location.hash = `#/o/${props.detail.org.slug}/board/${e.currentTarget.value}`;
-            }}
-          >
-            <For each={projectOptions}>
-              {(p) => (
-                <option value={p.id} selected={p.id === props.projectId}>
-                  {p.key} {p.name}
-                </option>
+    <div class="bd-board-layout" data-compact={openId() !== undefined}>
+      <div class="bd-board-main" inert={covered()}>
+        <div class="bd-board-head" inert={covered()}>
+          <div class="bd-board-project">
+            <Field label="Project">
+              {(control) => (
+                <select
+                  {...control()}
+                  onChange={(e) => {
+                    location.hash = `#/o/${props.detail.org.slug}/board/${e.currentTarget.value}`;
+                  }}
+                >
+                  <For each={projectOptions}>
+                    {(p) => (
+                      <option value={p.id} selected={p.id === props.projectId}>
+                        {p.key} {p.name}
+                      </option>
+                    )}
+                  </For>
+                </select>
               )}
-            </For>
-          </select>
-        </label>
-        <NewTask projectId={props.projectId} onCreated={() => void reloadAll()} />
-      </div>
-      <Show when={tasks.error() ?? edges.error()}>
-        {(message) => <State kind="error" message={message()} onRetry={() => void reloadAll()} />}
-      </Show>
-      <Show
-        when={tasks.data()}
-        fallback={
-          <Show when={!tasks.error()}>
-            <State kind="loading" />
+            </Field>
+          </div>
+          <Show when={tasks.data() && !empty()}>
+            <BoardFilters value={filters} onChange={setFilters} handles={handles} />
+            <div class="bd-board-new">
+              <NewTask projectId={props.projectId} onCreated={() => void reloadAll()} />
+            </div>
           </Show>
-        }
-      >
-        <div class="bd-board-layout">
-          <div class="bd-board-main" inert={covered()}>
-            <fieldset class="bd-chips">
-              <legend class="sr-only">Status</legend>
-              <For each={STATUSES}>
-                {(status) => (
-                  <button
-                    type="button"
-                    class="bd-chip"
-                    aria-pressed={shownStatus() === status}
-                    onClick={() => setPicked(status)}
-                  >
-                    {status} <span class="bd-mono muted">{idsIn(status).length}</span>
-                  </button>
-                )}
-              </For>
-            </fieldset>
+        </div>
+        <Show when={tasks.error() ?? edges.error()}>
+          {(message) => <State kind="error" message={message()} onRetry={() => void reloadAll()} />}
+        </Show>
+        <Show
+          when={tasks.data()}
+          fallback={
+            <Show when={!tasks.error()}>
+              <State kind="loading" />
+            </Show>
+          }
+        >
+          <Show
+            when={!empty()}
+            fallback={
+              <EmptyPanel
+                title="No tasks yet"
+                message="Tasks you add show up here, one column for each status."
+              >
+                <NewTask projectId={props.projectId} onCreated={() => void reloadAll()} />
+              </EmptyPanel>
+            }
+          >
+            <div class="bd-filter-row">
+              <div class="bd-status-select">
+                <Field label="Status">
+                  {(control) => (
+                    <select
+                      {...control()}
+                      onChange={(e) => setPicked(e.currentTarget.value as Status)}
+                    >
+                      <For each={STATUSES}>
+                        {(status) => (
+                          <option value={status} selected={shownStatus() === status}>
+                            {statusLabel(status)} {idsIn(status).length}
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                  )}
+                </Field>
+              </div>
+            </div>
+            <div class="bd-summary">
+              <Show
+                when={openId() === undefined}
+                fallback={
+                  <p class="bd-hint muted">
+                    A task is open, so the board shows one line per task. Close the task to see the
+                    columns again.
+                  </p>
+                }
+              >
+                <p class="bd-counts">
+                  <For each={STATUSES}>
+                    {(status) => (
+                      <span>
+                        {statusLabel(status)} <b>{idsIn(status).length}</b>
+                      </span>
+                    )}
+                  </For>
+                </p>
+                <p class="bd-hint muted">Scroll sideways for the last columns.</p>
+              </Show>
+            </div>
             <div class="bd-board">
               <For each={STATUSES}>
                 {(status) => (
-                  <Column
+                  <BoardColumn
                     status={status}
                     ids={idsIn(status)}
                     shown={shownStatus() === status}
@@ -361,24 +245,27 @@ function BoardView(props: { detail: OrgDetail; projectId: string }): JSX.Element
                 )}
               </For>
             </div>
-          </div>
-          <Show when={openId()} keyed>
-            {(id) => (
-              <TaskPanel
-                id={id}
-                detail={props.detail}
-                tasks={list}
-                version={tasks.data}
-                notice={notice}
-                move={move}
-                reload={reloadAll}
-                handleOf={handleOf}
-              />
-            )}
           </Show>
-        </div>
+        </Show>
+      </div>
+      <Show when={tasks.data() && openId()} keyed>
+        {(id) => (
+          <TaskPanel
+            id={id}
+            detail={props.detail}
+            tasks={list}
+            version={tasks.data}
+            notice={notice}
+            move={move}
+            reload={reloadAll}
+            handleOf={handleOf}
+            work={wakeups.work}
+            wakeups={() => wakeups.of(id)}
+            reloadWakeups={wakeups.reload}
+          />
+        )}
       </Show>
-    </>
+    </div>
   );
 }
 

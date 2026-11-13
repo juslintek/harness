@@ -5,7 +5,7 @@ test("an unknown visitor lands on the sign-in page", async ({ page }) => {
   await expect(page).toHaveURL(/#\/login$/);
   await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use an email code instead" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Use a recovery code" })).toBeVisible();
 });
 
@@ -71,37 +71,40 @@ test("an instance admin sees the grouped nav, and the current page is marked", a
     admin: true,
   });
   const nav = page.getByRole("navigation", { name: "Main" });
-  for (const group of ["Work", "Oversight", "Organisation", "Instance"]) {
+  for (const group of ["Now", "Work", "Monitor", "Reports", "Organisation", "Guides", "Instance"]) {
     await expect(nav.getByRole("list", { name: group })).toBeVisible();
   }
   await expect(nav.getByRole("link")).toHaveText([
+    "Now",
     "Board",
     "Chat",
     "Memory",
     "Approvals",
-    "Dashboard",
+    "Runs",
     "Logs",
+    "Usage & budgets",
     "Hiring",
     "Policies",
     "Settings",
-    "Runs",
-    "Agents",
-    "Search",
+    "Playbooks",
+    "Agent CLIs",
     "Integrations",
+    "Search",
     "Account",
   ]);
-  // "#/" is the runs list for an instance admin.
-  await expect(nav.getByRole("link", { name: "Runs", exact: true })).toHaveAttribute(
+  // "#/" is Now for everyone.
+  await expect(nav.getByRole("link", { name: "Now", exact: true })).toHaveAttribute(
     "aria-current",
     "page",
   );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Now");
   await nav.getByRole("link", { name: "Board", exact: true }).click();
   await expect(page).toHaveURL(/#\/o\/personal\/board$/);
   await expect(nav.getByRole("link", { name: "Board", exact: true })).toHaveAttribute(
     "aria-current",
     "page",
   );
-  await expect(nav.getByRole("link", { name: "Runs", exact: true })).not.toHaveAttribute(
+  await expect(nav.getByRole("link", { name: "Now", exact: true })).not.toHaveAttribute(
     "aria-current",
     "page",
   );
@@ -110,23 +113,38 @@ test("an instance admin sees the grouped nav, and the current page is marked", a
   await expect(nav.getByRole("button", { name: /Personal/ })).toContainText("owner");
 });
 
-test("an unknown route shows the board of the selected organisation", async ({ page, stack }) => {
-  await signIn(page, stack, { email: "lost@example.com", name: "Lost", admin: true });
-  await page.goto("/#/no-such-page");
-  await expect(page.getByRole("main").getByText("No projects yet")).toBeVisible();
+test("a pending approval puts a warning count on Approvals", async ({ page, stack }) => {
+  await signIn(page, stack, { email: "count@example.com", name: "Count", admin: true });
+  const approvals = page
+    .getByRole("navigation", { name: "Main" })
+    .getByRole("link", { name: "Approvals" });
+  await expect(approvals).toHaveText("Approvals");
+  stack.sql(
+    "INSERT INTO approvals (id, run_id, action, l1, status, created_at, expires_at) VALUES ('ap_1', 'run_1', 'push', 'ask', 'pending', ?, ?)",
+    Date.now(),
+    Date.now() + 600_000,
+  );
+  await page.reload();
+  await expect(approvals).toHaveText("Approvals1 waiting");
 });
 
-test("an organisation owner has no halt switch and no instance pages", async ({ page, stack }) => {
+test("an unknown route shows Now", async ({ page, stack }) => {
+  await signIn(page, stack, { email: "lost@example.com", name: "Lost", admin: true });
+  await page.goto("/#/no-such-page");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Now");
+});
+
+test("an organisation owner has no stop button and no instance pages", async ({ page, stack }) => {
   await signIn(page, stack, { email: "owner@example.com", name: "Owner" });
   const nav = page.getByRole("navigation", { name: "Main" });
-  await expect(nav.getByRole("link", { name: "Board", exact: true })).toHaveAttribute(
+  await expect(nav.getByRole("link", { name: "Now", exact: true })).toHaveAttribute(
     "aria-current",
     "page",
   );
   await expect(nav.getByRole("link", { name: "Approvals" })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Runs", exact: true })).toHaveCount(0);
   await expect(nav.getByRole("list", { name: "Instance" })).toHaveCount(0);
-  await expect(page.getByRole("switch")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Stop all agents" })).toHaveCount(0);
 });
 
 test("switching organisation keeps the section and remembers the pick", async ({ page, stack }) => {
@@ -148,37 +166,53 @@ test("switching organisation keeps the section and remembers the pick", async ({
   );
 });
 
-test("the halt switch asks, needs a passkey, and follows the server", async ({ page, stack }) => {
+test("stopping agents asks, needs a passkey, shows a banner, and follows the server", async ({
+  page,
+  stack,
+}) => {
   await signIn(page, stack, { email: "halt@example.com", name: "Halt", admin: true });
-  const halt = page.getByRole("switch", { name: "Halt all agent runs" });
-  await expect(halt).toHaveAttribute("aria-checked", "false");
+  const stop = page.getByRole("button", { name: "Stop all agents" });
+  const banner = page.getByText("All agents are stopped");
   await expect(page.getByText("Agents running")).toBeVisible();
+  await expect(page.getByText("Live", { exact: true })).toBeVisible();
+  await expect(banner).toHaveCount(0);
 
-  // Cancelling the passkey prompt rejects the call and the switch stays where the server is.
-  await halt.click();
-  await page.getByRole("button", { name: "Halt", exact: true }).click();
+  // Cancelling the passkey prompt rejects the call and the state stays where the server is.
+  await stop.click();
+  const confirm = page.getByRole("dialog", { name: "Stop all agents?" });
+  await expect(confirm).toContainText("Every running run is stopped now");
+  await confirm.getByRole("button", { name: "Stop all agents" }).click();
   const prompt = page.getByRole("dialog", { name: "Confirm it's you" });
   await expect(prompt).toContainText("POST /api/halt");
   await prompt.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByRole("alert")).toHaveText("Passkey check cancelled.");
-  await expect(halt).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByText("Agents running")).toBeVisible();
+  await expect(banner).toHaveCount(0);
 
-  await halt.click();
-  await page.getByRole("button", { name: "Halt", exact: true }).click();
+  await stop.click();
+  await page
+    .getByRole("dialog", { name: "Stop all agents?" })
+    .getByRole("button", { name: "Stop all agents" })
+    .click();
   await page
     .getByRole("dialog", { name: "Confirm it's you" })
     .getByRole("button", { name: "Use passkey" })
     .click();
-  await expect(halt).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByRole("group", { name: "Halt all agent runs" })).toContainText("Halted");
+  await expect(page.getByText("Agents stopped")).toBeVisible();
+  await expect(banner).toBeVisible();
+  await expect(
+    page.getByText("No run will start until an instance admin resumes them."),
+  ).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
 
-  // The server remembers it, so a reload shows the same.
+  // The server remembers it, so a reload shows the same, on every page.
   await page.reload();
-  await expect(halt).toHaveAttribute("aria-checked", "true");
-  await halt.click();
-  await page.getByRole("button", { name: "Resume" }).click();
-  await expect(halt).toHaveAttribute("aria-checked", "false");
+  await expect(banner).toBeVisible();
+  await page.goto("/#/o/personal/board");
+  await expect(banner).toBeVisible();
+  await page.getByRole("button", { name: "Resume agents" }).click();
+  await expect(page.getByText("Agents running")).toBeVisible();
+  await expect(banner).toHaveCount(0);
 });
 
 test("on a phone the nav is a drawer and the page does not scroll sideways", async ({
@@ -195,13 +229,15 @@ test("on a phone the nav is a drawer and the page does not scroll sideways", asy
   const nav = page.getByRole("navigation", { name: "Main" });
   await expect(nav).toBeHidden();
   await expect(open).toHaveAttribute("aria-expanded", "false");
-  // The halt switch stays in the bar at every width, with the short label.
-  await expect(page.getByRole("switch", { name: "Halt all agent runs" })).toBeVisible();
+  // The bar keeps only the dot and the short word; the button waits in the drawer.
   await expect(page.getByText("Running", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stop all agents" })).toBeHidden();
+  await expect(page.getByText("Live", { exact: true })).toBeHidden();
 
   await open.click();
   await expect(nav).toBeVisible();
   await expect(open).toHaveAttribute("aria-expanded", "true");
+  await expect(nav.getByRole("button", { name: "Stop all agents" })).toBeVisible();
   expect(await page.evaluate(() => document.activeElement?.closest("dialog") !== null)).toBe(true);
   await page.keyboard.press("Escape");
   await expect(nav).toBeHidden();
@@ -222,13 +258,13 @@ test("on a phone the nav is a drawer and the page does not scroll sideways", asy
   );
 });
 
-test("the keyboard reaches the skip link, the nav and the halt switch in that order", async ({
+test("the keyboard reaches the skip link, the nav and the stop button in that order", async ({
   page,
   stack,
 }) => {
   await signIn(page, stack, { email: "keys@example.com", name: "Keys", admin: true });
   const seen: string[] = [];
-  for (let i = 0; i < 30 && !seen.includes("Halt all agent runs"); i++) {
+  for (let i = 0; i < 30 && !seen.includes("Stop all agents"); i++) {
     await page.keyboard.press("Tab");
     seen.push(
       await page.evaluate(
@@ -241,8 +277,8 @@ test("the keyboard reaches the skip link, the nav and the halt switch in that or
   }
   expect(seen[0]).toBe("Skip to content");
   expect(seen.indexOf("Board")).toBeGreaterThan(0);
-  expect(seen.indexOf("Board")).toBeLessThan(seen.indexOf("Halt all agent runs"));
-  expect(seen.at(-1)).toBe("Halt all agent runs");
+  expect(seen.indexOf("Board")).toBeLessThan(seen.indexOf("Stop all agents"));
+  expect(seen.at(-1)).toBe("Stop all agents");
   await page.getByRole("link", { name: "Skip to content" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("#content")).toBeFocused();

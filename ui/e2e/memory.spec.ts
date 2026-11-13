@@ -34,8 +34,11 @@ test.describe("memory", () => {
     await signIn(page, stack, ADA);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/#/o/acme/memory");
-    await expect(page.getByText("Select a note to read it.")).toBeVisible();
-    await page.getByRole("button", { name: "New note" }).click();
+    await expect(page.getByText("No notes yet")).toBeVisible();
+    await expect(
+      page.getByText("agents can search and read with the memory tool", { exact: false }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Write the first note" }).click();
     await expect(page.getByLabel("Scope")).toBeFocused();
     await page.getByLabel(/^Name/).fill("how-to/deploy");
     await page.getByLabel("Note text").fill("Run the deploy script.\n\nSee [[Migrations]].");
@@ -62,16 +65,19 @@ test.describe("memory", () => {
     await page.goto("/#/o/acme/memory");
     await expect(page.getByRole("status")).toHaveText("2 notes");
     await page.getByLabel("Search notes").fill("applied");
-    await expect(page.getByRole("status")).toHaveText("1 notes");
+    await expect(page.getByRole("status")).toContainText("Showing 1 of 2 notes · applied");
     await page.getByLabel("Search notes").fill("");
     await expect(page.getByRole("status")).toHaveText("2 notes");
-    const scope = page.getByRole("group", { name: "Scope" });
-    await scope.getByRole("button", { name: /^org/ }).click();
-    await expect(scope.getByRole("button", { name: /^org/ })).toHaveAttribute(
+    const scope = page.getByRole("group", { name: "Applies to" });
+    await scope.getByRole("button", { name: /org/ }).click();
+    await expect(scope.getByRole("button", { name: /org/ })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    await scope.getByRole("button", { name: /^org/ }).click();
+    await expect(scope.getByRole("button", { name: /org/ })).toContainText("✓");
+    await expect(page.getByRole("status")).toContainText("Showing 2 of 2 notes · org");
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await expect(page.getByRole("status")).toHaveText("2 notes");
     await page.getByRole("link", { name: /deploy/ }).click();
     await page.getByRole("button", { name: "migrations" }).click();
     await expect(page.getByRole("heading", { name: "migrations" })).toBeVisible();
@@ -142,8 +148,6 @@ test.describe("memory", () => {
       });
     }, id);
     await page.goto("/#/o/acme/memory/writes");
-    const update = page.locator("summary", { hasText: "update" });
-    await update.click();
     await expect(page.locator(".memory-diff")).toContainText("- one");
     await expect(page.locator(".memory-diff")).toContainText("+ two");
     await page.getByRole("button", { name: "Revert" }).first().click();
@@ -151,7 +155,7 @@ test.describe("memory", () => {
     await page.goto(`/#/o/acme/memory/notes/${id}`);
     await expect(page.locator(".memory-body")).toHaveText("one");
     await page.goto("/#/o/acme/memory/writes");
-    await page.getByLabel("Agent writes only").check();
+    await page.getByLabel("Show only writes by agents").check();
     await expect(page.getByText("No writes yet.")).toBeVisible();
   });
 
@@ -163,10 +167,14 @@ test.describe("memory", () => {
       id,
     );
     await page.goto("/#/o/acme/memory/review");
-    await expect(page.locator(".badge", { hasText: /^pending$/ })).toBeVisible();
+    await expect(page.locator(".badge", { hasText: /^waiting for you$/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reject lesson" })).toHaveAttribute(
+      "data-tone",
+      "secondary",
+    );
     await expect(page.getByText("Task no longer exists")).toBeVisible();
     await page.getByLabel("Reason (optional)").fill("useful");
-    await page.getByRole("button", { name: "Accept" }).click();
+    await page.getByRole("button", { name: "Accept lesson" }).click();
     await expect(page.getByText("No lessons are waiting.")).toBeVisible();
     await page.goto("/#/o/acme/memory/notes");
     await expect(page.getByRole("list", { name: "Notes" })).toContainText("lessons/");
@@ -180,6 +188,61 @@ test.describe("memory", () => {
     await expect(page.getByRole("link", { name: "Notes" })).toBeVisible();
   });
 
+  test("a waiting lesson shows on Notes and as a count on the Review tab", async ({
+    page,
+    stack,
+  }) => {
+    await signIn(page, stack, ADA);
+    const id = await orgId(page, "acme");
+    stack.sql(
+      "INSERT INTO lessons (id, task_id, org_id, author_handle, body, scope, type, confidence, status, created_at) VALUES ('l2', 'gone', ?, 'claude-main', 'Run the linter first.', 'org', 'lesson', 0.9, 'pending', 1700000000000)",
+      id,
+    );
+    await page.goto("/#/o/acme/memory/notes");
+    await expect(page.getByText("1 lesson from an agent is waiting for you")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Review 1" })).toBeVisible();
+    await page.getByRole("link", { name: "Review lessons" }).click();
+    await expect(page).toHaveURL(/#\/o\/acme\/memory\/review$/);
+    await expect(page.getByLabel(/^Lesson text/)).toHaveValue("Run the linter first.");
+    await expect(page.getByRole("button", { name: "Accept lesson" })).toHaveAttribute(
+      "data-tone",
+      "primary",
+    );
+  });
+
+  test("a note shows its history, copies its path and is deleted after a named confirm", async ({
+    page,
+    stack,
+  }) => {
+    await signIn(page, stack, ADA);
+    const id = await makeNote(page, "facts/gone-soon", "short lived");
+    await page.goto(`/#/o/acme/memory/notes/${id}`);
+    await expect(page.getByRole("button", { name: "Copy path" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "History" })).toBeVisible();
+    await expect(page.getByText("not from a run")).toBeVisible();
+    await page.getByRole("button", { name: "Delete note" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText("facts/gone-soon.md");
+    await dialog.getByRole("button", { name: "Delete note" }).click();
+    await expect(page).toHaveURL(/#\/o\/acme\/memory\/notes$/);
+    await expect(page.getByText("No notes yet")).toBeVisible();
+  });
+
+  test("on a phone the filters sit behind a button", async ({ page, stack }) => {
+    await signIn(page, stack, ADA);
+    await makeNote(page, "how-to/a", "x");
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/#/o/acme/memory");
+    await expect(page.getByLabel("Search notes")).toBeVisible();
+    await expect(page.getByRole("group", { name: "Applies to" })).toBeHidden();
+    await page.getByRole("button", { name: "Filters" }).click();
+    await page
+      .getByRole("group", { name: "Applies to" })
+      .getByRole("button", { name: /org/ })
+      .click();
+    await expect(page.getByRole("button", { name: "Filters (1)" })).toBeVisible();
+  });
+
   test("a failed list load shows the error and Retry loads it", async ({ page, stack }) => {
     await signIn(page, stack, ADA);
     let broken = true;
@@ -191,7 +254,7 @@ test.describe("memory", () => {
     await expect(page.getByRole("alert")).toContainText("index is locked");
     broken = false;
     await page.getByRole("button", { name: "Retry" }).click();
-    await expect(page.getByRole("status")).toHaveText("0 notes");
+    await expect(page.getByText("No notes yet")).toBeVisible();
   });
 
   test("a missing note says so, and an unknown org is not found", async ({ page, stack }) => {

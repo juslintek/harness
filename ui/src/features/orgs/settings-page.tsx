@@ -1,103 +1,23 @@
-import { type OrgDetail, orgDetailSchema } from "@shared/orgs";
-import { createSignal, For, type JSX, Show } from "solid-js";
-import { api } from "../../api";
-import { ignored, me } from "../../auth/me";
+import { orgDetailSchema } from "@shared/orgs";
+import { type JSX, Match, Show, Switch } from "solid-js";
+import { me } from "../../auth/me";
 import { createLoad } from "../../load";
-import { createAction } from "../../ui/action";
-import { Button, Field, Panel, State } from "../../ui/primitives";
+import { routeParts } from "../../route";
+import { State, Tabs } from "../../ui/molecules";
 import { BridgeSettings } from "../bridge/bridge-settings";
 import { Members } from "./members";
 import { isAdmin } from "./shared";
 import { Positions, Projects } from "./structure";
+import { Teams } from "./teams";
 import "./settings.css";
 
-function Teams(props: { detail: OrgDetail; onChange: () => void }): JSX.Element {
-  const [name, setName] = createSignal("");
-  const [teamId, setTeamId] = createSignal("");
-  const [memberId, setMemberId] = createSignal("");
-  const create = createAction();
-  const join = createAction();
-  const slug = (): string => props.detail.org.slug;
-  return (
-    <Panel title="Teams">
-      <div class="stack">
-        <Show when={props.detail.teams.length > 0} fallback={<p class="muted">No teams yet.</p>}>
-          <ul class="chips">
-            <For each={props.detail.teams}>{(t) => <li class="chip">{t.name}</li>}</For>
-          </ul>
-        </Show>
-        <Show when={isAdmin(props.detail)}>
-          <form
-            class="form-row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void create.run(async () => {
-                await api(`/api/orgs/${slug()}/teams`, ignored, {
-                  method: "POST",
-                  body: { name: name() },
-                });
-                setName("");
-                props.onChange();
-              });
-            }}
-          >
-            <Field label="New team" error={create.error()}>
-              {(c) => (
-                <input
-                  {...c()}
-                  value={name()}
-                  required
-                  maxLength={80}
-                  onInput={(e) => setName(e.currentTarget.value)}
-                />
-              )}
-            </Field>
-            <Button type="submit" disabled={create.busy()}>
-              Create team
-            </Button>
-          </form>
-          <form
-            class="form-row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void join.run(async () => {
-                await api(`/api/orgs/${slug()}/teams/${teamId()}/members`, ignored, {
-                  method: "POST",
-                  body: { memberId: memberId() },
-                });
-                props.onChange();
-              });
-            }}
-          >
-            <Field label="Team">
-              {(c) => (
-                <select {...c()} required onChange={(e) => setTeamId(e.currentTarget.value)}>
-                  <option value="">Choose…</option>
-                  <For each={props.detail.teams}>
-                    {(t) => <option value={t.id}>{t.name}</option>}
-                  </For>
-                </select>
-              )}
-            </Field>
-            <Field label="Member" error={join.error()}>
-              {(c) => (
-                <select {...c()} required onChange={(e) => setMemberId(e.currentTarget.value)}>
-                  <option value="">Choose…</option>
-                  <For each={props.detail.members}>
-                    {(m) => <option value={m.id}>@{m.handle}</option>}
-                  </For>
-                </select>
-              )}
-            </Field>
-            <Button type="submit" disabled={join.busy()}>
-              Add to team
-            </Button>
-          </form>
-        </Show>
-      </div>
-    </Panel>
-  );
-}
+const SECTIONS = [
+  { key: "members", label: "Members" },
+  { key: "teams", label: "Teams" },
+  { key: "positions", label: "Positions" },
+  { key: "projects", label: "Projects" },
+  { key: "bridges", label: "Bridges" },
+] as const;
 
 export function SettingsPage(props: { slug: string }): JSX.Element {
   const known = (): boolean => me()?.orgs.some((o) => o.slug === props.slug) ?? false;
@@ -122,20 +42,48 @@ function SettingsBody(props: { slug: string }): JSX.Element {
         />
       }
     >
-      {(detail) => (
-        <div class="settings">
-          <h1 class="settings-title">
-            {detail().org.name} <span class="settings-slug">{props.slug}</span>
-          </h1>
-          <Teams detail={detail()} onChange={() => void org.reload()} />
-          <Members detail={detail()} onChange={() => void org.reload()} />
-          <Positions detail={detail()} onChange={() => void org.reload()} />
-          <Projects detail={detail()} onChange={() => void org.reload()} />
-          <Show when={isAdmin(detail())}>
-            <BridgeSettings slug={props.slug} />
-          </Show>
-        </div>
-      )}
+      {(detail) => {
+        const sections = (): (typeof SECTIONS)[number][] =>
+          SECTIONS.filter((x) => x.key !== "bridges" || isAdmin(detail()));
+        const current = (): string => {
+          const asked = routeParts()[3];
+          return sections().find((x) => x.key === asked)?.key ?? "members";
+        };
+        const reload = (): void => void org.reload();
+        return (
+          <div class="settings">
+            <h1 class="settings-title">
+              {detail().org.name} <span class="settings-slug">{props.slug}</span>
+            </h1>
+            <Tabs
+              label="Settings sections"
+              current={current()}
+              items={sections().map((x) => ({
+                key: x.key,
+                label: x.label,
+                href: `#/o/${props.slug}/settings/${x.key}`,
+              }))}
+            />
+            <Switch>
+              <Match when={current() === "members"}>
+                <Members detail={detail()} onChange={reload} />
+              </Match>
+              <Match when={current() === "teams"}>
+                <Teams detail={detail()} onChange={reload} />
+              </Match>
+              <Match when={current() === "positions"}>
+                <Positions detail={detail()} onChange={reload} />
+              </Match>
+              <Match when={current() === "projects"}>
+                <Projects detail={detail()} onChange={reload} />
+              </Match>
+              <Match when={current() === "bridges"}>
+                <BridgeSettings slug={props.slug} />
+              </Match>
+            </Switch>
+          </div>
+        );
+      }}
     </Show>
   );
 }

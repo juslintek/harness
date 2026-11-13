@@ -1,6 +1,3 @@
-import type { RunView } from "@shared/runs";
-import type { Tone } from "../../ui/primitives";
-
 export function fmtTime(ms: number | null): string {
   return ms === null ? "-" : new Date(ms).toLocaleString();
 }
@@ -12,26 +9,14 @@ export function fmtDuration(start: number | null, end: number | null): string {
   return minutes > 0 ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
 }
 
-export const RUN_TONE: Record<RunView["state"], Tone> = {
-  queued: "neutral",
-  starting: "info",
-  running: "info",
-  completed: "success",
-  failed: "danger",
-  blocked: "danger",
-  cancelled: "neutral",
-  killed: "danger",
-};
+// "Today 14:11", or the date for an older run, so a list of runs reads without a year.
+export function fmtStarted(ms: number | null): string | undefined {
+  if (ms === null) return undefined;
+  const at = new Date(ms);
+  const time = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  if (at.toDateString() === new Date().toDateString()) return `Today ${time}`;
+  return `${at.toLocaleDateString([], { month: "short", day: "numeric" })} ${time}`;
+}
 
-export const VERDICT_TONE: Record<string, Tone> = {
-  allow: "success",
-  ask: "warning",
-  deny: "danger",
-};
-
-export const APPROVAL_TONE = {
-  pending: "warning",
-  approved: "success",
-  denied: "danger",
-  expired: "neutral",
-} as const satisfies Record<string, Tone>;
+export const fmtCost = (usd: number | null | undefined): string | undefined =>
+  usd === null || usd === undefined ? undefined : `$${usd.toFixed(2)}`;

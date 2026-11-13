@@ -9,11 +9,19 @@ const STEP_UP_FAILED = "step-up failed";
 export class ApiError extends Error {
   readonly status: number;
   readonly issues: string[];
-  constructor(status: number, message: string, issues: string[] = []) {
+  // Why the server refused, when it says (the guard's 403 on a risky command).
+  readonly reason: string | null;
+  constructor(
+    status: number,
+    message: string,
+    issues: string[] = [],
+    reason: string | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.issues = issues;
+    this.reason = reason;
   }
 }
 
@@ -37,6 +45,11 @@ const send = (path: string, init: ApiInit | undefined): Promise<Response> =>
 
 const errorOf = (body: unknown): string =>
   typeof body === "object" && body !== null && "error" in body ? String(body.error) : "";
+
+const reasonOf = (body: unknown): string | null =>
+  typeof body === "object" && body !== null && "reason" in body && typeof body.reason === "string"
+    ? body.reason
+    : null;
 
 const issuesOf = (body: unknown): string[] =>
   typeof body === "object" && body !== null && "issues" in body && Array.isArray(body.issues)
@@ -78,6 +91,11 @@ export async function api<T>(path: string, schema: z.ZodType<T>, init?: ApiInit)
   }
   if (res.status === 401) sessionLost();
   if (!res.ok)
-    throw new ApiError(res.status, errorOf(body) || `HTTP ${res.status}`, issuesOf(body));
+    throw new ApiError(
+      res.status,
+      errorOf(body) || `HTTP ${res.status}`,
+      issuesOf(body),
+      reasonOf(body),
+    );
   return schema.parse(body);
 }

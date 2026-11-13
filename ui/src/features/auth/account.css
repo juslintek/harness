@@ -84,5 +84,19 @@
 }
 
 .acct-org {
-  max-width: 24rem;
+  margin-block: var(--space-md);
+}
+
+.acct-item .btn {
+  flex: none;
+}
+
+@media (max-width: 39.99rem) {
+  .acct-page {
+    padding: var(--space-md);
+  }
+
+  .acct-item .btn {
+    height: var(--size-control);
+  }
 }

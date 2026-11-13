@@ -32,8 +32,9 @@ async function project(page: Page): Promise<string> {
 const task = async (page: Page, projectId: string, body: object): Promise<Made> =>
   (await call(page, "POST", `/api/projects/${projectId}/tasks`, body)) as Made;
 
+// Columns are named in plain words: "in progress", not "in_progress".
 const column = (page: Page, status: string): Locator =>
-  page.getByRole("region", { name: status, exact: true });
+  page.getByRole("region", { name: status.replace("_", " "), exact: true });
 
 const panel = (page: Page): Locator => page.getByRole("complementary", { name: /^Task #/ });
 
@@ -112,7 +113,9 @@ test("a refused move shows why, in words, and the task stays put", async ({ page
   const waiting = await task(page, id, { title: "Waiting job", status: "todo" });
   await call(page, "POST", `/api/tasks/${waiting.id}/deps`, { dependsOn: blocker.id });
   await open(page, id, waiting.number);
-  await expect(column(page, "todo").getByRole("listitem").nth(1)).toContainText("blocked by 1");
+  await expect(column(page, "todo").getByRole("listitem").nth(1)).toContainText(
+    `Waiting on #${blocker.number}`,
+  );
   const status = panel(page).getByLabel("Status");
   await status.selectOption("in_progress");
   await expect(panel(page).getByRole("alert")).toContainText(`depends on #${blocker.number}`);
@@ -195,11 +198,11 @@ test("the panel edits the task, adds a comment, a dependency and a subtask, and 
   await expect(panel(page).getByText("Part one")).toBeVisible();
   await expect(panel(page)).toContainText("0 of 1 done");
 
-  await panel(page).getByRole("button", { name: "Checkout" }).click();
-  await expect(panel(page)).toContainText("Held by @");
+  await panel(page).getByRole("button", { name: "Take task" }).click();
+  await expect(panel(page)).toContainText("is working on it");
   await expect(column(page, "in_progress")).toContainText("Main job renamed");
-  await panel(page).getByRole("button", { name: "Release" }).click();
-  await expect(panel(page)).not.toContainText("Held by @");
+  await panel(page).getByRole("button", { name: "Let go" }).click();
+  await expect(panel(page)).not.toContainText("is working on it");
 
   await page.getByRole("button", { name: "New task" }).click();
   const dialog = page.getByRole("dialog", { name: "New task" });
@@ -248,9 +251,9 @@ test("on a phone one column shows at a time and the task opens as a sheet", asyn
   // The first column with tasks is the one shown.
   await expect(page.getByText("Backlog job")).toBeVisible();
   await expect(page.getByText("Todo job")).toBeHidden();
-  const chip = page.getByRole("button", { name: /^todo 1$/ });
-  await chip.click();
-  await expect(chip).toHaveAttribute("aria-pressed", "true");
+  const shown = page.locator(".bd-status-select").getByLabel("Status");
+  await shown.selectOption("todo");
+  await expect(shown).toHaveValue("todo");
   await expect(page.getByText("Todo job")).toBeVisible();
   await expect(page.getByText("Backlog job")).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -263,12 +266,135 @@ test("on a phone one column shows at a time and the task opens as a sheet", asyn
   ).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await panel(page).getByLabel("Status").selectOption("in_review");
-  await expect(page.getByRole("button", { name: /^in_review 1$/ })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(shown).toHaveValue("in_review");
   await panel(page).getByRole("link", { name: "Back" }).click();
   await expect(panel(page)).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(`board/${id}$`));
   await expect(page.getByText("Todo job")).toBeVisible();
+});
+
+test("with a task open at 1440 every column stays in view and the page does not scroll sideways", async ({
+  page,
+  stack,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signIn(page, stack, { email: "wide@example.com", name: "Wide" });
+  const id = await project(page);
+  const one = await task(page, id, { title: "Wide job", status: "todo" });
+  await open(page, id);
+  await expect(page.getByText("Scroll sideways for the last columns.")).toBeVisible();
+  await open(page, id, one.number);
+  await expect(panel(page)).toBeVisible();
+  await expect(page.getByText("Scroll sideways for the last columns.")).toHaveCount(0);
+  for (const status of [
+    "backlog",
+    "todo",
+    "in_progress",
+    "in_review",
+    "done",
+    "blocked",
+    "cancelled",
+  ]) {
+    await expect(column(page, status)).toBeInViewport({ ratio: 1 });
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.locator(".bd-board")).toHaveJSProperty("scrollLeft", 0);
+  expect(
+    await page.evaluate(() => {
+      const board = document.querySelector(".bd-board");
+      return board ? board.scrollWidth <= board.clientWidth : false;
+    }),
+  ).toBe(true);
+});
+
+test("filters narrow the board by assignee, holder kind and text", async ({ page, stack }) => {
+  await signIn(page, stack, { email: "filter@example.com", name: "Filter" });
+  const id = await project(page);
+  await task(page, id, { title: "Alpha job" });
+  await task(page, id, { title: "Beta job" });
+  await open(page, id);
+  await page.getByLabel("Filter").fill("beta");
+  await expect(page.getByRole("link", { name: "Beta job" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Alpha job" })).toHaveCount(0);
+  await page.getByLabel("Filter").fill("#1");
+  await expect(page.getByRole("link", { name: "Alpha job" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Beta job" })).toHaveCount(0);
+  await page.getByLabel("Filter").fill("");
+  await page.getByRole("button", { name: "Held by an agent" }).click();
+  await expect(page.getByRole("link", { name: "Alpha job" })).toHaveCount(0);
+  await expect(page.getByLabel("Assignee")).toHaveValue("");
+});
+
+test("an agent working on a task shows on its card and in the panel, and Run now says what happens", async ({
+  page,
+  stack,
+}) => {
+  await signIn(page, stack, { email: "agent@example.com", name: "Agent", admin: true });
+  const id = await project(page);
+  const work = await task(page, id, { title: "Agent job", status: "in_progress" });
+  const org = (await call(page, "GET", "/api/orgs/personal")) as { org: { id: string } };
+  stack.sql(
+    "INSERT INTO members (id, org_id, kind, agent_id, handle, display_name, role, created_at) VALUES ('m-bot', ?, 'agent', 'bot-agent', 'bot', 'Bot', 'member', 1)",
+    org.org.id,
+  );
+  stack.sql(
+    "INSERT INTO wakeups (id, member_id, reason, task_id, status, run_id, created_at, started_at) VALUES ('w1', 'm-bot', 'assignment', ?, 'started', 'r_4f2a9c', ?, ?)",
+    work.id,
+    Date.now() - 480_000,
+    Date.now() - 480_000,
+  );
+  stack.sql(
+    "INSERT INTO wakeups (id, member_id, reason, task_id, status, created_at) VALUES ('w2', 'm-bot', 'run_now', ?, 'pending', ?)",
+    work.id,
+    Date.now(),
+  );
+  await open(page, id);
+  const card = column(page, "in_progress").getByRole("listitem");
+  await expect(card).toContainText("working");
+  await expect(card).toContainText("8m");
+  await expect(card.getByRole("link", { name: "r_4f2a9c" })).toHaveAttribute(
+    "href",
+    "#/runs/r_4f2a9c",
+  );
+  await open(page, id, work.number);
+  const runs = panel(page).getByRole("region", { name: "Runs" });
+  await expect(runs).toContainText("Assigned");
+  await expect(runs.getByRole("link", { name: "r_4f2a9c" })).toBeVisible();
+  await expect(runs).toContainText("no run yet");
+  await expect(runs).toContainText("queued");
+
+  // Run now answers with a wakeup id only, so the notice says what happens and points to Now.
+  await call(page, "PATCH", `/api/tasks/${work.id}`, { assigneeId: "m-bot" });
+  stack.expireStepUp();
+  await panel(page).getByRole("button", { name: "Run now" }).click();
+  const dialog = page.getByRole("dialog", { name: "Confirm it's you" });
+  await dialog.getByRole("button", { name: "Use passkey" }).click();
+  await expect(
+    panel(page).getByRole("status").filter({ hasText: "Asked @bot to run." }),
+  ).toContainText("It starts as soon as a slot is free. Watch it under Now.");
+  await panel(page).getByRole("button", { name: "Open Now" }).click();
+  await expect(page).toHaveURL(/#\/now$/);
+});
+
+test("an empty project offers one New task button", async ({ page, stack }) => {
+  await signIn(page, stack, { email: "empty@example.com", name: "Empty" });
+  const id = await project(page);
+  await open(page, id);
+  await expect(page.getByText("No tasks yet")).toBeVisible();
+  await expect(page.getByRole("button", { name: "New task" })).toHaveCount(1);
+});
+
+test("a deep link opens New task with the title filled in, once", async ({ page, stack }) => {
+  await signIn(page, stack, { email: "link@example.com", name: "Link" });
+  const id = await project(page);
+  await page.goto(`/#/o/personal/board/${id}?new=1&title=Write%20the%20post`);
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await expect(dialog.getByLabel("Title")).toHaveValue("Write the post");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page).toHaveURL(new RegExp(`board/${id}$`));
+  await page.goto(`/#/o/personal/board/${id}?new=0&title=Ignored`);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "New task" })).toBeVisible();
+  await expect(dialog).toBeHidden();
 });

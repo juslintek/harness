@@ -1,7 +1,7 @@
 import type { ChatMember, MessageView } from "@shared/chat";
 import { createSignal, For, type JSX, Show } from "solid-js";
 import { errorText } from "../../format";
-import { Button, StatusBadge } from "../../ui/primitives";
+import { Button, StatusBadge } from "../../ui/atoms";
 import type { History } from "./history";
 
 const TOKEN =
@@ -57,7 +57,7 @@ function MessageText(props: { message: MessageView; ctx: MessageContext }): JSX.
 }
 
 const clock = (ms: number): string =>
-  new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
 export function MessageItem(props: {
   message: MessageView;
@@ -68,6 +68,7 @@ export function MessageItem(props: {
     props.message.replyCount > 0
       ? `${props.message.replyCount} ${props.message.replyCount === 1 ? "reply" : "replies"}`
       : "Reply";
+  // Only an existing thread stays on screen; "Reply" shows on hover or focus, and always on touch.
   return (
     <li class="message">
       <div class="meta">
@@ -82,7 +83,12 @@ export function MessageItem(props: {
       <MessageText message={props.message} ctx={props.ctx} />
       <Show when={props.onOpenThread}>
         {(open) => (
-          <button type="button" class="link" onClick={() => open()(props.message)}>
+          <button
+            type="button"
+            class="link"
+            data-quiet={props.message.replyCount === 0}
+            onClick={() => open()(props.message)}
+          >
             {replies()}
           </button>
         )}

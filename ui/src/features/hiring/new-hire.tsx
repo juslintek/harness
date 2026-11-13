@@ -1,23 +1,29 @@
-import type { RoleSpec } from "@shared/hiring";
+import { type HireView, hireViewSchema, type RoleSpec } from "@shared/hiring";
 import type { OrgDetail } from "@shared/orgs";
 import { type Specialty, specialties, type TaskType, taskTypes } from "@shared/router";
-import { createSignal, For, type JSX } from "solid-js";
+import { createSignal, For, type JSX, Show } from "solid-js";
 import { api } from "../../api";
-import { ignored } from "../../auth/me";
+import { routeQuery } from "../../route";
 import { createAction } from "../../ui/action";
-import { Button, Field, Panel } from "../../ui/primitives";
+import { Button, Help } from "../../ui/atoms";
+import { Field, Notice, Panel } from "../../ui/molecules";
 import { FormError } from "../orgs/shared";
 
 const MAX_TASK_TYPES = 4;
 
+// A deep link can preselect the specialty (#/o/acme/hiring?specialty=writing); anything else is ignored.
+export const specialtyFromLink = (): Specialty | undefined =>
+  specialties.find((s) => s === routeQuery().get("specialty"));
+
 export function NewHire(props: { detail: OrgDetail; onFiled: () => void }): JSX.Element {
   const [teamId, setTeamId] = createSignal(props.detail.teams[0]?.id ?? "");
   const [title, setTitle] = createSignal("");
-  const [specialty, setSpecialty] = createSignal<Specialty>("backend");
+  const [specialty, setSpecialty] = createSignal<Specialty>(specialtyFromLink() ?? "backend");
   const [maxCandidates, setMaxCandidates] = createSignal(2);
   const [summary, setSummary] = createSignal("");
   const [mustHave, setMustHave] = createSignal("");
   const [types, setTypes] = createSignal<TaskType[]>(["feature"]);
+  const [filed, setFiled] = createSignal<HireView | null>(null);
   const action = createAction();
   const toggle = (t: TaskType, on: boolean): void => {
     setTypes(on ? [...types(), t] : types().filter((x) => x !== t));
@@ -35,10 +41,11 @@ export function NewHire(props: { detail: OrgDetail; onFiled: () => void }): JSX.
       taskTypes: types(),
     };
     void action.run(async () => {
-      await api(`/api/orgs/${props.detail.org.slug}/hires`, ignored, {
+      const hire = await api(`/api/orgs/${props.detail.org.slug}/hires`, hireViewSchema, {
         method: "POST",
         body: { teamId: teamId(), spec, maxCandidates: maxCandidates() },
       });
+      setFiled(hire);
       setTitle("");
       setSummary("");
       setMustHave("");
@@ -48,6 +55,11 @@ export function NewHire(props: { detail: OrgDetail; onFiled: () => void }): JSX.
   return (
     <Panel title="New hire">
       <form class="stack" onSubmit={submit}>
+        <Show when={props.detail.teams.length === 0}>
+          <Notice tone="warning" standing>
+            This organisation has no team yet. Create a team in Settings first.
+          </Notice>
+        </Show>
         <div class="form-row">
           <Field label="Team">
             {(c) => (
@@ -62,7 +74,7 @@ export function NewHire(props: { detail: OrgDetail; onFiled: () => void }): JSX.
               </select>
             )}
           </Field>
-          <Field label="Title">
+          <Field label="Role title">
             {(c) => (
               <input
                 {...c()}
@@ -86,7 +98,7 @@ export function NewHire(props: { detail: OrgDetail; onFiled: () => void }): JSX.
               </select>
             )}
           </Field>
-          <Field label="Candidates">
+          <Field label="Candidates to interview">
             {(c) => (
               <select {...c()} onChange={(e) => setMaxCandidates(Number(e.currentTarget.value))}>
                 <For each={[1, 2, 3]}>
@@ -100,7 +112,7 @@ export function NewHire(props: { detail: OrgDetail; onFiled: () => void }): JSX.
             )}
           </Field>
         </div>
-        <Field label="Summary">
+        <Field label="What the role does">
           {(c) => (
             <textarea
               {...c()}
@@ -112,7 +124,7 @@ export function NewHire(props: { detail: OrgDetail; onFiled: () => void }): JSX.
             />
           )}
         </Field>
-        <Field label="Must-haves (one per line, up to 6)">
+        <Field label="Must-haves, one per line, up to 6">
           {(c) => (
             <textarea
               {...c()}
@@ -123,7 +135,7 @@ export function NewHire(props: { detail: OrgDetail; onFiled: () => void }): JSX.
           )}
         </Field>
         <fieldset class="checks">
-          <legend class="sub-title">Task types (1 to {MAX_TASK_TYPES})</legend>
+          <legend class="sub-title">Task types, 1 to {MAX_TASK_TYPES}</legend>
           <For each={taskTypes}>
             {(t) => (
               <label class="check">
@@ -138,7 +150,13 @@ export function NewHire(props: { detail: OrgDetail; onFiled: () => void }): JSX.
             )}
           </For>
         </fieldset>
-        <div>
+        <Notice tone="info" title="After you file the request">
+          Harness picks up to {maxCandidates()} candidate runtimes that your Allowed runtimes policy
+          permits. Each one is interviewed in a real agent run charged to you. Team agents may ask
+          follow-ups, reviewers score the candidates, and then you decide. The request shows under
+          Requests with its step.
+        </Notice>
+        <div class="form-row form-submit">
           <Button
             type="submit"
             tone="primary"
@@ -146,8 +164,22 @@ export function NewHire(props: { detail: OrgDetail; onFiled: () => void }): JSX.
           >
             File request
           </Button>
+          <Help>
+            Limits: one open request per team, 3 per organisation in 24 hours. A paused budget of
+            yours blocks new requests.
+          </Help>
         </div>
         <FormError message={action.error()} />
+        <Show when={filed()}>
+          {(hire) => (
+            <Notice tone="success" title="Request filed">
+              <a class="hire-link" href={`#/o/${props.detail.org.slug}/hiring/${hire().id}`}>
+                Open {hire().spec.title}
+              </a>{" "}
+              to follow it.
+            </Notice>
+          )}
+        </Show>
       </form>
     </Panel>
   );

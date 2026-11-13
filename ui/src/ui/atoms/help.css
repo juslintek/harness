@@ -1,0 +1,10 @@
+.help {
+  max-width: 640px;
+  margin: 0;
+  color: var(--color-ink-muted);
+  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
+}
+
+.help[data-size="small"] {
+  font: 400 var(--text-caption) / var(--leading-caption) var(--font-body);
+}

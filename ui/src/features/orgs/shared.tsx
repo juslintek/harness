@@ -1,4 +1,4 @@
-import type { OrgDetail } from "@shared/orgs";
+import type { OrgDetail, Role } from "@shared/orgs";
 import type { JSX } from "solid-js";
 import { Show } from "solid-js";
 
@@ -16,3 +16,5 @@ export function FormError(props: { message: string | null }): JSX.Element {
     </Show>
   );
 }
+
+export const ROLES: Role[] = ["owner", "admin", "member", "viewer"];

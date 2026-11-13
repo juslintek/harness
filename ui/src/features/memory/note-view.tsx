@@ -2,19 +2,26 @@ import { type NoteView as Note, noteSummarySchema, noteViewSchema } from "@share
 import type { OrgDetail } from "@shared/orgs";
 import { createSignal, For, type JSX, onMount, Show } from "solid-js";
 import { ApiError, api } from "../../api";
-import { errorText } from "../../format";
+import { ignored } from "../../auth/me";
+import { errorText, minuteStamp } from "../../format";
 import { createLoad } from "../../load";
 import { createTopic } from "../../realtime";
-import { Button, Panel, State, StatusBadge } from "../../ui/primitives";
+import { createAction } from "../../ui/action";
+import { Button, CopyButton, StatusBadge } from "../../ui/atoms";
+import { ConfirmDialog, Panel, State } from "../../ui/molecules";
 import {
   isMemoryMessage,
+  kindWord,
   memoryBase,
   noteListSchema,
   notesHash,
+  scopeWord,
   shownPath,
   splitLinks,
 } from "./memory-data";
+import { MemoryError } from "./memory-error";
 import { EditNote } from "./note-editor";
+import { NoteHistory } from "./note-history";
 
 function Body(props: { slug: string; id: string; text: string }): JSX.Element {
   const [missing, setMissing] = createSignal<string | null>(null);
@@ -47,13 +54,7 @@ function Body(props: { slug: string; id: string; text: string }): JSX.Element {
           }
         </For>
       </pre>
-      <Show when={missing()}>
-        {(message) => (
-          <p class="memory-error" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
+      <MemoryError message={missing()} />
     </>
   );
 }
@@ -61,6 +62,8 @@ function Body(props: { slug: string; id: string; text: string }): JSX.Element {
 export function NoteView(props: { detail: OrgDetail; id: string; topic: string }): JSX.Element {
   const slug = props.detail.org.slug;
   const [editing, setEditing] = createSignal(false);
+  const [deleting, setDeleting] = createSignal(false);
+  const removal = createAction();
   const [note, setNote] = createSignal<Note>();
   const [failure, setFailure] = createSignal<{ message: string; status: number | null } | null>(
     null,
@@ -97,6 +100,19 @@ export function NoteView(props: { detail: OrgDetail; id: string; topic: string }
   );
   // Only a 404 means the note was deleted; a timeout or 500 must not make a note vanish.
   const shown = (): Note | undefined => (failure()?.status === 404 ? undefined : note());
+  const remove = (n: Note): void => {
+    setDeleting(false);
+    void removal.run(async () => {
+      await api(
+        `${memoryBase(slug)}/notes/${n.id}?baseHash=${encodeURIComponent(n.hash)}`,
+        ignored,
+        {
+          method: "DELETE",
+        },
+      );
+      location.hash = notesHash(slug);
+    });
+  };
   let root!: HTMLDivElement;
   // On a phone the list is stacked above the note, so a tapped note would open off screen.
   onMount(() => root.scrollIntoView({ block: "nearest" }));
@@ -124,11 +140,19 @@ export function NoteView(props: { detail: OrgDetail; id: string; topic: string }
           <Panel
             title={n().title}
             actions={
-              <Show when={n().canWrite && !editing()}>
-                <Button size="sm" onClick={() => setEditing(true)}>
-                  Edit
-                </Button>
-              </Show>
+              <>
+                <Show when={n().canWrite && !editing()}>
+                  <Button size="sm" onClick={() => setEditing(true)}>
+                    Edit
+                  </Button>
+                </Show>
+                <CopyButton text={shownPath(n().path)} label="Copy path" />
+                <Show when={n().canWrite && !editing()}>
+                  <Button size="sm" tone="danger-quiet" onClick={() => setDeleting(true)}>
+                    Delete note
+                  </Button>
+                </Show>
+              </>
             }
           >
             <div class="memory-stack">
@@ -141,9 +165,11 @@ export function NoteView(props: { detail: OrgDetail; id: string; topic: string }
                 </p>
               </Show>
               <p class="memory-meta">
-                <span class="memory-line">{shownPath(n().path)}</span> · <span>{n().scope}</span> ·{" "}
-                <StatusBadge tone="neutral" value={n().type} /> · <span>{n().sourceAgent}</span> ·{" "}
-                <span>updated {n().updated}</span>
+                <span class="memory-line">{shownPath(n().path)}</span> ·{" "}
+                <span>applies to the {scopeWord(n().scope)}</span> ·{" "}
+                <StatusBadge tone="neutral" value={kindWord(n().type)} /> ·{" "}
+                <span>written by {n().sourceAgent}</span> ·{" "}
+                <span>updated {minuteStamp(n().updated).slice(0, 10)}</span>
               </p>
               <Show when={n().tags.length > 0}>
                 <p class="memory-meta">Tags: {n().tags.join(", ")}</p>
@@ -159,7 +185,19 @@ export function NoteView(props: { detail: OrgDetail; id: string; topic: string }
                   }}
                 />
               </Show>
-              <h3 class="memory-h">Backlinks</h3>
+              <MemoryError message={removal.error()} />
+              <ConfirmDialog
+                open={deleting()}
+                title="Delete this note?"
+                message={`"${n().title}" (${shownPath(n().path)}) is removed for everyone and agents can no longer read it.`}
+                confirm="Delete note"
+                onConfirm={() => remove(n())}
+                onClose={() => setDeleting(false)}
+              />
+              <Show when={n().canWrite}>
+                <NoteHistory slug={slug} noteId={n().id} topic={props.topic} />
+              </Show>
+              <h3 class="memory-h">Linked from</h3>
               <Show when={links.data()?.length === 0}>
                 <p class="memory-meta">No other note links here.</p>
               </Show>

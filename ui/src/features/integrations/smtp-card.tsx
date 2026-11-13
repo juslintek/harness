@@ -1,10 +1,11 @@
-import { createSignal, type JSX } from "solid-js";
+import { createSignal, type JSX, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { api } from "../../api";
 import { ErrorLine } from "../../auth/error-line";
-import { ignored } from "../../auth/me";
+import { ignored, me } from "../../auth/me";
 import { createAction } from "../../ui/action";
-import { Button, Field, Panel } from "../../ui/primitives";
+import { Button, Help, StatusBadge } from "../../ui/atoms";
+import { Field, Notice, Panel } from "../../ui/molecules";
 
 type Security = "starttls" | "tls" | "none";
 
@@ -37,7 +38,10 @@ export function SmtpCard(): JSX.Element {
     from: "",
     password: "",
   });
-  const [notice, setNotice] = createSignal<string | null>(null);
+  const [notice, setNotice] = createSignal<{ title: string; body: string } | null>(null);
+  const [tested, setTested] = createSignal<"not tested" | "test sent" | "test failed">(
+    "not tested",
+  );
   const action = createAction();
   const save = (e: SubmitEvent): void => {
     e.preventDefault();
@@ -45,22 +49,50 @@ export function SmtpCard(): JSX.Element {
       setNotice(null);
       await api("/api/notify/email/config", ignored, { method: "PUT", body: smtpBody(form) });
       setForm("password", "");
-      setNotice("Saved. The password is stored on the server and is never shown again.");
+      setNotice({
+        title: "Saved.",
+        body: "The password is stored on the server and is never shown again.",
+      });
     });
   };
   const test = (): void => {
     void action.run(async () => {
       setNotice(null);
-      await api("/api/notify/email/test", ignored, { method: "POST", body: {} });
-      setNotice("Test mail sent to your own address.");
+      try {
+        await api("/api/notify/email/test", ignored, { method: "POST", body: {} });
+      } catch (err) {
+        setTested("test failed");
+        throw err;
+      }
+      setTested("test sent");
+      setNotice({
+        title: `Test mail sent to ${me()?.user.email ?? "your own address"}`,
+        body: "Check that inbox. If it does not arrive, check the host, port and security above and send again.",
+      });
     });
   };
   return (
-    <Panel title="Email (SMTP)">
+    <Panel
+      title="Email (SMTP)"
+      actions={
+        <StatusBadge
+          tone={
+            tested() === "test sent" ? "success" : tested() === "test failed" ? "danger" : "neutral"
+          }
+          value={tested()}
+        />
+      }
+    >
       <form class="int-stack" onSubmit={save}>
-        <p class="int-hint">
-          Saving replaces the stored settings, so fill every field. The password field only writes.
-        </p>
+        <Help small>
+          Harness sends sign-in codes and email notifications through this mail server. Without it,
+          those emails do not go out.
+        </Help>
+        <Help small>
+          Saving replaces the stored host, port, security, user and sender, so fill all of them.
+          Leave Password empty to keep the stored password. Harness does not show the stored
+          settings.
+        </Help>
         <div class="int-grid">
           <Field label="Host">
             {(control) => (
@@ -112,7 +144,7 @@ export function SmtpCard(): JSX.Element {
               />
             )}
           </Field>
-          <Field label="Password (write only)">
+          <Field label="Password">
             {(control) => (
               <input
                 {...control()}
@@ -147,9 +179,13 @@ export function SmtpCard(): JSX.Element {
           </Button>
         </div>
         <ErrorLine message={action.error()} />
-        <p class="int-notice" role="status">
-          {notice()}
-        </p>
+        <Show when={notice()}>
+          {(text) => (
+            <Notice tone="success" title={text().title}>
+              {text().body}
+            </Notice>
+          )}
+        </Show>
       </form>
     </Panel>
   );

@@ -4,7 +4,8 @@ import { createSignal, For, type JSX, onMount, type ParentProps, Show } from "so
 import { ApiError, api } from "../../api";
 import { me } from "../../auth/me";
 import { createAction } from "../../ui/action";
-import { Button, Field, Panel } from "../../ui/primitives";
+import { Button } from "../../ui/atoms";
+import { Field, Panel } from "../../ui/molecules";
 import {
   keptAfterReload,
   mayDiscard,

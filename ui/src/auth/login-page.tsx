@@ -1,7 +1,9 @@
-import { createSignal, type JSX, Show } from "solid-js";
+import { createSignal, type JSX, Match, Show, Switch } from "solid-js";
 import { ApiError, api } from "../api";
-import { Button, Field } from "../ui/primitives";
+import { Button } from "../ui/atoms";
+import { Field, Notice } from "../ui/molecules";
 import "./auth.css";
+import { AuthHead } from "./auth-head";
 import { type Action, createAction } from "./create-action";
 import { ErrorLine } from "./error-line";
 import { ignored, leaveLogin } from "./me";
@@ -21,7 +23,9 @@ async function codeCall(action: Action, wrong: string, call: () => Promise<void>
   });
 }
 
-function PasskeyLogin(props: { action: Action }): JSX.Element {
+type View = "passkey" | "email" | "recovery";
+
+function PasskeyLogin(props: { action: Action; go: (view: View) => void }): JSX.Element {
   const signIn = (): Promise<void> =>
     props.action.run(async () => {
       const options = await api("/api/auth/login/options", requestChallengeSchema, post({}));
@@ -34,20 +38,48 @@ function PasskeyLogin(props: { action: Action }): JSX.Element {
       await leaveLogin();
     });
   return (
-    <Button tone="primary" class="wide" disabled={props.action.busy()} onClick={signIn}>
-      Sign in with a passkey
-    </Button>
+    <>
+      <Button tone="primary" class="wide" disabled={props.action.busy()} onClick={signIn}>
+        Sign in with a passkey
+      </Button>
+      <div class="auth-links">
+        <p class="auth-note">No passkey on this device?</p>
+        <Button size="sm" tone="ghost" onClick={() => props.go("email")}>
+          Use an email code instead
+        </Button>
+        <Button size="sm" tone="ghost" onClick={() => props.go("recovery")}>
+          Lost your passkey? Use a recovery code
+        </Button>
+      </div>
+    </>
   );
 }
 
 const CODE_WRONG = "That code is wrong or has expired. Request a new one.";
 
+function EmailField(props: { value: string; onInput: (v: string) => void }): JSX.Element {
+  return (
+    <Field label="Email">
+      {(control) => (
+        <input
+          {...control()}
+          type="email"
+          required
+          autocomplete="email"
+          value={props.value}
+          onInput={(e) => props.onInput(e.currentTarget.value)}
+        />
+      )}
+    </Field>
+  );
+}
+
 function EmailLogin(props: { action: Action }): JSX.Element {
   const [email, setEmail] = createSignal("");
   const [code, setCode] = createSignal("");
   const [sent, setSent] = createSignal(false);
-  const request = (e: SubmitEvent): void => {
-    e.preventDefault();
+  const request = (e?: SubmitEvent): void => {
+    e?.preventDefault();
     void props.action.run(async () => {
       await api("/api/auth/email/request", ignored, post({ email: email() }));
       setCode("");
@@ -62,54 +94,52 @@ function EmailLogin(props: { action: Action }): JSX.Element {
     });
   };
   return (
-    <>
-      <form class="auth-form" onSubmit={request} aria-label="Sign in by email code">
-        <Field label="Email">
+    <Show
+      when={sent()}
+      fallback={
+        <form class="auth-form" onSubmit={request} aria-label="Sign in by email code">
+          <EmailField value={email()} onInput={setEmail} />
+          <Button type="submit" tone="primary" class="wide" disabled={props.action.busy()}>
+            Send code
+          </Button>
+        </form>
+      }
+    >
+      <form class="auth-form" onSubmit={verify} aria-label="Enter email code">
+        <Notice tone="info" title={`Code sent to ${email()}`}>
+          Check spam if it is not there in a minute. The code is valid for 10 minutes. Until mail is
+          set up, the code is printed in the harness console.
+        </Notice>
+        <Field label="Code from email">
           {(control) => (
             <input
               {...control()}
-              type="email"
+              class="mono"
               required
-              autocomplete="email"
-              value={email()}
-              onInput={(e) => setEmail(e.currentTarget.value)}
+              autocomplete="one-time-code"
+              inputMode="numeric"
+              value={code()}
+              onInput={(e) => setCode(e.currentTarget.value)}
             />
           )}
         </Field>
-        <Button type="submit" class="wide" disabled={props.action.busy()}>
-          Send code
+        <Button type="submit" tone="primary" class="wide" disabled={props.action.busy()}>
+          Sign in with code
+        </Button>
+        <Button
+          tone="secondary"
+          class="wide"
+          disabled={props.action.busy()}
+          onClick={() => request()}
+        >
+          Request a new code
         </Button>
       </form>
-      <Show when={sent()}>
-        <form class="auth-form" onSubmit={verify} aria-label="Enter email code">
-          <p class="auth-note" role="status">
-            Code sent. It is printed in the harness console until mail is configured. It is valid
-            for 10 minutes, and you can request 3 codes every 15 minutes.
-          </p>
-          <Field label="Code from email">
-            {(control) => (
-              <input
-                {...control()}
-                class="mono"
-                required
-                autocomplete="one-time-code"
-                inputMode="numeric"
-                value={code()}
-                onInput={(e) => setCode(e.currentTarget.value)}
-              />
-            )}
-          </Field>
-          <Button type="submit" class="wide" disabled={props.action.busy()}>
-            Sign in with code
-          </Button>
-        </form>
-      </Show>
-    </>
+    </Show>
   );
 }
 
 function RecoveryLogin(props: { action: Action }): JSX.Element {
-  const [open, setOpen] = createSignal(false);
   const [email, setEmail] = createSignal("");
   const [code, setCode] = createSignal("");
   const submit = (e: SubmitEvent): void => {
@@ -120,71 +150,65 @@ function RecoveryLogin(props: { action: Action }): JSX.Element {
     });
   };
   return (
-    <div class="auth-lost">
-      <div class="auth-lost-row">
-        <span>Lost your passkey?</span>
-        <Button size="sm" tone="ghost" aria-expanded={open()} onClick={() => setOpen(!open())}>
-          {open() ? "Hide" : "Use a recovery code"}
-        </Button>
-      </div>
-      <Show when={open()}>
-        <form class="auth-form" onSubmit={submit} aria-label="Sign in by recovery code">
-          <Field label="Email">
-            {(control) => (
-              <input
-                {...control()}
-                type="email"
-                required
-                autocomplete="email"
-                value={email()}
-                onInput={(e) => setEmail(e.currentTarget.value)}
-              />
-            )}
-          </Field>
-          <Field label="Recovery code">
-            {(control) => (
-              <input
-                {...control()}
-                class="mono"
-                required
-                autocomplete="off"
-                placeholder="xxxx-xxxx-xxxx"
-                value={code()}
-                onInput={(e) => setCode(e.currentTarget.value)}
-              />
-            )}
-          </Field>
-          <Button type="submit" class="wide" disabled={props.action.busy()}>
-            Sign in with recovery code
-          </Button>
-          <p class="auth-note">
-            Each recovery code works once. After signing in you can add a new passkey in Account.
-          </p>
-        </form>
-      </Show>
-    </div>
+    <form class="auth-form" onSubmit={submit} aria-label="Sign in by recovery code">
+      <EmailField value={email()} onInput={setEmail} />
+      <Field label="Recovery code">
+        {(control) => (
+          <input
+            {...control()}
+            class="mono"
+            required
+            autocomplete="off"
+            placeholder="xxxx-xxxx-xxxx"
+            value={code()}
+            onInput={(e) => setCode(e.currentTarget.value)}
+          />
+        )}
+      </Field>
+      <Button type="submit" tone="primary" class="wide" disabled={props.action.busy()}>
+        Sign in with recovery code
+      </Button>
+      <p class="auth-note">
+        Each recovery code works once. After signing in you can add a new passkey in Account.
+      </p>
+    </form>
   );
 }
 
 export function LoginPage(): JSX.Element {
   const action = createAction();
+  const [view, setView] = createSignal<View>("passkey");
   return (
     <div class="auth-screen">
       <div class="auth-card">
-        <div class="auth-head">
-          <span class="auth-brand">Harness</span>
-          <h1>Sign in</h1>
-        </div>
+        <AuthHead
+          title="Sign in"
+          sub={
+            <>
+              to <code>{location.host}</code>
+            </>
+          }
+        />
         <ErrorLine message={action.error()} />
-        <PasskeyLogin action={action} />
-        <div class="auth-divider" aria-hidden="true">
-          or
-        </div>
-        <EmailLogin action={action} />
-        <RecoveryLogin action={action} />
+        <Switch>
+          <Match when={view() === "passkey"}>
+            <PasskeyLogin action={action} go={setView} />
+          </Match>
+          <Match when={view() === "email"}>
+            <EmailLogin action={action} />
+          </Match>
+          <Match when={view() === "recovery"}>
+            <RecoveryLogin action={action} />
+          </Match>
+        </Switch>
+        <Show when={view() !== "passkey"}>
+          <Button size="sm" tone="ghost" onClick={() => setView("passkey")}>
+            Back to passkey
+          </Button>
+        </Show>
       </div>
       <p class="auth-note">
-        New here? Accounts are created from an enrollment link an admin sends you.
+        New here? An admin sends you an enrolment link. Open it to create your account.
       </p>
     </div>
   );

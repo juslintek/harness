@@ -68,6 +68,14 @@
 
   --shadow-card: none;
   --shadow-overlay: 0 8px 24px rgba(22, 25, 29, 0.14);
+
+  /* Layout sizes, shared by the app and the design files */
+  --size-sidebar: 240px;
+  --size-topbar: 48px;
+  --size-control: 32px;
+  --size-control-sm: 28px;
+  --size-row: 36px;
+  --size-dialog: 480px;
 }
 
 /* recto:design-system dark */

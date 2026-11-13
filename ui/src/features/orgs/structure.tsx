@@ -3,8 +3,8 @@ import { createSignal, For, type JSX, Show } from "solid-js";
 import { api } from "../../api";
 import { ignored } from "../../auth/me";
 import { createAction } from "../../ui/action";
-import { TableBox } from "../../ui/data-table";
-import { Button, Dialog, Field, Panel, StatusBadge } from "../../ui/primitives";
+import { Button, StatusBadge } from "../../ui/atoms";
+import { Dialog, Field, Panel, TableBox } from "../../ui/molecules";
 import { FormError, isAdmin } from "./shared";
 
 function Node(props: {
@@ -288,7 +288,7 @@ export function Projects(props: { detail: OrgDetail; onChange: () => void }): JS
                       <span class="mono">{p.key}</span> {p.name}
                     </a>
                   </th>
-                  <td class="mono">{p.repo ?? "no repo"}</td>
+                  <td class="settings-id">{p.repo ?? "no repo"}</td>
                   <td>
                     <Show when={p.orgId !== props.detail.org.id}>
                       <StatusBadge tone="neutral" value="shared with this org" />

@@ -3,10 +3,13 @@ import type { OrgDetail } from "@shared/orgs";
 import { createSignal, For, type JSX, Show } from "solid-js";
 import { api } from "../../api";
 import { ignored } from "../../auth/me";
-import { createLoad } from "../../load";
+import { minuteStamp } from "../../format";
+import type { Load } from "../../load";
 import { createAction } from "../../ui/action";
-import { Button, Field, State, StatusBadge } from "../../ui/primitives";
-import { isMemoryMessage, lessonListSchema, memoryBase } from "./memory-data";
+import { Button, StatusBadge } from "../../ui/atoms";
+import { Field, Panel, State } from "../../ui/molecules";
+import { kindWord, memoryBase, scopeWord } from "./memory-data";
+import { MemoryError } from "./memory-error";
 
 function Lesson(props: {
   detail: OrgDetail;
@@ -29,55 +32,65 @@ function Lesson(props: {
   };
   const author = (): string => props.lesson.authorHandle;
   return (
-    <li class="memory-card">
-      <p class="memory-meta">
-        <StatusBadge tone="warning" value={props.lesson.status} />
-        <span>
-          {author()}, {new Date(props.lesson.createdAt).toLocaleString()}, proposed as{" "}
-          {props.lesson.scope} / {props.lesson.type}
-        </span>
-        {" · "}
-        <Show when={props.lesson.task} fallback="Task no longer exists">
-          {(task) => (
-            <a href={`#/o/${props.detail.org.slug}/board/${task().projectId}/${task().number}`}>
-              Task #{task().number} {task().title}
-            </a>
-          )}
-        </Show>
-      </p>
-      <Field label={`Lesson text from ${author()}`}>
-        {(c) => (
-          <textarea
-            {...c()}
-            rows={5}
-            readOnly={!props.admin}
-            value={body()}
-            onInput={(e) => setBody(e.currentTarget.value)}
-          />
-        )}
-      </Field>
-      <Show when={props.admin}>
-        <div class="memory-actions">
-          <Field label="Reason (optional)">
+    <li>
+      <Panel title={`Lesson from ${author()}`}>
+        <div class="memory-stack">
+          <p class="memory-meta">
+            <StatusBadge tone="warning" value="waiting for you" />
+            <span>
+              proposed by {author()} · {minuteStamp(props.lesson.createdAt)}
+            </span>
+            <span>
+              will be saved as a <b>{kindWord(props.lesson.type)}</b> for the{" "}
+              <b>{scopeWord(props.lesson.scope)}</b>
+            </span>
+            <Show when={props.lesson.task} fallback={<span>Task no longer exists</span>}>
+              {(task) => (
+                <a href={`#/o/${props.detail.org.slug}/board/${task().projectId}/${task().number}`}>
+                  Task #{task().number} {task().title}
+                </a>
+              )}
+            </Show>
+          </p>
+          <Field
+            label={
+              props.admin
+                ? "Lesson text. You can edit it before you accept."
+                : `Lesson text from ${author()}`
+            }
+          >
             {(c) => (
-              <input {...c()} value={reason()} onInput={(e) => setReason(e.currentTarget.value)} />
+              <textarea
+                {...c()}
+                rows={3}
+                readOnly={!props.admin}
+                value={body()}
+                onInput={(e) => setBody(e.currentTarget.value)}
+              />
             )}
           </Field>
-          <Button tone="primary" disabled={action.busy()} onClick={() => decide("accept")}>
-            Accept
-          </Button>
-          <Button tone="danger" disabled={action.busy()} onClick={() => decide("reject")}>
-            Reject
-          </Button>
+          <Show when={props.admin}>
+            <Field label="Reason (optional)">
+              {(c) => (
+                <input
+                  {...c()}
+                  value={reason()}
+                  onInput={(e) => setReason(e.currentTarget.value)}
+                />
+              )}
+            </Field>
+            <div class="memory-actions">
+              <Button tone="primary" disabled={action.busy()} onClick={() => decide("accept")}>
+                Accept lesson
+              </Button>
+              <Button disabled={action.busy()} onClick={() => decide("reject")}>
+                Reject lesson
+              </Button>
+            </div>
+          </Show>
+          <MemoryError message={action.error()} />
         </div>
-      </Show>
-      <Show when={action.error()}>
-        {(message) => (
-          <p class="memory-error" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
+      </Panel>
     </li>
   );
 }
@@ -85,14 +98,9 @@ function Lesson(props: {
 export function LessonsPanel(props: {
   detail: OrgDetail;
   admin: boolean;
-  topic: string;
+  list: Load<LessonView[]>;
 }): JSX.Element {
-  const list = createLoad(
-    () => `${memoryBase(props.detail.org.slug)}/lessons?status=pending`,
-    lessonListSchema,
-    [props.topic],
-    isMemoryMessage,
-  );
+  const list = props.list;
   return (
     <section class="memory-stack" aria-label="Lessons waiting for review">
       <Show when={!props.admin}>
@@ -102,7 +110,10 @@ export function LessonsPanel(props: {
         {(message) => <State kind="error" message={message()} onRetry={() => void list.reload()} />}
       </Show>
       <Show when={list.data()?.length === 0}>
-        <State kind="empty" message="No lessons are waiting." />
+        <State
+          kind="empty"
+          message="No lessons are waiting. When an agent finishes a task it can propose short lessons here."
+        />
       </Show>
       <ul class="memory-plain">
         <For each={list.data()}>

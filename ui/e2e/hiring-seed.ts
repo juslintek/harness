@@ -74,7 +74,7 @@ export async function seedHires(page: Page, stack: Stack): Promise<Seeded> {
       request,
       profileId,
       status,
-      8.4,
+      4.2,
     );
 
   profile("pf1", "claude", "opus", true);

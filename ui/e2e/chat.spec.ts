@@ -47,6 +47,13 @@ test("Enter sends, Shift+Enter keeps a newline, and a thread takes replies", asy
   await expect(list).toContainText("second line");
   await expect(composer(page)).toHaveValue("");
 
+  await expect(
+    page.getByText("Enter to send · Shift+Enter for a new line · @ to ask an agent"),
+  ).toBeVisible();
+  // A message with no replies shows "Reply" only on hover or focus.
+  await expect(list.getByRole("button", { name: "Reply" }).first()).toHaveCSS("opacity", "0");
+  await list.getByRole("listitem").first().hover();
+  await expect(list.getByRole("button", { name: "Reply" }).first()).toHaveCSS("opacity", "1");
   await list.getByRole("button", { name: "Reply" }).click();
   const thread = page.getByRole("complementary", { name: "Thread" });
   await thread.getByRole("textbox", { name: "Reply in thread" }).fill("a reply");
@@ -188,4 +195,46 @@ test("on a phone the channel list and the conversation are separate views", asyn
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
+});
+
+test("a started wakeup shows a strip under the header, and an agent DM says agent", async ({
+  page,
+  stack,
+}) => {
+  await signIn(page, stack, { ...who, admin: true });
+  const org = (await call(page, "GET", "/api/orgs/personal")) as { org: { id: string } };
+  stack.sql(
+    "INSERT INTO members (id, org_id, kind, agent_id, handle, display_name, role, created_at) VALUES ('m-bot', ?, 'agent', 'bot-agent', 'bot', 'Bot', 'member', 1)",
+    org.org.id,
+  );
+  await page.goto("/#/o/personal/chat");
+  const channels = (await call(page, "GET", "/api/orgs/personal/channels")) as {
+    id: string;
+    kind: string;
+  }[];
+  const channel = channels.find((c) => c.kind === "org")?.id;
+  stack.sql(
+    "INSERT INTO wakeups (id, member_id, reason, channel_id, status, run_id, created_at, started_at) VALUES ('w1', 'm-bot', 'mention', ?, 'started', 'r_4f2a9c', ?, ?)",
+    channel ?? "",
+    Date.now() - 420_000,
+    Date.now() - 420_000,
+  );
+  await page.goto(`/#/o/personal/chat/${channel}`);
+  await page.reload();
+  const strip = page.locator(".working-strip");
+  await expect(strip).toContainText("bot is working");
+  await expect(strip).toContainText("7 min");
+  await expect(strip.getByRole("link", { name: "r_4f2a9c" })).toHaveAttribute(
+    "href",
+    "#/runs/r_4f2a9c",
+  );
+  await page.getByRole("button", { name: "New DM" }).click();
+  const dialog = page.getByRole("dialog", { name: "New direct message" });
+  await dialog.getByLabel(/Bot/).check();
+  await dialog.getByRole("button", { name: "Create" }).click();
+  await expect(
+    page
+      .getByRole("navigation", { name: "Channels" })
+      .getByRole("list", { name: "Direct messages" }),
+  ).toContainText("bot (agent)");
 });

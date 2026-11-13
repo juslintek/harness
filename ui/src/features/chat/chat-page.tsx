@@ -14,7 +14,7 @@ import { ignored, me } from "../../auth/me";
 import { createLoad } from "../../load";
 import { createTopic } from "../../realtime";
 import { routeParts } from "../../route";
-import { State } from "../../ui/primitives";
+import { State } from "../../ui/molecules";
 import { ChannelDialog, type DialogKind } from "./channel-dialog";
 import { ChannelList, channelLabel } from "./channel-list";
 import { Composer } from "./composer";
@@ -22,6 +22,7 @@ import "./chat.css";
 import { createHistory, PAGE_SIZE } from "./history";
 import { type MessageContext, MessageList } from "./messages";
 import { ThreadPanel } from "./thread-panel";
+import { WorkingStrip } from "./working-strip";
 
 interface ChatEvent {
   seq: number;
@@ -42,6 +43,7 @@ function Conversation(props: {
   channelId: string;
   ctx: MessageContext;
   myHandle: string;
+  agents: Set<string>;
   event: () => ChatEvent | null;
 }): JSX.Element {
   const id = props.channelId;
@@ -98,14 +100,20 @@ function Conversation(props: {
       <section class="pane" aria-label="Conversation">
         <header class="pane-head">
           <a class="chat-back" href={`#/o/${props.ctx.slug}/chat`}>
-            Channels
+            <span aria-hidden="true">‹</span> Channels
           </a>
           <h2>
             <Show when={props.channel()} fallback="Channel">
-              {(c) => channelLabel(c(), props.myHandle)}
+              {(c) => channelLabel(c(), props.myHandle, props.agents)}
             </Show>
           </h2>
         </header>
+        <WorkingStrip
+          slug={props.ctx.slug}
+          channelId={id}
+          members={props.ctx.byHandle}
+          bump={() => props.event()?.seq}
+        />
         <Show when={messages.error()}>
           {(message) => (
             <p class="error" role="alert">
@@ -173,6 +181,8 @@ function ChatView(props: { slug: string; orgId: string }): JSX.Element {
     slug: props.slug,
     byHandle: new Map((org.data()?.members ?? []).map((m) => [m.handle, m])),
   });
+  const agents = (): Set<string> =>
+    new Set((org.data()?.members ?? []).filter((m) => m.kind === "agent").map((m) => m.handle));
   const failure = (): string | null => org.error() ?? channels.error();
   return (
     <Show
@@ -189,6 +199,7 @@ function ChatView(props: { slug: string; orgId: string }): JSX.Element {
           activeId={activeId() ?? null}
           slug={props.slug}
           myHandle={org.data()?.me.handle ?? ""}
+          agents={agents()}
           onNewGroup={() => setDialog("group")}
           onNewDm={() => setDialog("dm")}
         />
@@ -199,6 +210,7 @@ function ChatView(props: { slug: string; orgId: string }): JSX.Element {
               channelId={id}
               ctx={ctx()}
               myHandle={org.data()?.me.handle ?? ""}
+              agents={agents()}
               event={event}
             />
           )}

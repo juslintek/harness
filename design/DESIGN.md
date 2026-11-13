@@ -58,7 +58,7 @@ Five status roles. Each has a foreground and a soft background. A status is alwa
 
 ### Status mapping
 
-Server enum value to status role. Every badge shows the value as its word.
+Server enum value to status role. Every badge shows a word: the plain word from the next table, never a raw key.
 
 | Status | Values |
 |---|---|
@@ -67,6 +67,33 @@ Server enum value to status role. Every badge shows the value as its word.
 | warning | task `in_review`; hire `deciding`; guard `ask`; budget `warn`; approval `pending`; proposal `open`; lesson `pending` |
 | danger | run `failed`, `killed`, `blocked`; task `blocked`; approval `denied`; guard `deny`; budget `paused`; hire and candidate `rejected`; candidate `failed`; wake `failed`; proposal and lesson `rejected` |
 | neutral | run `queued`, `cancelled`; task `backlog`, `todo`, `cancelled`; approval `expired`; candidate `pending`, `answered`; hire `cancelled`; wake `pending`, `skipped`; proposal `withdrawn` |
+
+### Status words
+
+The badge word is plain English. The raw value goes in a tooltip or in mono small text, never as the label.
+
+| Raw value | Word on the badge |
+|---|---|
+| `in_progress` | in progress |
+| `in_review` | in review |
+| `tool_call` | command |
+| guard `ask` | guard asked |
+| guard `deny` | guard denied |
+| guard `allow` | guard allowed |
+| `waiting_approval`, or a running run with a pending approval | waiting for you |
+| other values with an underscore | the same words with spaces |
+| budget `ok` | ok (success) |
+| budget `warn` | near limit (warning) |
+| budget `paused` | paused (danger) |
+| approval `pending` | waiting for you (warning) |
+| approval `approved` | approved (success) |
+| approval `denied` | denied (danger) |
+| approval `expired` | expired (neutral) |
+| hire `deciding` | needs your decision (warning) |
+| wakeup `pending` | queued (neutral) |
+| wakeup `started` | running (info) |
+
+"Waiting for you" (warning tone) is the loudest state wherever it appears. It is reserved for a run, approval or lesson with a pending decision. The Now top line counts the "Needs you" rows and reads "N need you". Ids look the same on every page: runs `r_4f2a9c`, approvals `ap_8d31e0`, tasks `#142`.
 
 ## Typography
 
@@ -118,57 +145,72 @@ Depth comes from 1px borders. The overlay shadow is the only shadow in the syste
 
 Panels pad `--space-lg` and sit `--space-lg` apart. Table rows are 36px high with a 1px `--color-border` divider. Sidebar rows are 32px high. A page never scrolls sideways at 375px wide: tables scroll inside their own panel.
 
+Layout sizes are tokens in `theme.css`. The app and these files both read them, so change a value there and nowhere else.
+
+| Size | Token | Value |
+|---|---|---|
+| Sidebar width | `--size-sidebar` | `240px` |
+| Top bar height | `--size-topbar` | `48px` |
+| Control height (buttons, fields, nav rows) | `--size-control` | `32px` |
+| Small control height | `--size-control-sm` | `28px` |
+| Table and list row height | `--size-row` | `36px` |
+| Dialog width | `--size-dialog` | `480px` |
+
 ## Components
 
-Files are in `design-systems/default/components/`. All use roles only, so they follow `data-design-system="dark"`.
+Files are in `design-systems/default/components/`, all flat, because Recto reads them from that one folder. The levels below are recorded here only. All use roles, so they follow `data-design-system="dark"`. A molecule or organism file holds real nested instances of the atoms it uses (as `sidebar.html` holds `nav-item` and `org-switcher`), never a redrawn copy. Props: variants are written `axis=value`; `text` names are text layers an instance may reword; `slot` names take content; `show` names are layers an instance may hide.
 
-### Button
-`button.html`. tone: primary (brand fill), secondary (raised fill, strong border), danger (danger fill), ghost (no fill, no border). size: sm 28px, md 32px. Radius `--radius-md`, text `--text-body-sm` at 500.
+### Atoms
+One element. No component inside another.
 
-### Status badge
-`status-badge.html`. tone: neutral, info, success, warning, danger. Pill, `--text-caption` at 500, status foreground on status background. Always carries the enum word.
+| Name | File | Variants and props | For |
+|---|---|---|---|
+| Button | `button.html` | tone: primary, secondary, danger, danger-quiet, ghost, disabled; size: sm (28px), md (32px). text `label` | Every action. Filled `danger` only confirms, inside a confirm dialog. Routine remove, revoke, clear and stop use `danger-quiet`. At most one primary per view region. `disabled` has muted text, `aria-disabled="true"`; say why in a caption beside it. |
+| Status badge | `status-badge.html` | tone: neutral, info, success, warning, danger. text `label` | A status as a plain word (table under Status words). Never without its word. |
+| Tab | `tab.html` | state: default, active; count: none, neutral, warning. text `label`, `count` | One tab of a tab row. Active has ink text and a 2px brand underline. Neutral count is a muted mono number, warning count is a pill for work that waits for a person. |
+| Checkbox | `checkbox.html` | state: on, off. text `label` | A yes or no choice. On uses the brand fill. |
+| Switch | `switch.html` | state: on, off. text `label` | A setting applied at once. |
+| Help | `help.html` | text `body` | One muted line under a heading or field for a hard concept (policy, autonomy level, budget, bridge, tunnel, step-up, recovery codes). |
+| Meter | `meter.html` | tone: success, warning, danger. text `label`, `value` | A 6px bar. The label carries the meaning, not the colour. |
 
-### Field
-`field.html`. kind: text, select, textarea; state: default or error. Label 12px muted above a 32px control with a `--color-border-strong` border. Error shows a danger line below the control and a danger border.
+### Molecules
+A few atoms used as one unit.
 
-### Checkbox and switch
-`checkbox.html`, `switch.html`. on or off. On uses the brand fill. Off uses a strong border.
+| Name | File | Variants and props | For |
+|---|---|---|---|
+| Field | `field.html` | kind: text, select, textarea; state: default, error. text `label`, `message` | Label above a 32px control. Error shows a danger line and border. |
+| Notice | `notice.html` | tone: info, success, warning, danger. text `title`, `body`; slot `actions` | Banners, the result of an action, inline help and the halted banner. No icon. |
+| Steps | `steps.html` | state: done, current, todo. text `label`, `number` | One step of a flow strip (hiring, tunnel, enrol). State shows in the mark and the weight, not only colour. |
+| Tabs | `tabs.html` | slot `items` (holds `tab` instances) | A tab row. Approvals, Memory and Settings at 375 fill it. |
+| Nav item | `nav-item.html` | state: default, active; count: none, neutral, warning. text `label`, `count` | A 32px sidebar row with an optional count pill (warning for pending approvals). |
+| State | `state.html` | kind: loading, empty, error. text `title`, `message` | Centred muted text. Error adds a danger line and a Retry button. |
+| Panel | `panel.html` | text `title`; slots `actions`, `body` | A raised titled box. |
+| Dialog | `dialog.html` | text `title`, `body`; slot `actions` | A 480px modal. A confirm dialog puts the filled `danger` button on the right and names the object and the consequence. |
+| Step-up | `step-up.html` | text `title`, `body`, `action` | The passkey check (valid 5 minutes) before a sensitive action. |
+| Conn state | `conn-state.html` | state: live, reconnecting, offline. text `label` | A dot and a word in the top bar. At 375 shown only when not live. |
+| Agents state | `agents-state.html` | state: running, stopped; role: admin, member; size: full, compact | Dot and word; admins also get "Stop all agents" (`danger-quiet`) or "Resume agents" (primary). Stopping asks in a dialog first, both ask for the passkey. |
+| Org switcher | `org-switcher.html` | state: closed, open. text `org`, `role` | The current org and the person's real role in it (viewer, member, admin or owner). |
+| Data table | `data-table.html` | none | Header row, rows at 36px, one status badge column. |
+| Code block | `code-block.html` | none | A command or output in mono with a ghost Copy button. It holds a button, so it is a molecule. |
+| Empty panel | `empty-panel.html` | slots `state` (a `state` instance), `actions` (buttons) | An empty list in a raised box: what it is, why it is empty, the first action as a button. |
 
-### Panel
-`panel.html`. Raised surface, 1px border, `--radius-md`. Header row with a 14px title at 600 and an actions slot, then a body slot.
+### Organisms
+A section of a screen.
 
-### Tabs
-`tabs.html`. Three tabs. The active one has ink text and a 2px brand underline. Others are muted.
+| Name | File | Variants and props | For |
+|---|---|---|---|
+| Sidebar | `sidebar.html` | role: admin, org-admin, member. text `email`; slot `footer` | 240px. Groups: Now; Work (Board, Chat, Memory); Monitor (Approvals, Runs, Logs); Reports (Usage & budgets); Organisation (Hiring, Policies, Settings); Guides (Playbooks); Instance (Agent CLIs, Integrations, Search). Org admin (not instance admin) sees Approvals with its count and no Runs and no Instance group. Member sees neither Approvals, Runs nor Instance. Counts are a parameter of the generator; a missing or zero count draws no pill. |
+| Top bar | `top-bar.html` | layout: desktop, mobile. slots `title`, `status` | The page title or breadcrumb on the left; `conn-state` then `agents-state` on the right. Mobile has the menu button and shows the connection only when not live. |
+| Approval card | `approval-card.html` | layout: wide, narrow; frame: card, flat; urgent: no, yes. text `title`, `expires`, `at`, `agent`, `run`, `task`, `id`, `reason`; show `show-open`; slots `command` (a `code-block`), `extra` | One command waiting for a decision: who asked, which run and task, the command, Deny and Approve command. `extra` holds the refused notice (403 `instance_admin_required`) or a rule line. Used by Now, Approvals and the Run page. |
+| Run row | `run-row.html` | layout: wide, narrow; waiting: no, yes. text `what`, `id`, `agent`, `model`, `why`, `cost`, `duration`, `started`, `extra`, `reason`, `corner`, `meta`; show `show-extra`, `show-model`, `show-reason`; slot `status` | One run: a table row (wide) or a card (narrow). A waiting run has a warning edge and a Review command action. Used by Runs and Now. |
 
-### Data table
-`data-table.html`. 12px muted header, three 13px rows at 36px, 1px dividers, one status badge column.
+## Product principles
 
-### Meter
-`meter.html`. 6px bar. tone success, warning or danger, with a value label. The label carries the meaning, not the colour.
-
-### Dialog
-`dialog.html`. 480px, raised, `--radius-lg`, `--shadow-overlay`. Title, body, footer with secondary and primary buttons.
-
-### State
-`state.html`. kind loading, empty or error. Centred muted text. Error adds a danger line and a Retry button.
-
-### Nav item
-`nav-item.html`. state default, active or with-count. 32px row, 13px label. Active has `--color-accent` background and 600 ink text. The count is a neutral pill.
-
-### Code block
-`code-block.html`. 12px monospace on a `--status-neutral-bg` surface with a 1px border and a ghost Copy button at top right.
-
-### Org switcher
-`org-switcher.html`. state closed or open. A 36px row with the current org name at 600, the person's role in it (viewer, member, admin or owner) in muted caption, and a chevron. Open adds a menu with `--shadow-overlay` listing the orgs; the current one has the accent background and the word "Current".
-
-### Halt switch
-`halt-switch.html`. state running or halted. A 32px top bar control: a label and a switch, where on means halted. Halted uses the danger background, border and text with the word "Halted". Only instance admins see it.
-
-### Sidebar
-`sidebar.html`. One variant, 240px wide. Org switcher on top, then the groups Work, Oversight, Organisation and Instance as nav items, Board active. The Approvals count pill uses the warning status. The Account row and the signed-in email sit at the bottom.
-
-### Step-up
-`step-up.html`. One variant, a 480px dialog that asks for a fresh passkey check (valid 5 minutes). Title, body, a monospace line naming the action being confirmed, then Cancel and a primary "Use passkey" button.
+- Every screen answers: what is happening, what needs me, what I can do next, what the result was and where it is.
+- "Waiting for you" is the loudest state.
+- Filled red only confirms: the `danger` button lives in confirm dialogs. Routine destructive actions are `danger-quiet`.
+- No invented data: a screen shows only what the server returns.
+- Guidance is labelled as guidance, not as live data.
 
 ## Do's and Don'ts
 

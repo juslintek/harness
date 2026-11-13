@@ -3,7 +3,8 @@ import type { OrgDetail } from "@shared/orgs";
 import { createEffect, createMemo, createSignal, For, type JSX, Match, Switch } from "solid-js";
 import { z } from "zod";
 import { createLoad } from "../../load";
-import { Field } from "../../ui/primitives";
+import { Help } from "../../ui/atoms";
+import { Field } from "../../ui/molecules";
 import type { ScopeLayer } from "./policies-data";
 
 export interface Scope {
@@ -86,18 +87,18 @@ export function ScopePicker(props: {
       );
   });
   return (
-    <div class="form-row">
-      <Field label="Scope">
+    <div class="form-row scope-row">
+      <Field label="Apply to">
         {(c) => (
           <select {...c()} onChange={(e) => setLayer(e.currentTarget.value as ScopeLayer)}>
             <option value="org" selected={layer() === "org"}>
-              Whole org
+              Whole organisation
             </option>
             <option value="team" selected={layer() === "team"}>
               Team
             </option>
             <option value="agent" selected={layer() === "agent"}>
-              Member
+              Agent
             </option>
             <option value="task" selected={layer() === "task"}>
               Task
@@ -122,7 +123,7 @@ export function ScopePicker(props: {
           </Field>
         </Match>
         <Match when={layer() === "agent"}>
-          <Field label="Member">
+          <Field label="Agent">
             {(c) => (
               <select {...c()} onChange={(e) => setMemberId(e.currentTarget.value)}>
                 <For each={props.detail.members}>
@@ -140,6 +141,10 @@ export function ScopePicker(props: {
           <TaskPick detail={props.detail} onScope={props.onScope} />
         </Match>
       </Switch>
+      <Help>
+        Pick the whole organisation, one team, one agent or one task. A narrower choice overrides
+        the wider one.
+      </Help>
     </div>
   );
 }

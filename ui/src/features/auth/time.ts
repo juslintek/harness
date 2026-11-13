@@ -1,3 +1,5 @@
+import { minuteStamp } from "../../format";
+
 export function fmtTime(ms: number | null): string {
-  return ms === null ? "-" : new Date(ms).toLocaleString();
+  return ms === null ? "-" : minuteStamp(ms);
 }

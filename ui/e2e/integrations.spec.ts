@@ -29,11 +29,16 @@ test.describe("integrations", () => {
     await expect(page.getByRole("heading", { name: "Email (SMTP)" })).toBeVisible();
     const tunnel = page.getByRole("region", { name: "Remote access (tunnel)" });
     await expect(tunnel.locator(".badge", { hasText: /^stopped$/ })).toBeVisible();
-    await expect(tunnel).toContainText("Saved: nothing. Running: no.");
-    await expect(tunnel.getByRole("button", { name: "Start tunnel" })).toHaveCount(0);
+    await expect(tunnel).toContainText("Nothing saved yet.");
+    await expect(tunnel.getByRole("list", { name: "Remote access steps" })).toBeVisible();
+    await expect(tunnel.getByRole("button", { name: "Stop tunnel" })).toBeDisabled();
     const desktop = page.getByRole("region", { name: "Claude Desktop" });
     await expect(desktop.locator(".badge", { hasText: /^not linked$/ })).toBeVisible();
-    await expect(desktop.getByRole("button", { name: "Unlink" })).toBeDisabled();
+    await expect(desktop.getByRole("list", { name: "Claude Desktop steps" })).toBeVisible();
+    await expect(desktop.getByRole("button", { name: "Unlink" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Other connections" })).toContainText(
+      "Remote MCP",
+    );
     if (SHOTS) {
       await page.screenshot({ path: `${SHOTS}/integrations-1440-light.png`, fullPage: true });
       await page.emulateMedia({ colorScheme: "dark" });
@@ -44,8 +49,10 @@ test.describe("integrations", () => {
   test("a test mail without saved settings shows the server's answer", async ({ page, stack }) => {
     await signIn(page, stack, ADA);
     await page.goto("/#/integrations");
+    await expect(page.locator(".badge", { hasText: /^not tested$/ })).toBeVisible();
     await page.getByRole("button", { name: "Send a test mail to me" }).click();
     await expect(page.getByRole("alert")).toContainText("not configured");
+    await expect(page.locator(".badge", { hasText: /^test failed$/ })).toBeVisible();
   });
 
   test("SMTP settings save with step-up and the password field is cleared", async ({
@@ -59,64 +66,77 @@ test.describe("integrations", () => {
     await expect(page.getByLabel("Host")).toBeFocused();
     await page.getByLabel("Host").fill("smtp.example.test");
     await page.getByLabel("User").fill("mailer");
-    await page.getByLabel("Password (write only)").fill("s3cret");
+    await page.getByLabel("Password", { exact: true }).fill("s3cret");
     await page.getByLabel("From address").fill("harness@example.test");
     await page.getByLabel("Security").selectOption("tls");
-    await page.getByLabel("Password (write only)").press("Enter");
+    await page.getByLabel("Password", { exact: true }).press("Enter");
     await usePasskey(page);
     await expect(page.getByRole("status").filter({ hasText: "Saved." })).toContainText(
       "never shown again",
     );
-    await expect(page.getByLabel("Password (write only)")).toHaveValue("");
+    await expect(page.getByLabel("Password", { exact: true })).toHaveValue("");
   });
 
-  test("a tunnel choice is saved, an invalid hostname is refused, public start needs the box", async ({
+  test("one button saves the choice and starts it, public options need the box", async ({
     page,
     stack,
   }) => {
     await signIn(page, stack, ADA);
+    // Nothing may really start a tunnel on the machine that runs the test.
+    await page.route("**/api/tunnel/start", (route) =>
+      route.fulfill({ status: 500, json: { error: "tailscale is not installed" } }),
+    );
     await page.goto("/#/integrations");
     const tunnel = page.getByRole("region", { name: "Remote access (tunnel)" });
-    await tunnel.getByLabel("Hostname (required)").fill("not a host");
-    await tunnel.getByRole("button", { name: "Save choice" }).click();
+    const start = tunnel.getByRole("button", { name: "Start with Tailscale Serve" });
+    // This machine may already name itself, which pre-fills the field.
+    await tunnel.getByLabel("Hostname (required for Tailscale)").fill("");
+    await expect(start).toBeDisabled();
+    await tunnel.getByLabel("Hostname (required for Tailscale)").fill("not a host");
+    await expect(start).toBeEnabled();
+    await start.click();
+    await page
+      .getByRole("dialog", { name: "Confirm tunnel start" })
+      .getByRole("button", { name: "Yes, start the tunnel" })
+      .click();
     await usePasskey(page);
     await expect(tunnel.getByRole("alert")).toBeVisible();
-    await tunnel.getByLabel("Hostname (required)").fill("box.tailnet.ts.net");
-    await tunnel.getByRole("button", { name: "Save choice" }).click();
-    await expect(tunnel).toContainText("Saved: tailscale-serve https://box.tailnet.ts.net");
-    await expect(tunnel.getByRole("status").filter({ hasText: "origin" })).toBeVisible();
-    // Serve is tailnet only: no warning box, Start is open.
-    await expect(tunnel.getByRole("button", { name: "Start tunnel" })).toBeEnabled();
+    await tunnel.getByLabel("Hostname (required for Tailscale)").fill("box.tailnet.ts.net");
+    await start.click();
+    await page
+      .getByRole("dialog", { name: "Confirm tunnel start" })
+      .getByRole("button", { name: "Yes, start the tunnel" })
+      .click();
+    await expect(tunnel).toContainText(
+      "Saved choice: Tailscale Serve at https://box.tailnet.ts.net.",
+    );
+    await expect(tunnel.getByRole("alert")).toContainText("tailscale is not installed");
+    // Serve is tailnet only: no warning, no box.
+    await expect(tunnel.getByText("Anyone who has the address")).toHaveCount(2);
+    await expect(tunnel.getByLabel(/reachable from the internet/)).toHaveCount(0);
 
     await tunnel.getByLabel(/Cloudflare quick tunnel/).check();
     await expect(tunnel.getByLabel("Hostname (optional)")).toBeVisible();
-    await tunnel.getByRole("button", { name: "Save choice" }).click();
-    await expect(tunnel).toContainText("Saved: cloudflare");
-    const start = tunnel.getByRole("button", { name: "Start tunnel" });
-    await expect(start).toBeDisabled();
+    const cloudflare = tunnel.getByRole("button", { name: "Start with Cloudflare" });
+    await expect(cloudflare).toBeDisabled();
     await tunnel.getByLabel(/reachable from the internet/).check();
-    await expect(start).toBeEnabled();
-    await start.click();
+    await expect(cloudflare).toBeEnabled();
+    await cloudflare.click();
     const confirm = page.getByRole("dialog", { name: "Confirm tunnel start" });
     await expect(confirm).toContainText("This runs cloudflared");
     await confirm.getByRole("button", { name: "Cancel" }).click();
     await expect(confirm).toBeHidden();
   });
 
-  test("the keyboard reaches Save choice and the confirm dialog closes with Escape", async ({
+  test("the keyboard reaches Start and the confirm dialog closes with Escape", async ({
     page,
     stack,
   }) => {
     await signIn(page, stack, ADA);
     await page.goto("/#/integrations");
     const tunnel = page.getByRole("region", { name: "Remote access (tunnel)" });
-    await tunnel.getByLabel("Hostname (required)").fill("kbd.tailnet.ts.net");
-    await tunnel.getByLabel("Hostname (required)").press("Tab");
-    await expect(tunnel.getByRole("button", { name: "Save choice" })).toBeFocused();
-    await page.keyboard.press("Enter");
-    await usePasskey(page);
-    const start = tunnel.getByRole("button", { name: "Start tunnel" });
-    await expect(start).toBeVisible();
+    await tunnel.getByLabel("Hostname (required for Tailscale)").fill("kbd.tailnet.ts.net");
+    const start = tunnel.getByRole("button", { name: "Start with Tailscale Serve" });
     await start.focus();
     await page.keyboard.press("Enter");
     const confirm = page.getByRole("dialog", { name: "Confirm tunnel start" });

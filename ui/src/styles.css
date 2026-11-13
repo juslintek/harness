@@ -71,3 +71,79 @@ button {
 .error {
   color: var(--color-danger);
 }
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+a.btn {
+  text-decoration: none;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.page-stack > p {
+  margin: 0;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-sm);
+}
+
+.form-row > .field {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.sub-title,
+.muted-line {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font: 500 var(--text-caption) / var(--leading-caption) var(--font-body);
+}
+
+@media (max-width: 47.99rem) {
+  .page-stack {
+    gap: var(--space-md);
+  }
+}
+
+@media (max-width: 39.99rem) {
+  .form-row > .btn {
+    flex: 1 1 100%;
+  }
+}

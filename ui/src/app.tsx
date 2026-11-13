@@ -1,4 +1,4 @@
-import { createEffect, createSignal, type JSX, Match, Show, Switch } from "solid-js";
+import { createEffect, createSignal, type JSX, Match, Switch } from "solid-js";
 import { ApiError } from "./api";
 import { EnrollPage } from "./auth/enroll-page";
 import { LoginPage } from "./auth/login-page";
@@ -12,16 +12,17 @@ import { HiringPage } from "./features/hiring/hiring-page";
 import { IntegrationsPage } from "./features/integrations/integrations-page";
 import { LogsPage } from "./features/logs/logs-page";
 import { MemoryPage } from "./features/memory/memory-page";
+import { NowPage } from "./features/now/now";
 import { ConsentPage } from "./features/oauth/consent-page";
 import { SettingsPage } from "./features/orgs/settings-page";
+import { PlaybooksPage } from "./features/playbooks/playbooks";
 import { PoliciesPage } from "./features/policies/policies-page";
 import { runsRoute } from "./features/runs/routes";
 import { errorText } from "./format";
-import { selectedSlug } from "./orgs";
 import { routeParts } from "./route";
-import { pageTitle } from "./shell/nav";
-import { AppShell } from "./shell/shell";
-import { Button, State } from "./ui/primitives";
+import { Button } from "./ui/atoms";
+import { State } from "./ui/molecules";
+import { AppShell } from "./ui/organisms";
 
 export function App(): JSX.Element {
   const first = (): string | undefined => routeParts()[0];
@@ -30,13 +31,9 @@ export function App(): JSX.Element {
     const [head, slug, page] = routeParts();
     return head === "o" && page === name ? slug : undefined;
   };
-  // "#/" is the runs list for an instance admin and the board for everyone else.
   const boardSlug = (): string | undefined => {
     const [head, slug, page] = routeParts();
-    if (head === "o") return page === undefined || page === "board" ? slug : undefined;
-    return head === undefined && !me()?.user.instanceAdmin
-      ? (selectedSlug() ?? undefined)
-      : undefined;
+    return head === "o" && (page === undefined || page === "board") ? slug : undefined;
   };
   const [loadError, setLoadError] = createSignal<string | null>(null);
   // A 401 sends the visitor to the sign-in page from inside api(); anything else is shown here.
@@ -89,19 +86,10 @@ export function App(): JSX.Element {
         </Match>
         <Match when={true}>
           <AppShell>
-            <Switch
-              fallback={
-                <Show
-                  when={selectedSlug()}
-                  keyed
-                  fallback={
-                    <State kind="empty" title={pageTitle()} message="No organisation yet." />
-                  }
-                >
-                  {(slug) => <BoardPage slug={slug} />}
-                </Show>
-              }
-            >
+            <Switch fallback={<NowPage />}>
+              <Match when={first() === "playbooks"}>
+                <PlaybooksPage />
+              </Match>
               <Match when={first() === "account"}>
                 <AccountPage />
               </Match>

@@ -2,8 +2,8 @@ import { createSignal, type JSX, Show } from "solid-js";
 import { api } from "../../api";
 import { ErrorLine } from "../../auth/error-line";
 import { createAction } from "../../ui/action";
-import { CopyButton } from "../../ui/copy-button";
-import { Button, Field } from "../../ui/primitives";
+import { Button, CopyButton, Help } from "../../ui/atoms";
+import { Field } from "../../ui/molecules";
 import { createdSchema, orgUrl, webhookAddedSchema } from "./data";
 
 export function ValueForm(props: {
@@ -11,7 +11,7 @@ export function ValueForm(props: {
   org: string;
   field: "address" | "userId";
   label: string;
-  hint: string;
+  hint: JSX.Element;
   onAdded: () => void;
 }): JSX.Element {
   const [value, setValue] = createSignal("");
@@ -45,7 +45,7 @@ export function ValueForm(props: {
           Add
         </Button>
       </div>
-      <p class="nf-hint">{props.hint}</p>
+      <Help small>{props.hint}</Help>
       <ErrorLine message={action.error()} />
     </form>
   );
@@ -59,7 +59,7 @@ function SecretOnce(props: { secret: string; note: string; onDone: () => void })
         <strong>Copy this signing secret now.</strong> It is shown only once and cannot be read back
         later.
       </p>
-      <p class="nf-hint">{props.note}</p>
+      <Help small>{props.note}</Help>
       <div class="nf-row nf-row-end">
         <Field label="Signing secret">
           {(control) => (
@@ -72,7 +72,7 @@ function SecretOnce(props: { secret: string; note: string; onDone: () => void })
             />
           )}
         </Field>
-        <CopyButton text={props.secret} label="Copy the webhook signing secret" />
+        <CopyButton text={props.secret} label="Copy secret" />
         <Button onClick={props.onDone}>I have saved it</Button>
       </div>
     </div>

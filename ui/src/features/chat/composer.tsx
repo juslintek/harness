@@ -1,7 +1,7 @@
 import type { ChatMember } from "@shared/chat";
 import { createSignal, createUniqueId, For, type JSX, Show } from "solid-js";
 import { errorText } from "../../format";
-import { Button } from "../../ui/primitives";
+import { Button } from "../../ui/atoms";
 
 const TRAILING_MENTION = /(?<![A-Za-z0-9_@.-])@([a-z0-9_-]*)$/;
 
@@ -143,6 +143,7 @@ export function Composer(props: {
       <Button type="submit" tone="primary" disabled={busy()}>
         Send
       </Button>
+      <p class="composer-hint">Enter to send · Shift+Enter for a new line · @ to ask an agent</p>
     </form>
   );
 }

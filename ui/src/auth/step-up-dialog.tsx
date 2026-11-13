@@ -1,5 +1,6 @@
 import type { JSX } from "solid-js";
-import { Button, Dialog } from "../ui/primitives";
+import { Button } from "../ui/atoms";
+import { Dialog } from "../ui/molecules";
 import { answerStepUp, pendingAction } from "./step-up-prompt";
 
 export function StepUpDialog(): JSX.Element {

@@ -3,7 +3,8 @@ import { createSignal, For, type JSX, Show } from "solid-js";
 import { api } from "../../api";
 import { createLoad } from "../../load";
 import { createAction } from "../../ui/action";
-import { Button, State, StatusBadge } from "../../ui/primitives";
+import { Checkbox } from "../../ui/atoms";
+import { ConfirmButton, Panel, State } from "../../ui/molecules";
 import { lineDiff } from "./line-diff";
 import {
   isMemoryMessage,
@@ -12,45 +13,37 @@ import {
   writeListSchema,
   writeResultSchema,
 } from "./memory-data";
+import { MemoryError } from "./memory-error";
+import { WriteMeta } from "./write-meta";
 
-function Revert(props: { slug: string; id: string; onDone: () => void }): JSX.Element {
-  const [asking, setAsking] = createSignal(false);
+function Revert(props: {
+  slug: string;
+  id: string;
+  path: string;
+  onDone: () => void;
+}): JSX.Element {
   const action = createAction();
   const confirm = (): void => {
     void action.run(async () => {
       await api(`${memoryBase(props.slug)}/writes/${props.id}/revert`, writeResultSchema, {
         method: "POST",
       });
-      setAsking(false);
       props.onDone();
     });
   };
   return (
-    <Show
-      when={asking()}
-      fallback={
-        <Button size="sm" onClick={() => setAsking(true)}>
-          Revert
-        </Button>
-      }
-    >
-      <div class="memory-actions">
-        <span>Put the note back to the text before this write?</span>
-        <Button size="sm" tone="danger" disabled={action.busy()} onClick={confirm}>
-          Confirm revert
-        </Button>
-        <Button size="sm" onClick={() => setAsking(false)}>
-          Cancel
-        </Button>
-      </div>
-      <Show when={action.error()}>
-        {(message) => (
-          <p class="memory-error" role="alert">
-            {message()}
-          </p>
-        )}
-      </Show>
-    </Show>
+    <>
+      <ConfirmButton
+        size="sm"
+        tone="secondary"
+        text="Revert"
+        title="Revert this write?"
+        message={`The note ${shownPath(props.path)} goes back to the text it had before this write.`}
+        confirm="Confirm revert"
+        onConfirm={confirm}
+      />
+      <MemoryError message={action.error()} />
+    </>
   );
 }
 
@@ -78,21 +71,23 @@ function WriteItem(props: {
   write: NoteWriteFeedItem;
   onDone: () => void;
 }): JSX.Element {
-  const [open, setOpen] = createSignal(false);
   return (
-    <li class="memory-card">
-      <details open={open()} onToggle={(e) => setOpen(e.currentTarget.open)}>
-        <summary class="memory-summary">
-          <StatusBadge tone="neutral" value={props.write.op} />{" "}
-          <span class="memory-line">{shownPath(props.write.path)}</span> by {props.write.actor},{" "}
-          {new Date(props.write.at).toLocaleString()}
-        </summary>
-        <Show when={open()}>
-          <Diff write={props.write} />
+    <li class="memory-row">
+      <div class="memory-row-head">
+        <p class="memory-meta memory-summary">
+          <WriteMeta write={props.write} withPath />
+        </p>
+        <Show when={props.write.canRevert}>
+          <Revert
+            slug={props.slug}
+            id={props.write.id}
+            path={props.write.path}
+            onDone={props.onDone}
+          />
         </Show>
-      </details>
-      <Show when={props.write.canRevert}>
-        <Revert slug={props.slug} id={props.write.id} onDone={props.onDone} />
+      </div>
+      <Show when={props.write.op === "update" || props.write.op === "revert"}>
+        <Diff write={props.write} />
       </Show>
     </li>
   );
@@ -107,26 +102,30 @@ export function WritesPanel(props: { slug: string; topic: string }): JSX.Element
     isMemoryMessage,
   );
   return (
-    <section class="memory-stack" aria-label="Recent writes">
-      <label class="memory-check">
-        <input
-          type="checkbox"
+    <Panel title="Recent writes">
+      <section class="memory-stack" aria-label="Recent writes">
+        <Checkbox
           checked={agentsOnly()}
-          onChange={(e) => setAgentsOnly(e.currentTarget.checked)}
+          onChange={setAgentsOnly}
+          label="Show only writes by agents"
         />
-        Agent writes only
-      </label>
-      <Show when={list.error()}>
-        {(message) => <State kind="error" message={message()} onRetry={() => void list.reload()} />}
-      </Show>
-      <Show when={list.data()?.length === 0}>
-        <State kind="empty" message="No writes yet." />
-      </Show>
-      <ul class="memory-plain">
-        <For each={list.data()}>
-          {(w) => <WriteItem slug={props.slug} write={w} onDone={() => void list.reload()} />}
-        </For>
-      </ul>
-    </section>
+        <Show when={list.error()}>
+          {(message) => (
+            <State kind="error" message={message()} onRetry={() => void list.reload()} />
+          )}
+        </Show>
+        <Show when={list.data()?.length === 0}>
+          <State
+            kind="empty"
+            message="No writes yet. Every change to a note, by a person or an agent, is listed here."
+          />
+        </Show>
+        <ul class="memory-plain">
+          <For each={list.data()}>
+            {(w) => <WriteItem slug={props.slug} write={w} onDone={() => void list.reload()} />}
+          </For>
+        </ul>
+      </section>
+    </Panel>
   );
 }

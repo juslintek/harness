@@ -2,7 +2,8 @@ import { type ChannelView, type ChatMember, channelViewSchema } from "@shared/ch
 import { createSignal, createUniqueId, For, type JSX, Show } from "solid-js";
 import { api } from "../../api";
 import { errorText } from "../../format";
-import { Button, Dialog, Field } from "../../ui/primitives";
+import { Button } from "../../ui/atoms";
+import { Dialog, Field } from "../../ui/molecules";
 
 export type DialogKind = "group" | "dm";
 

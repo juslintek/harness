@@ -3,11 +3,47 @@ import { createSignal, For, type JSX, onMount, Show } from "solid-js";
 import { api } from "../../api";
 import { ignored } from "../../auth/me";
 import { createAction } from "../../ui/action";
-import { ConfirmDialog } from "../../ui/confirm-dialog";
-import { Button, Field, StatusBadge } from "../../ui/primitives";
+import { Button, Help, StatusBadge } from "../../ui/atoms";
+import { Field } from "../../ui/molecules";
 import { FormError } from "../orgs/shared";
-import { fields, parseValue, show, toText } from "./policies-data";
+import {
+  fields,
+  inheritedFrom,
+  layerName,
+  optionWord,
+  type PolicyMeta,
+  parseValue,
+  policyMeta,
+  toText,
+  valueWord,
+} from "./policies-data";
 import type { Scope } from "./scope-picker";
+
+const scopeText = (scope: Scope): string =>
+  scope.layer === "org" ? "the whole organisation" : `this ${scope.layer}`;
+
+function AutonomyLevels(): JSX.Element {
+  return (
+    <div class="autonomy-levels">
+      <p>
+        <strong>Full.</strong> The guard works as usual: safe commands run, risky ones ask you,
+        forbidden ones are blocked.
+      </p>
+      <p>
+        <strong>Supervised.</strong> Like Full, but manager agents may not approve commands. Only
+        people can.
+      </p>
+      <p>
+        <strong>Strict.</strong> Like Supervised, and every command that is not a plain read asks
+        for approval.
+      </p>
+      <Help>
+        A team or agent can pick the same level or a stricter one, never a looser one. Saving asks
+        for your passkey.
+      </Help>
+    </div>
+  );
+}
 
 function EditForm(props: {
   item: EffectivePolicy;
@@ -23,10 +59,11 @@ function EditForm(props: {
   const [invalid, setInvalid] = createSignal<string | null>(null);
   let control: HTMLInputElement | HTMLSelectElement | undefined;
   onMount(() => control?.focus());
-  const label = `Value for ${props.item.key}`;
+  const meta = policyMeta[props.item.key];
+  const label = `${meta.name} for ${scopeText(props.scope)}`;
   return (
     <form
-      class="form-row"
+      class="policy-edit"
       onSubmit={(e) => {
         e.preventDefault();
         if (props.busy) return;
@@ -36,9 +73,7 @@ function EditForm(props: {
       }}
     >
       <Field
-        label={
-          field.kind === "list" ? `${label} (comma separated, empty for no restriction)` : label
-        }
+        label={field.kind === "list" ? `${label} (comma separated, empty for no limit)` : label}
         error={invalid()}
       >
         {(c) =>
@@ -53,7 +88,7 @@ function EditForm(props: {
               <For each={field.options}>
                 {(o) => (
                   <option value={o} selected={o === text()}>
-                    {o}
+                    {optionWord(props.item.key, o)}
                   </option>
                 )}
               </For>
@@ -75,10 +110,15 @@ function EditForm(props: {
           )
         }
       </Field>
-      <Button type="submit" tone="primary" disabled={props.busy}>
-        Save at {props.scope.layer} layer
-      </Button>
-      <Button onClick={props.onCancel}>Cancel</Button>
+      <Show when={props.item.key === "autonomy"}>
+        <AutonomyLevels />
+      </Show>
+      <div class="row-actions">
+        <Button type="submit" tone="primary" disabled={props.busy}>
+          Save for {layerName[props.scope.layer]}
+        </Button>
+        <Button onClick={props.onCancel}>Cancel</Button>
+      </div>
     </form>
   );
 }
@@ -90,9 +130,9 @@ export function PolicyRow(props: {
   onChanged: () => void;
 }): JSX.Element {
   const [editing, setEditing] = createSignal(false);
-  const [clearing, setClearing] = createSignal(false);
   const action = createAction();
   const base = `/api/orgs/${props.slug}/policies`;
+  const meta = (): PolicyMeta => policyMeta[props.item.key];
   const run = (call: () => Promise<unknown>): Promise<void> =>
     action.run(async () => {
       await call();
@@ -111,6 +151,7 @@ export function PolicyRow(props: {
         },
       }),
     );
+  // No confirm: the value is not lost, the layer above applies again and can be set once more.
   const clear = (): Promise<void> => {
     const q = `layer=${props.scope.layer}&targetId=${encodeURIComponent(props.scope.targetId)}&key=${props.item.key}`;
     return run(() => api(`${base}?${q}`, ignored, { method: "DELETE" }));
@@ -119,38 +160,45 @@ export function PolicyRow(props: {
     props.item.chain.some(
       (c) => c.layer === props.scope.layer && c.targetId === props.scope.targetId,
     );
+  const inherited = (): ReturnType<typeof inheritedFrom> => inheritedFrom(props.item, props.scope);
+  const layersLine = (): string =>
+    props.item.chain.length === 0
+      ? "none set, default applies"
+      : [...props.item.chain]
+          .reverse()
+          .map((c) => `${layerName[c.layer]} ${valueWord(props.item.key, c.value)}`)
+          .join(", ");
   return (
     <li class="policy-card">
-      <div class="policy-head">
-        <span class="policy-key">{props.item.key}</span>
-        <span class="policy-value">{show(props.item.value)}</span>
-        <StatusBadge tone="neutral" value={`from ${props.item.layer}`} />
-      </div>
-      <Show
-        when={editing()}
-        fallback={
-          <div class="row-actions">
-            <Button
-              size="sm"
-              aria-label={`Edit ${props.item.key} at ${props.scope.layer} layer`}
-              onClick={() => setEditing(true)}
-            >
-              Edit at {props.scope.layer} layer
+      <div class="policy-main">
+        <div class="policy-what">
+          <p class="policy-name">
+            {meta().name} <code class="policy-key">{props.item.key}</code>
+          </p>
+          <Help>{meta().help}</Help>
+        </div>
+        <div class="policy-now">
+          <p class="policy-value">
+            {valueWord(props.item.key, props.item.value)}
+            <StatusBadge tone="neutral" value={`from ${layerName[props.item.layer]}`} />
+          </p>
+          <Show when={meta().explain(props.item.value)}>{(text) => <Help>{text()}</Help>}</Show>
+          <Help>Layers: {layersLine()}</Help>
+        </div>
+        <Show when={!editing()}>
+          <div class="row-actions policy-actions">
+            <Button size="sm" aria-label={`Edit ${meta().name}`} onClick={() => setEditing(true)}>
+              Edit
             </Button>
             <Show when={here()}>
-              <Button
-                size="sm"
-                tone="danger"
-                aria-label={`Clear ${props.item.key} at ${props.scope.layer} layer`}
-                disabled={action.busy()}
-                onClick={() => setClearing(true)}
-              >
-                Clear at {props.scope.layer} layer
+              <Button size="sm" disabled={action.busy()} onClick={() => void clear()}>
+                {`${inherited().layers ? "Use inherited" : "Use default"} (${valueWord(props.item.key, inherited().value)})`}
               </Button>
             </Show>
           </div>
-        }
-      >
+        </Show>
+      </div>
+      <Show when={editing()}>
         <EditForm
           item={props.item}
           scope={props.scope}
@@ -160,34 +208,6 @@ export function PolicyRow(props: {
         />
       </Show>
       <FormError message={action.error()} />
-      <details class="policy-chain">
-        <summary>Chain ({props.item.chain.length})</summary>
-        <Show
-          when={props.item.chain.length > 0}
-          fallback={<p class="muted-line">Nothing set; the built-in default applies.</p>}
-        >
-          <ol>
-            <For each={props.item.chain}>
-              {(c) => (
-                <li>
-                  {c.layer}: {show(c.value)}
-                </li>
-              )}
-            </For>
-          </ol>
-        </Show>
-      </details>
-      <ConfirmDialog
-        open={clearing()}
-        title={`Clear ${props.item.key}?`}
-        message={`The ${props.scope.layer} layer stops setting this policy. The next layer up applies again.`}
-        confirm="Clear policy"
-        onClose={() => setClearing(false)}
-        onConfirm={() => {
-          setClearing(false);
-          void clear();
-        }}
-      />
     </li>
   );
 }

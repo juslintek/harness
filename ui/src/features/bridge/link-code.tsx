@@ -2,14 +2,15 @@ import { linkCodeSchema } from "@shared/bridge";
 import { createSignal, type JSX, Show } from "solid-js";
 import { api } from "../../api";
 import { createAction } from "../../ui/action";
-import { CopyButton } from "../../ui/copy-button";
-import { Button } from "../../ui/primitives";
+import { Button, CopyButton, Help } from "../../ui/atoms";
 import { FormError } from "../orgs/shared";
+import "./bridge.css";
 
 export function BridgeLinkCode(props: {
   kind: "slack" | "telegram";
   org?: string;
   onLinked?: () => void;
+  onIssued?: () => void;
 }): JSX.Element {
   const [issued, setIssued] = createSignal<{ code: string; expiresAt: number } | null>(null);
   const action = createAction();
@@ -27,6 +28,7 @@ export function BridgeLinkCode(props: {
                   method: "POST",
                 }),
               );
+              props.onIssued?.();
             })
           }
         >
@@ -36,22 +38,22 @@ export function BridgeLinkCode(props: {
       <FormError message={action.error()} />
       <Show when={issued()}>
         {(code) => (
-          <div class="notice" role="status">
-            <span>
-              Send this message to the Harness app in a private {provider()} message:{" "}
+          <div class="link-code">
+            <p>Send this message to the Harness app in a private {provider()} message:</p>
+            <div class="link-code-row">
               <code>/link {code().code}</code>
-            </span>
-            <div>
-              <CopyButton
-                text={`/link ${code().code}`}
-                label={`Copy the ${provider()} link command`}
-              />
+              <CopyButton text={`/link ${code().code}`} label="Copy command" />
             </div>
-            <span class="muted">
-              The code works once and expires at {new Date(code().expiresAt).toLocaleString()}.
-            </span>
+            <Help small>
+              The code works once and expires at{" "}
+              {new Date(code().expiresAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}{" "}
+              (10 minutes).
+            </Help>
             <Show when={props.kind === "telegram"}>
-              <span class="muted">Refresh after the bot receives your message.</span>
+              <Help small>Refresh after the bot receives your message.</Help>
             </Show>
             <Show when={props.onLinked}>
               {(linked) => (

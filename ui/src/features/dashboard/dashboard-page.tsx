@@ -1,12 +1,16 @@
 import type { BudgetView } from "@shared/budgets";
-import type { DashboardTask, MemberReport, QuotaWindow } from "@shared/tracking";
+import type { MemberReport } from "@shared/tracking";
 import { dashboardViewSchema } from "@shared/tracking";
 import { createSignal, For, type JSX, Show } from "solid-js";
 import { me } from "../../auth/me";
 import { createLoad } from "../../load";
-import { TableBox } from "../../ui/data-table";
-import { Meter } from "../../ui/meter";
-import { Field, Panel, State, StatusBadge, type Tone } from "../../ui/primitives";
+import { Help } from "../../ui/atoms";
+import { Field, Panel, State, TableBox } from "../../ui/molecules";
+import { BudgetRow } from "./budget-row";
+import { MemberRow } from "./member-row";
+import { QuotaRow } from "./quota-row";
+import { SpendLine } from "./spend-line";
+import { TaskRow } from "./task-row";
 import "./dashboard.css";
 
 const DAY_MS = 86_400_000;
@@ -19,186 +23,16 @@ function sinceOf(range: Range, now: number): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
 }
 
-const nf = new Intl.NumberFormat("en");
-const minutes = (ms: number): string => `${nf.format(Math.round(ms / 60_000))} min`;
-const when = (ms: number | null): string => (ms === null ? "-" : new Date(ms).toLocaleString());
+const ORDER = { paused: 0, warn: 1, ok: 2 } as const;
 
-const TASK_TONE: Record<string, Tone> = {
-  backlog: "neutral",
-  todo: "neutral",
-  cancelled: "neutral",
-  in_progress: "info",
-  in_review: "warning",
-  done: "success",
-  blocked: "danger",
-};
-const BUDGET_TONE: Record<BudgetView["state"], Tone> = {
-  ok: "success",
-  warn: "warning",
-  paused: "danger",
-};
-
-function MemberTable(props: { members: MemberReport[] }): JSX.Element {
-  return (
-    <TableBox label="Usage per member">
-      <thead>
-        <tr>
-          <th scope="col">Member</th>
-          <th scope="col">Runs</th>
-          <th scope="col">Tokens in / out</th>
-          <th scope="col">Cost</th>
-          <th scope="col">Active / waiting / wall</th>
-          <th scope="col">Estimate vs actual (done tasks only)</th>
-          <th scope="col">Top tools</th>
-          <th scope="col">Stack</th>
-        </tr>
-      </thead>
-      <tbody>
-        <For each={props.members}>
-          {(m) => (
-            <tr>
-              <th scope="row">{m.handle}</th>
-              <td>
-                {m.completed} / {m.runs} done
-              </td>
-              <td class="num">
-                {nf.format(m.inputTokens)} / {nf.format(m.outputTokens)}
-              </td>
-              <td>
-                {/* "~" marks a cost the registry priced; unpriced events keep a low total from reading as final. */}
-                {m.costEstimated ? "~" : ""}${m.costUsd.toFixed(2)}
-                <Show when={m.unpricedEvents > 0}>
-                  <span class="dashboard-note"> + {m.unpricedEvents} unpriced</span>
-                </Show>
-              </td>
-              <td>
-                {minutes(m.activeMs)} / {minutes(m.waitingMs)} / {minutes(m.wallMs)}
-              </td>
-              <td>
-                planner {m.plannerMinutes} min, reviewer {m.reviewerMinutes} min, actual{" "}
-                {minutes(m.activeMs)}
-              </td>
-              <td class="dashboard-tools">
-                {m.tools.map((t) => `${t.name} (${t.count})`).join(", ") || "-"}
-              </td>
-              <td>{m.stack.join(", ") || "-"}</td>
-            </tr>
-          )}
-        </For>
-      </tbody>
-    </TableBox>
-  );
+function scopeName(b: BudgetView, members: MemberReport[], orgName: string): string {
+  if (b.scopeKind === "member") {
+    return members.find((m) => m.memberId === b.scopeId)?.handle ?? "member";
+  }
+  return b.scopeKind === "org" ? orgName : "Team";
 }
 
-const scopeName = (b: BudgetView, members: MemberReport[]): string =>
-  b.scopeKind === "member"
-    ? (members.find((m) => m.memberId === b.scopeId)?.handle ?? "member")
-    : b.scopeKind === "org"
-      ? "Whole org"
-      : "Team";
-
-function Budgets(props: { budgets: BudgetView[]; members: MemberReport[] }): JSX.Element {
-  return (
-    <Show when={props.budgets.length > 0} fallback={<p class="dashboard-empty">No budgets set.</p>}>
-      <ul class="dashboard-stack">
-        <For each={props.budgets}>
-          {(b) => (
-            <li>
-              <div class="dashboard-row">
-                <span>{scopeName(b, props.members)}</span>
-                <StatusBadge tone={BUDGET_TONE[b.state]} value={b.state} />
-              </div>
-              <Meter
-                tone={BUDGET_TONE[b.state]}
-                label={`$${b.spentUsd.toFixed(2)} of $${b.monthlyUsd.toFixed(2)}`}
-                value={`${Math.round(b.ratio * 100)}%`}
-                pct={b.monthlyUsd > 0 ? (b.spentUsd / b.monthlyUsd) * 100 : 0}
-              />
-            </li>
-          )}
-        </For>
-      </ul>
-    </Show>
-  );
-}
-
-function QuotaRow(props: { q: QuotaWindow }): JSX.Element {
-  const used = (): number | null => props.q.usedPercent;
-  return (
-    <li>
-      <div class="dashboard-row">
-        <span>
-          {props.q.provider}
-          <Show when={props.q.window !== "unknown"}>
-            <span class="dashboard-note"> {props.q.window}</span>
-          </Show>
-        </span>
-      </div>
-      <Show when={used() !== null} fallback={<span class="dashboard-note">no data yet</span>}>
-        <Meter
-          tone={(used() ?? 0) >= 80 ? "warning" : "success"}
-          label={`${Math.round(used() ?? 0)}% used`}
-          value={`resets ${when(props.q.resetsAt)}`}
-          pct={used() ?? 0}
-        />
-      </Show>
-    </li>
-  );
-}
-
-function Quota(props: { quota: QuotaWindow[] }): JSX.Element {
-  return (
-    <Show when={props.quota.length > 0} fallback={<p class="dashboard-empty">No quota data.</p>}>
-      <ul class="dashboard-stack">
-        <For each={props.quota}>{(q) => <QuotaRow q={q} />}</For>
-      </ul>
-    </Show>
-  );
-}
-
-const cell = (value: number | null): string => (value === null ? "-" : `${value} min`);
-
-function TaskTable(props: { tasks: DashboardTask[] }): JSX.Element {
-  return (
-    <Show
-      when={props.tasks.length > 0}
-      fallback={<p class="dashboard-empty">No tasks changed in this range.</p>}
-    >
-      <TableBox label="Tasks with estimates and agent time">
-        <thead>
-          <tr>
-            <th scope="col">Task</th>
-            <th scope="col">Status</th>
-            <th scope="col">Assignee</th>
-            <th scope="col">Planner</th>
-            <th scope="col">Reviewer</th>
-            <th scope="col">Agent active</th>
-          </tr>
-        </thead>
-        <tbody>
-          <For each={props.tasks}>
-            {(t) => (
-              <tr>
-                <th scope="row">
-                  <span class="mono muted">#{t.number}</span> {t.title}
-                </th>
-                <td>
-                  <StatusBadge tone={TASK_TONE[t.status] ?? "neutral"} value={t.status} />
-                </td>
-                <td>{t.assignee ?? "-"}</td>
-                <td>{cell(t.plannerMinutes)}</td>
-                <td>{cell(t.reviewerMinutes)}</td>
-                <td>{t.agentActiveMinutes} min</td>
-              </tr>
-            )}
-          </For>
-        </tbody>
-      </TableBox>
-    </Show>
-  );
-}
-
-function Dashboard(props: { org: { id: string; slug: string } }): JSX.Element {
+function Dashboard(props: { org: { id: string; slug: string; name: string } }): JSX.Element {
   const [range, setRange] = createSignal<Range>("month");
   const view = createLoad(
     () => `/api/orgs/${props.org.slug}/dashboard?since=${sinceOf(range(), Date.now())}`,
@@ -207,21 +41,6 @@ function Dashboard(props: { org: { id: string; slug: string } }): JSX.Element {
   );
   return (
     <div class="dashboard">
-      <div class="dashboard-head">
-        <Field label="Range">
-          {(control) => (
-            <select
-              {...control()}
-              value={range()}
-              onChange={(e) => setRange(e.currentTarget.value as Range)}
-            >
-              <option value="today">Today</option>
-              <option value="week">Last 7 days</option>
-              <option value="month">This month</option>
-            </select>
-          )}
-        </Field>
-      </div>
       <Show when={view.error()}>
         {(message) => <State kind="error" message={message()} onRetry={() => void view.reload()} />}
       </Show>
@@ -229,31 +48,125 @@ function Dashboard(props: { org: { id: string; slug: string } }): JSX.Element {
         <State kind="loading" />
       </Show>
       <Show when={view.data()}>
-        {(data) => (
-          <>
-            <Panel title="Members">
-              <MemberTable members={data().members} />
-            </Panel>
-            <div class="dashboard-pair">
-              <Panel title="Budgets">
-                <Budgets budgets={data().budgets} members={data().members} />
+        {(data) => {
+          const name = (b: BudgetView): string => scopeName(b, data().members, props.org.name);
+          const budgets = (): BudgetView[] =>
+            [...data().budgets].sort((a, b) => ORDER[a.state] - ORDER[b.state]);
+          return (
+            <>
+              <SpendLine
+                budgets={data().budgets}
+                quota={data().quota}
+                name={name}
+                slug={props.org.slug}
+              />
+              <div class="dashboard-pair">
+                <Panel title="Budgets">
+                  <Help>
+                    A budget is a monthly spending limit in USD. It counts the calendar month (UTC).
+                    At 80% the budget shows near limit. At 100% it is paused.
+                  </Help>
+                  <Show
+                    when={budgets().length > 0}
+                    fallback={<p class="dashboard-empty">No budgets set.</p>}
+                  >
+                    <ul class="dashboard-stack">
+                      <For each={budgets()}>
+                        {(b) => <BudgetRow budget={b} name={name(b)} slug={props.org.slug} />}
+                      </For>
+                    </ul>
+                  </Show>
+                </Panel>
+                <Panel title="Provider quota">
+                  <Help>
+                    Quota is the limit your AI provider sets, in percent of a time window. It is
+                    separate from budgets and does not depend on the range.
+                  </Help>
+                  <Show
+                    when={data().quota.length > 0}
+                    fallback={<p class="dashboard-empty">No quota data.</p>}
+                  >
+                    <ul class="dashboard-stack">
+                      <For each={data().quota}>{(q) => <QuotaRow quota={q} />}</For>
+                    </ul>
+                  </Show>
+                </Panel>
+              </div>
+              <div class="dashboard-head">
+                <Help>
+                  Budgets and quota are always shown for now. The range changes only the two tables
+                  below.
+                </Help>
+                <Field label="Range for members and tasks">
+                  {(control) => (
+                    <select
+                      {...control()}
+                      value={range()}
+                      onChange={(e) => setRange(e.currentTarget.value as Range)}
+                    >
+                      <option value="today">Today</option>
+                      <option value="week">Last 7 days</option>
+                      <option value="month">This month</option>
+                    </select>
+                  )}
+                </Field>
+              </div>
+              <Panel title="Members">
+                <TableBox stack label="Usage per member">
+                  <thead>
+                    <tr>
+                      <th scope="col">Member</th>
+                      <th scope="col">Runs done</th>
+                      <th scope="col">Tokens in</th>
+                      <th scope="col">Tokens out</th>
+                      <th scope="col">Cost (USD)</th>
+                      <th scope="col">Active (min)</th>
+                      <th scope="col">Waiting (min)</th>
+                      <th scope="col">Wall (min)</th>
+                      <th scope="col">Top tools (calls)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={data().members}>{(m) => <MemberRow member={m} />}</For>
+                  </tbody>
+                </TableBox>
+                <Help>
+                  Active: time an agent worked. Waiting: time a run waited for a person. Wall: first
+                  to last event of the run. ~ means the cost is an estimate from the price list.
+                </Help>
               </Panel>
-              <Panel title="Quota">
-                <Quota quota={data().quota} />
+              <Panel title="Tasks">
+                <Show
+                  when={data().tasks.length > 0}
+                  fallback={<p class="dashboard-empty">No tasks changed in this range.</p>}
+                >
+                  <TableBox stack label="Tasks with estimates and agent time">
+                    <thead>
+                      <tr>
+                        <th scope="col">Task</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Assignee</th>
+                        <th scope="col">Planner est. (min)</th>
+                        <th scope="col">Reviewer est. (min)</th>
+                        <th scope="col">Agent active (min)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <For each={data().tasks}>{(t) => <TaskRow task={t} />}</For>
+                    </tbody>
+                  </TableBox>
+                </Show>
               </Panel>
-            </div>
-            <Panel title="Tasks">
-              <TaskTable tasks={data().tasks} />
-            </Panel>
-          </>
-        )}
+            </>
+          );
+        }}
       </Show>
     </div>
   );
 }
 
 export function DashboardPage(props: { slug: string }): JSX.Element {
-  const org = (): { id: string; slug: string } | undefined =>
+  const org = (): { id: string; slug: string; name: string } | undefined =>
     me()?.orgs.find((o) => o.slug === props.slug);
   return (
     <Show when={org()} fallback={<State kind="empty" message="Org not found" />}>

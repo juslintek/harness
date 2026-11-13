@@ -6,7 +6,7 @@ import {
   taskViewSchema,
 } from "@shared/board";
 import { rememberReturn } from "../../return-hash";
-import type { Tone } from "../../ui/primitives";
+import { statusWord } from "../../ui/atoms/status";
 
 export const STATUSES: Status[] = [
   "backlog",
@@ -56,17 +56,10 @@ export async function postTask(
   return { ok: false, message: text || `HTTP ${res.status}` };
 }
 
-export const STATUS_TONE: Record<Status, Tone> = {
-  backlog: "neutral",
-  todo: "neutral",
-  in_progress: "info",
-  in_review: "warning",
-  done: "success",
-  blocked: "danger",
-  cancelled: "neutral",
-};
-
 export interface Notice {
   taskId: string;
   text: string;
 }
+
+// The plain word for a status, as DESIGN.md asks: "in progress", not "in_progress".
+export const statusLabel = (status: Status): string => statusWord(status).word;

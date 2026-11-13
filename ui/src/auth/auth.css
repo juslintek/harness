@@ -2,7 +2,7 @@
 .auth-screen {
   display: grid;
   justify-items: center;
-  align-content: start;
+  align-content: center;
   gap: var(--space-lg);
   min-height: 100vh;
   padding: var(--space-2xl) var(--space-lg);
@@ -44,6 +44,14 @@
   gap: var(--space-xs);
 }
 
+.auth-head > * {
+  margin: 0;
+}
+
+.auth-head code {
+  font-family: var(--font-mono);
+}
+
 .auth-head h1,
 .auth-head h2 {
   margin: 0;
@@ -75,22 +83,6 @@
   background: var(--color-border);
 }
 
-.auth-lost {
-  display: grid;
-  gap: var(--space-md);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--color-border);
-}
-
-.auth-lost-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  color: var(--color-ink-muted);
-  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
-}
-
 .auth-card input.mono {
   font-family: var(--font-mono);
 }
@@ -114,16 +106,26 @@
   text-align: center;
 }
 
-.codes-saved {
-  display: flex;
-  align-items: center;
+.codes-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: var(--space-sm);
-  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
 }
 
-.codes-saved input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: var(--color-brand);
+.codes-tools a.btn {
+  text-decoration: none;
+}
+
+.auth-links {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-xs);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+/* A ghost button has its own side padding; pulling it back lines its text up with the form's edge. */
+.auth-card .btn[data-tone="ghost"] {
+  justify-self: start;
+  margin-inline-start: calc((var(--space-sm) + 1px) * -1);
 }

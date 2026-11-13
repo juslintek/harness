@@ -40,35 +40,43 @@ async function confirmWithPasskey(page: Page): Promise<void> {
   await prompt.getByRole("button", { name: "Use passkey" }).click();
 }
 
-test("the sign-in card shows the passkey first and keeps recovery folded away", async ({
+test("the sign-in card shows the passkey first and keeps the other ways behind links", async ({
   page,
 }) => {
   await page.goto("/#/login");
   await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+  await expect(page.getByText(`to ${new URL(page.url()).host}`)).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send code" })).toHaveCount(0);
   await expect(page.getByLabel("Recovery code", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Use a recovery code" }).click();
+  await page.getByRole("button", { name: "Lost your passkey? Use a recovery code" }).click();
   await expect(page.getByLabel("Recovery code", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Hide" }).click();
-  await expect(page.getByLabel("Recovery code", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Back to passkey" }).click();
+  await page.getByRole("button", { name: "Use an email code instead" }).click();
+  await expect(page.getByRole("button", { name: "Send code" })).toBeVisible();
+  await page.getByRole("button", { name: "Back to passkey" }).click();
+  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
 });
 
 test("a wrong email code says so in plain words, and a wrong recovery code too", async ({
   page,
 }) => {
   await page.goto("/#/login");
+  await page.getByRole("button", { name: "Use an email code instead" }).click();
   await page.getByLabel("Email", { exact: true }).fill("nobody@example.com");
   await page.getByRole("button", { name: "Send code" }).click();
-  await expect(page.getByRole("status")).toContainText("Code sent");
+  await expect(page.getByRole("status")).toContainText("Code sent to nobody@example.com");
   await page.getByLabel("Code from email").fill("000000");
   await page.getByRole("button", { name: "Sign in with code" }).click();
   await expect(page.getByRole("alert")).toHaveText(
     "That code is wrong or has expired. Request a new one.",
   );
+  await page.getByRole("button", { name: "Request a new code" }).click();
+  await expect(page.getByRole("status")).toContainText("Code sent to nobody@example.com");
 
-  await page.getByRole("button", { name: "Use a recovery code" }).click();
-  await page.getByLabel("Email", { exact: true }).last().fill("nobody@example.com");
+  await page.getByRole("button", { name: "Back to passkey" }).click();
+  await page.getByRole("button", { name: "Lost your passkey? Use a recovery code" }).click();
+  await page.getByLabel("Email", { exact: true }).fill("nobody@example.com");
   await page.getByLabel("Recovery code", { exact: true }).fill("aaaa-bbbb-cccc");
   await page.getByRole("button", { name: "Sign in with recovery code" }).click();
   await expect(page.getByRole("alert")).toHaveText(
@@ -94,6 +102,29 @@ test("an enrollment link that is not valid says so and keeps the form", async ({
   await expect(page.getByRole("button", { name: "Register a passkey" })).toBeEnabled();
 });
 
+test("enrolling shows two steps, then recovery codes that stay locked until saved", async ({
+  page,
+  stack,
+}) => {
+  await page.goto(`/#/enroll/${stack.enrollmentCode("new@example.com", "New")}`);
+  const steps = page.getByRole("list", { name: "Enrolment steps" });
+  await expect(steps.getByRole("listitem")).toHaveText([
+    "1Create a passkey",
+    "2Save recovery codes",
+  ]);
+  await page.getByLabel("Your name").fill("New");
+  await page.getByLabel("Email").fill("new@example.com");
+  await page.getByRole("button", { name: "Register a passkey" }).click();
+  await expect(page.getByRole("heading", { name: "You are enrolled" })).toBeVisible();
+  await expect(steps.getByRole("listitem").first()).toContainText("(done)");
+  await expect(page.locator(".codes li")).toHaveCount(10);
+  await expect(page.getByLabel("I saved them")).not.toBeChecked();
+  await expect(page.getByRole("button", { name: "Continue" })).toBeDisabled();
+  await page.getByLabel("I saved them").check();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/#\/$/);
+});
+
 test("the account page lists the person, and a notification choice survives a reload", async ({
   page,
   stack,
@@ -109,6 +140,14 @@ test("the account page lists the person, and a notification choice survives a re
   await page.goto("/#/account");
   await expect(page.getByRole("heading", { name: "Ada", level: 2 })).toBeVisible();
   const box = page.getByRole("checkbox", { name: "Run blocked by Email" });
+  // A channel with no target cannot deliver, so its choices are off and say why.
+  await expect(box).toBeDisabled();
+  await expect(box).not.toBeChecked();
+  await expect(page.getByText(/Email.* no target/)).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /Email no target/ })).toBeVisible();
+  const email = page.getByRole("region", { name: "Email" });
+  await email.getByLabel("Email address").fill("ada@acme.example");
+  await email.getByRole("button", { name: "Add" }).click();
   await expect(box).toBeEnabled();
   const before = await box.isChecked();
   await box.click();
@@ -119,7 +158,7 @@ test("the account page lists the person, and a notification choice survives a re
   });
   // Another organisation has its own grid.
   await page.getByLabel("Notification organization").selectOption({ label: "Northwind" });
-  await expect(page.getByRole("checkbox", { name: "Run blocked by Email" })).toBeEnabled();
+  await expect(page.getByRole("checkbox", { name: "Run blocked by Email" })).toBeDisabled();
 });
 
 test("email and webhook targets are added and removed, the webhook secret shows once", async ({
@@ -137,7 +176,11 @@ test("email and webhook targets are added and removed, the webhook secret shows 
   await email.getByRole("button", { name: "Add" }).click();
   await expect(email).toContainText("ops@example.com");
   await email.getByRole("button", { name: /^Remove Email target/ }).click();
+  const confirm = page.getByRole("dialog", { name: "Remove ops@example.com?" });
+  await expect(confirm).toContainText("Notifications stop going to this Email target.");
+  await confirm.getByRole("button", { name: "Remove target" }).click();
   await expect(email).toContainText("No email target yet.");
+  await expect(page.getByText("Removed ops@example.com.")).toBeVisible();
 
   const hook = page.getByRole("region", { name: "Webhook" });
   await hook.getByLabel("Webhook URL").fill("https://example.com/harness-hook");
@@ -162,7 +205,7 @@ test("push shows what this browser can do, and telegram gives a link code", asyn
   await expect(
     page
       .getByRole("region", { name: "Push" })
-      .getByText(/Push is off|blocked|cannot receive|active/),
+      .getByText(/Push on this browser|blocked|cannot receive/),
   ).toBeVisible();
   const telegram = page.getByRole("region", { name: "Telegram" });
   await telegram.getByRole("button", { name: "Get a Telegram link code" }).click();
@@ -184,9 +227,16 @@ test("a second passkey is listed and removed, the same device cannot register tw
   await page.goto("/#/account");
   const passkeys = page.getByRole("region", { name: "Passkeys" });
   await expect(passkeys).toContainText("YubiKey 5C");
+  await expect(passkeys).toContainText("never used");
   await passkeys.getByRole("button", { name: "Remove passkey YubiKey 5C" }).click();
+  const sure = page.getByRole("dialog", { name: "Remove passkey YubiKey 5C?" });
+  await expect(sure).toContainText("can no longer sign you in");
+  await sure.getByRole("button", { name: "Remove", exact: true }).click();
   await confirmWithPasskey(page);
-  await expect(passkeys).not.toContainText("YubiKey 5C");
+  await expect(passkeys.locator(".acct-list")).not.toContainText("YubiKey 5C");
+  await expect(page.getByText("Removed passkey YubiKey 5C.")).toBeVisible();
+  // The last passkey cannot go.
+  await expect(passkeys.getByRole("button", { name: /^Remove passkey/ })).toBeDisabled();
 
   // This browser already holds a passkey for the account, so it refuses a second one and the page says why.
   await passkeys.getByLabel("Name for the new passkey").fill("Laptop");
@@ -199,14 +249,21 @@ test("recovery codes are shown once and stay locked until saved", async ({ page,
   await signIn(page, stack, { email: "rc@example.com", name: "Rc" });
   await page.goto("/#/account");
   const recovery = page.getByRole("region", { name: "Recovery codes" });
-  await recovery.getByRole("button", { name: "Regenerate recovery codes" }).click();
+  await recovery.getByRole("button", { name: "Generate new codes" }).click();
   await confirmWithPasskey(page);
   await expect(recovery.locator(".codes li")).toHaveCount(10);
   await expect(recovery.getByRole("button", { name: "Continue" })).toBeDisabled();
+  await expect(recovery.getByLabel("I saved them")).not.toBeChecked();
+  await expect(recovery.getByRole("button", { name: "Copy codes" })).toBeVisible();
+  await expect(recovery.getByRole("link", { name: "Download codes" })).toHaveAttribute(
+    "download",
+    "harness-recovery-codes.txt",
+  );
   await recovery.getByLabel("I saved them").check();
   await recovery.getByRole("button", { name: "Continue" }).click();
+  await expect(recovery.getByText("The old ones no longer work.")).toBeVisible();
   await expect(recovery.locator(".codes li")).toHaveCount(0);
-  await expect(recovery.getByRole("button", { name: "Regenerate recovery codes" })).toBeVisible();
+  await expect(recovery.getByRole("button", { name: "Generate new codes" })).toBeVisible();
 });
 
 test("another session can be revoked", async ({ page, stack }) => {
@@ -219,8 +276,13 @@ test("another session can be revoked", async ({ page, stack }) => {
   const sessions = page.getByRole("region", { name: "Sessions" });
   await expect(sessions).toContainText("Safari on iPhone");
   await sessions.getByRole("button", { name: "Revoke session Safari on iPhone" }).click();
+  await page
+    .getByRole("dialog", { name: "Revoke the session on Safari on iPhone?" })
+    .getByRole("button", { name: "Revoke", exact: true })
+    .click();
   await confirmWithPasskey(page);
-  await expect(sessions).not.toContainText("Safari on iPhone");
+  await expect(sessions.locator(".acct-list")).not.toContainText("Safari on iPhone");
+  await expect(page.getByText("Revoked the session on Safari on iPhone.")).toBeVisible();
   await expect(sessions).toContainText("This device");
 });
 
@@ -235,13 +297,24 @@ test("consent approves with a passkey, the grant is listed and can be revoked", 
   });
   await page.route("http://127.0.0.1:9999/**", (route) => route.fulfill({ body: "ok" }));
   const clientId = await startConsent(page, stack);
-  await expect(page.getByRole("heading", { name: "Allow access to Harness?" })).toBeVisible();
-  await expect(page.getByText("Test Connector")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Allow Test Connector to use Harness as you?" }),
+  ).toBeVisible();
+  await expect(page.getByText("oauth@example.com")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Deny" })).toHaveAttribute(
+    "data-tone",
+    "secondary",
+  );
+  await expect(page.getByRole("button", { name: "Allow", exact: true })).toHaveAttribute(
+    "data-tone",
+    "primary",
+  );
   await page.getByLabel("Organisation").selectOption({ label: "Acme Labs" });
-  const approve = page.getByRole("button", { name: "Approve" });
+  const approve = page.getByRole("button", { name: "Allow", exact: true });
   await page.getByLabel("Read and post chat messages").uncheck();
   await page.getByLabel("Read and change tasks on the board").uncheck();
   await expect(approve).toBeDisabled();
+  await expect(page.getByText("Pick at least one permission")).toBeVisible();
   await page.getByLabel("Read and change tasks on the board").check();
   await approve.focus();
   await page.keyboard.press("Enter");
@@ -265,9 +338,15 @@ test("consent approves with a passkey, the grant is listed and can be revoked", 
   const mcp = page.getByRole("region", { name: "Remote MCP (claude.ai, ChatGPT)" });
   await expect(mcp.getByLabel("Connector URL")).toHaveValue(`${stack.url}/mcp/remote`);
   await expect(mcp).toContainText("Test Connector");
-  await expect(mcp).toContainText("Acme Labs, board");
+  await expect(mcp).toContainText("Can use: board · connected");
+  await expect(mcp.locator(".badge", { hasText: "connected" })).toBeVisible();
   await mcp.getByRole("button", { name: /^Revoke access of Test Connector/ }).click();
-  await expect(mcp).toContainText("No client has access.");
+  await page
+    .getByRole("dialog", { name: "Revoke access of Test Connector?" })
+    .getByRole("button", { name: "Revoke", exact: true })
+    .click();
+  await expect(mcp).toContainText("A client appears here once you approve it.");
+  await expect(mcp.getByText("Revoked access of Test Connector to Acme Labs.")).toBeVisible();
 });
 
 test("deny sends the person back to the client with an error", async ({ page, stack }) => {
@@ -319,9 +398,15 @@ test("on a phone sign-in, account, consent and enrollment do not scroll sideways
     orgs: [{ name: "Acme Labs", slug: "acme" }],
   });
   await page.goto("/#/account");
-  await expect(page.getByRole("checkbox", { name: "Run blocked by Email" })).toBeEnabled();
+  await expect(page.getByRole("checkbox", { name: "Run blocked by Email" })).toBeDisabled();
+  // One card per event: the channel names sit beside each checkbox, not in a header row.
+  const label = await page
+    .locator("td[data-label='Email (no target)']")
+    .first()
+    .evaluate((td) => getComputedStyle(td, "::before").content);
+  expect(label).toContain("Email (no target)");
   expect(await noSideScroll(page)).toBe(true);
   await startConsent(page, stack);
-  await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Allow", exact: true })).toBeVisible();
   expect(await noSideScroll(page)).toBe(true);
 });

@@ -16,6 +16,10 @@
   },
   "overrides": [
     {
+      "includes": ["src/ui/*/index.ts"],
+      "linter": { "rules": { "performance": { "noBarrelFile": "off" } } }
+    },
+    {
       "includes": ["*.config.ts"],
       "linter": { "rules": { "style": { "noDefaultExport": "off" } } }
     }

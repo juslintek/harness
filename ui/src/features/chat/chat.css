@@ -1,11 +1,10 @@
 .chat {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);
-  height: calc(100dvh - 48px - 2 * var(--space-lg));
+  height: calc(100dvh - var(--size-topbar));
   min-height: 24rem;
+  margin: calc(-1 * var(--space-lg));
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
@@ -29,8 +28,6 @@
   height: 24px;
   padding: 0 var(--space-md);
   font: 600 var(--text-caption) / 24px var(--font-body);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--color-ink-muted);
 }
 
@@ -148,10 +145,13 @@
   padding: var(--space-md);
 }
 
-/* Pushes a short conversation to the bottom without the flex-end overflow trap. */
-.pane-scroll > :first-child,
-.thread-scroll > :first-child {
-  margin-top: auto;
+/* Pushes a short conversation to the bottom without the flex-end overflow trap. On a phone it
+   stays at the top, so a short channel does not open on a screen of empty space. */
+@media (min-width: 48rem) {
+  .pane-scroll > :first-child,
+  .thread-scroll > :first-child {
+    margin-top: auto;
+  }
 }
 
 .pane-scroll > *,
@@ -221,10 +221,6 @@ button.link {
   margin-bottom: var(--space-md);
 }
 
-.mono {
-  font-family: var(--font-mono);
-}
-
 .composer {
   position: relative;
   display: flex;
@@ -256,7 +252,7 @@ button.link {
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
-  resize: vertical;
+  resize: none;
 }
 
 .composer-error {
@@ -334,6 +330,8 @@ button.link {
 
   .chat-back {
     display: inline;
+    color: var(--color-ink);
+    text-decoration: none;
   }
 
   .pane-head {
@@ -354,5 +352,48 @@ button.link {
 
   .thread {
     border-left: 0;
+  }
+}
+
+.working-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-sm);
+  flex: none;
+  margin: 0;
+  padding: var(--space-xs) var(--space-lg);
+  background: var(--status-info-bg);
+  color: var(--status-info);
+  border-bottom: 1px solid var(--color-border);
+  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
+}
+
+.working-strip a {
+  color: inherit;
+  font-family: var(--font-mono);
+}
+
+.composer-hint {
+  flex-basis: 100%;
+  order: 4;
+  margin: 0;
+  color: var(--color-ink-muted);
+  font: 400 var(--text-caption) / var(--leading-caption) var(--font-body);
+}
+
+/* "Reply" is for starting a thread: it appears on hover or focus and always on touch screens. */
+.message .link[data-quiet="true"] {
+  opacity: 0;
+}
+
+.message:hover .link[data-quiet="true"],
+.message:focus-within .link[data-quiet="true"] {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .message .link[data-quiet="true"] {
+    opacity: 1;
   }
 }

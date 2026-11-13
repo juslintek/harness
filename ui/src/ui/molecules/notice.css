@@ -1,0 +1,56 @@
+.notice {
+  --tone: var(--status-info);
+  --tone-bg: var(--status-info-bg);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: var(--space-sm);
+  padding: var(--space-md);
+  background: var(--tone-bg);
+  border: 1px solid color-mix(in oklch, var(--tone) 35%, transparent);
+  border-radius: var(--radius-md);
+}
+
+.notice[data-tone="success"] {
+  --tone: var(--status-success);
+  --tone-bg: var(--status-success-bg);
+}
+
+.notice[data-tone="warning"] {
+  --tone: var(--status-warning);
+  --tone-bg: var(--status-warning-bg);
+}
+
+.notice[data-tone="danger"] {
+  --tone: var(--status-danger);
+  --tone-bg: var(--status-danger-bg);
+}
+
+.notice[data-banner] {
+  border-width: 0 0 1px;
+  border-radius: 0;
+}
+
+.notice-text {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding-right: var(--space-md);
+  overflow-wrap: anywhere;
+  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
+}
+
+.notice-title {
+  color: var(--tone);
+  font-weight: 600;
+}
+
+.notice code {
+  font-family: var(--font-mono);
+}
+
+.notice-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-sm);
+}

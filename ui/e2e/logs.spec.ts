@@ -33,7 +33,7 @@ function seedEvents(stack: Stack, org: string, count: number): void {
 }
 
 async function search(page: Page, q: string): Promise<void> {
-  await page.getByRole("searchbox", { name: "Search" }).fill(q);
+  await page.getByRole("searchbox", { name: "Search events" }).fill(q);
   await page.getByRole("button", { name: "Search logs" }).click();
 }
 
@@ -46,16 +46,17 @@ test.describe("logs", () => {
     seedEvents(stack, await orgId(page, "acme"), 55);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/#/o/acme/logs");
-    await expect(page.getByText("Search the events of this org.")).toBeVisible();
+    await expect(page.getByRole("list", { name: "Suggested searches" })).toBeVisible();
     await search(page, "deploy");
     const rows = page.getByRole("region", { name: "Log events" }).locator("tbody tr");
     await expect(rows).toHaveCount(50);
     await expect(rows.first()).toContainText("deploy step 55");
     await expect(rows.first()).toContainText("ada");
-    await expect(rows.first().getByRole("link", { name: "Run" })).toHaveAttribute(
+    await expect(rows.first().getByRole("link", { name: "run-logs" })).toHaveAttribute(
       "href",
       "#/runs/run-logs",
     );
+    await expect(page.getByText('50 events for "deploy", newest first')).toBeVisible();
     if (SHOTS) {
       await page.screenshot({ path: `${SHOTS}/logs-1440-light.png` });
       await page.emulateMedia({ colorScheme: "dark" });
@@ -68,7 +69,8 @@ test.describe("logs", () => {
     await page.getByLabel("Kind").selectOption("error");
     await page.getByRole("button", { name: "Search logs" }).click();
     await expect(rows).toHaveCount(1);
-    await expect(rows.first()).toContainText("error");
+    await expect(rows.first().locator(".badge")).toHaveText("error");
+    await expect(rows.first().locator(".badge")).toHaveAttribute("data-tone", "danger");
   });
 
   test("a task's event links to its board card, and the Member filter narrows to one member", async ({
@@ -112,9 +114,10 @@ test.describe("logs", () => {
     await search(page, "deploy");
     const rows = page.getByRole("region", { name: "Log events" }).locator("tbody tr");
     await expect(rows).toHaveCount(3);
-    await expect(
-      rows.filter({ hasText: "bot" }).getByRole("link", { name: "Task" }),
-    ).toHaveAttribute("href", `#/o/acme/board/${projectId}/1`);
+    await expect(rows.filter({ hasText: "bot" }).getByRole("link", { name: "#1" })).toHaveAttribute(
+      "href",
+      `#/o/acme/board/${projectId}/1`,
+    );
     await page.getByLabel("Member").selectOption({ label: "bot" });
     await page.getByRole("button", { name: "Search logs" }).click();
     await expect(rows).toHaveCount(1);
@@ -128,14 +131,14 @@ test.describe("logs", () => {
     await signIn(page, stack, { email: "ada@example.com", name: "Ada", orgs: [ACME] });
     await page.goto("/#/o/acme/logs");
     await search(page, "nothing");
-    await expect(page.getByText("No log events match.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: 'No events match "nothing"' })).toBeVisible();
   });
 
   test("the search works from the keyboard", async ({ page, stack }) => {
     await signIn(page, stack, { email: "ada@example.com", name: "Ada", orgs: [ACME] });
     seedEvents(stack, await orgId(page, "acme"), 3);
     await page.goto("/#/o/acme/logs");
-    await page.getByRole("searchbox", { name: "Search" }).focus();
+    await page.getByRole("searchbox", { name: "Search events" }).focus();
     await page.keyboard.type("deploy");
     await page.keyboard.press("Enter");
     await expect(page.getByRole("region", { name: "Log events" }).locator("tbody tr")).toHaveCount(
@@ -147,7 +150,7 @@ test.describe("logs", () => {
     await signIn(page, stack, { email: "ada@example.com", name: "Ada", orgs: [ACME] });
     const id = await orgId(page, "acme");
     await page.goto("/#/o/acme/logs");
-    await expect(page.getByRole("searchbox", { name: "Search" })).toBeVisible();
+    await expect(page.getByRole("searchbox", { name: "Search events" })).toBeVisible();
     // The page still thinks ada is an owner; the server now says 403.
     stack.sql("UPDATE members SET role = 'viewer' WHERE org_id = ? AND handle = 'ada'", id);
     await search(page, "deploy");
@@ -184,6 +187,73 @@ test.describe("logs", () => {
       () => document.documentElement.scrollWidth <= window.innerWidth,
     );
     expect(fits).toBe(true);
+    await expect(page.getByRole("columnheader", { name: "Kind" })).toBeHidden();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/logs-375-light.png` });
+  });
+
+  test("a suggested search fills the field and runs, an empty query is never sent", async ({
+    page,
+    stack,
+  }) => {
+    await signIn(page, stack, { email: "ada@example.com", name: "Ada", admin: true, orgs: [ACME] });
+    seedEvents(stack, await orgId(page, "acme"), 3);
+    let sent = 0;
+    await page.route("**/logs/search*", (route) => {
+      sent += 1;
+      return route.continue();
+    });
+    await page.goto("/#/o/acme/logs");
+    await page.getByRole("button", { name: "Search logs" }).click();
+    await page.getByRole("searchbox", { name: "Search events" }).fill("   ");
+    await page.getByRole("searchbox", { name: "Search events" }).press("Enter");
+    expect(sent).toBe(0);
+    await page
+      .getByRole("list", { name: "Suggested searches" })
+      .getByRole("button", { name: "deploy" })
+      .click();
+    await expect(page.getByRole("searchbox", { name: "Search events" })).toHaveValue("deploy");
+    await expect(page.getByRole("region", { name: "Log events" }).locator("tbody tr")).toHaveCount(
+      3,
+    );
+    expect(sent).toBe(1);
+    await page.getByRole("button", { name: "Search logs" }).click();
+    await expect.poll(() => sent).toBe(2);
+  });
+
+  test("a search with no match explains what matches and offers chips", async ({ page, stack }) => {
+    await signIn(page, stack, { email: "ada@example.com", name: "Ada", orgs: [ACME] });
+    await page.goto("/#/o/acme/logs");
+    await search(page, "nothing");
+    await expect(page.getByText(/with 3 or more characters/)).toBeVisible();
+    await expect(page.getByRole("list", { name: "Suggested searches" })).toBeVisible();
+  });
+
+  test("the live panel lists running runs for an admin, with a link to follow each", async ({
+    page,
+    stack,
+  }) => {
+    await signIn(page, stack, { email: "ada@example.com", name: "Ada", admin: true, orgs: [ACME] });
+    const org = await orgId(page, "acme");
+    await page.goto("/#/o/acme/logs");
+    await expect(page.getByRole("heading", { name: /Want to watch live/ })).toBeVisible();
+    await expect(page.getByText("No run is running now.")).toBeVisible();
+    stack.sql(
+      "INSERT INTO runs (id, agent_id, repo, prompt, state, created_at, org_id, member_id) VALUES ('run-live', 'a', 'r', 'fix the build', 'running', 1, ?, (SELECT id FROM members WHERE org_id = ? AND handle = 'ada'))",
+      org,
+      org,
+    );
+    await page.reload();
+    await expect(
+      page.getByRole("list", { name: "Running runs" }).getByRole("link", { name: "Follow live" }),
+    ).toHaveAttribute("href", "#/runs/run-live");
+    await expect(page.getByRole("heading", { name: /Live tail/i })).toHaveCount(0);
+  });
+
+  test("a non-admin sees the live help line without the run list", async ({ page, stack }) => {
+    await signIn(page, stack, { email: "ada@example.com", name: "Ada", orgs: [ACME] });
+    await page.goto("/#/o/acme/logs");
+    await expect(page.getByRole("heading", { name: /Want to watch live/ })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Running runs" })).toHaveCount(0);
+    await expect(page.getByText("No run is running now.")).toHaveCount(0);
   });
 });

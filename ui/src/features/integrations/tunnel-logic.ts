@@ -1,13 +1,24 @@
 export type Provider = "tailscale-serve" | "tailscale-funnel" | "cloudflare";
 
-export const PROVIDERS: { id: Provider; label: string; tailnetOnly: boolean }[] = [
+export const PROVIDERS: { id: Provider; label: string; name: string; tailnetOnly: boolean }[] = [
   {
     id: "tailscale-serve",
     label: "Tailscale Serve (tailnet only, recommended)",
+    name: "Tailscale Serve",
     tailnetOnly: true,
   },
-  { id: "tailscale-funnel", label: "Tailscale Funnel (public internet)", tailnetOnly: false },
-  { id: "cloudflare", label: "Cloudflare quick tunnel (public internet)", tailnetOnly: false },
+  {
+    id: "tailscale-funnel",
+    label: "Tailscale Funnel (public internet)",
+    name: "Tailscale Funnel",
+    tailnetOnly: false,
+  },
+  {
+    id: "cloudflare",
+    label: "Cloudflare quick tunnel (public internet)",
+    name: "Cloudflare",
+    tailnetOnly: false,
+  },
 ];
 
 // Mirrors the server: everything except Serve puts the instance on the open internet.
