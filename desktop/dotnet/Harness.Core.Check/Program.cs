@@ -77,7 +77,7 @@ static async Task ExpectKind(Func<Task> call, ApiErrorKind kind, string what)
 
 static bool IsAlive(int pid)
 {
-    try { return !Process.GetProcessById(pid).HasExited; }
+    try { using var p = Process.GetProcessById(pid); return !p.HasExited; }
     catch (ArgumentException) { return false; }
 }
 
@@ -122,10 +122,10 @@ async Task Enroll(string email, BackendProcess backend, ApiClient client)
         ["HARNESS_HOME"] = backend.Home,
         ["HARNESS_ORIGIN"] = client.Origin,
     });
-    var output = Task.WhenAll(child.StandardOutput.ReadToEndAsync(), child.StandardError.ReadToEndAsync());
+    var output = await Task.WhenAll(child.StandardOutput.ReadToEndAsync(), child.StandardError.ReadToEndAsync());
     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
     await child.WaitForExitAsync(timeout.Token);
-    Expect(child.ExitCode == 0, $"harness enroll failed ({child.ExitCode}): {string.Join(' ', await output)}");
+    Expect(child.ExitCode == 0, $"harness enroll failed ({child.ExitCode}): {string.Join(' ', output)}");
 }
 
 async Task<string> EmailCode(string email, BackendProcess backend)

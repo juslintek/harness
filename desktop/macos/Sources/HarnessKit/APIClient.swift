@@ -207,7 +207,7 @@ public final class APIClient: Sendable {
     }
 
     public func revokeSession(id: String) async throws {
-        _ = try await send("DELETE", "/api/auth/sessions/\(id)")
+        _ = try await send("DELETE", "/api/auth/sessions/\(seg(id))")
     }
 
     public func logout() async throws {
@@ -235,65 +235,65 @@ public final class APIClient: Sendable {
     /// Projects come with the org detail; there is no separate list route.
     public func projects(orgSlug: String) async throws -> [Project] {
         struct Detail: Decodable { let projects: [Project] }
-        let detail: Detail = try decode(await send("GET", "/api/orgs/\(orgSlug)"))
+        let detail: Detail = try decode(await send("GET", "/api/orgs/\(seg(orgSlug))"))
         return detail.projects
     }
 
     public func createProject(orgSlug: String, key: String, name: String) async throws -> Project {
-        try decode(await send("POST", "/api/orgs/\(orgSlug)/projects", body: ["key": key, "name": name]))
+        try decode(await send("POST", "/api/orgs/\(seg(orgSlug))/projects", body: ["key": key, "name": name]))
     }
 
     public func tasks(projectId: String) async throws -> [TaskItem] {
-        try decode(await send("GET", "/api/projects/\(projectId)/tasks"))
+        try decode(await send("GET", "/api/projects/\(seg(projectId))/tasks"))
     }
 
     public func createTask(projectId: String, title: String, description: String = "", status: TaskStatus? = nil) async throws -> TaskItem {
         var body = ["title": title, "description": description]
         if let status { body["status"] = status.rawValue }
-        return try decode(await send("POST", "/api/projects/\(projectId)/tasks", body: body))
+        return try decode(await send("POST", "/api/projects/\(seg(projectId))/tasks", body: body))
     }
 
     public func task(id: String) async throws -> TaskDetail {
-        try decode(await send("GET", "/api/tasks/\(id)"))
+        try decode(await send("GET", "/api/tasks/\(seg(id))"))
     }
 
     /// The board's drag-and-drop uses this route; PATCH /api/tasks/:id edits fields, not the column.
     public func moveTask(id: String, to status: TaskStatus, beforeId: String? = nil) async throws -> TaskItem {
         var body = ["to": status.rawValue]
         if let beforeId { body["beforeId"] = beforeId }
-        return try decode(await send("POST", "/api/tasks/\(id)/move", body: body))
+        return try decode(await send("POST", "/api/tasks/\(seg(id))/move", body: body))
     }
 
     public func addComment(taskId: String, body: String) async throws -> TaskComment {
-        try decode(await send("POST", "/api/tasks/\(taskId)/comments", body: ["body": body]))
+        try decode(await send("POST", "/api/tasks/\(seg(taskId))/comments", body: ["body": body]))
     }
 
     /// Includes the org channel, teams, projects, groups and the caller's DMs, with `unread` counts.
     public func channels(orgSlug: String) async throws -> [Channel] {
-        try decode(await send("GET", "/api/orgs/\(orgSlug)/channels"))
+        try decode(await send("GET", "/api/orgs/\(seg(orgSlug))/channels"))
     }
 
     /// The contract has no plain "create channel"; a group is the user-made kind, and the creator is a member.
     public func createGroup(orgSlug: String, name: String, memberIds: [String] = []) async throws -> Channel {
         struct Body: Encodable { let name: String; let memberIds: [String] }
-        return try decode(await send("POST", "/api/orgs/\(orgSlug)/groups", body: Body(name: name, memberIds: memberIds)))
+        return try decode(await send("POST", "/api/orgs/\(seg(orgSlug))/groups", body: Body(name: name, memberIds: memberIds)))
     }
 
     /// Oldest first. Without `thread` the list holds top-level messages; with it, that thread's replies.
     public func messages(channelId: String, before: String? = nil, thread: String? = nil, limit: Int = 50) async throws -> [Message] {
-        var path = "/api/channels/\(channelId)/messages?limit=\(limit)"
-        if let before { path += "&before=\(before)" }
-        if let thread { path += "&thread=\(thread)" }
+        var path = "/api/channels/\(seg(channelId))/messages?limit=\(limit)"
+        if let before { path += "&before=\(seg(before))" }
+        if let thread { path += "&thread=\(seg(thread))" }
         return try decode(await send("GET", path))
     }
 
     public func postMessage(channelId: String, body: String, threadRootId: String? = nil) async throws -> Message {
         struct Body: Encodable { let body: String; let threadRootId: String? }
-        return try decode(await send("POST", "/api/channels/\(channelId)/messages", body: Body(body: body, threadRootId: threadRootId)))
+        return try decode(await send("POST", "/api/channels/\(seg(channelId))/messages", body: Body(body: body, threadRootId: threadRootId)))
     }
 
     public func markRead(channelId: String) async throws {
-        _ = try await send("POST", "/api/channels/\(channelId)/read")
+        _ = try await send("POST", "/api/channels/\(seg(channelId))/read")
     }
 
     /// Keeps a WebSocket on `topic` until the task is cancelled, reconnecting with a delay that doubles
@@ -330,6 +330,11 @@ public final class APIClient: Sendable {
     /// Raw GET for routes that have no typed method yet.
     public func get(_ path: String) async throws -> Data {
         try await send("GET", path)
+    }
+
+    /// One path segment or query value: `/`, `?`, `#` and `&` must not survive.
+    private func seg(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "-._~").union(.alphanumerics)) ?? value
     }
 
     private func send(_ method: String, _ path: String, body: (any Encodable)? = nil) async throws -> Data {

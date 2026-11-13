@@ -286,6 +286,19 @@ final class TSServerTests: XCTestCase {
         XCTAssertFalse(frames.isEmpty, "only the open event arrived, no frame")
     }
 
+    func testPathValuesStayInsideTheirSegment() async throws {
+        let (_, client, seed) = try await startServer()
+        do {
+            try await client.revokeSession(id: "a/../../auth/me?x=1#y")
+            XCTFail("revoking a bogus session id succeeded")
+        } catch {
+            guard case .server(let status, _) = error as? APIError else { return XCTFail("unexpected error \(error)") }
+            XCTAssertEqual(status, 404)
+        }
+        let me = try await client.me()
+        XCTAssertEqual(me.user.id, seed.userId)
+    }
+
     func testUnauthenticatedClientIsRejected() async throws {
         let (backend, _, _) = try await startServer()
         guard case .running(let port) = backend.state else { return XCTFail("not running") }
