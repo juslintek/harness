@@ -1,0 +1,23 @@
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--status-neutral);
+}
+
+.dot[data-tone="info"] {
+  background: var(--status-info);
+}
+
+.dot[data-tone="success"] {
+  background: var(--status-success);
+}
+
+.dot[data-tone="warning"] {
+  background: var(--status-warning);
+}
+
+.dot[data-tone="danger"] {
+  background: var(--status-danger);
+}

@@ -1,0 +1,22 @@
+.nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  height: var(--size-control);
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-muted);
+  font: 400 var(--text-body-sm) / 1 var(--font-body);
+  text-decoration: none;
+}
+
+.nav-item:hover {
+  background: var(--status-neutral-bg);
+}
+
+.nav-item[aria-current="page"] {
+  background: var(--color-accent);
+  color: var(--color-ink);
+  font-weight: 600;
+}

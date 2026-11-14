@@ -1,0 +1,87 @@
+.org-switcher {
+  position: relative;
+  padding: var(--space-md);
+}
+
+.org-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  width: 100%;
+  height: var(--size-row);
+  padding: 0 var(--space-md);
+  background: var(--color-surface-raised);
+  color: var(--color-ink);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font: 400 var(--text-body-sm) / 1.2 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.org-trigger svg {
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.org-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.org-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.org-role {
+  color: var(--color-ink-muted);
+  font-size: var(--text-caption);
+}
+
+.org-menu {
+  position: absolute;
+  top: calc(var(--space-md) + 40px);
+  right: var(--space-md);
+  left: var(--space-md);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-xs);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-overlay);
+}
+
+.org-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  height: var(--size-control);
+  padding: 0 var(--space-sm);
+  background: transparent;
+  color: var(--color-ink);
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: 400 var(--text-body-sm) / 1 var(--font-body);
+  text-align: left;
+  cursor: pointer;
+}
+
+.org-option[aria-current="true"] {
+  background: var(--color-accent);
+  font-weight: 600;
+}
+
+.org-current {
+  color: var(--color-ink-muted);
+  font: 500 var(--text-caption) / 1 var(--font-body);
+}

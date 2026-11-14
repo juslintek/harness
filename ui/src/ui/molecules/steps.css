@@ -1,0 +1,55 @@
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  height: var(--size-control);
+  color: var(--color-ink-muted);
+  font: 400 var(--text-body-sm) / 1 var(--font-body);
+  white-space: nowrap;
+}
+
+.step-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  font: 500 var(--text-caption) / 1 var(--font-body);
+}
+
+.step[data-state="done"] {
+  color: var(--color-ink);
+}
+
+.step[data-state="done"] .step-mark {
+  background: var(--status-success-bg);
+  border-color: transparent;
+  color: var(--status-success);
+  font-weight: 600;
+}
+
+.step[data-state="current"] {
+  color: var(--color-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.step[data-state="current"] .step-mark {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-on-brand);
+  font-weight: 600;
+}

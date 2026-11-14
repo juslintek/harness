@@ -1,0 +1,171 @@
+.hiring {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.hiring-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0;
+  font: 600 var(--text-heading) / var(--leading-heading) var(--font-display);
+}
+
+.hire-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.hire-head p {
+  margin: 0;
+}
+
+.hire-link {
+  color: var(--color-brand);
+  font-weight: 500;
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+}
+
+.cols > div {
+  min-width: 0;
+}
+
+.answers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+}
+
+.answers dt {
+  font-weight: 500;
+}
+
+.answers dd {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.plain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.score-form .form-row {
+  align-items: flex-start;
+}
+
+.score-form {
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+@media (max-width: 47.99rem) {
+  .cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hiring .stack > p,
+.hiring .stack h3 {
+  margin: 0;
+}
+
+.hiring-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.updated-ago {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.request-row[data-needs] {
+  background: var(--status-warning-bg);
+}
+
+.request-action {
+  text-align: right;
+}
+
+.how-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-lg);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hire-terms {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.hiring .hire-terms p {
+  margin: 0;
+}
+
+.hire-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.hire-decision {
+  margin: 0;
+}
+
+.form-submit {
+  align-items: center;
+}
+
+.score-pick {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.hiring .notice-actions {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+@media (max-width: 47.99rem) {
+  .hiring .btn,
+  .policies .btn {
+    min-height: var(--size-control);
+  }
+}
+
+/* a position makes the box the containing block of .sr-only cells, which would otherwise widen the page */
+.hiring .table-box {
+  position: relative;
+}

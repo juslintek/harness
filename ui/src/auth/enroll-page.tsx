@@ -1,6 +1,10 @@
 import { createSignal, type JSX, Show } from "solid-js";
 import { z } from "zod";
 import { api } from "../api";
+import { Button } from "../ui/atoms";
+import { Field, type Step, Steps } from "../ui/molecules";
+import "./auth.css";
+import { AuthHead } from "./auth-head";
 import { createAction } from "./create-action";
 import { ErrorLine } from "./error-line";
 import { leaveLogin } from "./me";
@@ -16,6 +20,11 @@ const optionsSchema: z.ZodType<EnrollChallenge> = z.custom<EnrollChallenge>(
 const enrolledSchema: z.ZodType<{ recoveryCodes: string[] }> = z.object({
   recoveryCodes: z.array(z.string()),
 });
+
+const steps = (second: boolean): Step[] => [
+  { label: "Create a passkey", state: second ? "done" : "current" },
+  { label: "Save recovery codes", state: second ? "current" : "todo" },
+];
 
 const post = (body: unknown): { method: "POST"; body: unknown } => ({ method: "POST", body });
 
@@ -45,44 +54,59 @@ export function EnrollPage(props: { code: string }): JSX.Element {
     });
   };
   return (
-    <Show
-      when={codes()}
-      fallback={
-        <form class="auth-page" onSubmit={submit} aria-labelledby="enroll-h">
-          <h2 id="enroll-h">Create your account</h2>
-          <ErrorLine message={action.error()} />
-          <label>
-            Your name
-            <input
-              required
-              autocomplete="name"
-              value={name()}
-              onInput={(e) => setName(e.currentTarget.value)}
-            />
-          </label>
-          <label>
-            Email
-            <input
-              type="email"
-              required
-              autocomplete="email"
-              value={email()}
-              onInput={(e) => setEmail(e.currentTarget.value)}
-            />
-          </label>
-          <button type="submit" disabled={action.busy()}>
-            Register a passkey
-          </button>
-        </form>
-      }
-    >
-      {(done) => (
-        <div class="auth-page">
-          <h2>You are enrolled</h2>
-          <RecoveryCodes codes={done()} onDone={() => void action.run(leaveLogin)} />
-          <ErrorLine message={action.error()} />
-        </div>
-      )}
-    </Show>
+    <div class="auth-screen">
+      <div class="auth-card">
+        <AuthHead title={codes() ? "You are enrolled" : "Create your account"} />
+        <Steps label="Enrolment steps" items={steps(codes() !== null)} />
+        <Show
+          when={codes()}
+          fallback={
+            <form class="auth-form" onSubmit={submit} aria-label="Create your account">
+              <ErrorLine message={action.error()} />
+              <Field label="Your name">
+                {(control) => (
+                  <input
+                    {...control()}
+                    required
+                    autocomplete="name"
+                    value={name()}
+                    onInput={(e) => setName(e.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field label="Email">
+                {(control) => (
+                  <input
+                    {...control()}
+                    type="email"
+                    required
+                    autocomplete="email"
+                    value={email()}
+                    onInput={(e) => setEmail(e.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <p class="auth-note">
+                A passkey is a sign-in kept on this device. You unlock it with your fingerprint,
+                face or screen lock, so there is no password.
+              </p>
+              <Button type="submit" tone="primary" class="wide" disabled={action.busy()}>
+                Register a passkey
+              </Button>
+              <p class="auth-note">
+                Your browser asks you to create a passkey. You will get recovery codes next.
+              </p>
+            </form>
+          }
+        >
+          {(done) => (
+            <>
+              <ErrorLine message={action.error()} />
+              <RecoveryCodes codes={done()} onDone={() => void action.run(leaveLogin)} />
+            </>
+          )}
+        </Show>
+      </div>
+    </div>
   );
 }

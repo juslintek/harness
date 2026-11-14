@@ -11,6 +11,14 @@ const LISTENING = /^harness listening on http:\/\/127\.0\.0\.1:(\d+)\/$/m;
 export interface Stack {
   url: string;
   enrollmentCode: (email: string, name: string) => string;
+  // Enrollment only makes ordinary users; the instance admin flag has no HTTP path, so it is set in
+  // the server's own database.
+  makeInstanceAdmin: (email: string) => void;
+  // Sessions from a passkey sign-in only get a step-up when asked, and it lasts five minutes, so a
+  // test that wants the prompt again clears it.
+  expireStepUp: () => void;
+  // Runs one statement against the server's database, for state that has no HTTP path in a test.
+  sql: (statement: string, ...params: (string | number)[]) => void;
   stop: () => Promise<void>;
 }
 
@@ -82,9 +90,42 @@ export async function startStack(): Promise<Stack> {
       if (!code) throw new Error(`no enrollment code in ${link}`);
       return code;
     },
+    makeInstanceAdmin: (email) => {
+      execFileSync(
+        "bun",
+        [
+          "-e",
+          'const db = new (require("bun:sqlite").Database)(process.env.DB); db.run("PRAGMA busy_timeout = 5000"); db.query("UPDATE users SET instance_admin = 1 WHERE email = ?").run(process.env.EMAIL)',
+        ],
+        { env: { ...env, DB: join(home, "harness.db"), EMAIL: email.toLowerCase() } },
+      );
+    },
+    sql: (statement, ...params) => {
+      execFileSync(
+        "bun",
+        [
+          "-e",
+          'const [q, p] = JSON.parse(process.env.STMT); const db = new (require("bun:sqlite").Database)(process.env.DB); db.run("PRAGMA busy_timeout = 5000"); db.query(q).run(...p)',
+        ],
+        {
+          env: { ...env, DB: join(home, "harness.db"), STMT: JSON.stringify([statement, params]) },
+        },
+      );
+    },
+    expireStepUp: () => {
+      execFileSync(
+        "bun",
+        [
+          "-e",
+          'const db = new (require("bun:sqlite").Database)(process.env.DB); db.run("PRAGMA busy_timeout = 5000"); db.query("UPDATE sessions SET step_up_at = NULL").run()',
+        ],
+        { env: { ...env, DB: join(home, "harness.db") } },
+      );
+    },
     stop: async () => {
       await stopChild(server);
-      rmSync(home, { recursive: true, force: true });
+      // An agent process the server started can outlive it for a moment and still write here.
+      rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     },
   };
 }

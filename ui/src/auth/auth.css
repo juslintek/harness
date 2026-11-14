@@ -1,0 +1,131 @@
+/* Sign-in, enrollment and recovery codes: one centred card outside the shell (design/pages/signin.html). */
+.auth-screen {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-lg);
+  min-height: 100vh;
+  padding: var(--space-2xl) var(--space-lg);
+}
+
+.auth-page {
+  max-width: 28rem;
+  margin: var(--space-2xl) auto;
+  padding: 0 var(--space-lg);
+}
+
+.auth-card {
+  display: grid;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 400px;
+  padding: var(--space-xl);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.auth-card > *,
+.auth-form > * {
+  margin: 0;
+}
+
+.auth-form {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.auth-brand {
+  font: 600 var(--text-subheading) / var(--leading-subheading) var(--font-body);
+}
+
+.auth-head {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.auth-head > * {
+  margin: 0;
+}
+
+.auth-head code {
+  font-family: var(--font-mono);
+}
+
+.auth-head h1,
+.auth-head h2 {
+  margin: 0;
+  font: 600 var(--text-heading) / var(--leading-heading) var(--font-body);
+}
+
+.auth-card .btn.wide {
+  width: 100%;
+}
+
+.auth-note {
+  color: var(--color-ink-muted);
+  font: 400 var(--text-caption) / var(--leading-caption) var(--font-body);
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--color-ink-muted);
+  font: 400 var(--text-caption) / var(--leading-caption) var(--font-body);
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.auth-card input.mono {
+  font-family: var(--font-mono);
+}
+
+.codes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.codes code {
+  display: block;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-mono);
+  text-align: center;
+}
+
+.codes-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+}
+
+.codes-tools a.btn {
+  text-decoration: none;
+}
+
+.auth-links {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-xs);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+/* A ghost button has its own side padding; pulling it back lines its text up with the form's edge. */
+.auth-card .btn[data-tone="ghost"] {
+  justify-self: start;
+  margin-inline-start: calc((var(--space-sm) + 1px) * -1);
+}

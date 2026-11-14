@@ -1,0 +1,126 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-width: 0;
+}
+
+.dashboard-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.dashboard-head .field {
+  width: 200px;
+}
+
+.dashboard-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+.dashboard-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-stack li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.dashboard-stack li + li {
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+@media (min-width: 40rem) {
+  .dashboard .table-box {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-raised);
+  }
+
+  .dashboard .data-table :is(th, td) {
+    padding: var(--space-md) var(--space-lg);
+  }
+}
+
+.dashboard .data-table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.dashboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font: 600 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
+}
+
+.dashboard-note {
+  font: 400 var(--text-caption) / var(--leading-caption) var(--font-body);
+  color: var(--color-ink-muted);
+}
+
+.dashboard-empty {
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
+.dashboard-tools {
+  min-width: 140px;
+}
+
+.dashboard-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.dashboard-item p {
+  margin: 0;
+}
+
+.dashboard .btn {
+  text-decoration: none;
+}
+
+.dashboard-head .help {
+  flex: 1 1 16rem;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .dashboard-tools {
+    min-width: 0;
+  }
+}
+
+.dashboard .panel-body,
+.logs .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.dashboard .help,
+.logs .help {
+  margin: 0;
+}
+
+@media (max-width: 39.99rem) {
+  .dashboard-head .field {
+    width: 100%;
+  }
+}

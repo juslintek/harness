@@ -1,0 +1,5 @@
+{
+  "pages": "pages/**/*.html",
+  "theme": "theme.css",
+  "assets": "assets"
+}

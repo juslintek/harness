@@ -1,0 +1,4 @@
+.copy-status {
+  color: var(--color-ink-muted);
+  font-size: var(--text-caption);
+}

@@ -1,0 +1,156 @@
+:root {
+  /* Palette: neutral surfaces, one accent */
+  --color-canvas: #f6f7f8;
+  --color-panel: #ffffff;
+  --color-text: #16191d;
+  --color-text-soft: #5b6470;
+  --color-line: #dfe3e8;
+  --color-line-strong: #848d98;
+  --color-action: #2f5fd0;
+  --color-action-tint: #e6edfb;
+  --color-on-action: #ffffff;
+  --color-alert: #c0362c;
+
+  /* Roles */
+  --color-surface: var(--color-canvas);
+  --color-surface-raised: var(--color-panel);
+  --color-ink: var(--color-text);
+  --color-ink-muted: var(--color-text-soft);
+  --color-border: var(--color-line);
+  --color-border-strong: var(--color-line-strong);
+  --color-brand: var(--color-action);
+  --color-on-brand: var(--color-on-action);
+  --color-accent: var(--color-action-tint);
+  --color-link: var(--color-action);
+  --color-danger: var(--color-alert);
+  --color-scrim: rgba(22, 25, 29, 0.4);
+
+  /* Status: foreground and soft background, always shown with a word */
+  --status-neutral: #5b6470;
+  --status-neutral-bg: #eceef1;
+  --status-info: #2f5fd0;
+  --status-info-bg: #e6edfb;
+  --status-success: #187543;
+  --status-success-bg: #e2f4ea;
+  --status-warning: #8a5a00;
+  --status-warning-bg: #fbf0d3;
+  --status-danger: #c0362c;
+  --status-danger-bg: #fbe6e3;
+
+  --font-display: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-caption: 12px;
+  --leading-caption: 1.45;
+  --text-body-sm: 13px;
+  --leading-body-sm: 1.45;
+  --text-body: 14px;
+  --leading-body: 1.45;
+  --text-subheading: 16px;
+  --leading-subheading: 1.45;
+  --text-heading: 20px;
+  --leading-heading: 1.25;
+  --text-display: 28px;
+  --leading-display: 1.25;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+
+  --shadow-card: none;
+  --shadow-overlay: 0 8px 24px rgba(22, 25, 29, 0.14);
+
+  /* Layout sizes, shared by the app and the design files */
+  --size-sidebar: 240px;
+  --size-topbar: 48px;
+  --size-control: 32px;
+  --size-control-sm: 28px;
+  --size-row: 36px;
+  --size-dialog: 480px;
+}
+
+/* recto:design-system dark */
+[data-design-system="dark"] {
+  --color-canvas: #0f1114;
+  --color-panel: #171a1f;
+  --color-text: #e6e8eb;
+  --color-text-soft: #9aa3ae;
+  --color-line: #2a2f37;
+  --color-line-strong: #68717d;
+  --color-action: #7aa2ff;
+  --color-action-tint: #1a2540;
+  --color-on-action: #0f1114;
+  --color-alert: #ff7b72;
+
+  --color-surface: var(--color-canvas);
+  --color-surface-raised: var(--color-panel);
+  --color-ink: var(--color-text);
+  --color-ink-muted: var(--color-text-soft);
+  --color-border: var(--color-line);
+  --color-border-strong: var(--color-line-strong);
+  --color-brand: var(--color-action);
+  --color-on-brand: var(--color-on-action);
+  --color-accent: var(--color-action-tint);
+  --color-link: var(--color-action);
+  --color-danger: var(--color-alert);
+  --color-scrim: rgba(0, 0, 0, 0.6);
+
+  --status-neutral: #9aa3ae;
+  --status-neutral-bg: #22262d;
+  --status-info: #7aa2ff;
+  --status-info-bg: #1a2540;
+  --status-success: #4cc38a;
+  --status-success-bg: #12301f;
+  --status-warning: #e0b341;
+  --status-warning-bg: #33290d;
+  --status-danger: #ff7b72;
+  --status-danger-bg: #3a1614;
+
+  --font-display: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-caption: 12px;
+  --leading-caption: 1.45;
+  --text-body-sm: 13px;
+  --leading-body-sm: 1.45;
+  --text-body: 14px;
+  --leading-body: 1.45;
+  --text-subheading: 16px;
+  --leading-subheading: 1.45;
+  --text-heading: 20px;
+  --leading-heading: 1.25;
+  --text-display: 28px;
+  --leading-display: 1.25;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+
+  --shadow-card: none;
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+}
+/* /recto:design-system dark */
+[hidden] { display: none !important; }

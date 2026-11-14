@@ -1,0 +1,26 @@
+.query-chips {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  color: var(--color-ink-muted);
+  font: 400 var(--text-body-sm) / var(--leading-body-sm) var(--font-body);
+}
+
+.query-chips > span {
+  line-height: var(--size-control-sm);
+}
+
+.query-chips ul {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.query-chips .btn {
+  border-radius: var(--radius-pill);
+}

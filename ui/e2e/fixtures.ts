@@ -71,4 +71,30 @@ export async function enroll(page: Page, code: string, email: string, name: stri
   await page.context().clearCookies();
 }
 
+// Enrolls, then signs in with the passkey and waits for the shell. With `orgs`, the person also
+// creates those organisations (and becomes their owner) before the page is loaded again.
+export async function signIn(
+  page: Page,
+  stack: Stack,
+  who: { email: string; name: string; admin?: boolean; orgs?: { name: string; slug: string }[] },
+): Promise<void> {
+  await enroll(page, stack.enrollmentCode(who.email, who.name), who.email, who.name);
+  if (who.admin) stack.makeInstanceAdmin(who.email);
+  await page.goto("/#/login");
+  await page.getByRole("button", { name: "Sign in with a passkey" }).click();
+  await expect(page).toHaveURL(/#\/$/);
+  await expect(page.locator("#content")).toBeVisible();
+  for (const org of who.orgs ?? []) {
+    await page.evaluate(async (body) => {
+      const res = await fetch("/api/orgs", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`create org: HTTP ${res.status}`);
+    }, org);
+  }
+  if (who.orgs?.length) await page.reload();
+}
+
 export { expect };

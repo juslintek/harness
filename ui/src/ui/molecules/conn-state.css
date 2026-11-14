@@ -1,0 +1,9 @@
+.conn-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  height: var(--size-control);
+  color: var(--color-ink-muted);
+  font: 400 var(--text-caption) / 1 var(--font-body);
+  white-space: nowrap;
+}

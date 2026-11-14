@@ -11,6 +11,7 @@
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
+    "paths": { "@shared/*": ["../code/src/shared/*"], "zod": ["./node_modules/zod"] },
     "skipLibCheck": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true
