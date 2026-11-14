@@ -124,7 +124,8 @@ export async function startStack(): Promise<Stack> {
     },
     stop: async () => {
       await stopChild(server);
-      rmSync(home, { recursive: true, force: true });
+      // An agent process the server started can outlive it for a moment and still write here.
+      rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     },
   };
 }
