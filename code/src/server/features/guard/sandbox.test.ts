@@ -43,6 +43,19 @@ test("settings snapshot: paths expanded, domains merged without duplicates", () 
   expect(s.network.allowedDomains).toContain("registry.npmjs.org");
 });
 
+test("the accounts directory is denied for reading in every run", () => {
+  for (const agentId of ["claude", "codex"]) {
+    for (const preset of ["offline", "dev", "open-web"] as const) {
+      const denied = buildSrtSettings({ ...baseInput, agentId, preset }).filesystem.denyRead;
+      expect(denied).toContain("/hh/accounts");
+      expect(buildSrtSettings({ ...baseInput, agentId, preset }).filesystem.allowRead).toEqual([
+        "/runs/r1",
+        "/wt/r1",
+      ]);
+    }
+  }
+});
+
 test("git admin pointers and agent code and config dirs are write-denied", () => {
   const denied = buildSrtSettings(baseInput).filesystem.denyWrite;
   expect(denied).toEqual(

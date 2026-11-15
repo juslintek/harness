@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { runTmpDir } from "./sandbox";
@@ -24,9 +24,12 @@ test("live srt: l0 holds for worktree, harness home and home", async () => {
       "secret",
       "secrets.json",
       "runs/other/srt.json",
+      "accounts/other/auth.json",
     ]) {
       expect(await run(`cat ${join(harnessHome, f)}`)).not.toBe(0);
     }
+    expect(await run(`ls ${join(harnessHome, "accounts")}`)).not.toBe(0);
+    expect(await run(`echo x > ${join(harnessHome, "accounts/other/new.json")}`)).not.toBe(0);
     expect(await run(`cat ${join(runDir, "srt.json")} ${worktree}/a`)).toBe(0);
   } finally {
     if (existsSync(canary)) await rm(canary);
@@ -80,6 +83,24 @@ test("live srt: a read-only run cannot write in the worktree or commit", async (
     expect(tip).toBe((await Bun.$`git -C ${repo} rev-parse main`.text()).trim());
     expect(await run("git log -1 --format=%s && git diff main..harness/x")).toBe(0);
     expect(await run("touch $TMPDIR/x")).toBe(0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test("live srt: an accounts directory made after the run started is unreadable", async () => {
+  const { dir, harnessHome, run, stderr } = await liveFixture();
+  const accounts = join(harnessHome, "accounts");
+  const file = join(accounts, "c", "auth.json");
+  try {
+    await rm(accounts, { recursive: true });
+    const running = run(`sleep 3; cat ${file} && exit 1; ls ${accounts} && exit 2; exit 0`);
+    await Bun.sleep(1500);
+    await mkdir(join(accounts, "c"), { recursive: true });
+    await Bun.write(file, "late");
+    expect(await running).toBe(0);
+    expect(await Bun.file(file).text()).toBe("late");
+    expect(stderr().match(/Operation not permitted/g)).toHaveLength(2);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

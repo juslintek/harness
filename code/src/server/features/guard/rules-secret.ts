@@ -9,6 +9,7 @@ import {
   resolvePath,
   type Scope,
 } from "./rules-core";
+import { accountsRoot } from "./sandbox-accounts";
 import { base, type Cmd } from "./shell";
 
 const ASSIGN = /^[A-Za-z_][A-Za-z0-9_]*=/;
@@ -28,16 +29,21 @@ const SECRET_PATHS = [
   ".claude/.credentials.json",
   ".codex/auth.json",
   ".harness/secrets.json",
+  ".harness/accounts",
 ];
 
 function secretLocations(scope: Scope): string[] {
   const home = resolve(scope.home);
   const locations = SECRET_PATHS.map((p) => join(home, p));
-  if (scope.harnessHome) locations.push(join(resolve(scope.harnessHome), "secrets.json"));
+  if (scope.harnessHome) {
+    locations.push(join(resolve(scope.harnessHome), "secrets.json"));
+    locations.push(accountsRoot(resolve(scope.harnessHome)));
+  }
   return locations;
 }
 // A word we cannot resolve but that still names a credential location is not safe to pass.
-const SECRET_WORD = /\.ssh|\.aws|\.gnupg|\.netrc|\.config\/gh|Keychains|\.git-credentials/i;
+const SECRET_WORD =
+  /\.ssh|\.aws|\.gnupg|\.netrc|\.config\/gh|Keychains|\.git-credentials|(^|\/)accounts(\/|$)/i;
 const SENSITIVE_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i;
 
 // curl `-d @file`, `-d@file`, `--data=@file`, `-F name=@file` hide the path behind a prefix.

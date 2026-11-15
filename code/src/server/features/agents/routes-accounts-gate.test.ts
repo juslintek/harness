@@ -37,12 +37,13 @@ const post = (a: ReturnType<typeof withActor>, path: string): Response | Promise
 
 const MESSAGE = "this runtime is not enabled for extra accounts yet";
 
-test("no built-in runtime is enabled for extra accounts yet", () => {
-  for (const id of ["claude", "codex", "agy", "copilot", "cursor", "junie", "gemini"])
+test("only codex is enabled for extra accounts, until the claude spike is recorded", () => {
+  expect(getSpec("codex")?.accountIsolation).toBe(true);
+  for (const id of ["claude", "agy", "copilot", "cursor", "junie", "gemini"])
     expect(getSpec(id)?.accountIsolation ?? false).toBe(false);
 });
 
-test("add, login and test answer 409 for the real codex and claude specs and the rest", async () => {
+test("add, login and test answer 409 for the real claude spec and the other runtimes", async () => {
   const spawned: string[][] = [];
   const a = app({
     spawn: (argv) => {
@@ -53,7 +54,7 @@ test("add, login and test answer 409 for the real codex and claude specs and the
       throw new Error("no CLI may run");
     },
   });
-  for (const runtime of ["claude", "codex", "agy", "copilot"]) {
+  for (const runtime of ["claude", "agy", "copilot", "cursor", "junie", "gemini"]) {
     const add = await post(a, `/${runtime}/accounts`);
     expect(add.status).toBe(409);
     expect(await add.json()).toEqual({ error: MESSAGE });
@@ -65,26 +66,32 @@ test("add, login and test answer 409 for the real codex and claude specs and the
     label: "old",
     home: join(home, "x"),
   });
-  const codexRow = createAccount(db, {
-    runtime: "codex",
-    kind: "login",
-    label: "old",
-    home: join(home, "y"),
-  });
-  for (const [runtime, account] of [
-    ["claude", row],
-    ["codex", codexRow],
-  ] as const) {
-    for (const path of ["login", "test"]) {
-      const res = await post(a, `/${runtime}/accounts/${account.id}/${path}`);
-      expect(res.status).toBe(409);
-      expect(await res.json()).toEqual({ error: MESSAGE });
-    }
+  for (const path of ["login", "test"]) {
+    const res = await post(a, `/claude/accounts/${row.id}/${path}`);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: MESSAGE });
   }
   expect(spawned).toEqual([]);
   expect(db.query("SELECT count(*) AS n FROM agent_accounts WHERE label = 'work'").get()).toEqual({
     n: 0,
   });
+});
+
+test("the real codex spec accepts add, login and test", async () => {
+  const spawned: string[][] = [];
+  const a = app({
+    spawn: (argv) => {
+      spawned.push(argv);
+      return { kill: () => {}, exited: new Promise(() => {}) };
+    },
+    run: async () => ({ code: 0, stdout: "Logged in using ChatGPT", stderr: "" }),
+  });
+  const added = await post(a, "/codex/accounts");
+  expect(added.status).toBe(201);
+  const account = (await added.json()) as AccountView;
+  expect((await post(a, `/codex/accounts/${account.id}/login`)).status).toBe(200);
+  expect(spawned).toHaveLength(1);
+  expect((await post(a, `/codex/accounts/${account.id}/test`)).status).toBe(200);
 });
 
 test("codex add, login and test work with the fake CLI", async () => {
@@ -96,6 +103,15 @@ test("codex add, login and test work with the fake CLI", async () => {
   await until(() => getAccount(db, account.id)?.state === "active");
   const tested = await post(a, `/codex/accounts/${account.id}/test`);
   expect(((await tested.json()) as AccountView).identityHint).toBe("ChatGPT plus");
+});
+
+// guard/sandbox-accounts.ts spells the same directory; sandbox.test.ts pins "<harness home>/accounts"
+// there, and guard may not be imported from here.
+test("an added account has its home inside the directory the sandbox denies", async () => {
+  const added = await post(app({ spec: fakeCliSpec("codex") }), "/codex/accounts");
+  const account = (await added.json()) as AccountView;
+  const stored = getAccount(db, account.id);
+  expect(stored?.home?.startsWith(`${join(home, "h", "accounts")}/`)).toBe(true);
 });
 
 test("the default account is probed as before, with no account variable", async () => {

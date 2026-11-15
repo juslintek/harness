@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 import { withRealpaths } from "./real-paths";
+import { accountsRoot } from "./sandbox-accounts";
 
 export interface SandboxInput {
   runDir: string;
@@ -238,6 +239,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
         join(input.harnessHome, "worktrees"),
         join(input.harnessHome, "memory"),
         join(input.harnessHome, "scratch-checkouts"),
+        accountsRoot(input.harnessHome),
         ...otherAgentCredentials(input.agentId).map(expand),
       ]),
       allowRead: [input.runDir, input.worktree, ...(input.scratch ? [input.scratch.path] : [])],

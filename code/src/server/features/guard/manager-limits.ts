@@ -39,6 +39,7 @@ const FORBIDDEN = [
   ".codex/",
   "codex_home",
   "harness_",
+  "accounts/",
 ];
 // A guard rule that means the guard could not see what really runs or that widens the scope.
 const BLIND_RULES = ["exec.escalate", "env.injection"];

@@ -80,9 +80,9 @@ const builtinSpecs: readonly AgentSpec[] = [
     },
     loginArgs: ["codex", "login"],
     logoutArgs: ["codex", "logout"],
-    // Off until the accounts directory is denied in srt and in the L1 secret guard (slice P1.5a):
-    // today an agent run could read another account's auth.json from <HARNESS_HOME>/accounts.
-    accountIsolation: false,
+    // Runs deny <HARNESS_HOME>/accounts in srt and in the L1 secret guard, so no run can read
+    // another account's auth.json.
+    accountIsolation: true,
     modeOption: { configId: "mode", value: "workspace-write" },
     egress: ["chatgpt.com"],
     stateWrite: [],

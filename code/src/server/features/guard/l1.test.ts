@@ -95,6 +95,34 @@ test("secrets.json under a custom HARNESS_HOME is a credential location", () => 
   expect(exec("cat /data/h/secrets.json").rule).not.toBe("secret.path");
 });
 
+test("the accounts directory under the harness home is a credential location", () => {
+  const custom: Scope = { ...scope, harnessHome: "/data/h" };
+  const at = (command: string, sc: Scope = custom) =>
+    evaluateL1({ kind: "execute", command, paths: [] }, sc);
+  for (const command of [
+    "cat /data/h/accounts/acc-1/auth.json",
+    "cat /data/h/accounts/*/auth.json",
+    'cat "$TMPDIR"/../../../accounts/*/auth.json',
+    "cat $TMPDIR/../../../accounts/acc-1/auth.json",
+    "cp -r /data/h/accounts /tmp/k",
+    "rg token /data/h",
+  ])
+    expect(at(command).verdict).not.toBe("allow");
+  expect(at("cat /data/h/accounts/acc-1/auth.json")).toMatchObject({
+    verdict: "deny",
+    category: "secret",
+  });
+  expect(at('cat "$TMPDIR"/../../../accounts/*/auth.json')).toMatchObject({
+    verdict: "deny",
+    category: "secret",
+  });
+  expect(at("cat /home/u/.harness/accounts/acc-1/auth.json", scope).verdict).toBe("deny");
+  expect(
+    evaluateL1({ kind: "read", paths: ["/data/h/accounts/a/auth.json"] }, custom).verdict,
+  ).toBe("deny");
+  expect(at("cat /data/h/accountsfoo/x").rule).not.toBe("secret.path");
+});
+
 test("harness tool allow needs a registered full name, no paths and a tool-like kind", () => {
   const tool = (extra: Partial<ActionRequest>) =>
     run({ kind: "other", paths: [], toolName: "mcp__harness__task_get", ...extra }).verdict;

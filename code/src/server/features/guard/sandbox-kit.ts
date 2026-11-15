@@ -62,6 +62,7 @@ async function seed(repo: string, worktree: string, harnessHome: string): Promis
     "secret",
     "secrets.json",
     "runs/other/srt.json",
+    "accounts/other/auth.json",
   ]) {
     await Bun.write(join(harnessHome, f), "s");
   }
