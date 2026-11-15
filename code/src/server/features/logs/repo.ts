@@ -35,8 +35,8 @@ const INSERT_SQL = `INSERT INTO events (id, ts, run_id, task_id, agent, kind,
   gen_ai_operation_name, gen_ai_tool_name, gen_ai_conversation_id, gen_ai_request_model,
   gen_ai_usage_input_tokens, gen_ai_usage_output_tokens, cache_read_tokens, cache_write_tokens,
   reasoning_tokens, reported_cost_usd, command, exit_code, duration_ms, guard_layer,
-  guard_verdict, guard_rule, source, dedupe_key)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  guard_verdict, guard_rule, source, dedupe_key, account_id)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 // Order matches INSERT_SQL after id and ts.
 const FIELD_KEYS = [
@@ -62,6 +62,7 @@ const FIELD_KEYS = [
   "guardRule",
   "source",
   "dedupeKey",
+  "accountId",
 ] as const;
 
 type Fields = Readonly<Record<string, string | number | undefined>>;

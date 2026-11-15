@@ -1,0 +1,42 @@
+import type { Database } from "bun:sqlite";
+import { type Context, Hono } from "hono";
+import { z } from "zod";
+import { type AuthEnv, requireStepUp } from "../auth/api";
+import { AccountError, addAccount, removeAccount, setAccountEnabled } from "./accounts-ops";
+import { getSpec, listAccounts } from "./api";
+
+// The label is display text only (the id names the directory), but it is still kept to a short,
+// printable set so it cannot carry control characters into logs or the UI.
+const addBody = z.object({ label: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9 ._@+-]{0,63}$/) });
+const patchBody = z.object({ enabled: z.boolean() });
+
+function respond(c: Context<AuthEnv>, run: () => unknown, status: 200 | 201 = 200): Response {
+  if (!getSpec(c.req.param("id") ?? "")) return c.json({ error: "unknown agent" }, 404);
+  try {
+    return c.json(run(), status);
+  } catch (err) {
+    if (err instanceof AccountError) return c.json({ error: err.message }, err.status);
+    throw err;
+  }
+}
+
+export function accountRoutes(db: Database, home: string): Hono<AuthEnv> {
+  const app = new Hono<AuthEnv>();
+  app.get("/:id/accounts", (c) => respond(c, () => listAccounts(db, c.req.param("id"))));
+  app.post("/:id/accounts", requireStepUp, async (c) => {
+    const body = addBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid label" }, 400);
+    return respond(c, () => addAccount(db, home, c.req.param("id"), body.data.label), 201);
+  });
+  app.patch("/:id/accounts/:acct", requireStepUp, async (c) => {
+    const body = patchBody.safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid body" }, 400);
+    const { id, acct } = c.req.param();
+    return respond(c, () => setAccountEnabled(db, id, acct, body.data.enabled));
+  });
+  app.delete("/:id/accounts/:acct", requireStepUp, (c) => {
+    const { id, acct } = c.req.param();
+    return respond(c, () => removeAccount(db, home, id, acct, c.req.query("drain") === "1"));
+  });
+  return app;
+}

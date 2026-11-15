@@ -23,6 +23,8 @@ interface AccountRow {
 }
 
 export interface NewAccount {
+  // The caller picks it when the home path is derived from it.
+  id?: string;
   runtime: string;
   kind: AccountKind;
   label: string;
@@ -95,7 +97,7 @@ function defaultConcurrency(runtime: string): number {
 }
 
 export function createAccount(db: Database, input: NewAccount): AccountView {
-  const id = crypto.randomUUID();
+  const id = input.id ?? Bun.randomUUIDv7();
   const now = Date.now();
   db.run(
     `INSERT INTO agent_accounts

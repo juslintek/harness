@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { Hono } from "hono";
 import { z } from "zod";
+import { loadConfig } from "../../config";
 import { type AuthEnv, requireStepUp } from "../auth/api";
 import { appendEvent } from "../logs/api";
 import type { AgentSpec } from "./api";
@@ -17,6 +18,7 @@ import {
 } from "./api";
 import type { Runner } from "./discover";
 import { keyStatus, type Provider, providers, storeKey } from "./keys";
+import { accountRoutes } from "./routes-accounts";
 
 const linkBody = z.object({ enabled: z.boolean() });
 const keyBody = z.object({ key: z.string().regex(/^[\x20-\x7e]{20,400}$/) });
@@ -30,8 +32,13 @@ const noAcp: ModelSources = {
   listAcp: () => Promise.reject(new Error("ACP model listing is not wired")),
 };
 
-export function agentRoutes(db: Database, models: ModelSources = noAcp): Hono<AuthEnv> {
+export function agentRoutes(
+  db: Database,
+  models: ModelSources = noAcp,
+  home: string = loadConfig().home,
+): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
+  app.route("/", accountRoutes(db, home));
   app.get("/", async (c) => c.json(await listAgents(db)));
   app.get("/keys", async (c) =>
     c.json(

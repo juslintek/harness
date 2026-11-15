@@ -1,6 +1,8 @@
 import type { Database } from "bun:sqlite";
 import type { AccountView } from "../../../shared/accounts";
 import { layaHealth } from "../laya/api";
+import { appendEvent } from "../logs/api";
+
 import * as accounts from "./accounts-repo";
 import { bunRunner, type DiscoveredAgent, discoverAgents, type Runner } from "./discover";
 import { getKey, type Provider } from "./keys";
@@ -113,6 +115,13 @@ export function setLinked(db: Database, id: string, enabled: boolean): void {
     );
     if (enabled) accounts.ensureDefaultAccount(db, id);
   })();
+  appendEvent(db, {
+    kind: enabled ? "account.linked" : "account.unlinked",
+    agent: id,
+    accountId: `default:${id}`,
+    source: "agents",
+    body: id,
+  });
 }
 
 export interface LoginProcess {

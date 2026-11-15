@@ -10,6 +10,13 @@ export const LOG_KINDS = [
   "approval",
   "process",
   "error",
+  "account.linked",
+  "account.unlinked",
+  "account.added",
+  "account.enabled",
+  "account.disabled",
+  "account.removed",
+  "account.remove_failed",
 ] as const;
 
 export interface OrgLogHit {

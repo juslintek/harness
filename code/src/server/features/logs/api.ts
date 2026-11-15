@@ -19,7 +19,14 @@ export type EventKind =
   | "usage"
   | "approval"
   | "process"
-  | "error";
+  | "error"
+  | "account.linked"
+  | "account.unlinked"
+  | "account.added"
+  | "account.enabled"
+  | "account.disabled"
+  | "account.removed"
+  | "account.remove_failed";
 
 export type NewEvent = {
   runId?: string;
@@ -42,6 +49,7 @@ export type NewEvent = {
   guardLayer?: "L0" | "L1" | "L2" | "L3" | "L4";
   guardVerdict?: "allow" | "ask" | "deny";
   guardRule?: string;
+  accountId?: string;
   source?: string;
   dedupeKey?: string;
   body?: string;
