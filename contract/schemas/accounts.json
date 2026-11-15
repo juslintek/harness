@@ -1,0 +1,217 @@
+{
+  "accountView": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "createdAt": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "exhaustedUntil": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "home": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "identityHint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "login",
+            "api_key"
+          ],
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "lastProbeAt": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxConcurrent": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "priority": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "unknown",
+            "pending",
+            "active",
+            "logged_out",
+            "probe_failed",
+            "disabled",
+            "removing",
+            "removed"
+          ],
+          "type": "string"
+        },
+        "updatedAt": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "runtime",
+        "kind",
+        "label",
+        "home",
+        "state",
+        "identityHint",
+        "maxConcurrent",
+        "priority",
+        "exhaustedUntil",
+        "lastProbeAt",
+        "createdAt",
+        "updatedAt"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "createdAt": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "exhaustedUntil": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "home": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "identityHint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "login",
+            "api_key"
+          ],
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "lastProbeAt": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maxConcurrent": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "priority": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "unknown",
+            "pending",
+            "active",
+            "logged_out",
+            "probe_failed",
+            "disabled",
+            "removing",
+            "removed"
+          ],
+          "type": "string"
+        },
+        "updatedAt": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "runtime",
+        "kind",
+        "label",
+        "home",
+        "state",
+        "identityHint",
+        "maxConcurrent",
+        "priority",
+        "exhaustedUntil",
+        "lastProbeAt",
+        "createdAt",
+        "updatedAt"
+      ],
+      "type": "object"
+    }
+  }
+}

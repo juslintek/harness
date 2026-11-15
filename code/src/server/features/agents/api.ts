@@ -1,5 +1,7 @@
 import type { Database } from "bun:sqlite";
+import type { AccountView } from "../../../shared/accounts";
 import { layaHealth } from "../laya/api";
+import * as accounts from "./accounts-repo";
 import { bunRunner, type DiscoveredAgent, discoverAgents, type Runner } from "./discover";
 import { getKey, type Provider } from "./keys";
 import * as secrets from "./secrets-file";
@@ -7,6 +9,18 @@ import { type AgentSpec, agentSpecs } from "./specs";
 
 export type { Provider } from "./keys";
 export type { AgentSpec } from "./specs";
+
+export function listAccounts(db: Database, runtime?: string): AccountView[] {
+  return accounts.listAccounts(db, runtime);
+}
+
+export function getAccount(db: Database, id: string): AccountView | null {
+  return accounts.getAccount(db, id);
+}
+
+export function ensureDefaultAccount(db: Database, runtime: string): AccountView {
+  return accounts.ensureDefaultAccount(db, runtime);
+}
 
 export function getApiKey(provider: Provider): Promise<string | null> {
   return getKey(provider);
@@ -91,11 +105,14 @@ export async function listAgents(db: Database, run?: Runner): Promise<AgentView[
 }
 
 export function setLinked(db: Database, id: string, enabled: boolean): void {
-  db.run(
-    `INSERT INTO agent_links (agent_id, enabled, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT(agent_id) DO UPDATE SET enabled = excluded.enabled, updated_at = excluded.updated_at`,
-    [id, enabled ? 1 : 0, Date.now()],
-  );
+  db.transaction(() => {
+    db.run(
+      `INSERT INTO agent_links (agent_id, enabled, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(agent_id) DO UPDATE SET enabled = excluded.enabled, updated_at = excluded.updated_at`,
+      [id, enabled ? 1 : 0, Date.now()],
+    );
+    if (enabled) accounts.ensureDefaultAccount(db, id);
+  })();
 }
 
 export interface LoginProcess {
