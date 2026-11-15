@@ -8,3 +8,5 @@ coverage
 data/
 *.bak
 .claude/worktrees/
+.superpowers/
+working-docs/
