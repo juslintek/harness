@@ -30,10 +30,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bun run check
-      # the e2e fixture starts the TS server from ../code
+      # @shared imports resolve their packages (zod) from code/node_modules, and the e2e
+      # fixture starts the TS server from ../code
       - run: bun install --frozen-lockfile
         working-directory: code
+      - run: bun run check
       - run: bunx playwright install --with-deps chromium
       - run: bun run e2e
 
