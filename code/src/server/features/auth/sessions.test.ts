@@ -13,6 +13,7 @@ import {
   sessionFromToken,
   type User,
 } from "./api";
+import { createMobileSession, insertMobileDevice, listMobileDevices } from "./mobile-devices";
 import { createUser } from "./users";
 
 afterEach(() => setSystemTime());
@@ -120,4 +121,49 @@ test("users are found by id and by email ignoring case", () => {
   expect(findUserByEmail(db, "A@EXAMPLE.COM")?.id).toBe(userId);
   expect(findUserByEmail(db, "x@example.com")).toBeNull();
   expect(getUser(db, "missing")).toBeNull();
+});
+
+test("cookie session lookup refuses mobile session tokens", () => {
+  const { db, userId } = setup();
+  const mobToken = "hmob_0123456789abcdef0123456789abcdef0123456789";
+  const { id: sessionId } = createMobileSession(db, userId, mobToken, null);
+  insertMobileDevice(db, {
+    userId,
+    sessionId,
+    name: "Phone",
+    platform: "ios",
+    publicKeySpki: "spki",
+  });
+  expect(sessionFromToken(db, mobToken)).toBeNull();
+});
+
+test("listMobileDevices excludes revoked or expired sessions", () => {
+  const { db, userId } = setup();
+  const t1 = "hmob_111111111111111111111111111111111111111111";
+  const { id: s1 } = createMobileSession(db, userId, t1, null);
+  const d1 = insertMobileDevice(db, {
+    userId,
+    sessionId: s1,
+    name: "Phone 1",
+    platform: "ios",
+    publicKeySpki: "spki1",
+  });
+
+  const t2 = "hmob_222222222222222222222222222222222222222222";
+  const { id: s2 } = createMobileSession(db, userId, t2, null);
+  insertMobileDevice(db, {
+    userId,
+    sessionId: s2,
+    name: "Phone 2",
+    platform: "android",
+    publicKeySpki: "spki2",
+  });
+
+  expect(listMobileDevices(db, userId)).toHaveLength(2);
+
+  revokeSession(db, userId, s2);
+  expect(listMobileDevices(db, userId).map((d) => d.id)).toEqual([d1]);
+
+  setSystemTime(new Date(Date.now() + 31 * DAY));
+  expect(listMobileDevices(db, userId)).toHaveLength(0);
 });

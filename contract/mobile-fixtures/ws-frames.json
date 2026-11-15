@@ -1,0 +1,62 @@
+[
+  {
+    "type": "event",
+    "runId": "run_019318894978701388bb69b7f5256010",
+    "event": {
+      "kind": "command",
+      "ts": 1700000005000
+    }
+  },
+  {
+    "type": "run",
+    "run": {
+      "id": "run_019318894978701388bb69b7f5256010",
+      "memberId": "mem_019318894978701388bb69b7f5256005",
+      "agentId": "claude-code",
+      "model": "claude-3-7-sonnet",
+      "repo": "/Users/alice/projects/harness",
+      "branch": "main",
+      "prompt": "Fix bug in mobile auth",
+      "state": "running",
+      "reason": null,
+      "createdAt": 1700000000000,
+      "startedAt": 1700000001000,
+      "endedAt": null,
+      "inputTokens": 1250,
+      "outputTokens": 450
+    }
+  },
+  {
+    "type": "approval",
+    "approval": {
+      "id": "app_019318894978701388bb69b7f5256011",
+      "runId": "run_019318894978701388bb69b7f5256010",
+      "command": "rm -rf /tmp/scratch",
+      "reason": "Clean temporary artifacts",
+      "status": "pending",
+      "decidedBy": null,
+      "createdAt": 1700000000000,
+      "expiresAt": 1700000300000,
+      "decidedAt": null
+    }
+  },
+  {
+    "type": "task",
+    "projectId": "prj_019318894978701388bb69b7f5256006",
+    "taskId": "tsk_019318894978701388bb69b7f5256020",
+    "kind": "updated"
+  },
+  {
+    "type": "chat",
+    "channelId": "chn_019318894978701388bb69b7f5256030",
+    "messageId": "msg_019318894978701388bb69b7f5256031",
+    "threadRootId": null
+  },
+  {
+    "type": "dashboard"
+  },
+  {
+    "type": "memory",
+    "orgId": "org_019318894978701388bb69b7f5256003"
+  }
+]

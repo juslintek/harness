@@ -1,0 +1,22 @@
+{
+  "held": {
+    "ok": false,
+    "reason": "held",
+    "holderId": "mem_019318894978701388bb69b7f5256005"
+  },
+  "depsOpen": {
+    "ok": false,
+    "reason": "deps_open",
+    "open": [
+      42,
+      43
+    ]
+  },
+  "childrenOpen": {
+    "ok": false,
+    "reason": "children_open",
+    "open": [
+      44
+    ]
+  }
+}

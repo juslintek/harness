@@ -1,0 +1,4 @@
+Harness.xcodeproj/
+.build/
+DerivedData/
+*.xcuserstate

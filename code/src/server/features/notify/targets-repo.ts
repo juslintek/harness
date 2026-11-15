@@ -37,6 +37,30 @@ export function insertTarget(
   return id;
 }
 
+export function upsertMobileTarget(
+  db: Database,
+  memberId: string,
+  value: Record<string, string>,
+  id: string = Bun.randomUUIDv7(),
+): string {
+  const existing = targetsOf(db, memberId, "push").find(
+    (t) => t.value.kind === "mobile_relay" && t.value.pushToken === value.pushToken,
+  );
+  const json = JSON.stringify(value);
+  if (existing) {
+    db.query("UPDATE notify_targets SET value = ?, created_at = ? WHERE id = ?").run(
+      json,
+      Date.now(),
+      existing.id,
+    );
+    return existing.id;
+  }
+  db.query(
+    "INSERT INTO notify_targets (id, member_id, channel, value, created_at) VALUES (?, ?, 'push', ?, ?)",
+  ).run(id, memberId, json, Date.now());
+  return id;
+}
+
 export function targetsOf(db: Database, memberId: string, channel?: Channel): Target[] {
   const rows = channel
     ? db
@@ -64,8 +88,11 @@ export function deleteTarget(
     .get(targetId, memberId);
   if (!row) return false;
   db.query("DELETE FROM notify_targets WHERE id = ?").run(targetId);
+  const target = toTarget(row);
   if (row.channel === "webhook") {
-    deleteSecret(toTarget(row).value.secretName ?? `webhook.${targetId}`, home);
+    deleteSecret(target.value.secretName ?? `webhook.${targetId}`, home);
+  } else if (row.channel === "push" && target.value.secretName) {
+    deleteSecret(target.value.secretName, home);
   }
   return true;
 }
@@ -91,11 +118,18 @@ function pushHost(endpoint: string | undefined): string {
   }
 }
 
+function pushLabel(v: Record<string, string>): string {
+  if (v.kind === "mobile_relay" && v.platform && v.appId) {
+    return `${v.platform}:${v.appId}`;
+  }
+  return pushHost(v.endpoint ?? v.relayUrl);
+}
+
 // The label never carries a secret: a webhook shows its url, a push subscription only its host.
 export function viewOf(t: Target): TargetView {
   const v = t.value;
   const label: Record<Channel, string> = {
-    push: pushHost(v.endpoint),
+    push: pushLabel(v),
     email: v.address ?? "",
     slack: v.userId ?? "",
     telegram: v.chatId ?? "",

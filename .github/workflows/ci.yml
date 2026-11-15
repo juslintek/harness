@@ -79,3 +79,30 @@ jobs:
           zig fmt --check .
           zig build test -Doptimize=ReleaseSafe --summary all
           zig build -Doptimize=ReleaseSafe
+
+  ios:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - run: |
+          UDID=$(xcrun simctl list devices available | grep -m1 'iPhone' | sed -E 's/.*\(([0-9A-F-]+)\).*/\1/')
+          xcodebuild test -project Harness.xcodeproj -scheme Harness -only-testing:HarnessTests -destination "platform=iOS Simulator,id=$UDID"
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew testDebugUnitTest assembleDebug

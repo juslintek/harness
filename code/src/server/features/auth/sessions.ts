@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 
-export type SessionMethod = "passkey" | "email" | "recovery" | "enroll";
+export type SessionMethod = "passkey" | "email" | "recovery" | "enroll" | "mobile";
 
 export interface Session {
   id: string;
@@ -75,7 +75,7 @@ export function sessionFromToken(db: Database, token: string): Session | null {
     .query<SessionRow, [string, number]>(
       `SELECT s.id, s.user_id, s.method, s.step_up_at, s.last_seen_at, u.instance_admin
          FROM sessions s JOIN users u ON u.id = s.user_id
-        WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?`,
+        WHERE s.token_hash = ? AND s.method != 'mobile' AND s.revoked_at IS NULL AND s.expires_at > ?`,
     )
     .get(sha256Hex(token), now);
   if (!row) return null;

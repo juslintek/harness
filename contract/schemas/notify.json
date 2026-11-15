@@ -1,4 +1,83 @@
 {
+  "MobilePushSubscribeBody": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "appId": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "ios",
+            "android"
+          ],
+          "type": "string"
+        },
+        "pushToken": {
+          "maxLength": 4096,
+          "minLength": 16,
+          "type": "string"
+        },
+        "relaySecret": {
+          "maxLength": 256,
+          "minLength": 16,
+          "type": "string"
+        },
+        "relayUrl": {
+          "maxLength": 2048,
+          "type": "string"
+        }
+      },
+      "required": [
+        "relayUrl",
+        "platform",
+        "appId",
+        "pushToken"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "appId": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        },
+        "platform": {
+          "enum": [
+            "ios",
+            "android"
+          ],
+          "type": "string"
+        },
+        "pushToken": {
+          "maxLength": 4096,
+          "minLength": 16,
+          "type": "string"
+        },
+        "relaySecret": {
+          "maxLength": 256,
+          "minLength": 16,
+          "type": "string"
+        },
+        "relayUrl": {
+          "maxLength": 2048,
+          "type": "string"
+        }
+      },
+      "required": [
+        "relayUrl",
+        "platform",
+        "appId",
+        "pushToken"
+      ],
+      "type": "object"
+    }
+  },
   "notificationSchema": {
     "input": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",

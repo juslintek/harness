@@ -181,6 +181,40 @@ Login is the authorization code flow with PKCE, `state` and `nonce`. The ID toke
 - Existing users only. The email must match a user that already exists. No account is created; new users still come in through an invite.
 - An OIDC login opens a session of the same kind as an email-code login. It proves the address, not a passkey, so it starts without step-up. Actions that need step-up still need a passkey touch.
 
+## Mobile Apps (iOS & Android)
+
+The native iOS and Android apps connect directly to your Harness instance over HTTPS (or `http://127.0.0.1` / loopback during local testing) using a per-device bearer token (`hmob_...`). Each device holds its own P-256 signing key in the platform keychain/keystore (Secure Enclave on iOS, Android Keystore on Android).
+
+### Pairing from `#/account`
+
+1. Sign in to the web UI on your Harness instance and open `#/account`.
+2. Start a mobile pairing code (`POST /api/auth/mobile/pair/start`, requires step-up). The UI displays a QR code encoding `harness://pair?origin=<origin>&code=<code>` (valid for 5 minutes, single-use).
+3. Scan the QR code in the mobile app (or paste the origin and pairing code). The app requests a challenge from `/api/auth/mobile/pair/options`, signs `harness-mobile-pair-v1|<origin>|<challengeId>|<nonce>` with its hardware P-256 key, and exchanges it at `/api/auth/mobile/pair/verify` for a long-lived `hmob_...` bearer token.
+
+### Bootstrap enrollment codes
+
+On a fresh instance with no users yet (or when an admin generates an enrollment code for a user), the app can redeem an enrollment code directly via `/api/auth/mobile/enroll/:code/options` and `/api/auth/mobile/enroll/:code/verify`. This registers the device's P-256 public key, issues a `hmob_...` token, and returns 10 recovery codes.
+
+### Multi-instance switching over Tailscale or Cloudflare Tunnel
+
+Each paired instance is stored in the app's instance registry keyed by its origin (`https://<host>`), with its bearer token and device key scoped to that instance. You can pair multiple Harness instances exposed via Tailscale Serve (`https://<node>.<tailnet>.ts.net`) or Cloudflare Tunnel (`https://<subdomain>.example.com`) and switch active instances from the workspace switcher without re-pairing.
+
+### Hardware P-256 biometric step-up
+
+Risky actions (such as halting runs, approving self-updates, or managing federation peers) require a fresh step-up within the last 5 minutes. When an endpoint returns `403 { "error": "step_up_required" }`, the app prompts for Face ID / Touch ID / Android BiometricPrompt to unlock the hardware P-256 key, requests `/api/auth/mobile/step-up/options`, signs `harness-mobile-stepup-v1|<origin>|<sessionId>|<challengeId>|<nonce>`, and submits to `/api/auth/mobile/step-up/verify`.
+
+### Self-hosting `tools/push-relay/relay.ts` for APNs/FCM
+
+Harness instances never hold Apple or Google push credentials directly. Instead, when a mobile device subscribes via `POST /api/notify/push/mobile`, the instance signs push envelopes with HMAC-SHA256 (`x-harness-push-signature: sha256=<hex>`) and forwards them to a stateless push relay.
+
+To self-host the relay, run `tools/push-relay/relay.ts` (`createRelayHandler(config)`) behind HTTPS and configure:
+
+- `secret`: shared HMAC secret matching the `relaySecret` registered by the device
+- `apnsTopic` / `apnsEndpoint`: Apple Push Notification service topic (app bundle ID) and endpoint
+- `fcmProjectId` / `fcmToken` / `fcmEndpoint`: Firebase Cloud Messaging v1 project ID and OAuth2 bearer token
+
+The relay verifies the HMAC signature, translates the envelope into an APNs alert (`interruption-level: time-sensitive` or `active`) or high-priority FCM data message, and returns `410` when a device token is unregistered so Harness prunes stale targets automatically.
+
 ## Known gaps
 
 - No relay between grantees. A project is shared from its home to each peer; two peers do not see each other's changes except through the home, and a change on a copy reaches only the home.

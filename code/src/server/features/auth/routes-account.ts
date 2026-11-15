@@ -20,6 +20,7 @@ import {
 } from "./api";
 import { deletePasskey, listPasskeys } from "./credentials";
 import { SESSION_COOKIE, stepUpRequired } from "./middleware";
+import { mobileAccountRoutes } from "./mobile-account-routes";
 import { oidcAdminRoutes } from "./oidc-admin";
 import { invalidBody, parseBody } from "./routes";
 
@@ -118,6 +119,7 @@ export function accountRoutes(db: Database, rp: Rp, home: string): Hono<AuthEnv>
   passkeyRoutes(app, db, rp);
   stepUpRoutes(app, db, rp);
   sessionRoutes(app, db);
+  mobileAccountRoutes(app, db, rp);
   oidcAdminRoutes(app, db, home);
   return app;
 }
