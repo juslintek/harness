@@ -202,3 +202,24 @@ test("an admin without a passkey gets a link for their own account, one with a p
   addPasskey(db, adminId);
   expect(firstRunEnrollment(db, MIN)).toBeNull();
 });
+
+test("first run: mobile enrollment bootstrap prevents re-minting admin enrollment code", () => {
+  const db = openDb(":memory:");
+  migrate(db, migrations);
+  const code = firstRunEnrollment(db, MIN) ?? "";
+  const adminId = redeemEnrollment(db, code, { email: "owner@example.com", name: "Owner" }) ?? "";
+  completeEnrollment(db, code);
+
+  const sessionId = "s_mob_1";
+  const now = Date.now();
+  db.run(
+    "INSERT INTO sessions (id, user_id, token_hash, method, created_at, last_seen_at, expires_at) VALUES (?, ?, 'th', 'mobile', ?, ?, ?)",
+    [sessionId, adminId, now, now, now + 30 * 24 * 3600 * 1000],
+  );
+  db.run(
+    "INSERT INTO mobile_devices (id, user_id, session_id, name, platform, public_key_spki, created_at, last_used_at) VALUES ('md1', ?, ?, 'iPhone', 'ios', 'spki', ?, ?)",
+    [adminId, sessionId, now, now],
+  );
+
+  expect(firstRunEnrollment(db, MIN)).toBeNull();
+});

@@ -70,6 +70,25 @@ test("a db at version 7 gains runs.pid_identity at version 8", () => {
   expect(columns(db)).toBe(1);
 });
 
+test("migration 040 preserves existing oauth_consent_challenges rows across sessions rebuild", () => {
+  const db = openDb(join(dir, "t.db"));
+  migrate(db, migrations.slice(0, 38));
+  db.run(
+    "INSERT INTO users (id, email, name, created_at, instance_admin) VALUES ('u1', 'u@test', 'U', 1, 1)",
+  );
+  db.run(
+    "INSERT INTO sessions (id, user_id, token_hash, method, user_agent, created_at, last_seen_at, expires_at) VALUES ('s1', 'u1', 'th', 'passkey', 'ua', 1, 1, 100000)",
+  );
+  db.run(
+    "INSERT INTO oauth_consent_challenges (challenge_id, session_id, user_id, grant_hash, expires_at) VALUES ('c1', 's1', 'u1', 'gh', 100000)",
+  );
+  migrate(db, migrations);
+  const row = db
+    .query("SELECT challenge_id FROM oauth_consent_challenges WHERE challenge_id = 'c1'")
+    .get();
+  expect(row).toEqual({ challenge_id: "c1" });
+});
+
 test("a db with a newer user_version than the known migrations is refused and left alone", () => {
   const db = openDb(join(dir, "t.db"));
   migrate(db, migrations);

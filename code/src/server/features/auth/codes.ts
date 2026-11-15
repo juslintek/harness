@@ -117,7 +117,19 @@ export function createEnrollment(
 }
 
 export function hasPasskey(db: Database, userId: string): boolean {
-  return db.query("SELECT 1 FROM passkeys WHERE user_id = ?").get(userId) !== null;
+  const now = Date.now();
+  return (
+    db
+      .query(
+        `SELECT 1 WHERE EXISTS (SELECT 1 FROM passkeys WHERE user_id = ?)
+         OR EXISTS (
+           SELECT 1 FROM mobile_devices md
+           JOIN sessions s ON s.id = md.session_id
+           WHERE md.user_id = ? AND s.revoked_at IS NULL AND s.expires_at > ?
+         )`,
+      )
+      .get(userId, userId, now) !== null
+  );
 }
 
 interface EnrollmentRow {
@@ -204,12 +216,20 @@ export function completeEnrollment(db: Database, code: string): void {
 // admin who has no passkey yet gets the link for their own account. Older unused bootstrap links
 // die first so only one first-run link is ever live.
 export function firstRunEnrollment(db: Database, ttlMs: number): string | null {
+  const now = Date.now();
   const enrolled = db
     .query(
       `SELECT 1 FROM users u WHERE u.instance_admin = 1
-         AND EXISTS (SELECT 1 FROM passkeys p WHERE p.user_id = u.id)`,
+         AND (
+           EXISTS (SELECT 1 FROM passkeys p WHERE p.user_id = u.id)
+           OR EXISTS (
+             SELECT 1 FROM mobile_devices md
+             JOIN sessions s ON s.id = md.session_id
+             WHERE md.user_id = u.id AND s.revoked_at IS NULL AND s.expires_at > ?
+           )
+         )`,
     )
-    .get();
+    .get(now);
   if (enrolled) return null;
   const admin = db
     .query<{ id: string }, []>(
@@ -219,6 +239,6 @@ export function firstRunEnrollment(db: Database, ttlMs: number): string | null {
   db.query(
     `UPDATE enrollments SET used_at = ?
       WHERE used_at IS NULL AND ((user_id IS NULL AND email IS NULL) OR user_id = ?)`,
-  ).run(Date.now(), admin?.id ?? null);
+  ).run(now, admin?.id ?? null);
   return createEnrollment(db, admin ? { userId: admin.id, ttlMs } : { ttlMs });
 }

@@ -60,7 +60,7 @@ interface Request {
 
 function testLoopback(url: URL): boolean {
   return (
-    process.env.NODE_ENV === "test" &&
+    (process.env.NODE_ENV === "test" || process.env.HARNESS_TEST === "1") &&
     url.protocol === "http:" &&
     (url.hostname === "localhost" || url.hostname === "127.0.0.1")
   );

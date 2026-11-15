@@ -1,0 +1,9 @@
+{
+  "rpOrigin": "http://localhost:4100",
+  "sessionId": "01931889-4978-7013-88bb-69b7f5256e65",
+  "challengeId": "ch_019318894978701388bb69b7f5256e65",
+  "nonce": "test_nonce_123456789012345678901234567890",
+  "canonicalPayload": "harness-mobile-stepup-v1|http://localhost:4100|01931889-4978-7013-88bb-69b7f5256e65|ch_019318894978701388bb69b7f5256e65|test_nonce_123456789012345678901234567890",
+  "publicKeySpki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEQut1gHTXG14xqB_NMo5yzITaBb3g1Lcdk4-SKvFTKAC6UAwXWozTLyomUkXHWzG51WjRHzgr0aXDjJ9_le7jwg",
+  "signature": "ifSjq9lyHJRMWQugiBJ8XeIjjxg8E3xGGCjL7g0HI__VtunTXGEm7n9ucMD9eb5R_hZeb3bYUGQRSFo5XQMyKQ"
+}

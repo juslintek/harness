@@ -1,0 +1,59 @@
+name: Harness
+options:
+  bundleIdPrefix: dev.harness
+  deploymentTarget:
+    iOS: "18.0"
+
+settings:
+  SWIFT_VERSION: "6.0"
+  SWIFT_STRICT_CONCURRENCY: complete
+
+targets:
+  Harness:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Harness
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: dev.harness.mobile
+      INFOPLIST_KEY_CFBundleURLTypes:
+        - CFBundleURLName: dev.harness.mobile
+          CFBundleURLSchemes:
+            - harness
+      INFOPLIST_KEY_NSFaceIDUsageDescription: "Harness uses Face ID to authorize step-up actions."
+      INFOPLIST_KEY_NSCameraUsageDescription: "Harness uses the camera to scan instance pairing QR codes."
+      INFOPLIST_KEY_NSAppTransportSecurity:
+        NSAllowsLocalNetworking: true
+      INFOPLIST_KEY_UILaunchScreen_Generation: true
+      GENERATE_INFOPLIST_FILE: YES
+      SWIFT_STRICT_CONCURRENCY: complete
+      SWIFT_VERSION: "6.0"
+
+  HarnessTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: HarnessTests
+      - path: ../contract/mobile-fixtures
+        buildPhase: resources
+    dependencies:
+      - target: Harness
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+      SWIFT_STRICT_CONCURRENCY: complete
+      SWIFT_VERSION: "6.0"
+
+  HarnessUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: HarnessUITests
+    dependencies:
+      - target: Harness
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+      SWIFT_STRICT_CONCURRENCY: complete
+      SWIFT_VERSION: "6.0"

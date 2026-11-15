@@ -1,0 +1,79 @@
+{
+  "tasks": [
+    {
+      "id": "tsk_019318894978701388bb69b7f5256020",
+      "orgId": "org_019318894978701388bb69b7f5256003",
+      "projectId": "prj_019318894978701388bb69b7f5256006",
+      "number": 1,
+      "parentId": null,
+      "title": "Setup Mobile Fixtures",
+      "description": "Create deterministic fixtures for mobile client",
+      "status": "in_progress",
+      "rank": 1000,
+      "assigneeId": "mem_019318894978701388bb69b7f5256005",
+      "holderId": null,
+      "assignee": {
+        "id": "mem_019318894978701388bb69b7f5256005",
+        "handle": "alice",
+        "displayName": "Alice Cooper",
+        "kind": "human"
+      },
+      "holder": null,
+      "checkedOutAt": null,
+      "estimateMinutes": 60,
+      "createdBy": "mem_019318894978701388bb69b7f5256005",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    }
+  ],
+  "deps": [
+    {
+      "taskId": "tsk_019318894978701388bb69b7f5256020",
+      "dependsOn": "tsk_019318894978701388bb69b7f5256019"
+    }
+  ],
+  "detail": {
+    "task": {
+      "id": "tsk_019318894978701388bb69b7f5256020",
+      "orgId": "org_019318894978701388bb69b7f5256003",
+      "projectId": "prj_019318894978701388bb69b7f5256006",
+      "number": 1,
+      "parentId": null,
+      "title": "Setup Mobile Fixtures",
+      "description": "Create deterministic fixtures for mobile client",
+      "status": "in_progress",
+      "rank": 1000,
+      "assigneeId": "mem_019318894978701388bb69b7f5256005",
+      "holderId": null,
+      "assignee": {
+        "id": "mem_019318894978701388bb69b7f5256005",
+        "handle": "alice",
+        "displayName": "Alice Cooper",
+        "kind": "human"
+      },
+      "holder": null,
+      "checkedOutAt": null,
+      "estimateMinutes": 60,
+      "createdBy": "mem_019318894978701388bb69b7f5256005",
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000
+    },
+    "deps": [],
+    "subtasks": [],
+    "comments": [
+      {
+        "id": "com_019318894978701388bb69b7f5256021",
+        "taskId": "tsk_019318894978701388bb69b7f5256020",
+        "authorId": "mem_019318894978701388bb69b7f5256005",
+        "author": {
+          "id": "mem_019318894978701388bb69b7f5256005",
+          "handle": "alice",
+          "displayName": "Alice Cooper",
+          "kind": "human"
+        },
+        "body": "Work started on fixtures",
+        "createdAt": 1700000000000
+      }
+    ]
+  }
+}

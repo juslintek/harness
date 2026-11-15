@@ -365,6 +365,132 @@
   },
   {
     "method": "GET",
+    "path": "/api/auth/mobile/devices",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/auth/mobile/devices/:id",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/mobile/enroll/:code/options",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": true,
+      "rateLimited": true,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/mobile/enroll/:code/verify",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": true,
+      "rateLimited": true,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/mobile/pair/options",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": true,
+      "rateLimited": true,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/mobile/pair/start",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/mobile/pair/verify",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": true,
+      "rateLimited": true,
+      "session": false,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/mobile/step-up/options",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/mobile/step-up/verify",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
     "path": "/api/auth/oidc/:id/start",
     "policy": {
       "admin": false,
@@ -1113,6 +1239,20 @@
       "loopback": false,
       "orgAdmin": false,
       "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/notify/push/mobile",
+    "policy": {
+      "admin": false,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
       "public": false,
       "rateLimited": false,
       "session": true,

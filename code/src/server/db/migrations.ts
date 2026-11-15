@@ -40,6 +40,7 @@ import oidcIdentitiesIssuer from "./migrations/038_oidc_identities_issuer.sql" w
   type: "text",
 };
 import agentAccounts from "./migrations/039_agent_accounts.sql" with { type: "text" };
+import mobileDevices from "./migrations/040_mobile_devices.sql" with { type: "text" };
 
 export const migrations: readonly Migration[] = [
   { version: 1, sql: instance },
@@ -81,4 +82,5 @@ export const migrations: readonly Migration[] = [
   { version: 37, sql: peersUniqueKey },
   { version: 38, sql: oidcIdentitiesIssuer },
   { version: 39, sql: agentAccounts },
+  { version: 40, sql: mobileDevices },
 ];

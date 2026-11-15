@@ -38,6 +38,12 @@ pre-push:
       root: "code/"
       use_stdin: true
       run: scripts/changed.sh code || bun run size
+    ios-test:
+      use_stdin: true
+      run: ./code/scripts/changed.sh ios || (cd ios && xcodegen generate && xcodebuild test -project Harness.xcodeproj -scheme Harness -only-testing:HarnessTests -destination "platform=iOS Simulator,id=BFC10D6C-44F3-41E2-823B-95BCB6BCA77D")
+    android-test:
+      use_stdin: true
+      run: ./code/scripts/changed.sh android || (source code/scripts/android-env.sh && cd android && ./gradlew testDebugUnitTest)
 
 commit-msg:
   commands:

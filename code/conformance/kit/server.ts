@@ -99,7 +99,13 @@ function childEnv(home: string, opts: BootOpts): Record<string, string> {
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined && !key.startsWith("HARNESS_")) env[key] = value;
   }
-  Object.assign(env, { HARNESS_HOME: home, HARNESS_PORT: "0", HARNESS_TEST: "1", ...opts.env });
+  Object.assign(env, {
+    HARNESS_HOME: home,
+    HARNESS_PORT: "0",
+    HARNESS_TEST: "1",
+    NODE_ENV: "development",
+    ...opts.env,
+  });
   if (opts.agents) env.HARNESS_TEST_AGENTS = JSON.stringify(opts.agents);
   return env;
 }

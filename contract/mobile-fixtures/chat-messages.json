@@ -1,0 +1,50 @@
+{
+  "channels": [
+    {
+      "id": "chn_019318894978701388bb69b7f5256030",
+      "orgId": "org_019318894978701388bb69b7f5256003",
+      "kind": "org",
+      "name": "general",
+      "teamId": null,
+      "projectId": null,
+      "createdAt": 1700000000000,
+      "unread": 0
+    }
+  ],
+  "members": [
+    {
+      "id": "mem_019318894978701388bb69b7f5256005",
+      "kind": "human",
+      "handle": "alice",
+      "displayName": "Alice Cooper"
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg_019318894978701388bb69b7f5256031",
+      "channelId": "chn_019318894978701388bb69b7f5256030",
+      "threadRootId": null,
+      "authorId": "mem_019318894978701388bb69b7f5256005",
+      "author": {
+        "id": "mem_019318894978701388bb69b7f5256005",
+        "handle": "alice",
+        "displayName": "Alice Cooper",
+        "kind": "human"
+      },
+      "body": "Wave M0 mobile client is ready for testing #1",
+      "createdAt": 1700000000000,
+      "editedAt": null,
+      "replyCount": 0,
+      "mentions": [],
+      "taskIds": [
+        "tsk_019318894978701388bb69b7f5256020"
+      ],
+      "tasks": [
+        {
+          "number": 1,
+          "projectId": "prj_019318894978701388bb69b7f5256006"
+        }
+      ]
+    }
+  ]
+}

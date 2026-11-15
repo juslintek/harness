@@ -1,7 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
 import { type Context, Hono } from "hono";
-import type { z } from "zod";
 import {
   assertionBody,
   codeBody,
@@ -31,8 +30,10 @@ import {
   verifyEmailCode,
 } from "./api";
 import { setSessionCookie } from "./middleware";
+import { mobilePublicRoutes } from "./mobile-routes";
 import { oidcPublicRoutes } from "./oidc-routes";
 import { rateLimit } from "./rate-limit";
+import { invalidBody, parseBody } from "./routes-common";
 
 export interface AuthDeps {
   db: Database;
@@ -44,12 +45,7 @@ export interface AuthDeps {
 
 const ATTEMPTS_PER_MINUTE = 10;
 
-export async function parseBody<T>(c: Context, schema: z.ZodType<T>): Promise<T | null> {
-  const parsed = schema.safeParse(await c.req.json().catch(() => null));
-  return parsed.success ? parsed.data : null;
-}
-
-export const invalidBody = (c: Context): Response => c.json({ error: "invalid body" }, 400);
+export { invalidBody, parseBody };
 
 // Every way in ends here, so the personal org exists whichever method the user used first.
 function openSession(
@@ -169,12 +165,16 @@ export function publicAuthRoutes(deps: AuthDeps): Hono {
     "/email/*",
     "/recovery",
     "/enroll/*",
+    "/mobile/enroll/*",
+    "/mobile/pair/options",
+    "/mobile/pair/verify",
     "/oidc/callback",
     "/oidc/:id/start",
   ])
     app.use(path, limiter);
   loginRoutes(app, deps);
   enrollRoutes(app, deps);
+  mobilePublicRoutes(app, deps);
   // An OIDC login opens the same kind of session as an email code: it proves the address, not a
   // passkey, so it never unlocks step-up.
   oidcPublicRoutes(app, {
