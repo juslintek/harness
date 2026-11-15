@@ -4,6 +4,10 @@ import { dirname, join } from "node:path";
 import type { AccountView } from "../../../shared/accounts";
 import { appendEvent, type EventKind } from "../logs/api";
 import * as repo from "./accounts-repo";
+import { getSpec } from "./api";
+import { logoutAccount, type Runner } from "./discover";
+import { stopLogin } from "./login-registry";
+import type { AgentSpec } from "./specs";
 
 export class AccountError extends Error {
   readonly status: 404 | 409;
@@ -19,7 +23,7 @@ const LIVE_RUN_STATES = ["running", "starting", "queued"];
 const accountsDir = (home: string): string => join(home, "accounts");
 
 // Only the id and the label go in: a label is limited to a safe set, and no path or token is logged.
-function auditAccount(
+export function auditAccount(
   db: Database,
   kind: Extract<EventKind, `account.${string}`>,
   account: AccountView,
@@ -34,10 +38,15 @@ function auditAccount(
   });
 }
 
-function accountOf(db: Database, runtime: string, id: string): AccountView {
+export function accountOf(db: Database, runtime: string, id: string): AccountView {
   const account = repo.getAccount(db, id);
   if (!account || account.runtime !== runtime) throw new AccountError(404, "unknown account");
   return account;
+}
+
+export function assertIsolated(spec: AgentSpec | null): void {
+  if (!spec?.accountIsolation)
+    throw new AccountError(409, "this runtime is not enabled for extra accounts yet");
 }
 
 export function addAccount(
@@ -45,7 +54,9 @@ export function addAccount(
   home: string,
   runtime: string,
   label: string,
+  spec: AgentSpec | null = getSpec(runtime),
 ): AccountView {
+  assertIsolated(spec);
   // The default account owns this label; a custom one would block ensureDefaultAccount on link.
   if (label.toLowerCase() === "default")
     throw new AccountError(409, "the label default is reserved for the runtime's own login");
@@ -121,9 +132,21 @@ function ownedHome(home: string, account: AccountView): string | null {
   return resolved;
 }
 
-function finishRemoval(db: Database, home: string, account: AccountView): AccountView {
-  // Checked again here, right before the delete, because the account row is the only thing that
-  // names the path and it was read earlier.
+// Removals in flight in this process. A drained or failed account is already `removing` in the
+// database, so the row alone cannot tell a retry from a second request running right now.
+const inFlight = new Set<string>();
+
+async function finishRemoval(
+  db: Database,
+  home: string,
+  account: AccountView,
+  how: { spec?: AgentSpec | null; run?: Runner },
+): Promise<{ removed: AccountView; logout: string }> {
+  await stopLogin(account.id);
+  const spec = how.spec === undefined ? getSpec(account.runtime) : how.spec;
+  const logout = spec ? await logoutAccount(spec, account, how.run) : "no logout command";
+  // Checked again here, right before the delete: the awaits above can take seconds, and the row
+  // is the only thing that names the path.
   const dir = ownedHome(home, account);
   if (dir) rmSync(dir, { recursive: true, force: true });
   // The row stays, but its label is freed: UNIQUE (runtime, label) would otherwise block it forever.
@@ -132,50 +155,64 @@ function finishRemoval(db: Database, home: string, account: AccountView): Accoun
     label: `${account.label}~removed~${account.id}`,
   });
   if (!removed) throw new AccountError(404, "unknown account");
-  return removed;
+  return { removed, logout };
 }
 
-export function removeAccount(
-  db: Database,
-  home: string,
-  runtime: string,
-  id: string,
-  drain: boolean,
-): AccountView {
-  const account = accountOf(db, runtime, id);
+function assertRemovable(account: AccountView, runtime: string): void {
   if (account.id === `default:${runtime}` || account.home === null)
     throw new AccountError(
       409,
       "the default account cannot be removed, unlink the runtime instead",
     );
   if (account.state === "removed") throw new AccountError(409, "the account is already removed");
+  if (inFlight.has(account.id)) throw new AccountError(409, "the account is already being removed");
+}
+
+// One row changing is the claim: a second remove for the same account loses it. A drained or
+// failed account is already `removing` and keeps going.
+function claimRemoval(db: Database, account: AccountView): void {
+  if (account.state === "removing") return;
+  const claimed = db.run(
+    "UPDATE agent_accounts SET state = 'removing', updated_at = ? WHERE id = ? AND state NOT IN ('removing', 'removed')",
+    [Date.now(), account.id],
+  );
+  if (claimed.changes !== 1) throw new AccountError(409, "the account is already being removed");
+}
+
+export async function removeAccount(
+  db: Database,
+  home: string,
+  runtime: string,
+  id: string,
+  drain: boolean,
+  how: { spec?: AgentSpec | null; run?: Runner } = {},
+): Promise<AccountView> {
+  const account = accountOf(db, runtime, id);
+  assertRemovable(account, runtime);
   // A second drain changes nothing, so it neither rewrites the row nor repeats the audit event.
   if (account.state === "removing" && drain) return account;
   const live = liveRuns(db, id) > 0;
   if (live && !drain) throw new AccountError(409, "the account has live runs, retry with ?drain=1");
+  // Before anything runs with this home: a vendor logout must never see a path outside ours.
   ownedHome(home, account);
-  if (account.state !== "removing") {
-    // One row changing is the claim: a second remove for the same account loses it.
-    const claimed = db.run(
-      "UPDATE agent_accounts SET state = 'removing', updated_at = ? WHERE id = ? AND state NOT IN ('removing', 'removed')",
-      [Date.now(), id],
-    );
-    if (claimed.changes !== 1) throw new AccountError(409, "the account is already being removed");
-  }
+  claimRemoval(db, account);
   const claimedView = accountOf(db, runtime, id);
   if (live) {
     auditAccount(db, "account.removed", claimedView, "draining");
     return claimedView;
   }
+  inFlight.add(id);
   try {
-    const removed = finishRemoval(db, home, account);
+    const { removed, logout } = await finishRemoval(db, home, account, how);
     // The audit line keeps the name the holder knew, not the tombstone label.
-    auditAccount(db, "account.removed", { ...removed, label: account.label });
+    auditAccount(db, "account.removed", { ...removed, label: account.label }, logout);
     return removed;
   } catch (err) {
     const reason =
       err instanceof AccountError ? err.message : ((err as { code?: string }).code ?? "error");
     auditAccount(db, "account.remove_failed", claimedView, reason);
     throw new AccountError(409, `removal failed (${reason}), the account stays in removing`);
+  } finally {
+    inFlight.delete(id);
   }
 }

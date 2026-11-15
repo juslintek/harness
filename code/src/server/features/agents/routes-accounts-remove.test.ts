@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { AccountView } from "../../../shared/accounts";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
+import { isolatedStubSpec } from "../../test-support/agents-kit";
 import { withActor } from "../../test-support/app-kit";
 import { agentRoutes } from "./routes";
 
@@ -22,7 +23,11 @@ afterEach(() => rmSync(home, { recursive: true, force: true }));
 
 const noAcp = (): Promise<never> => Promise.reject(new Error("not used"));
 const routes = (session?: Parameters<typeof withActor>[1]): ReturnType<typeof withActor> =>
-  withActor(agentRoutes(db, { listAcp: noAcp }, home), session);
+  withActor(
+    // A stub spec keeps removal from running a vendor logout on the machine running the tests.
+    agentRoutes(db, { listAcp: noAcp }, home, { spec: isolatedStubSpec() }),
+    session,
+  );
 
 const send = (
   app: ReturnType<typeof withActor>,

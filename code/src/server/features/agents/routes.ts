@@ -4,6 +4,7 @@ import { z } from "zod";
 import { loadConfig } from "../../config";
 import { type AuthEnv, requireStepUp } from "../auth/api";
 import { appendEvent } from "../logs/api";
+import type { AccountDeps } from "./accounts-login";
 import type { AgentSpec } from "./api";
 import {
   getSpec,
@@ -36,9 +37,10 @@ export function agentRoutes(
   db: Database,
   models: ModelSources = noAcp,
   home: string = loadConfig().home,
+  accountDeps: AccountDeps = {},
 ): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
-  app.route("/", accountRoutes(db, home));
+  app.route("/", accountRoutes(db, home, accountDeps));
   app.get("/", async (c) => c.json(await listAgents(db)));
   app.get("/keys", async (c) =>
     c.json(

@@ -1,4 +1,6 @@
-import { type AgentSpec, agentSpecs } from "./specs";
+import type { AccountState } from "../../../shared/accounts";
+import { identityHint } from "./identity-hint";
+import { type AgentSpec, accountEnv, agentSpecs } from "./specs";
 
 export type Runner = (
   argv: string[],
@@ -56,6 +58,20 @@ function parseVersion(text: string): string | null {
   return text.match(/\d+\.\d+\.\d+\S*/)?.[0] ?? null;
 }
 
+function loggedInBy(
+  spec: AgentSpec,
+  out: { code: number; stdout: string; stderr: string },
+): boolean {
+  const rule = spec.loginProbe?.loggedInWhen;
+  if (!rule) return false;
+  return (
+    out.code === 0 &&
+    (rule === "exit0" ||
+      out.stdout.includes(rule.stdoutIncludes) ||
+      out.stderr.includes(rule.stdoutIncludes))
+  );
+}
+
 async function probeLogin(
   spec: AgentSpec,
   run: Runner,
@@ -67,13 +83,7 @@ async function probeLogin(
       TIMEOUT_MS,
       spec.loginProbe.env,
     );
-    const rule = spec.loginProbe.loggedInWhen;
-    const loggedIn =
-      code === 0 &&
-      (rule === "exit0" ||
-        stdout.includes(rule.stdoutIncludes) ||
-        stderr.includes(rule.stdoutIncludes));
-    return { loggedIn, error: null };
+    return { loggedIn: loggedInBy(spec, { code, stdout, stderr }), error: null };
   } catch (err) {
     return { loggedIn: null, error: errorText(err) };
   }
@@ -106,4 +116,52 @@ async function discoverOne(spec: AgentSpec, run: Runner): Promise<DiscoveredAgen
 
 export function discoverAgents(run: Runner = bunRunner): Promise<DiscoveredAgent[]> {
   return Promise.all(agentSpecs.map((spec) => discoverOne(spec, run)));
+}
+
+export interface AccountProbe {
+  state: Extract<AccountState, "active" | "logged_out" | "probe_failed">;
+  identityHint: string | null;
+}
+
+// The probe keeps whatever env the spec pins (Codex reads ~/.codex) and lets the account's own
+// home replace it. A NULL home adds nothing, which is today's behaviour.
+function probeEnv(
+  spec: AgentSpec,
+  account: { home: string | null },
+): Record<string, string> | undefined {
+  const env = { ...spec.loginProbe?.env, ...accountEnv(spec, account) };
+  return Object.keys(env).length > 0 ? env : undefined;
+}
+
+export async function probeAccount(
+  spec: AgentSpec,
+  account: { home: string | null },
+  run: Runner = bunRunner,
+): Promise<AccountProbe> {
+  const failed: AccountProbe = { state: "probe_failed", identityHint: null };
+  if (!spec.loginProbe) return failed;
+  try {
+    const out = await run(spec.loginProbe.args, TIMEOUT_MS, probeEnv(spec, account));
+    if (out.code === NOT_FOUND) return failed;
+    if (!loggedInBy(spec, out)) return { state: "logged_out", identityHint: null };
+    return { state: "active", identityHint: identityHint(spec.id, out.stdout) };
+  } catch {
+    return failed;
+  }
+}
+
+// Best effort: the vendor name for this command is not verified against a real CLI, so a failure
+// is reported to the caller and never blocks removing the local home.
+export async function logoutAccount(
+  spec: AgentSpec,
+  account: { home: string | null },
+  run: Runner = bunRunner,
+): Promise<"logged out" | "logout failed" | "no logout command"> {
+  if (!spec.logoutArgs || account.home === null) return "no logout command";
+  try {
+    const out = await run(spec.logoutArgs, TIMEOUT_MS, accountEnv(spec, account));
+    return out.code === 0 ? "logged out" : "logout failed";
+  } catch {
+    return "logout failed";
+  }
 }

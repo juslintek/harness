@@ -26,6 +26,7 @@ export type EventKind =
   | "account.enabled"
   | "account.disabled"
   | "account.removed"
+  | "account.tested"
   | "account.remove_failed";
 
 export type NewEvent = {

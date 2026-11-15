@@ -1,0 +1,27 @@
+#!/bin/sh
+# Stand-in for the claude CLI. The login marker lives in CLAUDE_CONFIG_DIR, or in
+# FAKE_DEFAULT_HOME when the variable is unset (the CLI's own default home).
+# Records argv and whether CLAUDE_CONFIG_DIR was set; never touches a network.
+echo "claude $* config=${CLAUDE_CONFIG_DIR-<unset>}" >> "${FAKE_BIN_LOG:-/dev/null}"
+dir="${CLAUDE_CONFIG_DIR:-$FAKE_DEFAULT_HOME}"
+marker="$dir/.fake-login"
+case "$1 $2" in
+  "auth login")
+    mkdir -p "$dir" && printf '%s' "${FAKE_LOGIN_HINT:-max}" > "$marker"
+    echo "Login successful" ;;
+  "auth status")
+    if [ -f "$marker" ]; then
+      printf '{\n  "loggedIn": true,\n  "authMethod": "claude.ai",\n  "subscriptionType": "%s"\n}\n' "$(cat "$marker")"
+    else
+      printf '{\n  "loggedIn": false,\n  "authMethod": "none"\n}\n'
+      exit 1
+    fi ;;
+  "auth logout")
+    rm -f "$marker"
+    echo "Logged out" ;;
+  *)
+    case "$1" in
+      --version) echo "2.0.0 (Fake Claude)" ;;
+      *) echo "fake claude: unsupported: $*" >&2; exit 2 ;;
+    esac ;;
+esac

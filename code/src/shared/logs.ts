@@ -16,6 +16,7 @@ export const LOG_KINDS = [
   "account.enabled",
   "account.disabled",
   "account.removed",
+  "account.tested",
   "account.remove_failed",
 ] as const;
 

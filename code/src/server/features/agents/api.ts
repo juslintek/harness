@@ -69,6 +69,11 @@ async function discovered(run?: Runner): Promise<DiscoveredAgent[]> {
   return cache.agents;
 }
 
+// Drops the cached discovery result so the next agent list probes again.
+export function forgetDiscovery(): void {
+  cache = null;
+}
+
 export function getSpec(id: string): AgentSpec | null {
   return agentSpecs.find((spec) => spec.id === id) ?? null;
 }

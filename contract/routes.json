@@ -99,6 +99,34 @@
   },
   {
     "method": "POST",
+    "path": "/api/agents/:id/accounts/:acct/login",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/agents/:id/accounts/:acct/test",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": true
+    }
+  },
+  {
+    "method": "POST",
     "path": "/api/agents/:id/link",
     "policy": {
       "admin": true,

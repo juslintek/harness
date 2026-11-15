@@ -18,6 +18,14 @@ export interface AgentSpec {
   } | null;
   /** Full argv of the interactive login command, null when the CLI has none. */
   loginArgs: string[] | null;
+  /** Argv that signs the account out at the vendor, run with the account's environment. */
+  logoutArgs?: string[];
+  /**
+   * True only when a second login in its own home is safe: it leaves the default login alone and
+   * agent sandboxes cannot read the account home. Without it, adding, logging in and testing a
+   * non-default account are refused.
+   */
+  accountIsolation?: boolean;
   modeOption: { configId: string; value: string } | null;
   egress: string[];
   stateWrite: string[];
@@ -44,6 +52,11 @@ const builtinSpecs: readonly AgentSpec[] = [
       loggedInWhen: { stdoutIncludes: '"loggedIn": true' },
     },
     loginArgs: ["claude", "auth", "login"],
+    // Stays false until the accounts directory is denied in srt and L1 (slice P1.5a) and spike S1
+    // (working-docs/plans/multi-account.md) shows that a login or logout under another
+    // CLAUDE_CONFIG_DIR leaves the default macOS Keychain login alone.
+    // No logout command either: it could sign the owner's default login out.
+    accountIsolation: false,
     modeOption: { configId: "mode", value: "default" },
     egress: ["api.anthropic.com"],
     stateWrite: ["~/.claude", "/private/tmp/claude-<uid>", "/private/tmp/claude-*-cwd"],
@@ -66,6 +79,10 @@ const builtinSpecs: readonly AgentSpec[] = [
       env: { CODEX_HOME: join(homedir(), ".codex") },
     },
     loginArgs: ["codex", "login"],
+    logoutArgs: ["codex", "logout"],
+    // Off until the accounts directory is denied in srt and in the L1 secret guard (slice P1.5a):
+    // today an agent run could read another account's auth.json from <HARNESS_HOME>/accounts.
+    accountIsolation: false,
     modeOption: { configId: "mode", value: "workspace-write" },
     egress: ["chatgpt.com"],
     stateWrite: [],
@@ -155,6 +172,18 @@ const builtinSpecs: readonly AgentSpec[] = [
   },
 ];
 
+// Environment that points one CLI at an account's own home. A NULL home is the CLI's default
+// login and gets nothing, so its behaviour (and the Keychain item it uses) stays as it was.
+export function accountEnv(
+  spec: Pick<AgentSpec, "id">,
+  account: { home: string | null },
+): Record<string, string> {
+  if (account.home === null) return {};
+  if (spec.id === "claude") return { CLAUDE_CONFIG_DIR: account.home };
+  if (spec.id === "codex") return { CODEX_HOME: account.home };
+  return {};
+}
+
 const specSchema: z.ZodType<AgentSpec> = z.object({
   id: z.string().min(1),
   name: z.string(),
@@ -170,6 +199,8 @@ const specSchema: z.ZodType<AgentSpec> = z.object({
     })
     .nullable(),
   loginArgs: z.array(z.string()).nullable(),
+  logoutArgs: z.exactOptional(z.array(z.string())),
+  accountIsolation: z.exactOptional(z.boolean()),
   modeOption: z.object({ configId: z.string(), value: z.string() }).nullable(),
   egress: z.array(z.string()),
   stateWrite: z.array(z.string()),
