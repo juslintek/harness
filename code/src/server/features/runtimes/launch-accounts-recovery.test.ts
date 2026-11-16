@@ -212,3 +212,20 @@ test("a token that could not be stored when the run ended is stored by the next 
   expect(readFileSync(join(b.home, "auth.json"), "utf8")).toBe('{"b":"refreshed"}');
   expect(tokenFiles(runDir)).toEqual([]);
 });
+
+test("an unreadable account file keeps the refreshed token instead of discarding it", async () => {
+  const f = fixture();
+  const b = await codexAccount(f);
+  const runDir = join(makeDir(), "run");
+  const { home } = await prepareAccountCodexHome(runDir, "", b.home);
+  writeFileSync(join(home, "auth.json"), '{"b":"refreshed"}');
+  await chmod(join(b.home, "auth.json"), 0o000);
+  try {
+    await expect(writeBackAccountAuth(runDir, b.home)).rejects.toThrow();
+  } finally {
+    await chmod(join(b.home, "auth.json"), 0o600);
+  }
+  expect(tokenFiles(runDir)).toHaveLength(2);
+  await writeBackAccountAuth(runDir, b.home);
+  expect(readFileSync(join(b.home, "auth.json"), "utf8")).toBe('{"b":"refreshed"}');
+});

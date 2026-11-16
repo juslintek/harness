@@ -52,7 +52,12 @@ export function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 async function readRegular(path: string): Promise<string | null> {
   // O_NONBLOCK: opening a FIFO the run planted would otherwise wait for a writer and hold the lock.
   const flags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
-  const handle = await open(path, flags).catch(() => null);
+  const handle = await open(path, flags).catch((err: NodeJS.ErrnoException) => {
+    // Missing or a link is a refusal; any other failure (permissions, I/O) must not look like one,
+    // or the caller would discard a token it could not read.
+    if (["ENOENT", "ELOOP", "EMLINK", "ENOTDIR"].includes(err.code ?? "")) return null;
+    throw err;
+  });
   if (handle === null) return null;
   try {
     const info = await handle.stat();
@@ -122,22 +127,20 @@ async function replaceAuth(accountHome: string, token: string): Promise<void> {
   }
 }
 
-// The run's plaintext copy and the baseline are removed either way, except when the store itself
-// failed: the account's refresh token was already rotated, so they are the only place the new one
-// exists and a retry can still store it. A second call finds no baseline.
+// The run's plaintext copy and the baseline are removed once the outcome is settled (stored, or
+// refused on purpose). On any error they stay: the account's refresh token was already rotated, so
+// they are the only place the new one exists and a later retry can still store it. A second call
+// finds no baseline.
 export function writeBackAccountAuth(runDir: string, accountHome: string): Promise<void> {
   const home = join(runDir, "codex-home");
   return withLock(accountHome, async () => {
-    let keep = false;
+    let stored = false;
     try {
       const token = await refreshedToken(runDir, accountHome);
-      if (token === null) return;
-      await replaceAuth(accountHome, token).catch((err: unknown) => {
-        keep = true;
-        throw err;
-      });
+      if (token !== null) await replaceAuth(accountHome, token);
+      stored = true;
     } finally {
-      if (!keep) {
+      if (stored) {
         // Never through a home the run swapped for a link, which could point at another account.
         if ((await lstat(home).catch(() => null))?.isDirectory()) {
           await rm(join(home, "auth.json"), { force: true });
