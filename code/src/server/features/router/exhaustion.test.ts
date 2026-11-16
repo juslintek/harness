@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { getAccount } from "../agents/api";
 import { killRun, waitForRun } from "../runtimes/api";
+import { recordQuota } from "../usage/api";
 import {
   type Adapter,
   cleanup,
@@ -59,14 +60,32 @@ test("a rate_limited ending with a quota reason blocks only that account for 15 
   expect((await waitForRun(id)).reason).toBe("rate_limited");
 });
 
-test("a quota ending uses the window reset the run reported", async () => {
+test("a full window reported by a run blocks its account until the reset", async () => {
   const w = world();
   addAccount(w.db, "acct-a");
   const resetsAt = Date.now() + 3 * 60 * MINUTE;
+  // The run itself ends cleanly, so only the reading can block the account.
   await endsOn(w, "acct-a", (ctx) => {
     ctx.onQuota({ provider: "claude", window: "five_hour", usedPercent: 100, resetsAt });
-    return outcome({ stopReason: "error", error: "usage limit" });
+    return outcome({ stopReason: "end_turn" });
   });
+  expect(exhaustedUntil(w, "acct-a")).toBe(resetsAt);
+});
+
+test("a quota ending blocks until the reset of the account's full window", async () => {
+  const w = world();
+  addAccount(w.db, "acct-a");
+  const resetsAt = Date.now() + 3 * 60 * MINUTE;
+  // Recorded outside the run, so the run's own quota handling never sees it.
+  recordQuota(w.db, {
+    provider: "claude",
+    accountId: "acct-a",
+    window: "five_hour",
+    usedPercent: 100,
+    resetsAt,
+    source: "acp",
+  });
+  await endsOn(w, "acct-a", () => outcome({ stopReason: "error", error: "usage limit" }));
   expect(exhaustedUntil(w, "acct-a")).toBe(resetsAt);
 });
 

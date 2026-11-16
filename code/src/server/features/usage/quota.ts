@@ -25,7 +25,8 @@ export interface QuotaInput {
 const PROVIDERS = ["claude", "codex", "agy"];
 
 const MINUTE = 60_000;
-// Codex is probed every few minutes; Claude only reports inside live runs, so its readings last longer.
+// Codex readings come from its session logs, which the tailer reads every minute while Codex runs;
+// Claude only reports inside live runs, so its readings last longer.
 const TTL_MS: Readonly<Record<string, number>> = { codex: 10 * MINUTE };
 const DEFAULT_TTL_MS = 60 * MINUTE;
 const RETENTION_MS = 30 * 24 * 60 * MINUTE;
@@ -118,8 +119,10 @@ export function pruneQuota(db: Database, now: number = Date.now()): number {
   return db.run("DELETE FROM quota_snapshots WHERE ts < ?", [now - RETENTION_MS]).changes;
 }
 
-// One row per account and window. A reading past its TTL, or whose window has reset, says nothing
-// about current usage and reads as unknown.
+// One row per account and window. A reading whose window has reset says nothing about current usage
+// and reads as unknown. So does a reading past its TTL, except a full window with a reset still ahead:
+// nothing runs on a full account, so nothing would refresh it, and dropping it would let the router
+// send a run there every TTL period until the reset.
 export function latestQuota(
   db: Database,
   accountId?: string,
@@ -143,10 +146,13 @@ export function latestQuota(
     accountId: r.account_id,
     window: r.window,
     usedPercent:
-      (r.resets_at !== null && r.resets_at <= now) ||
-      now - r.ts > (TTL_MS[r.provider] ?? DEFAULT_TTL_MS)
+      r.resets_at !== null && r.resets_at <= now
         ? null
-        : r.used_percent,
+        : r.used_percent !== null && r.used_percent >= 100 && r.resets_at !== null
+          ? r.used_percent
+          : now - r.ts > (TTL_MS[r.provider] ?? DEFAULT_TTL_MS)
+            ? null
+            : r.used_percent,
     resetsAt: r.resets_at,
     source: r.source,
     ts: r.ts,
