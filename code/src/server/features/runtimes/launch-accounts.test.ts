@@ -1,6 +1,15 @@
 import type { Database } from "bun:sqlite";
 import { afterAll, expect, test } from "bun:test";
-import { existsSync, lstatSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeCliSpec } from "../../test-support/agents-kit";
@@ -226,4 +235,18 @@ test("a refresh from an older login does not replace the credentials that took i
   };
   await waitForRun(await start(f.db, deps(f, lane), f.repo, "codex", b));
   expect(readFileSync(join(home, "auth.json"), "utf8")).toBe('{"login":"new"}');
+});
+
+test("a run that points its home at another account's home cannot copy that login into its own account", async () => {
+  const root = makeDir();
+  const home = join(root, "accounts", "b");
+  const other = join(root, "accounts", "c");
+  for (const h of [home, other]) await mkdir(h, { recursive: true });
+  writeFileSync(join(home, "auth.json"), '{"who":"b"}');
+  writeFileSync(join(other, "auth.json"), '{"who":"c"}');
+  const { home: runHome, finish } = await prepareAccountCodexHome(join(root, "run"), "", home);
+  renameSync(runHome, `${runHome}.moved`);
+  symlinkSync(other, runHome);
+  await finish();
+  expect(readFileSync(join(home, "auth.json"), "utf8")).toBe('{"who":"b"}');
 });

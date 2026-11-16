@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { copyFile, mkdir, open, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, open, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -62,6 +62,9 @@ export async function prepareAccountCodexHome(
 ): Promise<{ home: string; finish: () => Promise<void> }> {
   const home = await freshHome(runDir, rulesText);
   const mine = join(home, "auth.json");
+  // O_NOFOLLOW guards only the last path component. Resolving the whole path and comparing it with
+  // where it pointed at copy-in also catches a symlink the run put in place of its home directory.
+  const mineReal = join(await realpath(home), "auth.json");
   const theirs = join(accountHome, "auth.json");
   const copied = await withLock(accountHome, async () => {
     await copyFile(theirs, mine);
@@ -73,6 +76,7 @@ export async function prepareAccountCodexHome(
   // a newer token from another run, or a new login, must not be replaced by an older one.
   const finish = (): Promise<void> =>
     withLock(accountHome, async () => {
+      if ((await realpath(mine).catch(() => null)) !== mineReal) return;
       const after = await readRegular(mine);
       if (after === null || after === copied) return;
       if ((await readRegular(theirs)) !== copied) return;
