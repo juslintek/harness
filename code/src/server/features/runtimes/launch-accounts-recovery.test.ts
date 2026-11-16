@@ -1,11 +1,11 @@
 import { afterAll, expect, test } from "bun:test";
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { chmod, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fakeCliSpec } from "../../test-support/agents-kit";
 import type { RunContext, RunOutcome } from "./adapter";
 import { getRun, killRun, recoverRuns, shutdownRuns, startRun, waitForRun } from "./api";
-import { prepareAccountCodexHome, withLock } from "./codex-home";
+import { prepareAccountCodexHome, withLock, writeBackAccountAuth } from "./codex-home";
 import { addAccount, cleanup, fakeDeps, fixture, makeDir } from "./manager-kit";
 import { insertRun, markRunning } from "./runs-repo";
 
@@ -163,4 +163,22 @@ test("a run stays unended until its token is stored, so a crash mid-recovery ret
   await recovering;
   expect(getRun(f.db, id)?.state).toBe("failed");
   expect(readFileSync(join(account.home, "auth.json"), "utf8")).toBe('{"b":"refreshed"}');
+});
+
+test("a write-back that cannot persist keeps the refreshed token for a retry", async () => {
+  const f = fixture();
+  const b = await codexAccount(f);
+  const runDir = join(makeDir(), "run");
+  const { home } = await prepareAccountCodexHome(runDir, "", b.home);
+  writeFileSync(join(home, "auth.json"), '{"b":"refreshed"}');
+  await chmod(b.home, 0o500);
+  try {
+    await expect(writeBackAccountAuth(runDir, b.home)).rejects.toThrow();
+  } finally {
+    await chmod(b.home, 0o700);
+  }
+  expect(tokenFiles(runDir)).toHaveLength(2);
+  await writeBackAccountAuth(runDir, b.home);
+  expect(readFileSync(join(b.home, "auth.json"), "utf8")).toBe('{"b":"refreshed"}');
+  expect(tokenFiles(runDir)).toEqual([]);
 });

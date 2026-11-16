@@ -96,37 +96,54 @@ export async function prepareAccountCodexHome(
   return { home, finish: () => writeBackAccountAuth(runDir, accountHome) };
 }
 
-// Written back only when the run changed its copy and the account's file is still what it copied
-// in: a newer token from another run, or a new login, must not be replaced by an older one. The
-// run's plaintext copy and the baseline are removed either way; a second call finds no baseline.
+// The run's token when it changed its copy and the account's file is still what it copied in: a
+// newer token from another run, or a new login, must not be replaced by an older one.
+async function refreshedToken(runDir: string, accountHome: string): Promise<string | null> {
+  const mine = join(runDir, "codex-home", "auth.json");
+  const copied = await readRegular(baselineOf(runDir));
+  if (copied === null) return null;
+  // O_NOFOLLOW guards only the last path component. The run cannot write its run dir, so the
+  // resolved path must still be the copy inside it; this also catches a symlink the run put in
+  // place of its home directory.
+  const mineReal = join(await realpath(runDir), "codex-home", "auth.json");
+  if ((await realpath(mine).catch(() => null)) !== mineReal) return null;
+  const after = await readRegular(mine);
+  if (after === null || after === copied) return null;
+  return (await readRegular(join(accountHome, "auth.json"))) === copied ? after : null;
+}
+
+async function replaceAuth(accountHome: string, token: string): Promise<void> {
+  const tmp = join(accountHome, `.auth.json.${Bun.randomUUIDv7()}.tmp`);
+  try {
+    await writeFile(tmp, token, { mode: 0o600 });
+    await rename(tmp, join(accountHome, "auth.json"));
+  } finally {
+    await rm(tmp, { force: true });
+  }
+}
+
+// The run's plaintext copy and the baseline are removed either way, except when the store itself
+// failed: the account's refresh token was already rotated, so they are the only place the new one
+// exists and a retry can still store it. A second call finds no baseline.
 export function writeBackAccountAuth(runDir: string, accountHome: string): Promise<void> {
   const home = join(runDir, "codex-home");
-  const mine = join(home, "auth.json");
-  const theirs = join(accountHome, "auth.json");
-  const baseline = baselineOf(runDir);
   return withLock(accountHome, async () => {
+    let keep = false;
     try {
-      const copied = await readRegular(baseline);
-      if (copied === null) return;
-      // O_NOFOLLOW guards only the last path component. The run cannot write its run dir, so the
-      // resolved path must still be the copy inside it; this also catches a symlink the run put in
-      // place of its home directory.
-      const mineReal = join(await realpath(runDir), "codex-home", "auth.json");
-      if ((await realpath(mine).catch(() => null)) !== mineReal) return;
-      const after = await readRegular(mine);
-      if (after === null || after === copied) return;
-      if ((await readRegular(theirs)) !== copied) return;
-      const tmp = join(accountHome, `.auth.json.${Bun.randomUUIDv7()}.tmp`);
-      try {
-        await writeFile(tmp, after, { mode: 0o600 });
-        await rename(tmp, theirs);
-      } finally {
-        await rm(tmp, { force: true });
-      }
+      const token = await refreshedToken(runDir, accountHome);
+      if (token === null) return;
+      await replaceAuth(accountHome, token).catch((err: unknown) => {
+        keep = true;
+        throw err;
+      });
     } finally {
-      // Never through a home the run swapped for a link, which could point at another account.
-      if ((await lstat(home).catch(() => null))?.isDirectory()) await rm(mine, { force: true });
-      await rm(baseline, { force: true });
+      if (!keep) {
+        // Never through a home the run swapped for a link, which could point at another account.
+        if ((await lstat(home).catch(() => null))?.isDirectory()) {
+          await rm(join(home, "auth.json"), { force: true });
+        }
+        await rm(baselineOf(runDir), { force: true });
+      }
     }
   });
 }
