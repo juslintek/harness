@@ -22,7 +22,8 @@ jobs:
       - run: bun run check
 
   ui:
-    runs-on: ubuntu-latest
+    # the e2e runs start the fake agent inside the real srt sandbox, which needs macOS sandbox-exec
+    runs-on: macos-latest
     defaults:
       run:
         working-directory: ui
