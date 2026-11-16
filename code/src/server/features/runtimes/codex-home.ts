@@ -69,12 +69,13 @@ export async function prepareAccountCodexHome(
   });
   // No baseline would make every run look like it changed the file.
   if (copied === null) throw new Error("account auth.json is not a regular file under 1 MiB");
-  // Written back only when this run changed it, so a run that did not refresh cannot overwrite a
-  // newer token another run on the account already stored.
+  // Written back only when this run changed it and the account's file is still what it copied in:
+  // a newer token from another run, or a new login, must not be replaced by an older one.
   const finish = (): Promise<void> =>
     withLock(accountHome, async () => {
       const after = await readRegular(mine);
       if (after === null || after === copied) return;
+      if ((await readRegular(theirs)) !== copied) return;
       const tmp = join(accountHome, `.auth.json.${Bun.randomUUIDv7()}.tmp`);
       try {
         await writeFile(tmp, after, { mode: 0o600 });

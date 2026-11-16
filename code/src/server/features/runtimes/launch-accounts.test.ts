@@ -211,3 +211,19 @@ test("a run that swaps auth.json for a FIFO cannot hang the write-back, and an o
     "regular file",
   );
 });
+
+test("a refresh from an older login does not replace the credentials that took its place", async () => {
+  const f = fixture();
+  const home = join(makeDir(), "accounts", "b");
+  await mkdir(home, { recursive: true });
+  writeFileSync(join(home, "auth.json"), '{"login":"old"}');
+  const b = addAccount(f.db, "codex", home);
+  const lane = async (ctx: { env: Record<string, string> }): Promise<RunOutcome> => {
+    writeFileSync(join(ctx.env.CODEX_HOME ?? "", "auth.json"), '{"login":"old","refreshed":true}');
+    // The holder logs in again while the run is still going.
+    writeFileSync(join(home, "auth.json"), '{"login":"new"}');
+    return done;
+  };
+  await waitForRun(await start(f.db, deps(f, lane), f.repo, "codex", b));
+  expect(readFileSync(join(home, "auth.json"), "utf8")).toBe('{"login":"new"}');
+});
