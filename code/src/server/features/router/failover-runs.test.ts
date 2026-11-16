@@ -42,6 +42,54 @@ test("recording claude five_hour 100% kills a live claude run and leaves a codex
   await waitForRun(codex);
 });
 
+test("a full window on one account kills only that account's runs", async () => {
+  const w = world();
+  stops.push(startWatchdog(w.db));
+  const onAccount = async (accountId: string, agentId = "claude"): Promise<string> => {
+    const id = await w.start(holdUntilKilled(), { agentId });
+    w.db.run("UPDATE runs SET account_id = ? WHERE id = ?", [accountId, id]);
+    return id;
+  };
+  const a1 = await onAccount("acct-a");
+  const a2 = await onAccount("acct-a");
+  const b = await onAccount("acct-b");
+  const codex = await onAccount("acct-c", "codex");
+  const reading = { provider: "claude", window: "five_hour", source: "manual" } as const;
+  recordQuota(w.db, {
+    ...reading,
+    accountId: "acct-a",
+    usedPercent: 100,
+    resetsAt: Date.now() - 1000,
+  });
+  recordQuota(w.db, {
+    ...reading,
+    accountId: "acct-a",
+    usedPercent: 99,
+    resetsAt: Date.now() + 60_000,
+  });
+  expect([a1, a2, b, codex].map((id) => getRun(w.db, id)?.state)).toEqual([
+    "running",
+    "running",
+    "running",
+    "running",
+  ]);
+  recordQuota(w.db, {
+    ...reading,
+    accountId: "acct-a",
+    usedPercent: 100,
+    resetsAt: Date.now() + 60_000,
+  });
+  for (const id of [a1, a2]) {
+    expect(await waitForRun(id)).toMatchObject({ state: "killed", reason: "quota_exhausted" });
+  }
+  expect(getRun(w.db, b)?.state).toBe("running");
+  expect(getRun(w.db, codex)?.state).toBe("running");
+  for (const id of [b, codex]) {
+    killRun(w.db, id);
+    await waitForRun(id);
+  }
+});
+
 test("a stale 100% reading and a lower one leave live runs alone", async () => {
   const w = world();
   stops.push(startWatchdog(w.db));
