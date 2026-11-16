@@ -1,10 +1,12 @@
 import type { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { getAccount } from "../agents/api";
 import { revokeRunTokens } from "../mcp/api";
 import { killGroup } from "./acp-rpc";
 import { writeBackAccountAuth } from "./codex-home";
-import { failLiveRuns, listUnendedRuns } from "./runs-repo";
+import { failLiveRuns, getRun, listUnendedRuns } from "./runs-repo";
 
 export interface ProcInfo {
   boot: () => string;
@@ -56,16 +58,22 @@ export function ownsGroup(
 // Live runs, their agent groups and in-process approval waiters do not survive a restart. A token
 // the run refreshed before the harness died is still only in the run's copy; codex has already
 // rotated the account's refresh token, so it is stored the same way a normal end would store it.
+// An ended run whose write-back failed still has its baseline, so it is retried here too.
 export async function reapRuns(db: Database, home: string): Promise<void> {
   const runs = listUnendedRuns(db);
   for (const run of runs) {
     if (run.pid !== null && ownsGroup(run.pid, run.identity)) killGroup(run.pid, "SIGKILL");
     revokeRunTokens(db, run.id);
   }
-  for (const run of runs) {
-    const accountHome = run.accountId === null ? null : getAccount(db, run.accountId)?.home;
+  const runsDir = join(home, "runs");
+  const ids = new Set(runs.map((run) => run.id));
+  for (const id of await readdir(runsDir).catch(() => []))
+    if (existsSync(join(runsDir, id, "codex-auth.base"))) ids.add(id);
+  for (const id of ids) {
+    const accountId = getRun(db, id)?.accountId ?? null;
+    const accountHome = accountId === null ? null : getAccount(db, accountId)?.home;
     if (accountHome == null) continue;
-    await writeBackAccountAuth(join(home, "runs", run.id), accountHome).catch((err: unknown) =>
+    await writeBackAccountAuth(join(runsDir, id), accountHome).catch((err: unknown) =>
       console.error("account write-back failed", err),
     );
   }

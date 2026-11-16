@@ -1,5 +1,12 @@
 import { afterAll, expect, test } from "bun:test";
-import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { chmod, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fakeCliSpec } from "../../test-support/agents-kit";
@@ -179,6 +186,29 @@ test("a write-back that cannot persist keeps the refreshed token for a retry", a
   }
   expect(tokenFiles(runDir)).toHaveLength(2);
   await writeBackAccountAuth(runDir, b.home);
+  expect(readFileSync(join(b.home, "auth.json"), "utf8")).toBe('{"b":"refreshed"}');
+  expect(tokenFiles(runDir)).toEqual([]);
+});
+
+test("a token that could not be stored when the run ended is stored by the next restart", async () => {
+  const f = fixture();
+  const b = await codexAccount(f);
+  let runDir = "";
+  const id = await startCodex(f, b.id, async (ctx) => {
+    runDir = dirname(ctx.env.CODEX_HOME ?? "");
+    writeFileSync(join(runDir, "codex-home", "auth.json"), '{"b":"refreshed"}');
+    // A read-only account dir fails the temp file write, as a full disk would.
+    chmodSync(b.home, 0o500);
+    return done;
+  });
+  try {
+    expect(await waitForRun(id)).toMatchObject({ state: "completed" });
+    expect(readFileSync(join(b.home, "auth.json"), "utf8")).toBe('{"b":1}');
+    expect(tokenFiles(runDir)).toHaveLength(2);
+  } finally {
+    chmodSync(b.home, 0o700);
+  }
+  await recoverRuns(f.db, f.home);
   expect(readFileSync(join(b.home, "auth.json"), "utf8")).toBe('{"b":"refreshed"}');
   expect(tokenFiles(runDir)).toEqual([]);
 });
