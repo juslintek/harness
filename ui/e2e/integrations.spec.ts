@@ -63,8 +63,8 @@ test.describe("integrations", () => {
     await page.goto("/#/integrations");
     // Native validation stops an empty form before any request is sent.
     await page.getByRole("button", { name: "Save SMTP settings" }).click();
-    await expect(page.getByLabel("Host")).toBeFocused();
-    await page.getByLabel("Host").fill("smtp.example.test");
+    await expect(page.getByLabel("Host", { exact: true })).toBeFocused();
+    await page.getByLabel("Host", { exact: true }).fill("smtp.example.test");
     await page.getByLabel("User").fill("mailer");
     await page.getByLabel("Password", { exact: true }).fill("s3cret");
     await page.getByLabel("From address").fill("harness@example.test");
