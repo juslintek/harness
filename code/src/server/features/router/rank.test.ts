@@ -59,10 +59,10 @@ test("a runtime whose quota window is full is skipped, until it has room again",
     resetsAt: 9e12,
     source: "manual" as const,
   };
-  recordQuota(db, { ...window, usedPercent: 100, ts: 1 });
+  recordQuota(db, { ...window, usedPercent: 100, ts: Date.now() - 2000 });
   const deps = agents("claude", "codex");
   expect((await rankEngines(db, input(orgId), deps)).map((e) => e.runtime)).toEqual(["codex"]);
-  recordQuota(db, { ...window, usedPercent: 40, ts: 2 });
+  recordQuota(db, { ...window, usedPercent: 40, ts: Date.now() - 1000 });
   expect((await rankEngines(db, input(orgId), deps)).map((e) => e.runtime).sort()).toEqual([
     "claude",
     "codex",

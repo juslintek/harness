@@ -30,8 +30,8 @@ test("latest snapshot per window wins", async () => {
   const ins = db.query(
     "INSERT INTO quota_snapshots (id, provider, window, used_percent, resets_at, source, ts) VALUES (?, 'codex', 'primary', ?, NULL, 'tail', ?)",
   );
-  ins.run("a", 10, 1000);
-  ins.run("b", 30, 2000);
+  ins.run("a", 10, Date.now() - 2000);
+  ins.run("b", 30, Date.now() - 1000);
   const view = await probeQuota(db);
   const codex = view.filter((q) => q.provider === "codex");
   expect(codex).toHaveLength(1);

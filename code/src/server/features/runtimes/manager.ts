@@ -3,13 +3,14 @@ import type { AgentSpec } from "../agents/api";
 import { expireRunApprovals } from "../guard/api";
 import { appendEvent, type NewEvent, sealSegments } from "../logs/api";
 import { revokeRunTokens } from "../mcp/api";
-import { recordQuota, recordUsage } from "../usage/api";
+import { recordUsage } from "../usage/api";
 import { runAcp } from "./acp";
 import type { Adapter, RunContext } from "./adapter";
 import { runAgy } from "./agy";
 import { runApi } from "./api-lane";
 import { createBreaker, defaultLimits } from "./breaker";
 import { decideAsk } from "./decide";
+import { markRunCooldown, recordRunQuota } from "./exhaustion";
 import type { RunCandidate } from "./launch";
 import { createLaunch, inProcessLaunch, type Launch, type RunDeps, type RunMember } from "./launch";
 import { pidIdentity } from "./orphans";
@@ -175,7 +176,7 @@ function buildContext(
       }),
     onQuota: (q) => {
       if (q.usedPercent >= 100) run.quotaFull = true;
-      recordQuota(db, { ...q, source: "acp" });
+      recordRunQuota(db, input.id, q);
     },
     onProgress: (p) => {
       if (breaker.addTokens(p.contextTokens) === "trip") killRun(db, input.id, "circuit_breaker");
@@ -208,7 +209,9 @@ async function execute(
     );
     const conversation = outcome.sessionId === null ? {} : { conversationId: outcome.sessionId };
     recordUsage(db, { id: input.id, agent: spec.id, ...conversation }, outcome.usage);
-    [state, reason] = endState(db, input.id, run, outcome);
+    const [endedState, endedReason, cooldown] = endState(db, input.id, run, outcome);
+    [state, reason] = [endedState, endedReason];
+    markRunCooldown(db, input.id, cooldown);
   } catch (err) {
     reason = err instanceof Error ? err.message : String(err);
     if (run.killReason !== null) [state, reason] = ["killed", run.killReason];

@@ -150,3 +150,12 @@ export function ensureDefaultAccount(db: Database, runtime: string): AccountView
   if (!account) throw new Error("default account missing after insert");
   return account;
 }
+
+// Only ever pushes the block later: a short "overloaded" skip must not cut a quota block short.
+export function markExhausted(db: Database, id: string, until: number): void {
+  if (id.startsWith("default:")) ensureDefaultAccount(db, id.slice("default:".length));
+  db.run(
+    "UPDATE agent_accounts SET exhausted_until = max(COALESCE(exhausted_until, 0), ?), updated_at = ? WHERE id = ?",
+    [until, Date.now(), id],
+  );
+}

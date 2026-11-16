@@ -6,6 +6,7 @@ import {
   insertSnapshot,
   latestQuota,
   onQuotaRecorded,
+  pruneQuota,
   type QuotaInput,
   type QuotaView as QuotaViewRow,
 } from "./quota";
@@ -21,6 +22,8 @@ export interface UsageRecord {
   reportedCostUsd: number | null;
   source: "acp" | "agy" | "api" | "tail";
 }
+
+const PRUNE_EVERY_MS = 24 * 60 * 60 * 1000;
 
 export type { QuotaInput } from "./quota";
 export { onQuotaRecorded };
@@ -89,6 +92,10 @@ export function recordQuota(db: Database, s: QuotaInput): void {
   insertSnapshot(db, s);
 }
 
+export function accountQuota(db: Database, accountId: string): QuotaView[] {
+  return latestQuota(db, accountId);
+}
+
 export function defaultTailSources(harnessWorktrees?: string): TailSource[] {
   return [
     {
@@ -114,7 +121,13 @@ export function startTailers(
   sources: TailSource[] = defaultTailSources(),
 ): () => void {
   // tailSources ignores a tick while the previous sweep is still running.
+  let prunedAt = 0;
   const timer = setInterval(() => {
+    // The snapshot table only grows, so trim it once a day from the tick that already runs.
+    if (Date.now() - prunedAt > PRUNE_EVERY_MS) {
+      prunedAt = Date.now();
+      pruneQuota(db);
+    }
     tailOnce(db, sources).catch((err: unknown) => console.error("usage tail failed", err));
   }, intervalMs);
   return () => clearInterval(timer);
