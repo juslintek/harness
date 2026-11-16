@@ -40,7 +40,9 @@ function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 // A run can write anything into its own home, so a link or a huge file there must not be followed
 // or copied into the account's home by Harness, which can read what the sandbox cannot.
 async function readRegular(path: string): Promise<string | null> {
-  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW).catch(() => null);
+  // O_NONBLOCK: opening a FIFO the run planted would otherwise wait for a writer and hold the lock.
+  const flags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+  const handle = await open(path, flags).catch(() => null);
   if (handle === null) return null;
   try {
     const info = await handle.stat();
@@ -65,6 +67,8 @@ export async function prepareAccountCodexHome(
     await copyFile(theirs, mine);
     return readRegular(mine);
   });
+  // No baseline would make every run look like it changed the file.
+  if (copied === null) throw new Error("account auth.json is not a regular file under 1 MiB");
   // Written back only when this run changed it, so a run that did not refresh cannot overwrite a
   // newer token another run on the account already stored.
   const finish = (): Promise<void> =>

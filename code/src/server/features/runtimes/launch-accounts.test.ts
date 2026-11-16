@@ -1,12 +1,13 @@
 import type { Database } from "bun:sqlite";
 import { afterAll, expect, test } from "bun:test";
-import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeCliSpec } from "../../test-support/agents-kit";
 import { ensureDefaultAccount, getSpec } from "../agents/api";
 import type { RunOutcome } from "./adapter";
 import { getRun, startRun, waitForRun } from "./api";
+import { prepareAccountCodexHome } from "./codex-home";
 import { createProbeLaunch } from "./launch";
 import { AccountUnavailable, resolveRunAccount } from "./launch-accounts";
 import { cleanup, fakeDeps, fixture, makeDir } from "./manager-kit";
@@ -193,4 +194,20 @@ test("a probe launch on a codex account copies that account's auth.json too", as
   expect(lstatSync(file).isSymbolicLink()).toBe(false);
   expect(readFileSync(file, "utf8")).toBe('{"who":"b"}');
   expect(probe.finish).not.toBeNull();
+});
+
+test("a run that swaps auth.json for a FIFO cannot hang the write-back, and an oversized account file is refused", async () => {
+  const root = makeDir();
+  const home = join(root, "accounts", "b");
+  await mkdir(home, { recursive: true });
+  writeFileSync(join(home, "auth.json"), '{"v":1}');
+  const { home: runHome, finish } = await prepareAccountCodexHome(join(root, "run"), "", home);
+  rmSync(join(runHome, "auth.json"));
+  expect(Bun.spawnSync(["mkfifo", join(runHome, "auth.json")]).exitCode).toBe(0);
+  await finish();
+  expect(readFileSync(join(home, "auth.json"), "utf8")).toBe('{"v":1}');
+  writeFileSync(join(home, "auth.json"), "x".repeat((1 << 20) + 1));
+  await expect(prepareAccountCodexHome(join(root, "run2"), "", home)).rejects.toThrow(
+    "regular file",
+  );
 });
