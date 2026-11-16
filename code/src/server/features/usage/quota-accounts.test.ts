@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { recordQuota } from "./api";
-import { latestQuota, pruneQuota } from "./quota";
+import { insertSnapshotIfChanged, latestQuota, pruneQuota } from "./quota";
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -71,6 +71,15 @@ test("a reading older than its provider TTL reads as unknown", () => {
     latestQuota(db, id).find((q) => q.window === "primary")?.usedPercent;
   expect(codexUsed("codex-old")).toBeNull();
   expect(codexUsed("codex-new")).toBe(40);
+});
+
+test("an unchanged reading seen again moves the row forward instead of aging out", () => {
+  const now = Date.now();
+  const tailed = { ...window, source: "tail", accountId: "acct-a", usedPercent: 40 };
+  insertSnapshotIfChanged(db, { ...tailed, ts: now - 61 * MINUTE });
+  insertSnapshotIfChanged(db, { ...tailed, ts: now - MINUTE });
+  expect(usedBy("acct-a")).toBe(40);
+  expect(db.query("SELECT ts FROM quota_snapshots").all()).toEqual([{ ts: now - MINUTE }]);
 });
 
 test("retention removes snapshots older than 30 days and keeps the rest", () => {

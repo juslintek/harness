@@ -69,6 +69,20 @@ test("a runtime whose quota window is full is skipped, until it has room again",
   ]);
 });
 
+test("a full window stays full past its TTL while its reset is still ahead", async () => {
+  const { db, orgId } = fresh();
+  recordQuota(db, {
+    provider: "claude",
+    window: "five_hour",
+    usedPercent: 100,
+    resetsAt: Date.now() + 60 * 60_000,
+    source: "acp",
+    ts: Date.now() - 2 * 60 * 60_000,
+  });
+  const deps = agents("claude", "codex");
+  expect((await rankEngines(db, input(orgId), deps)).map((e) => e.runtime)).toEqual(["codex"]);
+});
+
 test("a full window on another account does not take the runtime out of the ranking", async () => {
   const { db, orgId } = fresh();
   const window = {
