@@ -69,6 +69,23 @@ test("a runtime whose quota window is full is skipped, until it has room again",
   ]);
 });
 
+test("a full window on another account does not take the runtime out of the ranking", async () => {
+  const { db, orgId } = fresh();
+  const window = {
+    provider: "claude",
+    window: "five_hour",
+    resetsAt: 9e12,
+    source: "manual" as const,
+  };
+  recordQuota(db, { ...window, accountId: "acct-a", usedPercent: 100 });
+  recordQuota(db, { ...window, usedPercent: 30 });
+  const deps = agents("claude", "codex");
+  expect((await rankEngines(db, input(orgId), deps)).map((e) => e.runtime).sort()).toEqual([
+    "claude",
+    "codex",
+  ]);
+});
+
 test("the org's allowed runtimes limit the ranking", async () => {
   const { db, orgId } = fresh();
   setPolicy(db, {

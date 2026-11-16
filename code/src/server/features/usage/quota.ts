@@ -30,9 +30,17 @@ const TTL_MS: Readonly<Record<string, number>> = { codex: 10 * MINUTE };
 const DEFAULT_TTL_MS = 60 * MINUTE;
 const RETENTION_MS = 30 * 24 * 60 * MINUTE;
 
-// Rows written before accounts existed have no account_id and belong to the provider's default account.
-const accountSql = (alias = ""): string =>
-  `COALESCE(${alias}account_id, 'default:' || ${alias}provider)`;
+// Rows written before accounts existed have a NULL account_id and belong to the provider's default
+// account. account_id is not wrapped in a function here, so the (account_id, window, ts) index stays usable.
+function ofAccount(accountId: string): { sql: string; args: [string, string | null] } {
+  const legacyProvider = accountId.startsWith("default:")
+    ? accountId.slice("default:".length)
+    : null;
+  return {
+    sql: "(account_id = ? OR (account_id IS NULL AND provider = ?))",
+    args: [accountId, legacyProvider],
+  };
+}
 
 interface SnapshotRow {
   provider: string;
@@ -48,13 +56,17 @@ function latest(
   db: Database,
   accountId: string,
   window: string,
-): (SnapshotRow & { id: number }) | null {
+): { id: number; used_percent: number | null; resets_at: number | null; ts: number } | null {
+  const match = ofAccount(accountId);
   return db
-    .query<SnapshotRow & { id: number }, [string, string]>(
-      `SELECT rowid AS id, provider, ${accountSql()} AS account_id, window, used_percent, resets_at, source, ts
-       FROM quota_snapshots WHERE ${accountSql()} = ? AND window = ? ORDER BY ts DESC, rowid DESC LIMIT 1`,
+    .query<
+      { id: number; used_percent: number | null; resets_at: number | null; ts: number },
+      [string, string, string | null]
+    >(
+      `SELECT rowid AS id, used_percent, resets_at, ts FROM quota_snapshots
+       WHERE window = ? AND ${match.sql} ORDER BY ts DESC, rowid DESC LIMIT 1`,
     )
-    .get(accountId, window);
+    .get(window, ...match.args);
 }
 
 const accountOf = (s: QuotaInput): string => s.accountId ?? `default:${s.provider}`;
@@ -113,18 +125,19 @@ export function latestQuota(
   accountId?: string,
   now: number = Date.now(),
 ): QuotaView[] {
+  const match = accountId === undefined ? null : ofAccount(accountId);
   const rows = db
-    .query<SnapshotRow, [string | null, string | null]>(
-      `SELECT provider, ${accountSql()} AS account_id, window, used_percent, resets_at, source, ts
-       FROM quota_snapshots q
-       WHERE rowid = (SELECT rowid FROM quota_snapshots
-                      WHERE ${accountSql()} = ${accountSql("q.")}
-                        AND window = q.window
-                      ORDER BY ts DESC, rowid DESC LIMIT 1)
-         AND (? IS NULL OR ${accountSql("q.")} = ?)
-       ORDER BY provider, account_id, window`,
+    .query<SnapshotRow, Array<string | null>>(
+      `SELECT provider, account_id, window, used_percent, resets_at, source, ts FROM (
+         SELECT provider, COALESCE(account_id, 'default:' || provider) AS account_id, window,
+                used_percent, resets_at, source, ts,
+                row_number() OVER (
+                  PARTITION BY COALESCE(account_id, 'default:' || provider), window
+                  ORDER BY ts DESC, rowid DESC) AS rn
+         FROM quota_snapshots ${match ? `WHERE ${match.sql}` : ""}
+       ) WHERE rn = 1 ORDER BY provider, account_id, window`,
     )
-    .all(accountId ?? null, accountId ?? null);
+    .all(...(match?.args ?? []));
   const views: QuotaView[] = rows.map((r) => ({
     provider: r.provider,
     accountId: r.account_id,
