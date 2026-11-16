@@ -62,7 +62,6 @@ export async function reapRuns(db: Database, home: string): Promise<void> {
     if (run.pid !== null && ownsGroup(run.pid, run.identity)) killGroup(run.pid, "SIGKILL");
     revokeRunTokens(db, run.id);
   }
-  failLiveRuns(db, "harness_restart");
   for (const run of runs) {
     const accountHome = run.accountId === null ? null : getAccount(db, run.accountId)?.home;
     if (accountHome == null) continue;
@@ -70,4 +69,6 @@ export async function reapRuns(db: Database, home: string): Promise<void> {
       console.error("account write-back failed", err),
     );
   }
+  // Last, so a harness that dies mid-recovery still finds the unfinished runs on the next start.
+  failLiveRuns(db, "harness_restart");
 }

@@ -37,7 +37,7 @@ export async function prepareCodexHome(
 // enough to keep a copy-in from reading while a write-back is renaming.
 const tails = new Map<string, Promise<unknown>>();
 
-function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+export function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const run = (tails.get(key) ?? Promise.resolve()).then(fn, fn);
   const tail = run.catch(() => undefined);
   tails.set(key, tail);
@@ -86,7 +86,13 @@ export async function prepareAccountCodexHome(
     await rm(mine, { force: true });
     throw new Error("account auth.json is not a regular file under 1 MiB");
   }
-  await writeFile(baselineOf(runDir), copied, { mode: 0o600 });
+  try {
+    await writeFile(baselineOf(runDir), copied, { mode: 0o600 });
+  } catch (err) {
+    // The caller never gets a finish hook, so nothing else would remove the plaintext copy.
+    await Promise.allSettled([rm(mine, { force: true }), rm(baselineOf(runDir), { force: true })]);
+    throw err;
+  }
   return { home, finish: () => writeBackAccountAuth(runDir, accountHome) };
 }
 

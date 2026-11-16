@@ -4,8 +4,8 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fakeCliSpec } from "../../test-support/agents-kit";
 import type { RunContext, RunOutcome } from "./adapter";
-import { getRun, recoverRuns, shutdownRuns, startRun, waitForRun } from "./api";
-import { prepareAccountCodexHome } from "./codex-home";
+import { getRun, killRun, recoverRuns, shutdownRuns, startRun, waitForRun } from "./api";
+import { prepareAccountCodexHome, withLock } from "./codex-home";
 import { addAccount, cleanup, fakeDeps, fixture, makeDir } from "./manager-kit";
 import { insertRun, markRunning } from "./runs-repo";
 
@@ -53,8 +53,35 @@ test("a codex run's token copy and baseline are gone after it ends", async () =>
     expect(tokenFiles(runDir)).toHaveLength(2);
     return done;
   });
-  await waitForRun(id);
+  expect(await waitForRun(id)).toMatchObject({ state: "completed" });
+  expect(runDir).not.toBe("");
   expect(tokenFiles(runDir)).toEqual([]);
+});
+
+test("a kill that arrives while the token is being stored still ends the run as killed", async () => {
+  const f = fixture();
+  const b = await codexAccount(f);
+  let release = (): void => {};
+  const id = await startCodex(f, b.id, async () => {
+    // Holds the account lock, so the write-back after the lane waits for it.
+    void withLock(b.home, () => new Promise<void>((resolve) => (release = resolve)));
+    return done;
+  });
+  while (getRun(f.db, id)?.state !== "running") await Bun.sleep(5);
+  await Bun.sleep(20);
+  expect(killRun(f.db, id)).toBe(true);
+  release();
+  expect(await waitForRun(id)).toMatchObject({ state: "killed", reason: "killed_by_user" });
+});
+
+test("a failed baseline write removes the copied token", async () => {
+  const f = fixture();
+  const b = await codexAccount(f);
+  const runDir = join(makeDir(), "run");
+  // A directory where the baseline file goes makes the write fail.
+  await mkdir(join(runDir, "codex-auth.base"), { recursive: true });
+  await expect(prepareAccountCodexHome(runDir, "", b.home)).rejects.toThrow();
+  expect(existsSync(join(runDir, "codex-home", "auth.json"))).toBe(false);
 });
 
 test("shutdown stores the token of a run whose lane never returns", async () => {
@@ -109,4 +136,31 @@ test("a launch that fails after the copy-in leaves no token in the run dir", asy
   const runDir = join(realpathSync(f.home), "runs", id);
   expect(existsSync(join(runDir, "codex-home"))).toBe(true);
   expect(tokenFiles(runDir)).toEqual([]);
+});
+
+test("a run stays unended until its token is stored, so a crash mid-recovery retries it", async () => {
+  const f = fixture();
+  const account = await codexAccount(f);
+  const id = Bun.randomUUIDv7();
+  insertRun(f.db, {
+    id,
+    taskId: null,
+    model: null,
+    repo: f.repo,
+    prompt: "p",
+    agentId: "codex",
+    accountId: account.id,
+  });
+  markRunning(f.db, id);
+  const { home } = await prepareAccountCodexHome(join(f.home, "runs", id), "", account.home);
+  writeFileSync(join(home, "auth.json"), '{"b":"refreshed"}');
+  let release = (): void => {};
+  void withLock(account.home, () => new Promise<void>((resolve) => (release = resolve)));
+  const recovering = recoverRuns(f.db, f.home);
+  await Bun.sleep(30);
+  expect(getRun(f.db, id)?.state).toBe("running");
+  release();
+  await recovering;
+  expect(getRun(f.db, id)?.state).toBe("failed");
+  expect(readFileSync(join(account.home, "auth.json"), "utf8")).toBe('{"b":"refreshed"}');
 });
