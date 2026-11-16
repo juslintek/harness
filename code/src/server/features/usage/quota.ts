@@ -17,6 +17,7 @@ export interface QuotaInput {
   source: string;
   // Observation time; the log line's own timestamp when ingesting history.
   ts?: number;
+  accountId?: string;
 }
 
 const PROVIDERS = ["claude", "codex", "agy"];
@@ -47,7 +48,7 @@ export function onQuotaRecorded(listener: (q: QuotaInput) => void): () => void {
 
 export function insertSnapshot(db: Database, s: QuotaInput): void {
   db.query(
-    "INSERT INTO quota_snapshots (id, provider, window, used_percent, resets_at, source, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO quota_snapshots (id, provider, window, used_percent, resets_at, source, ts, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   ).run(
     Bun.randomUUIDv7(),
     s.provider,
@@ -56,6 +57,7 @@ export function insertSnapshot(db: Database, s: QuotaInput): void {
     s.resetsAt,
     s.source,
     s.ts ?? Date.now(),
+    s.accountId ?? null,
   );
   for (const listener of listeners) {
     try {

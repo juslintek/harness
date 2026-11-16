@@ -198,40 +198,46 @@ export async function createLaunch(
   const token = tokenFor(db, runId, member);
   const codex = await runCodexHome(spec, runDir, account);
   const codexHome = codex?.home ?? null;
-  const settingsPath = await writeRunSettings({
-    spec,
-    home,
-    runDir,
-    tree,
-    codexHome,
-    member,
-    scratch,
-  });
-  const base = `http://127.0.0.1:${deps.port}`;
-  const index = member === undefined || "candidateId" in member ? undefined : member.memoryIndex;
-  const env = runEnv(deps, {
-    runDir,
-    runId,
-    token,
-    base,
-    codexHome,
-    account,
-    spec,
-    treePath: tree.path,
-    branch,
-    scratch,
-  });
-  Object.assign(env, await memoryFileEnv(runDir, index));
-  return {
-    worktree: tree.path,
-    branch: tree.branch,
-    argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]),
-    env,
-    mcp: { url: `${base}/mcp`, token },
-    claudeSettings: claudeSettings(process.execPath, HOOK_SCRIPT),
-    scope: { root: tree.path, home: homedir(), harnessHome: home, defaultBranch: branch },
-    ...(codex?.finish ? { finish: codex.finish } : {}),
-  };
+  try {
+    const settingsPath = await writeRunSettings({
+      spec,
+      home,
+      runDir,
+      tree,
+      codexHome,
+      member,
+      scratch,
+    });
+    const base = `http://127.0.0.1:${deps.port}`;
+    const index = member === undefined || "candidateId" in member ? undefined : member.memoryIndex;
+    const env = runEnv(deps, {
+      runDir,
+      runId,
+      token,
+      base,
+      codexHome,
+      account,
+      spec,
+      treePath: tree.path,
+      branch,
+      scratch,
+    });
+    Object.assign(env, await memoryFileEnv(runDir, index));
+    return {
+      worktree: tree.path,
+      branch: tree.branch,
+      argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]),
+      env,
+      mcp: { url: `${base}/mcp`, token },
+      claudeSettings: claudeSettings(process.execPath, HOOK_SCRIPT),
+      scope: { root: tree.path, home: homedir(), harnessHome: home, defaultBranch: branch },
+      ...(codex?.finish ? { finish: codex.finish } : {}),
+    };
+  } catch (err) {
+    // The run never starts, so nothing reaches the account; this only drops the token copy.
+    await codex?.finish?.();
+    throw err;
+  }
 }
 
 // A throwaway sandbox for asking an agent which models it offers: same srt wrapping and scrubbed

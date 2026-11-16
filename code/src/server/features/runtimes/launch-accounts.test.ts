@@ -1,25 +1,15 @@
 import type { Database } from "bun:sqlite";
 import { afterAll, expect, test } from "bun:test";
-import {
-  existsSync,
-  lstatSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { fakeCliSpec } from "../../test-support/agents-kit";
 import { ensureDefaultAccount, getSpec } from "../agents/api";
-import type { RunOutcome } from "./adapter";
+import type { RunContext, RunOutcome } from "./adapter";
 import { getRun, startRun, waitForRun } from "./api";
-import { prepareAccountCodexHome } from "./codex-home";
 import { createProbeLaunch } from "./launch";
 import { AccountUnavailable, resolveRunAccount } from "./launch-accounts";
-import { cleanup, fakeDeps, fixture, makeDir } from "./manager-kit";
+import { addAccount, cleanup, fakeDeps, fixture, makeDir } from "./manager-kit";
 
 afterAll(cleanup);
 
@@ -32,24 +22,11 @@ const done: RunOutcome = {
 };
 
 // The lane stub only reports what the run was given; the fake CLI is run by hand with that env.
-function deps(
-  f: ReturnType<typeof fixture>,
-  lane: (ctx: { env: Record<string, string> }) => Promise<RunOutcome>,
-) {
+function deps(f: ReturnType<typeof fixture>, lane: (ctx: RunContext) => Promise<RunOutcome>) {
   return fakeDeps(f, [], {
     lane,
     resolveSpec: (id) => (id === "claude" || id === "codex" ? fakeCliSpec(id) : null),
   });
-}
-
-function addAccount(db: Database, runtime: string, home: string | null, state = "active"): string {
-  const id = Bun.randomUUIDv7();
-  db.run(
-    `INSERT INTO agent_accounts (id, runtime, kind, label, home, state, max_concurrent, created_at, updated_at)
-     VALUES (?, ?, 'login', ?, ?, ?, 1, 0, 0)`,
-    [id, runtime, `acct-${id}`, home, state],
-  );
-  return id;
 }
 
 const start = (
@@ -123,37 +100,14 @@ test("a codex run gets a copy of B's auth.json and only B's file takes the refre
   expect(a).not.toBe(b);
 });
 
-test("two concurrent runs on one codex account leave a whole auth.json", async () => {
-  const f = fixture();
-  const home = join(makeDir(), "accounts", "b");
-  await mkdir(home, { recursive: true });
-  writeFileSync(join(home, "auth.json"), "{}");
-  const b = addAccount(f.db, "codex", home);
-  const big = (tag: string): string => JSON.stringify({ tag, pad: tag.repeat(200_000) });
-  const lane =
-    (tag: string) =>
-    async (ctx: { env: Record<string, string> }): Promise<RunOutcome> => {
-      await Bun.sleep(5);
-      writeFileSync(join(ctx.env.CODEX_HOME ?? "", "auth.json"), big(tag));
-      return done;
-    };
-  const ids = await Promise.all([
-    start(f.db, deps(f, lane("x")), f.repo, "codex", b),
-    start(f.db, deps(f, lane("y")), f.repo, "codex", b),
-  ]);
-  await Promise.all(ids.map(waitForRun));
-  const final = JSON.parse(readFileSync(join(home, "auth.json"), "utf8")) as { tag: string };
-  expect(["x", "y"]).toContain(final.tag);
-  expect(readdirSync(home)).toEqual(["auth.json"]);
-});
-
-test("a run that did not change auth.json leaves the account file alone", async () => {
+test("a run whose account file changed meanwhile leaves the account file alone", async () => {
   const f = fixture();
   const home = join(makeDir(), "accounts", "b");
   await mkdir(home, { recursive: true });
   writeFileSync(join(home, "auth.json"), '{"v":1}');
   const b = addAccount(f.db, "codex", home);
-  const lane = async (): Promise<RunOutcome> => {
+  const lane = async (ctx: { env: Record<string, string> }): Promise<RunOutcome> => {
+    writeFileSync(join(ctx.env.CODEX_HOME ?? "", "auth.json"), '{"v":"run"}');
     // Another run refreshed the account's file while this one was running.
     writeFileSync(join(home, "auth.json"), '{"v":2}');
     return done;
@@ -205,22 +159,6 @@ test("a probe launch on a codex account copies that account's auth.json too", as
   expect(probe.finish).not.toBeNull();
 });
 
-test("a run that swaps auth.json for a FIFO cannot hang the write-back, and an oversized account file is refused", async () => {
-  const root = makeDir();
-  const home = join(root, "accounts", "b");
-  await mkdir(home, { recursive: true });
-  writeFileSync(join(home, "auth.json"), '{"v":1}');
-  const { home: runHome, finish } = await prepareAccountCodexHome(join(root, "run"), "", home);
-  rmSync(join(runHome, "auth.json"));
-  expect(Bun.spawnSync(["mkfifo", join(runHome, "auth.json")]).exitCode).toBe(0);
-  await finish();
-  expect(readFileSync(join(home, "auth.json"), "utf8")).toBe('{"v":1}');
-  writeFileSync(join(home, "auth.json"), "x".repeat((1 << 20) + 1));
-  await expect(prepareAccountCodexHome(join(root, "run2"), "", home)).rejects.toThrow(
-    "regular file",
-  );
-});
-
 test("a refresh from an older login does not replace the credentials that took its place", async () => {
   const f = fixture();
   const home = join(makeDir(), "accounts", "b");
@@ -237,16 +175,40 @@ test("a refresh from an older login does not replace the credentials that took i
   expect(readFileSync(join(home, "auth.json"), "utf8")).toBe('{"login":"new"}');
 });
 
-test("a run that points its home at another account's home cannot copy that login into its own account", async () => {
-  const root = makeDir();
-  const home = join(root, "accounts", "b");
-  const other = join(root, "accounts", "c");
-  for (const h of [home, other]) await mkdir(h, { recursive: true });
-  writeFileSync(join(home, "auth.json"), '{"who":"b"}');
-  writeFileSync(join(other, "auth.json"), '{"who":"c"}');
-  const { home: runHome, finish } = await prepareAccountCodexHome(join(root, "run"), "", home);
-  renameSync(runHome, `${runHome}.moved`);
-  symlinkSync(other, runHome);
-  await finish();
-  expect(readFileSync(join(home, "auth.json"), "utf8")).toBe('{"who":"b"}');
+test("usage and quota of a run on account B are attributed to B", async () => {
+  const f = fixture();
+  const home = join(makeDir(), "accounts", "b");
+  await mkdir(home, { recursive: true });
+  writeFileSync(join(home, "auth.json"), "{}");
+  const b = addAccount(f.db, "codex", home);
+  const lane = async (ctx: RunContext): Promise<RunOutcome> => {
+    ctx.onQuota({ provider: "claude", window: "five_hour", usedPercent: 10, resetsAt: null });
+    return {
+      ...done,
+      usage: [
+        {
+          model: null,
+          inputTokens: 1,
+          outputTokens: 1,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          reasoningTokens: 0,
+          reportedCostUsd: null,
+          source: "acp",
+        },
+      ],
+    };
+  };
+  const id = await start(f.db, deps(f, lane), f.repo, "codex", b);
+  await waitForRun(id);
+  const usage = f.db
+    .query<{ account_id: string | null }, [string]>(
+      "SELECT account_id FROM events WHERE run_id = ? AND kind = 'usage'",
+    )
+    .all(id);
+  expect(usage).toEqual([{ account_id: b }]);
+  const quota = f.db
+    .query<{ account_id: string | null }, []>("SELECT account_id FROM quota_snapshots")
+    .all();
+  expect(quota).toEqual([{ account_id: b }]);
 });

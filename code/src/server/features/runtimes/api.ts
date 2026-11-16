@@ -159,9 +159,9 @@ export function shutdownRuns(db: Database, graceMs?: number): Promise<void> {
   return shutdown(db, graceMs);
 }
 
-export function recoverRuns(db: Database): void {
+export function recoverRuns(db: Database, home: string): Promise<void> {
   for (const run of listUnendedRuns(db)) expireRunApprovals(db, run.id);
-  reapRuns(db);
+  return reapRuns(db, home);
 }
 
 export function sweepStaleScratch(home: string): Promise<void> {

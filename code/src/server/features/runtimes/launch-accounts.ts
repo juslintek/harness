@@ -32,6 +32,11 @@ export function resolveRunAccount(db: Database, spec: AgentSpec, accountId: stri
   return { id: account.id, home: account.home };
 }
 
+// events.account_id cannot be set after insert, so usage and quota carry it from the start.
+export function accountTag(account: RunAccount | undefined): { accountId?: string } {
+  return account === undefined ? {} : { accountId: account.id };
+}
+
 // Codex always runs on a per-run home, so the account's own home reaches it only as a copy.
 export function accountRunEnv(spec: AgentSpec, account: RunAccount | null): Record<string, string> {
   return account === null || spec.id === "codex" ? {} : accountEnv(spec, account);

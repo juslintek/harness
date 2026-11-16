@@ -1,5 +1,15 @@
 import { constants } from "node:fs";
-import { copyFile, mkdir, open, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  open,
+  realpath,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -52,6 +62,11 @@ async function readRegular(path: string): Promise<string | null> {
   }
 }
 
+// The copied-in token, kept beside the run's home rather than in it: srt lets the run write only
+// its home, so the run cannot change what a write-back compares against. On disk so that a restart
+// can still store a token the run refreshed before the harness died.
+const baselineOf = (runDir: string): string => join(runDir, "codex-auth.base");
+
 // A non-default account keeps its login in its own home. The run gets a copy, never a link: srt
 // blocks a write through a link, so a token refresh would fail, and a link would let the run
 // reach the account's directory.
@@ -62,20 +77,35 @@ export async function prepareAccountCodexHome(
 ): Promise<{ home: string; finish: () => Promise<void> }> {
   const home = await freshHome(runDir, rulesText);
   const mine = join(home, "auth.json");
-  // O_NOFOLLOW guards only the last path component. Resolving the whole path and comparing it with
-  // where it pointed at copy-in also catches a symlink the run put in place of its home directory.
-  const mineReal = join(await realpath(home), "auth.json");
-  const theirs = join(accountHome, "auth.json");
   const copied = await withLock(accountHome, async () => {
-    await copyFile(theirs, mine);
+    await copyFile(join(accountHome, "auth.json"), mine);
     return readRegular(mine);
   });
   // No baseline would make every run look like it changed the file.
-  if (copied === null) throw new Error("account auth.json is not a regular file under 1 MiB");
-  // Written back only when this run changed it and the account's file is still what it copied in:
-  // a newer token from another run, or a new login, must not be replaced by an older one.
-  const finish = (): Promise<void> =>
-    withLock(accountHome, async () => {
+  if (copied === null) {
+    await rm(mine, { force: true });
+    throw new Error("account auth.json is not a regular file under 1 MiB");
+  }
+  await writeFile(baselineOf(runDir), copied, { mode: 0o600 });
+  return { home, finish: () => writeBackAccountAuth(runDir, accountHome) };
+}
+
+// Written back only when the run changed its copy and the account's file is still what it copied
+// in: a newer token from another run, or a new login, must not be replaced by an older one. The
+// run's plaintext copy and the baseline are removed either way; a second call finds no baseline.
+export function writeBackAccountAuth(runDir: string, accountHome: string): Promise<void> {
+  const home = join(runDir, "codex-home");
+  const mine = join(home, "auth.json");
+  const theirs = join(accountHome, "auth.json");
+  const baseline = baselineOf(runDir);
+  return withLock(accountHome, async () => {
+    try {
+      const copied = await readRegular(baseline);
+      if (copied === null) return;
+      // O_NOFOLLOW guards only the last path component. The run cannot write its run dir, so the
+      // resolved path must still be the copy inside it; this also catches a symlink the run put in
+      // place of its home directory.
+      const mineReal = join(await realpath(runDir), "codex-home", "auth.json");
       if ((await realpath(mine).catch(() => null)) !== mineReal) return;
       const after = await readRegular(mine);
       if (after === null || after === copied) return;
@@ -87,6 +117,10 @@ export async function prepareAccountCodexHome(
       } finally {
         await rm(tmp, { force: true });
       }
-    });
-  return { home, finish };
+    } finally {
+      // Never through a home the run swapped for a link, which could point at another account.
+      if ((await lstat(home).catch(() => null))?.isDirectory()) await rm(mine, { force: true });
+      await rm(baseline, { force: true });
+    }
+  });
 }

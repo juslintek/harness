@@ -12,7 +12,7 @@ import { createBreaker, defaultLimits } from "./breaker";
 import { decideAsk } from "./decide";
 import type { RunCandidate } from "./launch";
 import { createLaunch, inProcessLaunch, type Launch, type RunDeps, type RunMember } from "./launch";
-import type { RunAccount } from "./launch-accounts";
+import { accountTag, type RunAccount } from "./launch-accounts";
 import { pidIdentity } from "./orphans";
 import { endState } from "./outcome";
 import {
@@ -29,7 +29,7 @@ import {
   worktreeOf,
 } from "./runs-repo";
 import { dropScratchCheckout } from "./scratch-checkout";
-import { type Live, stopAll } from "./shutdown";
+import { type Live, stopAll, storeAccount } from "./shutdown";
 import { NotAGitRepo } from "./worktree";
 
 export interface StartInput {
@@ -177,7 +177,7 @@ function buildContext(
       }),
     onQuota: (q) => {
       if (q.usedPercent >= 100) run.quotaFull = true;
-      recordQuota(db, { ...q, source: "acp" });
+      recordQuota(db, { ...q, source: "acp", ...accountTag(input.account) });
     },
     onProgress: (p) => {
       if (breaker.addTokens(p.contextTokens) === "trip") killRun(db, input.id, "circuit_breaker");
@@ -209,13 +209,14 @@ async function execute(
       buildContext(db, deps, spec, input, launch, run),
     );
     const conversation = outcome.sessionId === null ? {} : { conversationId: outcome.sessionId };
-    recordUsage(db, { id: input.id, agent: spec.id, ...conversation }, outcome.usage);
+    const tagged = { id: input.id, agent: spec.id, ...conversation, ...accountTag(input.account) };
+    recordUsage(db, tagged, outcome.usage);
     [state, reason] = endState(db, input.id, run, outcome);
   } catch (err) {
     reason = err instanceof Error ? err.message : String(err);
     if (run.killReason !== null) [state, reason] = ["killed", run.killReason];
   }
-  await launch.finish?.().catch((err: unknown) => console.error("account write-back failed", err));
+  await storeAccount(run);
   return finalize(db, input.id, spec.id, state, reason);
 }
 
@@ -279,8 +280,11 @@ export async function startRun(
     return full.id;
   }
   if (isHalted(db)) run.killReason ??= "halted";
+  if (launch.finish) run.finish = launch.finish;
   if (run.killReason !== null) {
-    waits.set(full.id, Promise.resolve(finalize(db, full.id, spec.id, "killed", run.killReason)));
+    const reason = run.killReason;
+    const end = () => finalize(db, full.id, spec.id, "killed", reason);
+    waits.set(full.id, storeAccount(run)?.then(end) ?? Promise.resolve(end()));
     return full.id;
   }
   markRunning(db, full.id);

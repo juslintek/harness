@@ -153,12 +153,17 @@ export function setPid(db: Database, id: string, pid: number, identity: string |
   db.run("UPDATE runs SET pid = ?, pid_identity = ? WHERE id = ?", [pid, identity, id]);
 }
 
-export function listUnendedRuns(
-  db: Database,
-): Array<{ id: string; pid: number | null; identity: string | null }> {
+interface UnendedRun {
+  id: string;
+  pid: number | null;
+  identity: string | null;
+  accountId: string | null;
+}
+
+export function listUnendedRuns(db: Database): UnendedRun[] {
   return db
-    .query<{ id: string; pid: number | null; identity: string | null }, []>(
-      "SELECT id, pid, pid_identity AS identity FROM runs WHERE state IN ('queued', 'starting', 'running')",
+    .query<UnendedRun, []>(
+      "SELECT id, pid, pid_identity AS identity, account_id AS accountId FROM runs WHERE state IN ('queued', 'starting', 'running')",
     )
     .all();
 }
