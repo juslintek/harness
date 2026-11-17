@@ -1,8 +1,10 @@
 import type { Database } from "bun:sqlite";
 import { markAccountExhausted } from "../agents/api";
 import { accountQuota, recordQuota } from "../usage/api";
-import type { RunContext } from "./adapter";
-import type { Cooldown } from "./outcome";
+import type { RunContext, RunOutcome } from "./adapter";
+import { type Cooldown, endState } from "./outcome";
+import type { RunState } from "./runs-repo";
+import type { Live } from "./shutdown";
 
 // Runs started before account routing have no account_id; they belong to their runtime's default.
 function accountOf(db: Database, runId: string): string | null {
@@ -31,7 +33,7 @@ export function recordRunQuota(
   }
 }
 
-export function markRunCooldown(db: Database, runId: string, cooldown: Cooldown | null): void {
+function markRunCooldown(db: Database, runId: string, cooldown: Cooldown | null): void {
   if (cooldown === null) return;
   const accountId = accountOf(db, runId);
   if (accountId === null) return;
@@ -44,4 +46,16 @@ export function markRunCooldown(db: Database, runId: string, cooldown: Cooldown 
       ? Math.max(...resets)
       : now + cooldown.fallbackMs;
   markAccountExhausted(db, accountId, until);
+}
+
+// The state a run ends in, plus the account block that ending calls for.
+export function endAndMark(
+  db: Database,
+  runId: string,
+  run: Live,
+  outcome: RunOutcome,
+): [RunState, string | null] {
+  const [state, reason, cooldown] = endState(db, runId, run, outcome);
+  markRunCooldown(db, runId, cooldown);
+  return [state, reason];
 }

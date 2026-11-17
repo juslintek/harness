@@ -10,11 +10,11 @@ import { runAgy } from "./agy";
 import { runApi } from "./api-lane";
 import { createBreaker, defaultLimits } from "./breaker";
 import { decideAsk } from "./decide";
-import { markRunCooldown, recordRunQuota } from "./exhaustion";
+import { endAndMark, recordRunQuota } from "./exhaustion";
 import type { RunCandidate } from "./launch";
 import { createLaunch, inProcessLaunch, type Launch, type RunDeps, type RunMember } from "./launch";
+import { accountTag, type RunAccount } from "./launch-accounts";
 import { pidIdentity } from "./orphans";
-import { endState } from "./outcome";
 import {
   getFlag,
   getRun,
@@ -29,7 +29,7 @@ import {
   worktreeOf,
 } from "./runs-repo";
 import { dropScratchCheckout } from "./scratch-checkout";
-import { type Live, stopAll } from "./shutdown";
+import { type Live, stopAll, storeAccount } from "./shutdown";
 import { NotAGitRepo } from "./worktree";
 
 export interface StartInput {
@@ -43,6 +43,7 @@ export interface StartInput {
   reuseWorktreeOf?: string;
   attempt?: number;
   batchId?: string;
+  account?: RunAccount;
 }
 const LANES: Record<AgentSpec["lane"], Adapter> = { acp: runAcp, agy: runAgy, api: runApi };
 const DEFAULT_IDLE_TIMEOUT_MS = 300_000;
@@ -208,14 +209,14 @@ async function execute(
       buildContext(db, deps, spec, input, launch, run),
     );
     const conversation = outcome.sessionId === null ? {} : { conversationId: outcome.sessionId };
-    recordUsage(db, { id: input.id, agent: spec.id, ...conversation }, outcome.usage);
-    const [endedState, endedReason, cooldown] = endState(db, input.id, run, outcome);
-    [state, reason] = [endedState, endedReason];
-    markRunCooldown(db, input.id, cooldown);
+    const tagged = { id: input.id, agent: spec.id, ...conversation, ...accountTag(input.account) };
+    recordUsage(db, tagged, outcome.usage);
+    [state, reason] = endAndMark(db, input.id, run, outcome);
   } catch (err) {
     reason = err instanceof Error ? err.message : String(err);
-    if (run.killReason !== null) [state, reason] = ["killed", run.killReason];
   }
+  await storeAccount(run);
+  if (run.killReason !== null) [state, reason] = ["killed", run.killReason];
   return finalize(db, input.id, spec.id, state, reason);
 }
 
@@ -231,7 +232,7 @@ async function prepare(
     const launch =
       spec.lane === "api"
         ? inProcessLaunch(input.repo)
-        : await createLaunch(db, deps, spec, input.id, input.repo, who, reuse);
+        : await createLaunch(db, deps, spec, input.id, input.repo, who, reuse, input.account);
     setStarting(db, input.id, launch.worktree, launch.branch);
     return launch;
   } catch (err) {
@@ -263,6 +264,7 @@ export async function startRun(
     prompt: input.prompt,
     attempt: input.attempt,
     batchId: input.batchId,
+    accountId: input.account?.id,
   });
   const run: Live = {
     abort: new AbortController(),
@@ -278,8 +280,11 @@ export async function startRun(
     return full.id;
   }
   if (isHalted(db)) run.killReason ??= "halted";
+  if (launch.finish) run.finish = launch.finish;
   if (run.killReason !== null) {
-    waits.set(full.id, Promise.resolve(finalize(db, full.id, spec.id, "killed", run.killReason)));
+    const reason = run.killReason;
+    const end = () => finalize(db, full.id, spec.id, "killed", reason);
+    waits.set(full.id, storeAccount(run)?.then(end) ?? Promise.resolve(end()));
     return full.id;
   }
   markRunning(db, full.id);

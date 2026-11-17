@@ -7,7 +7,7 @@ import * as accounts from "./accounts-repo";
 import { bunRunner, type DiscoveredAgent, discoverAgents, type Runner } from "./discover";
 import { getKey, type Provider } from "./keys";
 import * as secrets from "./secrets-file";
-import { type AgentSpec, agentSpecs } from "./specs";
+import { type AgentSpec, accountEnv as accountEnvOf, agentSpecs } from "./specs";
 
 export type { Provider } from "./keys";
 export type { AgentSpec } from "./specs";
@@ -26,6 +26,14 @@ export function markAccountExhausted(db: Database, id: string, until: number): v
 
 export function ensureDefaultAccount(db: Database, runtime: string): AccountView {
   return accounts.ensureDefaultAccount(db, runtime);
+}
+
+// Environment that points one CLI at an account's own home; empty for the default login.
+export function accountEnv(
+  spec: Pick<AgentSpec, "id">,
+  account: { home: string | null },
+): Record<string, string> {
+  return accountEnvOf(spec, account);
 }
 
 export function getApiKey(provider: Provider): Promise<string | null> {

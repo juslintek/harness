@@ -160,7 +160,7 @@ test("recoverRuns preserves a member's future approval until heartbeat expires a
     "INSERT INTO approvals (id, run_id, action, l1, status, created_at, expires_at) VALUES (?, ?, '{}', '{}', 'pending', 1, ?)",
     [id, w.runId, Date.now() + 200],
   );
-  recoverRuns(w.k.db);
+  await recoverRuns(w.k.db, w.k.home);
   expect(findApproval(w.k.db, id)?.status).toBe("pending");
   expect(wakes(w.k.db, w.member.id)).toHaveLength(0);
   const stop = w.k.start();
