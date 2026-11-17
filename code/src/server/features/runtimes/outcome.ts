@@ -13,8 +13,12 @@ export interface Cooldown {
   kind: "quota" | "overloaded";
   fallbackMs: number;
 }
-const QUOTA_COOLDOWN: Cooldown = { kind: "quota", fallbackMs: 15 * 60_000 };
+export const QUOTA_COOLDOWN: Cooldown = { kind: "quota", fallbackMs: 15 * 60_000 };
 const OVERLOADED_COOLDOWN: Cooldown = { kind: "overloaded", fallbackMs: 2 * 60_000 };
+
+// A run stopped by the quota watchdog blocks its account like a quota error does.
+export const killCooldown = (reason: string): Cooldown | null =>
+  reason === "quota_exhausted" ? QUOTA_COOLDOWN : null;
 
 export function endState(
   db: Database,
@@ -23,7 +27,7 @@ export function endState(
   o: RunOutcome,
 ): [RunState, string | null, Cooldown | null] {
   if (run.killReason !== null) {
-    return ["killed", run.killReason, run.killReason === "quota_exhausted" ? QUOTA_COOLDOWN : null];
+    return ["killed", run.killReason, killCooldown(run.killReason)];
   }
   if (hasExpiredApproval(db, runId)) return ["blocked", "approval_timeout", null];
   switch (o.stopReason) {
