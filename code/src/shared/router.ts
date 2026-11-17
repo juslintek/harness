@@ -75,4 +75,9 @@ export const quotaBodySchema: z.ZodType<QuotaBody> = z
     usedPercent: z.number().min(0).max(100),
     resetsAt: z.number().int().positive().optional(),
   })
-  .strict();
+  .strict()
+  // A default account id names its provider; any other id is opaque.
+  .refine((b) => !b.accountId?.startsWith("default:") || b.accountId === `default:${b.provider}`, {
+    message: "accountId belongs to another provider",
+    path: ["accountId"],
+  });

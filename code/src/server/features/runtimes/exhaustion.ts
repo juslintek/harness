@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { markAccountExhausted } from "../agents/api";
 import { accountQuota, recordQuota } from "../usage/api";
 import type { RunContext, RunOutcome } from "./adapter";
-import { type Cooldown, endState } from "./outcome";
+import { type Cooldown, endState, killCooldown, QUOTA_COOLDOWN } from "./outcome";
 import type { RunState } from "./runs-repo";
 import type { Live } from "./shutdown";
 
@@ -16,21 +16,22 @@ function accountOf(db: Database, runId: string): string | null {
   return row?.id ?? null;
 }
 
-// A reading from a live run is the account's own: store it under that account, and a full window
-// blocks the account until the window resets.
+// A reading from a live run is the account's own: store it under that account. A full window blocks
+// the account until it resets, or for the quota fallback when the reading gives no reset time.
+// Returns whether the account still has a full window, which is what makes a later error a quota error.
 export function recordRunQuota(
   db: Database,
   runId: string,
   q: Parameters<RunContext["onQuota"]>[0],
-): void {
+): boolean {
   const accountId = accountOf(db, runId);
   // No run row means nothing to attribute the reading to; storing it under a guessed account would
   // feed another account's window.
-  if (accountId === null) return;
+  if (accountId === null) return false;
   recordQuota(db, { ...q, accountId, source: "acp" });
-  if (q.usedPercent >= 100 && q.resetsAt !== null && q.resetsAt > Date.now()) {
-    markAccountExhausted(db, accountId, q.resetsAt);
-  }
+  const until = q.resetsAt ?? Date.now() + QUOTA_COOLDOWN.fallbackMs;
+  if (q.usedPercent >= 100 && until > Date.now()) markAccountExhausted(db, accountId, until);
+  return accountQuota(db, accountId).some((v) => v.usedPercent !== null && v.usedPercent >= 100);
 }
 
 function markRunCooldown(db: Database, runId: string, cooldown: Cooldown | null): void {
@@ -58,4 +59,11 @@ export function endAndMark(
   const [state, reason, cooldown] = endState(db, runId, run, outcome);
   markRunCooldown(db, runId, cooldown);
   return [state, reason];
+}
+
+// A kill can land after the lane returned, while the account write-back is pending; it still ends the
+// run killed and still blocks the account.
+export function endKilled(db: Database, runId: string, reason: string): [RunState, string] {
+  markRunCooldown(db, runId, killCooldown(reason));
+  return ["killed", reason];
 }
