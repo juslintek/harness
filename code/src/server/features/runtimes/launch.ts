@@ -5,7 +5,6 @@ import { join } from "node:path";
 import type { AgentSpec } from "../agents/api";
 import {
   claudeSettings,
-  codexRules,
   runTmpDir,
   type Scope,
   scrubEnv,
@@ -14,7 +13,7 @@ import {
 } from "../guard/api";
 import { mintRunToken, type TokenScope } from "../mcp/api";
 import type { Adapter } from "./adapter";
-import { prepareCodexHome } from "./codex-home";
+import { accountRunEnv, type RunAccount, runCodexHome } from "./launch-accounts";
 import { memoryFileEnv } from "./memory-file";
 import { createScratchCheckout } from "./scratch-checkout";
 import { createWorktree, defaultBranch, reuseWorktree } from "./worktree";
@@ -68,6 +67,8 @@ export interface Launch {
   mcp: { url: string; token: string } | null;
   claudeSettings: unknown;
   scope: Scope;
+  // Runs after the lane returns: stores what the run changed in its account (a refreshed token).
+  finish?: () => Promise<void>;
 }
 
 const HOOK_SCRIPT = join(import.meta.dir, "../../../../scripts/guard-hook.ts");
@@ -110,6 +111,8 @@ interface RunEnvInput {
   token: string;
   base: string;
   codexHome: string | null;
+  account: RunAccount | null;
+  spec: AgentSpec;
   treePath: string;
   branch: string;
   scratch: { path: string } | null;
@@ -121,6 +124,7 @@ function runEnv(deps: RunDeps, i: RunEnvInput): Record<string, string> {
     ...deps.agentEnv?.(i.runDir),
     TMPDIR: tmp,
     CLAUDE_CODE_TMPDIR: tmp,
+    ...accountRunEnv(i.spec, i.account),
     // The guard treats git log/diff/show as read-only, which only holds while no pager runs; the
     // env wins over core.pager and pager.<cmd> in any config the run can reach.
     GIT_PAGER: "cat",
@@ -181,6 +185,7 @@ export async function createLaunch(
   repo: string,
   member?: RunMember | RunCandidate,
   reuse?: { worktree: string; branch: string },
+  account: RunAccount | null = null,
 ): Promise<Launch> {
   // srt's sandbox profile matches resolved paths only, so a home behind a symlink (macOS /var)
   // would leave the run's own tmp dir read-only and break heredocs.
@@ -191,38 +196,48 @@ export async function createLaunch(
   const scratch = await scratchFor(repo, home, runId, member);
   const runDir = join(home, "runs", runId);
   const token = tokenFor(db, runId, member);
-  const codexHome = spec.id === "codex" ? await prepareCodexHome(runDir, codexRules()) : null;
-  const settingsPath = await writeRunSettings({
-    spec,
-    home,
-    runDir,
-    tree,
-    codexHome,
-    member,
-    scratch,
-  });
-  const base = `http://127.0.0.1:${deps.port}`;
-  const index = member === undefined || "candidateId" in member ? undefined : member.memoryIndex;
-  const env = runEnv(deps, {
-    runDir,
-    runId,
-    token,
-    base,
-    codexHome,
-    treePath: tree.path,
-    branch,
-    scratch,
-  });
-  Object.assign(env, await memoryFileEnv(runDir, index));
-  return {
-    worktree: tree.path,
-    branch: tree.branch,
-    argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]),
-    env,
-    mcp: { url: `${base}/mcp`, token },
-    claudeSettings: claudeSettings(process.execPath, HOOK_SCRIPT),
-    scope: { root: tree.path, home: homedir(), harnessHome: home, defaultBranch: branch },
-  };
+  const codex = await runCodexHome(spec, runDir, account);
+  const codexHome = codex?.home ?? null;
+  try {
+    const settingsPath = await writeRunSettings({
+      spec,
+      home,
+      runDir,
+      tree,
+      codexHome,
+      member,
+      scratch,
+    });
+    const base = `http://127.0.0.1:${deps.port}`;
+    const index = member === undefined || "candidateId" in member ? undefined : member.memoryIndex;
+    const env = runEnv(deps, {
+      runDir,
+      runId,
+      token,
+      base,
+      codexHome,
+      account,
+      spec,
+      treePath: tree.path,
+      branch,
+      scratch,
+    });
+    Object.assign(env, await memoryFileEnv(runDir, index));
+    return {
+      worktree: tree.path,
+      branch: tree.branch,
+      argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]),
+      env,
+      mcp: { url: `${base}/mcp`, token },
+      claudeSettings: claudeSettings(process.execPath, HOOK_SCRIPT),
+      scope: { root: tree.path, home: homedir(), harnessHome: home, defaultBranch: branch },
+      ...(codex?.finish ? { finish: codex.finish } : {}),
+    };
+  } catch (err) {
+    // The run never starts, so nothing reaches the account; this only drops the token copy.
+    await codex?.finish?.();
+    throw err;
+  }
 }
 
 // A throwaway sandbox for asking an agent which models it offers: same srt wrapping and scrubbed
@@ -231,10 +246,17 @@ export async function createProbeLaunch(
   deps: RunDeps,
   spec: AgentSpec,
   dir: string,
-): Promise<{ argv: string[]; env: Record<string, string>; cwd: string }> {
+  account: RunAccount | null = null,
+): Promise<{
+  argv: string[];
+  env: Record<string, string>;
+  cwd: string;
+  finish: (() => Promise<void>) | null;
+}> {
   const cwd = join(dir, "cwd");
   await mkdir(cwd, { recursive: true });
-  const codexHome = spec.id === "codex" ? await prepareCodexHome(dir, codexRules()) : null;
+  const codex = await runCodexHome(spec, dir, account);
+  const codexHome = codex?.home ?? null;
   const settingsPath = await writeSrtSettings({
     runDir: dir,
     worktree: cwd,
@@ -252,7 +274,13 @@ export async function createProbeLaunch(
     ...deps.agentEnv?.(dir),
     TMPDIR: tmp,
     CLAUDE_CODE_TMPDIR: tmp,
+    ...accountRunEnv(spec, account),
     ...(codexHome === null ? {} : { CODEX_HOME: codexHome }),
   });
-  return { argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]), env, cwd };
+  return {
+    argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]),
+    env,
+    cwd,
+    finish: codex?.finish ?? null,
+  };
 }

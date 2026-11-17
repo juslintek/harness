@@ -59,7 +59,7 @@ test("recoverRuns kills a surviving srt agent group, revokes its token and fails
   const { id, pid } = orphan(x, "srt-agent");
   const token = mintRunToken(x.db, id, ["report"]);
   expect(verifyRunToken(x.db, token)).not.toBeNull();
-  recoverRuns(x.db);
+  await recoverRuns(x.db, x.home);
   await until(() => gone(pid));
   expect(verifyRunToken(x.db, token)).toBeNull();
   expect(getRun(x.db, id)).toMatchObject({ state: "failed", reason: "harness_restart" });
@@ -69,7 +69,7 @@ test("recoverRuns leaves a pid alone when it no longer belongs to an srt process
   const x = fixture();
   const { id, pid } = orphan(x, "unrelated");
   const token = mintRunToken(x.db, id, ["report"]);
-  recoverRuns(x.db);
+  await recoverRuns(x.db, x.home);
   await Bun.sleep(200);
   expect(gone(pid)).toBe(false);
   expect(verifyRunToken(x.db, token)).toBeNull();

@@ -58,7 +58,7 @@ wireBoard(db);
 wireChat(db);
 wireRuntimes();
 
-recoverRuns(db);
+await recoverRuns(db, config.home);
 await sweepStaleScratch(config.home);
 
 // With HARNESS_PORT=0 the real port is only known after binding, and the origin and run deps derive from it.
