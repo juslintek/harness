@@ -49,7 +49,7 @@ export function onUsageRecorded(listener: (runId: string | null) => void): () =>
 
 export function recordUsage(
   db: Database,
-  run: { id: string; agent: string; conversationId?: string },
+  run: { id: string; agent: string; conversationId?: string; accountId?: string },
   records: UsageRecord[],
 ): void {
   // Turns arrive in separate calls; continue numbering so dedupe keys never collide.
@@ -65,6 +65,7 @@ export function recordUsage(
       runId: run.id,
       agent: run.agent,
       ...(run.conversationId === undefined ? {} : { conversationId: run.conversationId }),
+      ...(run.accountId === undefined ? {} : { accountId: run.accountId }),
       operation: "chat",
       inputTokens: r.inputTokens,
       outputTokens: r.outputTokens,

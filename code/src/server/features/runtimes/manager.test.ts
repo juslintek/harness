@@ -96,7 +96,7 @@ test("the circuit breaker kills a run that floods events", async () => {
   expect(gone(agentPid(x, id))).toBe(true);
 });
 
-test("recoverRuns fails runs left running and expires pending approvals", () => {
+test("recoverRuns fails runs left running and expires pending approvals", async () => {
   const x = fixture();
   const id = Bun.randomUUIDv7();
   insertRun(x.db, { id, taskId: null, agentId: "fake", model: null, repo: x.repo, prompt: "p" });
@@ -106,7 +106,7 @@ test("recoverRuns fails runs left running and expires pending approvals", () => 
     "INSERT INTO approvals (id, run_id, action, l1, status, created_at, expires_at) VALUES ('ap1', ?, '{}', '{}', 'pending', ?, ?)",
     [id, now, now + 600_000],
   );
-  recoverRuns(x.db);
+  await recoverRuns(x.db, x.home);
   expect(getRun(x.db, id)).toMatchObject({ state: "failed", reason: "harness_restart" });
   const status = x.db.query<{ status: string }, []>(
     "SELECT status FROM approvals WHERE id = 'ap1'",

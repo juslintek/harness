@@ -8,6 +8,8 @@ export interface Live {
   quotaFull?: boolean;
   agent: string;
   pid: number | null;
+  // Stores what the run changed in its account; a run that never reaches its own end still needs it.
+  finish?: () => Promise<void>;
 }
 
 // Aborts every live run, then escalates to SIGKILL on the agent groups once the grace is over.
@@ -28,5 +30,15 @@ export async function stopAll(
   await Promise.race([ended, Bun.sleep(graceMs)]);
   for (const run of live.values()) if (run.pid !== null) killGroup(run.pid, "SIGKILL");
   await Promise.race([ended, Bun.sleep(1000)]);
-  for (const [id, run] of [...live]) finish(id, run);
+  await Promise.all(
+    [...live].map(async ([id, run]) => {
+      await storeAccount(run);
+      finish(id, run);
+    }),
+  );
+}
+
+// Undefined without an account to store into, so a plain run ends on the same tick as before.
+export function storeAccount(run: Live): Promise<void> | undefined {
+  return run.finish?.().catch((err: unknown) => console.error("account write-back failed", err));
 }
