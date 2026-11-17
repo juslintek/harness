@@ -28,7 +28,8 @@ export interface RunRow {
   endedAt: number | null;
   attempt: number;
   batchId: string | null;
-  accountId: string | null;
+  // Runs from before accounts existed have none stored and belong to their runtime's default.
+  accountId: string;
 }
 
 interface DbRun {
@@ -83,7 +84,7 @@ function toRow(r: DbRun): RunRow {
     endedAt: r.ended_at,
     attempt: r.attempt,
     batchId: r.batch_id,
-    accountId: r.account_id,
+    accountId: r.account_id ?? `default:${r.agent_id}`,
   };
 }
 

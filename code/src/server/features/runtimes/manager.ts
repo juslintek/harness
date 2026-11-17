@@ -3,13 +3,14 @@ import type { AgentSpec } from "../agents/api";
 import { expireRunApprovals } from "../guard/api";
 import { appendEvent, type NewEvent, sealSegments } from "../logs/api";
 import { revokeRunTokens } from "../mcp/api";
-import { recordQuota, recordUsage } from "../usage/api";
+import { recordUsage } from "../usage/api";
 import { runAcp } from "./acp";
 import type { Adapter, RunContext } from "./adapter";
 import { runAgy } from "./agy";
 import { runApi } from "./api-lane";
 import { createBreaker, defaultLimits } from "./breaker";
 import { decideAsk } from "./decide";
+import { markRunCooldown, recordRunQuota } from "./exhaustion";
 import type { RunCandidate } from "./launch";
 import { createLaunch, inProcessLaunch, type Launch, type RunDeps, type RunMember } from "./launch";
 import { accountTag, type RunAccount } from "./launch-accounts";
@@ -177,7 +178,7 @@ function buildContext(
       }),
     onQuota: (q) => {
       if (q.usedPercent >= 100) run.quotaFull = true;
-      recordQuota(db, { ...q, source: "acp", ...accountTag(input.account) });
+      recordRunQuota(db, input.id, q);
     },
     onProgress: (p) => {
       if (breaker.addTokens(p.contextTokens) === "trip") killRun(db, input.id, "circuit_breaker");
@@ -211,7 +212,7 @@ async function execute(
     const conversation = outcome.sessionId === null ? {} : { conversationId: outcome.sessionId };
     const tagged = { id: input.id, agent: spec.id, ...conversation, ...accountTag(input.account) };
     recordUsage(db, tagged, outcome.usage);
-    [state, reason] = endState(db, input.id, run, outcome);
+    [state, reason] = markRunCooldown(db, input.id, endState(db, input.id, run, outcome));
   } catch (err) {
     reason = err instanceof Error ? err.message : String(err);
   }
@@ -282,8 +283,7 @@ export async function startRun(
   if (isHalted(db)) run.killReason ??= "halted";
   if (launch.finish) run.finish = launch.finish;
   if (run.killReason !== null) {
-    const reason = run.killReason;
-    const end = () => finalize(db, full.id, spec.id, "killed", reason);
+    const end = () => finalize(db, full.id, spec.id, "killed", run.killReason);
     waits.set(full.id, storeAccount(run)?.then(end) ?? Promise.resolve(end()));
     return full.id;
   }

@@ -20,6 +20,10 @@ export function getAccount(db: Database, id: string): AccountView | null {
   return accounts.getAccount(db, id);
 }
 
+export function markAccountExhausted(db: Database, id: string, until: number): void {
+  accounts.markExhausted(db, id, until);
+}
+
 export function ensureDefaultAccount(db: Database, runtime: string): AccountView {
   return accounts.ensureDefaultAccount(db, runtime);
 }

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { type Engine, QUOTA_PROVIDER } from "../../../shared/router";
+import type { Engine } from "../../../shared/router";
 import { contextForMember, effective } from "../policies/api";
 import { getRun, killRun, liveRuns, type RunRow } from "../runtimes/api";
 import { onQuotaRecorded } from "../usage/api";
@@ -76,14 +76,16 @@ export function linkHandoff(db: Database, handoffId: string, toRunId: string): v
   db.run("UPDATE run_handoffs SET to_run_id = ? WHERE id = ?", [toRunId, handoffId]);
 }
 
-// Every live run of the exhausted provider stops at once; its own error path would only get there later.
+// Every live run on the exhausted account stops at once; its own error path would only get there later.
+// Other accounts of the same provider have their own windows and keep running.
 // A snapshot read back from old logs can say 100% for a window that has long reset, so it is ignored.
 export function startWatchdog(db: Database): () => void {
   return onQuotaRecorded((q) => {
     if (q.usedPercent === null || q.usedPercent < 100) return;
     if (q.resetsAt !== null && q.resetsAt <= Date.now()) return;
+    const accountId = q.accountId ?? `default:${q.provider}`;
     for (const run of liveRuns(db)) {
-      if (QUOTA_PROVIDER[run.agentId] === q.provider) killRun(db, run.id, "quota_exhausted");
+      if (run.accountId === accountId) killRun(db, run.id, "quota_exhausted");
     }
   });
 }
