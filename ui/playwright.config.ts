@@ -5,5 +5,6 @@ export default defineConfig({
   workers: 1,
   timeout: 60_000,
   reporter: [["list"]],
-  projects: [{ name: "chromium", use: { browserName: "chromium" } }],
+  // The scroll test only fails on the CI runner; the trace is what shows what the page did there.
+  projects: [{ name: "chromium", use: { browserName: "chromium", trace: "retain-on-failure" } }],
 });
