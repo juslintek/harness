@@ -126,8 +126,12 @@ export function startTailers(
   const timer = setInterval(() => {
     // The snapshot table only grows, so trim it once a day from the tick that already runs.
     if (Date.now() - prunedAt > PRUNE_EVERY_MS) {
-      prunedAt = Date.now();
-      pruneQuota(db);
+      try {
+        pruneQuota(db);
+        prunedAt = Date.now();
+      } catch (err) {
+        console.error("quota prune failed", err);
+      }
     }
     tailOnce(db, sources).catch((err: unknown) => console.error("usage tail failed", err));
   }, intervalMs);
