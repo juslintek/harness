@@ -61,6 +61,7 @@ export const QUOTA_PROVIDER: Readonly<Record<string, string>> = {
 
 export interface QuotaBody {
   provider: string;
+  accountId?: string | undefined;
   window: string;
   usedPercent: number;
   resetsAt?: number | undefined;
@@ -69,6 +70,7 @@ export interface QuotaBody {
 export const quotaBodySchema: z.ZodType<QuotaBody> = z
   .object({
     provider: z.string().min(1).max(40),
+    accountId: z.string().min(1).max(100).optional(),
     window: z.string().min(1).max(40),
     usedPercent: z.number().min(0).max(100),
     resetsAt: z.number().int().positive().optional(),

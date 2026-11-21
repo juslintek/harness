@@ -74,7 +74,10 @@ function claudeLine(id: string): string {
   })}\n`;
 }
 
-function codexLine(used: number, withInfo = true, timestamp = "2026-11-02T01:00:00.000Z"): string {
+// Quota readings expire, so the log lines must be recent for the view to show them.
+const minutesAgo = (n: number): string => new Date(Date.now() - n * 60_000).toISOString();
+
+function codexLine(used: number, withInfo = true, timestamp = minutesAgo(2)): string {
   return `${JSON.stringify({
     timestamp,
     type: "event_msg",
@@ -217,9 +220,9 @@ test("quota latest follows the log timestamp, not ingest order", async () => {
     "02",
     `rollout-b-${SESSION.replace("1", "2")}.jsonl`,
   );
-  writeFileSync(newer, codexLine(60, true, "2026-11-02T05:00:00.000Z"));
+  writeFileSync(newer, codexLine(60, true, minutesAgo(1)));
   await tailOnce(db, sources);
-  writeFileSync(codexFile, codexLine(10, true, "2026-11-02T01:00:00.000Z"));
+  writeFileSync(codexFile, codexLine(10, true, minutesAgo(5)));
   await tailOnce(db, sources);
   const view = await probeQuota(db);
   expect(view.find((q) => q.provider === "codex" && q.window === "primary")?.usedPercent).toBe(60);

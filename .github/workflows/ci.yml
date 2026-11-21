@@ -22,7 +22,8 @@ jobs:
       - run: bun run check
 
   ui:
-    runs-on: ubuntu-latest
+    # the e2e runs start the fake agent inside the real srt sandbox, which needs macOS sandbox-exec
+    runs-on: macos-latest
     defaults:
       run:
         working-directory: ui
@@ -30,12 +31,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bun run check
-      # the e2e fixture starts the TS server from ../code
+      # @shared imports resolve their packages (zod) from code/node_modules, and the e2e
+      # fixture starts the TS server from ../code
       - run: bun install --frozen-lockfile
         working-directory: code
+      - run: bun run check
       - run: bunx playwright install --with-deps chromium
       - run: bun run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: ui/test-results
 
   conformance:
     # the stub agent runs inside the real srt sandbox, which needs macOS sandbox-exec

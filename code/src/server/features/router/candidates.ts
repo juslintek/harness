@@ -38,10 +38,14 @@ const LEARN_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const sameEngine = (a: Engine, b: Engine): boolean =>
   a.runtime === b.runtime && a.model === b.model;
 
+// Launches still use each runtime's default account, so only its windows decide eligibility; another
+// account of the same provider being full must not hide a runtime that can still run.
 function windowsOf(quota: QuotaView[], runtime: string): number[] {
   const provider = QUOTA_PROVIDER[runtime];
   return quota.flatMap((q) =>
-    q.provider === provider && q.usedPercent !== null ? [q.usedPercent] : [],
+    q.provider === provider && q.accountId === `default:${runtime}` && q.usedPercent !== null
+      ? [q.usedPercent]
+      : [],
   );
 }
 

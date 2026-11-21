@@ -28,6 +28,8 @@ export interface RunRow {
   endedAt: number | null;
   attempt: number;
   batchId: string | null;
+  // Runs from before accounts existed have none stored and belong to their runtime's default.
+  accountId: string;
 }
 
 interface DbRun {
@@ -47,6 +49,7 @@ interface DbRun {
   ended_at: number | null;
   attempt: number;
   batch_id: string | null;
+  account_id: string | null;
 }
 
 export interface NewRun {
@@ -60,6 +63,7 @@ export interface NewRun {
   prompt: string;
   attempt?: number | undefined;
   batchId?: string | undefined;
+  accountId?: string | undefined;
 }
 
 function toRow(r: DbRun): RunRow {
@@ -80,12 +84,13 @@ function toRow(r: DbRun): RunRow {
     endedAt: r.ended_at,
     attempt: r.attempt,
     batchId: r.batch_id,
+    accountId: r.account_id ?? `default:${r.agent_id}`,
   };
 }
 
 export function insertRun(db: Database, run: NewRun): void {
   db.run(
-    "INSERT INTO runs (id, task_id, member_id, project_id, agent_id, model, repo, prompt, state, created_at, attempt, batch_id, charged_to, org_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?)",
+    "INSERT INTO runs (id, task_id, member_id, project_id, agent_id, model, repo, prompt, state, created_at, attempt, batch_id, charged_to, org_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?)",
     [
       run.id,
       run.taskId,
@@ -100,6 +105,8 @@ export function insertRun(db: Database, run: NewRun): void {
       run.batchId ?? null,
       run.chargedTo ?? null,
       run.member?.orgId ?? null,
+      // A run with no chosen account used the default login.
+      run.accountId ?? `default:${run.agentId}`,
     ],
   );
 }
@@ -147,12 +154,17 @@ export function setPid(db: Database, id: string, pid: number, identity: string |
   db.run("UPDATE runs SET pid = ?, pid_identity = ? WHERE id = ?", [pid, identity, id]);
 }
 
-export function listUnendedRuns(
-  db: Database,
-): Array<{ id: string; pid: number | null; identity: string | null }> {
+interface UnendedRun {
+  id: string;
+  pid: number | null;
+  identity: string | null;
+  accountId: string | null;
+}
+
+export function listUnendedRuns(db: Database): UnendedRun[] {
   return db
-    .query<{ id: string; pid: number | null; identity: string | null }, []>(
-      "SELECT id, pid, pid_identity AS identity FROM runs WHERE state IN ('queued', 'starting', 'running')",
+    .query<UnendedRun, []>(
+      "SELECT id, pid, pid_identity AS identity, account_id AS accountId FROM runs WHERE state IN ('queued', 'starting', 'running')",
     )
     .all();
 }

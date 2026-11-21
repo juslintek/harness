@@ -8,6 +8,7 @@ import type { NewEvent } from "../logs/api";
 import { onGrantChanged, onMemberDemoted, onMemberRemoved } from "../orgs/api";
 import { listAcpModels } from "./acp-models";
 import { createProbeLaunch, type RunCandidate, type RunDeps, type RunMember } from "./launch";
+import { resolveRunAccount } from "./launch-accounts";
 import {
   setHalted as halt,
   isHalted as halted,
@@ -71,13 +72,16 @@ export async function startRun(
     reuseWorktreeOf?: string;
     attempt?: number;
     batchId?: string;
+    accountId?: string;
   },
 ): Promise<string> {
   if (isShuttingDown(db)) throw new ShuttingDownError();
   if (halted(db)) throw new HaltedError();
   const spec = (deps.resolveSpec ?? getSpec)(input.agentId);
   if (!spec) throw new UnknownAgent(input.agentId);
-  return start(db, deps, spec, input);
+  const { accountId, ...rest } = input;
+  const account = accountId === undefined ? undefined : resolveRunAccount(db, spec, accountId);
+  return start(db, deps, spec, account === undefined ? rest : { ...rest, account });
 }
 
 export function killRun(db: Database, runId: string, reason?: string): boolean {
@@ -155,9 +159,9 @@ export function shutdownRuns(db: Database, graceMs?: number): Promise<void> {
   return shutdown(db, graceMs);
 }
 
-export function recoverRuns(db: Database): void {
+export function recoverRuns(db: Database, home: string): Promise<void> {
   for (const run of listUnendedRuns(db)) expireRunApprovals(db, run.id);
-  reapRuns(db);
+  return reapRuns(db, home);
 }
 
 export function sweepStaleScratch(home: string): Promise<void> {

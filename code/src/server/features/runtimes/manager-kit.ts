@@ -113,3 +113,18 @@ export function firstSshEntry(): string {
   const files = readdirSync(ssh).filter((name) => statSync(join(ssh, name)).isFile());
   return join(ssh, files[0] ?? "id_ed25519");
 }
+
+export function addAccount(
+  db: Database,
+  runtime: string,
+  home: string | null,
+  state = "active",
+): string {
+  const id = Bun.randomUUIDv7();
+  db.run(
+    `INSERT INTO agent_accounts (id, runtime, kind, label, home, state, max_concurrent, created_at, updated_at)
+     VALUES (?, ?, 'login', ?, ?, ?, 1, 0, 0)`,
+    [id, runtime, `acct-${id}`, home, state],
+  );
+  return id;
+}

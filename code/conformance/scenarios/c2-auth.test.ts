@@ -28,7 +28,8 @@ async function expectError(res: Response, status: number, error: string): Promis
 }
 
 async function withRig(run: (rig: Rig) => Promise<void>): Promise<void> {
-  const lazy = lazyBoot({});
+  // The TS server prints email codes only in development; bun test hands the child NODE_ENV=test.
+  const lazy = lazyBoot({ env: { NODE_ENV: "development" } });
   try {
     const server = await lazy.get();
     const authn = createSoftAuthenticator({ id: "localhost", origin: server.origin });
