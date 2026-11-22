@@ -181,6 +181,23 @@ export async function refreshAcpModels(
   }
 }
 
+export async function createCodexProbeLaunch(
+  deps: RunDeps,
+  dir: string,
+  account: { id: string; home: string | null } | null,
+  opts?: { command?: string[]; spec?: AgentSpec },
+): Promise<{
+  argv: string[];
+  env: Record<string, string>;
+  cwd: string;
+  finish: (() => Promise<void>) | null;
+}> {
+  const spec = opts?.spec ?? (deps.resolveSpec ?? getSpec)("codex");
+  if (!spec) throw new UnknownAgent("codex");
+  const command = opts?.command ?? [spec.versionArgs[0] ?? "codex", "app-server"];
+  return createProbeLaunch(deps, spec, dir, account, { command, preset: "offline" });
+}
+
 export function scratchRepo(home: string, orgId: string): string {
   return scratch(home, orgId);
 }

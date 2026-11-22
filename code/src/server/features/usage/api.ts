@@ -3,6 +3,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { appendEvent, type NewEvent } from "../logs/api";
 import {
+  type CodexProbeLauncher,
+  type CodexProbeOpts,
+  type CodexProbeResult,
+  probeCandidateCodexAccounts,
+  probeCodexAccount,
+  startCodexQuotaProbe,
+} from "./codex-probe";
+import {
   insertSnapshot,
   latestQuota,
   onQuotaRecorded,
@@ -26,9 +34,18 @@ export interface UsageRecord {
 const PRUNE_EVERY_MS = 24 * 60 * 60 * 1000;
 
 export type { QuotaInput } from "./quota";
-export { onQuotaRecorded };
+export type { CodexProbeLauncher, CodexProbeOpts, CodexProbeResult };
+export { onQuotaRecorded, probeCandidateCodexAccounts, startCodexQuotaProbe };
 export type TailSource = TailSourceRow;
 export type QuotaView = QuotaViewRow;
+
+export function probeAccountQuota(
+  db: Database,
+  accountId: string,
+  opts: CodexProbeOpts,
+): Promise<CodexProbeResult> {
+  return probeCodexAccount(db, accountId, opts);
+}
 
 export interface UsageSummaryRow {
   key: string;
