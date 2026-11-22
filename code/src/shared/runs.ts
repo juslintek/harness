@@ -17,6 +17,7 @@ export interface StartRunBody {
   repo: string;
   prompt: string;
   model?: string | undefined;
+  accountId?: string | undefined;
 }
 
 // Absolute only: the worktree is cut from this path, a relative one would resolve against the server cwd.
@@ -25,6 +26,7 @@ export const startRunBody: z.ZodType<StartRunBody> = z.object({
   repo: z.string().min(1).max(4096).regex(/^\//, "repo must be an absolute path"),
   prompt: z.string().min(1).max(20000),
   model: z.string().min(1).max(200).optional(),
+  accountId: z.string().min(1).max(100).optional(),
 });
 
 export interface DecisionBody {

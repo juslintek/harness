@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { specialties, taskTypes } from "../../../shared/router";
 import { getMember, getOrg } from "../orgs/api";
 import { getProfile } from "../profiles/api";
+import { pickAccount } from "../router/api";
 import {
   type RunDeps,
   ShuttingDownError,
@@ -68,9 +69,11 @@ export async function runInterview(
     const prompt = promptOf(db, candidateId, questionIds);
     if (!profile || !hire || prompt === null) throw new Error("candidate is gone");
     if (deps.budgetPaused(hire.requestedBy)) return candidateRunEnded(db, deps, candidateId, false);
+    const accountId = await pickAccount(db, profile.runtime);
     const runId = await startRun(db, env.runDeps, {
       agentId: profile.runtime,
       ...(profile.model ? { model: profile.model } : {}),
+      ...(accountId === null ? {} : { accountId }),
       repo: scratchRepo(env.home, hire.orgId),
       prompt,
       candidate: {

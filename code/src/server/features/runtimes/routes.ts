@@ -6,6 +6,7 @@ import { type AuthEnv, requireStepUp } from "../auth/api";
 import { listRunEvents, readBody } from "../logs/api";
 import { usageSummary } from "../usage/api";
 import {
+  AccountUnavailable,
   getRun,
   HaltedError,
   isHalted,
@@ -67,6 +68,35 @@ function detail(db: Database, row: RunRow, after: number): RunDetail {
   return { run: viewRun(db, row), events };
 }
 
+function accountErrorStatus(err: AccountUnavailable): 404 | 409 {
+  return err.message === "account unavailable: unknown" ? 404 : 409;
+}
+
+async function handleStartRun(
+  db: Database,
+  deps: RunDeps,
+  raw: unknown,
+): Promise<{ status: 201 | 400 | 404 | 409; body: { id: string } | { error: string } }> {
+  const body = startRunBody.safeParse(raw);
+  if (!body.success) return { status: 400, body: { error: "invalid body" } };
+  const { model, accountId, ...rest } = body.data;
+  try {
+    const id = await startRun(db, deps, {
+      ...rest,
+      ...(model === undefined ? {} : { model }),
+      ...(accountId === undefined ? {} : { accountId }),
+    });
+    return { status: 201, body: { id } };
+  } catch (err) {
+    if (err instanceof HaltedError) return { status: 409, body: { error: err.message } };
+    if (err instanceof UnknownAgent) return { status: 404, body: { error: "unknown agent" } };
+    if (err instanceof AccountUnavailable) {
+      return { status: accountErrorStatus(err), body: { error: err.message } };
+    }
+    throw err;
+  }
+}
+
 export function runRoutes(db: Database, deps: RunDeps): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
   app.get("/", (c) => {
@@ -81,17 +111,8 @@ export function runRoutes(db: Database, deps: RunDeps): Hono<AuthEnv> {
     );
   });
   app.post("/", requireStepUp, async (c) => {
-    const body = startRunBody.safeParse(await c.req.json().catch(() => null));
-    if (!body.success) return c.json({ error: "invalid body" }, 400);
-    const { model, ...rest } = body.data;
-    try {
-      const id = await startRun(db, deps, { ...rest, ...(model === undefined ? {} : { model }) });
-      return c.json({ id }, 201);
-    } catch (err) {
-      if (err instanceof HaltedError) return c.json({ error: err.message }, 409);
-      if (err instanceof UnknownAgent) return c.json({ error: "unknown agent" }, 404);
-      throw err;
-    }
+    const res = await handleStartRun(db, deps, await c.req.json().catch(() => null));
+    return c.json(res.body, res.status);
   });
   app.get("/:id", (c) => {
     const after = afterQuery.safeParse(c.req.query("after"));

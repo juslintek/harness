@@ -8,7 +8,7 @@ import type { NewEvent } from "../logs/api";
 import { onGrantChanged, onMemberDemoted, onMemberRemoved } from "../orgs/api";
 import { listAcpModels } from "./acp-models";
 import { createProbeLaunch, type RunCandidate, type RunDeps, type RunMember } from "./launch";
-import { resolveRunAccount } from "./launch-accounts";
+import { AccountUnavailable, resolveRunAccount } from "./launch-accounts";
 import {
   setHalted as halt,
   isHalted as halted,
@@ -33,6 +33,7 @@ import { defaultBranch as defaultBranchOf } from "./worktree";
 
 export type { RunDeps, RunMember } from "./launch";
 export type { RunRow } from "./runs-repo";
+export { AccountUnavailable };
 
 export class HaltedError extends Error {
   constructor() {

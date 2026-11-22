@@ -1,4 +1,6 @@
 import type { Database } from "bun:sqlite";
+import { probeQuota } from "../usage/api";
+import { pickAccountForRuntime } from "./accounts";
 import { type RouteDeps, rankEngines, readyRuntimes, route } from "./candidates";
 import { linkHandoff, type NextAttempt, nextAttempt, startWatchdog } from "./failover";
 import { estimateCostUsd, priceOf, refreshRegistry, registryStale } from "./registry";
@@ -18,6 +20,10 @@ export {
   startWatchdog,
   triageOf,
 };
+
+export async function pickAccount(db: Database, runtime: string): Promise<string | null> {
+  return pickAccountForRuntime(db, runtime, await probeQuota(db));
+}
 
 const REFRESH_EVERY_MS = 24 * 60 * 60 * 1000;
 

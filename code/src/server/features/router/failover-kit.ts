@@ -84,7 +84,13 @@ export interface World {
   taskId: string;
   start: (
     lane: Adapter,
-    input?: { agentId?: string; attempt?: number; batchId?: string; reuseWorktreeOf?: string },
+    input?: {
+      agentId?: string;
+      accountId?: string;
+      attempt?: number;
+      batchId?: string;
+      reuseWorktreeOf?: string;
+    },
   ) => Promise<string>;
   // Inserts an already ended run of the member, for tests that only care about what follows it.
   ended: (state: string, reason: string | null, over?: EndedOverrides) => string;
@@ -135,7 +141,8 @@ export function world(): World {
   migrate(db, migrations);
   const { orgId, memberId, taskId } = seed(db);
   const start: World["start"] = (lane, input = {}) => {
-    const agentId = input.agentId ?? "claude";
+    const { accountId, ...rest } = input;
+    const agentId = rest.agentId ?? "claude";
     const deps = { home: join(root, "home"), port: 1, resolveSpec: () => specOf(agentId), lane };
     return startRun(db, deps, {
       agentId,
@@ -144,7 +151,8 @@ export function world(): World {
       model: "opus",
       taskId,
       member: { memberId, orgId, scopes: [] },
-      ...input,
+      ...rest,
+      ...(accountId === undefined ? {} : { accountId }),
     });
   };
   const ended: World["ended"] = (state, reason, over = {}) => {

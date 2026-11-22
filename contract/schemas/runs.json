@@ -1033,6 +1033,11 @@
     "input": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "accountId": {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
         "agentId": {
           "maxLength": 64,
           "minLength": 1,
@@ -1066,6 +1071,11 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
       "properties": {
+        "accountId": {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
         "agentId": {
           "maxLength": 64,
           "minLength": 1,

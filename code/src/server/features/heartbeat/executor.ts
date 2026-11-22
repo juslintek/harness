@@ -89,12 +89,13 @@ async function startFirst(
     setStatus(db, batch.ids, "failed", { detail: { route: reason } });
     return null;
   }
-  const { runtime, model } = choice.engine;
+  const { runtime, model, accountId } = choice.engine;
   const repo = batch.projectId === null ? null : (getProject(db, batch.projectId)?.repo ?? null);
   const mem = memoryRun(db, deps, member, runtime, batch.projectId, batch.wakes);
   return startRun(db, deps.runDeps, {
     agentId: runtime,
     ...(model === null ? {} : { model }),
+    ...(accountId == null ? {} : { accountId }),
     repo: repo ?? scratchRepo(deps.home, member.orgId),
     prompt: buildPrompt(db, member, batch.wakes, mem.mcp, mem.index !== undefined),
     ...(taskId == null ? {} : { taskId }),

@@ -41,6 +41,7 @@ export const SIZE_PRIOR_MINUTES: Readonly<Record<SizeBucket, number>> = {
 export interface Engine {
   runtime: string;
   model: string | null;
+  accountId?: string | null | undefined;
 }
 
 // Provider key in the models.dev registry per agent runtime; runtimes not listed have no prices.
