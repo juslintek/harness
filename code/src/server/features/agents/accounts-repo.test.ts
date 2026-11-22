@@ -50,7 +50,7 @@ function column(sql: string, ...args: string[]): Array<Record<string, unknown>> 
 
 test("migration 039 creates a default account per known runtime and backfills the columns", () => {
   seedAt38();
-  migrate(db, migrations);
+  migrate(db, migrations.slice(0, 39));
   expect(db.query("PRAGMA user_version").get()).toEqual({ user_version: 39 });
   const accounts = column(
     "SELECT id, kind, label, home, state, max_concurrent FROM agent_accounts ORDER BY id",
