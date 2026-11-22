@@ -154,19 +154,41 @@ test("older messages load on demand, and a new message leaves the reading positi
   await expect(list).toContainText("arrived at the bottom");
   await expect.poll(gap).toBeLessThan(48);
 
-  // The pin-to-bottom scroll runs on the next frame; let it land before scrolling away.
-  await page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  // Wait for scroll to settle so atBottom is definitely false before testing the same-frame race.
+  await scroller.evaluate(
+    (el) =>
+      new Promise<void>((done) => {
+        el.addEventListener("scroll", () => done(), { once: true });
+        el.scrollTop = 0;
+      }),
   );
-  // Scrolled up, the same arrival must not move the view.
-  await scroller.evaluate((el) => {
+  // Jump to bottom and post in the same frame before onScroll fires.
+  await page.evaluate(async (channelId) => {
+    const el = document.querySelector(".pane-scroll");
+    if (!el) throw new Error("no pane-scroll");
+    el.scrollTop = el.scrollHeight;
+    const res = await fetch(`/api/channels/${channelId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: "arrived in same frame" }),
+    });
+    if (!res.ok) throw new Error(`POST failed: HTTP ${res.status}`);
+  }, org.id);
+  await expect(list).toContainText("arrived in same frame");
+  await expect.poll(gap).toBeLessThan(48);
+
+  // Scroll to top and post in the same frame before onScroll fires.
+  await page.evaluate(async (channelId) => {
+    const el = document.querySelector(".pane-scroll");
+    if (!el) throw new Error("no pane-scroll");
     el.scrollTop = 0;
-  });
-  // The scroll event reaches the page before the next message does.
-  await page.evaluate(
-    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
-  );
-  await post("arrived while reading");
+    const res = await fetch(`/api/channels/${channelId}/messages`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: "arrived while reading" }),
+    });
+    if (!res.ok) throw new Error(`POST failed: HTTP ${res.status}`);
+  }, org.id);
   await expect(list).toContainText("arrived while reading");
   expect(await scroller.evaluate((el) => el.scrollTop)).toBe(0);
 });
