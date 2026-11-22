@@ -222,7 +222,9 @@ jobs:
         with:
           path: all-assets
           merge-multiple: true
-      - run: cp scripts/install.sh all-assets/install.sh
+      - run: |
+          rm -rf all-assets/assets all-assets/icon.svg all-assets/index.html all-assets/manifest.webmanifest all-assets/sw.js
+          cp scripts/install.sh all-assets/install.sh
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
