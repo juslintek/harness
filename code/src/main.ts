@@ -17,6 +17,7 @@ import { startMemory } from "./server/features/memory/api";
 import { emailCodeSender, startNotify } from "./server/features/notify/api";
 import { startRouter } from "./server/features/router/api";
 import {
+  createCodexProbeLaunch,
   recoverRuns,
   shutdownRuns,
   sweepStaleScratch,
@@ -30,7 +31,11 @@ import {
 } from "./server/features/selfupdate/api";
 import { startTracking } from "./server/features/tracking/api";
 import { createTunnel } from "./server/features/tunnel/api";
-import { defaultTailSources, startTailers } from "./server/features/usage/api";
+import {
+  defaultTailSources,
+  startCodexQuotaProbe,
+  startTailers,
+} from "./server/features/usage/api";
 import { consoleEmailCode, MAX_REQUEST_BODY_BYTES } from "./server/http";
 import { createOriginApp } from "./server/origin-app";
 import { closeRealtimeSockets, type WsData, websocket, wireRealtime } from "./server/realtime";
@@ -122,6 +127,10 @@ const stopLoops = [
   ...[startFederation, startDeploy, startSelfupdate].map((start) =>
     start(db, { home: config.home }),
   ),
+  startCodexQuotaProbe(db, {
+    home: bound.home,
+    launch: (dir, account) => createCodexProbeLaunch(runDeps, dir, account),
+  }),
 ];
 
 console.log(`harness listening on ${server.url}`);

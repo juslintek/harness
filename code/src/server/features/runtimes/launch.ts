@@ -145,6 +145,7 @@ interface SettingsInput {
   runDir: string;
   tree: { path: string; branch: string; gitCommonDir: string };
   codexHome: string | null;
+  account: RunAccount | null;
   member: RunMember | RunCandidate | undefined;
   scratch: { path: string; gitDir: string } | null;
 }
@@ -163,6 +164,7 @@ async function writeRunSettings(i: SettingsInput): Promise<string> {
     preset: "dev",
     weakerNetworkIsolation: i.spec.weakerNetworkIsolation,
     codexHome: i.codexHome,
+    account: i.account,
     readOnlyWorktree:
       i.member !== undefined && ("candidateId" in i.member || i.member.readOnly === true),
     ...(i.scratch === null ? {} : { scratch: i.scratch }),
@@ -205,6 +207,7 @@ export async function createLaunch(
       runDir,
       tree,
       codexHome,
+      account,
       member,
       scratch,
     });
@@ -240,13 +243,13 @@ export async function createLaunch(
   }
 }
 
-// A throwaway sandbox for asking an agent which models it offers: same srt wrapping and scrubbed
-// env as a run, but no worktree, no run token and no MCP.
+// Throwaway sandbox for model/quota probes: same srt & scrubbed env, no worktree, token, or MCP.
 export async function createProbeLaunch(
   deps: RunDeps,
   spec: AgentSpec,
   dir: string,
   account: RunAccount | null = null,
+  opts?: { command?: string[]; preset?: "dev" | "offline" },
 ): Promise<{
   argv: string[];
   env: Record<string, string>;
@@ -254,33 +257,40 @@ export async function createProbeLaunch(
   finish: (() => Promise<void>) | null;
 }> {
   const cwd = join(dir, "cwd");
-  await mkdir(cwd, { recursive: true });
+  await Promise.all([mkdir(deps.home, { recursive: true }), mkdir(cwd, { recursive: true })]);
+  const home = await realpath(deps.home);
   const codex = await runCodexHome(spec, dir, account);
   const codexHome = codex?.home ?? null;
-  const settingsPath = await writeSrtSettings({
-    runDir: dir,
-    worktree: cwd,
-    gitCommonDir: null,
-    agentId: spec.id,
-    harnessHome: deps.home,
-    agentStateWrite: spec.stateWrite,
-    agentEgress: spec.egress,
-    preset: "dev",
-    weakerNetworkIsolation: spec.weakerNetworkIsolation,
-    codexHome,
-  });
-  const tmp = runTmpDir(dir);
-  const env = scrubEnv(process.env, {
-    ...deps.agentEnv?.(dir),
-    TMPDIR: tmp,
-    CLAUDE_CODE_TMPDIR: tmp,
-    ...accountRunEnv(spec, account),
-    ...(codexHome === null ? {} : { CODEX_HOME: codexHome }),
-  });
-  return {
-    argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]),
-    env,
-    cwd,
-    finish: codex?.finish ?? null,
-  };
+  try {
+    const settingsPath = await writeSrtSettings({
+      runDir: dir,
+      worktree: cwd,
+      gitCommonDir: null,
+      agentId: spec.id,
+      harnessHome: home,
+      agentStateWrite: spec.stateWrite,
+      agentEgress: spec.egress,
+      preset: opts?.preset ?? "dev",
+      weakerNetworkIsolation: spec.weakerNetworkIsolation,
+      codexHome,
+      account,
+    });
+    const tmp = runTmpDir(dir);
+    const env = scrubEnv(process.env, {
+      ...deps.agentEnv?.(dir),
+      TMPDIR: tmp,
+      CLAUDE_CODE_TMPDIR: tmp,
+      ...accountRunEnv(spec, account),
+      ...(codexHome === null ? {} : { CODEX_HOME: codexHome }),
+    });
+    return {
+      argv: wrapCommand(settingsPath, opts?.command ?? [spec.bin, ...spec.args]),
+      env,
+      cwd,
+      finish: codex?.finish ?? null,
+    };
+  } catch (err) {
+    await codex?.finish?.();
+    throw err;
+  }
 }

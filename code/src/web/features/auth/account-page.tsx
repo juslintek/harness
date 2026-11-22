@@ -7,6 +7,7 @@ import { selectedSlug } from "../orgs/org-switcher";
 import { ErrorLine } from "./error-line";
 import { McpCard } from "./mcp-card";
 import { me } from "./me";
+import { MobilePairCard } from "./mobile-pair-card";
 import { PasskeysList } from "./passkeys-list";
 import { RecoveryCodes } from "./recovery-codes";
 import { SessionsList } from "./sessions-list";
@@ -82,6 +83,7 @@ export function AccountPage(): preact.JSX.Element {
       <McpCard />
       <PasskeysList />
       <Recovery />
+      <MobilePairCard />
       <SessionsList />
     </div>
   );

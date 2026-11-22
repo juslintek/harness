@@ -59,3 +59,19 @@ export const prefSchema: z.ZodType<PrefView> = z.object({
   kind: z.enum(NOTIFY_KINDS),
   enabled: z.boolean(),
 });
+
+export interface MobilePushSubscribeBody {
+  relayUrl: string;
+  platform: "ios" | "android";
+  appId: string;
+  pushToken: string;
+  relaySecret?: string | undefined;
+}
+
+export const MobilePushSubscribeBody: z.ZodType<MobilePushSubscribeBody> = z.object({
+  relayUrl: z.string().max(2048),
+  platform: z.enum(["ios", "android"]),
+  appId: z.string().min(1).max(120),
+  pushToken: z.string().min(16).max(4096),
+  relaySecret: z.string().min(16).max(256).optional(),
+});

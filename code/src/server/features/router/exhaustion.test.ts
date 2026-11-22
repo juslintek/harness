@@ -27,7 +27,7 @@ function addAccount(db: ReturnType<typeof world>["db"], id: string): void {
 async function endsOn(
   w: ReturnType<typeof world>,
   accountId: string | null,
-  end: (ctx: Parameters<Adapter>[0]) => RunOutcome,
+  end: (ctx: Parameters<Adapter>[0]) => RunOutcome | Promise<RunOutcome>,
 ): Promise<string> {
   let release: () => void = () => {};
   const gate = new Promise<void>((resolve) => {
@@ -131,4 +131,35 @@ test("an ordinary failure does not block the account", async () => {
   addAccount(w.db, "acct-a");
   await endsOn(w, "acct-a", () => outcome({ stopReason: "error", error: "segfault" }));
   expect(exhaustedUntil(w, "acct-a")).toBeNull();
+});
+
+test("a full live reading with no reset time still blocks the account for 15 minutes", async () => {
+  const w = world();
+  addAccount(w.db, "acct-a");
+  const before = Date.now();
+  await endsOn(w, "acct-a", (ctx) => {
+    ctx.onQuota({ provider: "claude", window: "five_hour", usedPercent: 100, resetsAt: null });
+    return outcome({});
+  });
+  expect(exhaustedUntil(w, "acct-a")).toBeGreaterThanOrEqual(before + 15 * MINUTE);
+});
+
+test("a window that filled and then reset does not block the account again on a later error", async () => {
+  const w = world();
+  addAccount(w.db, "acct-a");
+  let resetsAt = 0;
+  await endsOn(w, "acct-a", async (ctx) => {
+    // Taken here, not before the run starts: starting a run takes longer than the window lasts.
+    resetsAt = Date.now() + 50;
+    ctx.onQuota({ provider: "claude", window: "five_hour", usedPercent: 100, resetsAt });
+    await Bun.sleep(100);
+    ctx.onQuota({
+      provider: "claude",
+      window: "five_hour",
+      usedPercent: 40,
+      resetsAt: Date.now() + 5 * 60 * MINUTE,
+    });
+    return outcome({ stopReason: "error", error: "segfault" });
+  });
+  expect(exhaustedUntil(w, "acct-a")).toBe(resetsAt);
 });

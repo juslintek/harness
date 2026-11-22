@@ -135,7 +135,7 @@ export function latestQuota(
          SELECT provider, COALESCE(account_id, 'default:' || provider) AS account_id, window,
                 used_percent, resets_at, source, ts,
                 row_number() OVER (
-                  PARTITION BY COALESCE(account_id, 'default:' || provider), window
+                  PARTITION BY provider, COALESCE(account_id, 'default:' || provider), window
                   ORDER BY ts DESC, rowid DESC) AS rn
          FROM quota_snapshots ${match ? `WHERE ${match.sql}` : ""}
        ) WHERE rn = 1 ORDER BY provider, account_id, window`,

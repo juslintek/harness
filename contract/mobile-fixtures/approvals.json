@@ -1,0 +1,24 @@
+[
+  {
+    "id": "app_019318894978701388bb69b7f5256011",
+    "runId": "run_019318894978701388bb69b7f5256010",
+    "command": "rm -rf /tmp/scratch",
+    "reason": "Clean temporary artifacts",
+    "status": "pending",
+    "decidedBy": null,
+    "createdAt": 1700000000000,
+    "expiresAt": 1700000300000,
+    "decidedAt": null
+  },
+  {
+    "id": "app_019318894978701388bb69b7f5256012",
+    "runId": "run_019318894978701388bb69b7f5256010",
+    "command": "git push origin main",
+    "reason": "Push release tag",
+    "status": "approved",
+    "decidedBy": "usr_019318894978701388bb69b7f5256001",
+    "createdAt": 1700000000000,
+    "expiresAt": 1700000300000,
+    "decidedAt": 1700000050000
+  }
+]

@@ -2,6 +2,7 @@ import type { DeliverResult, Notification, Target } from "../../../../shared/not
 import { endpointProblem, requestEndpoint, safeEndpoint } from "../endpoint/api";
 import type { Notifier } from "../port";
 import { encryptPayload } from "./encrypt";
+import { deliverMobilePush } from "./mobile-push";
 import { vapidHeader } from "./vapid";
 
 const TTL_S = "86400";
@@ -38,6 +39,9 @@ async function send(
   base: string,
   checkEndpoint: typeof safeEndpoint,
 ): Promise<DeliverResult> {
+  if (target.value.kind === "mobile_relay") {
+    return deliverMobilePush(env, target, n, base, checkEndpoint);
+  }
   const { endpoint = "", p256dh = "", auth = "" } = target.value;
   const keys = decodeKeys(p256dh, auth);
   if (!keys) {

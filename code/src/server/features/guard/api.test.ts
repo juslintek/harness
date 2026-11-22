@@ -16,6 +16,7 @@ import {
   type GuardOutcome,
   listApprovals,
   runTmpDir,
+  type SandboxAccount,
   type SandboxInput,
   scrubEnv,
   wrapCommand,
@@ -162,6 +163,7 @@ describe("checkAction with L3", () => {
 
 describe("sandbox wrappers", () => {
   test("settings file, wrapped argv, scrubbed env and tmp dir", async () => {
+    const account: SandboxAccount = { home: null };
     const input: SandboxInput = {
       runDir: join(dir, "run"),
       worktree: join(dir, "wt"),
@@ -172,6 +174,7 @@ describe("sandbox wrappers", () => {
       preset: "dev",
       weakerNetworkIsolation: false,
       codexHome: null,
+      account,
     };
     const settings = await writeSrtSettings(input);
     expect(await Bun.file(settings).exists()).toBe(true);

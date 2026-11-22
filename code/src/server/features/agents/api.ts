@@ -24,6 +24,25 @@ export function markAccountExhausted(db: Database, id: string, until: number): v
   accounts.markExhausted(db, id, until);
 }
 
+const PROBE_IGNORE_STATES = new Set(["disabled", "removing", "removed"]);
+
+export function clearAccountExhaustion(db: Database, id: string): void {
+  accounts.updateAccount(db, id, { exhaustedUntil: null });
+}
+
+export function recordAccountQuotaProbe(
+  db: Database,
+  id: string,
+  patch: { state?: "active" | "logged_out"; lastProbeAt: number },
+): void {
+  const current = accounts.getAccount(db, id);
+  if (!current || PROBE_IGNORE_STATES.has(current.state)) return;
+  accounts.updateAccount(db, id, {
+    lastProbeAt: patch.lastProbeAt,
+    ...(patch.state === undefined ? {} : { state: patch.state }),
+  });
+}
+
 export function ensureDefaultAccount(db: Database, runtime: string): AccountView {
   return accounts.ensureDefaultAccount(db, runtime);
 }

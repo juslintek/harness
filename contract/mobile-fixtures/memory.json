@@ -1,0 +1,107 @@
+{
+  "facets": {
+    "scopes": {
+      "global": 2,
+      "org": 5
+    },
+    "types": {
+      "decision": 3,
+      "lesson": 4
+    },
+    "tags": {
+      "mobile": 2,
+      "auth": 2
+    },
+    "sources": {
+      "claude-code": 5
+    }
+  },
+  "notes": [
+    {
+      "id": "not_019318894978701388bb69b7f5256040",
+      "path": "architecture/mobile-auth.md",
+      "scope": "org",
+      "orgId": "org_019318894978701388bb69b7f5256003",
+      "projectId": null,
+      "memberId": "usr_019318894978701388bb69b7f5256001",
+      "type": "decision",
+      "title": "Mobile Device Authentication",
+      "tags": [
+        "mobile",
+        "auth",
+        "p256"
+      ],
+      "sourceAgent": "claude-code",
+      "confidence": 1,
+      "created": "2026-11-13T10:00:00.000Z",
+      "updated": "2026-11-13T10:00:00.000Z",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "note": {
+    "id": "not_019318894978701388bb69b7f5256040",
+    "path": "architecture/mobile-auth.md",
+    "scope": "org",
+    "orgId": "org_019318894978701388bb69b7f5256003",
+    "projectId": null,
+    "memberId": "usr_019318894978701388bb69b7f5256001",
+    "type": "decision",
+    "title": "Mobile Device Authentication",
+    "tags": [
+      "mobile",
+      "auth",
+      "p256"
+    ],
+    "sourceAgent": "claude-code",
+    "confidence": 1,
+    "created": "2026-11-13T10:00:00.000Z",
+    "updated": "2026-11-13T10:00:00.000Z",
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "body": "# Mobile Device Authentication\n\nP-256 IEEE P1363 signatures.",
+    "canWrite": true
+  },
+  "conflict409": {
+    "error": "conflict",
+    "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "writes": [
+    {
+      "id": "wrt_019318894978701388bb69b7f5256041",
+      "noteId": "not_019318894978701388bb69b7f5256040",
+      "path": "architecture/mobile-auth.md",
+      "op": "create",
+      "actor": "alice",
+      "runId": "run_019318894978701388bb69b7f5256010",
+      "at": 1700000000000,
+      "beforeHash": null,
+      "afterHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "before": null,
+      "after": "# Mobile Device Authentication\n\nP-256 IEEE P1363 signatures.",
+      "canRevert": false
+    }
+  ],
+  "lessons": [
+    {
+      "id": "lsn_019318894978701388bb69b7f5256042",
+      "taskId": "tsk_019318894978701388bb69b7f5256020",
+      "orgId": "org_019318894978701388bb69b7f5256003",
+      "projectId": null,
+      "authorId": "usr_019318894978701388bb69b7f5256001",
+      "authorHandle": "alice",
+      "body": "Always verify P-256 signature length is exactly 64 bytes IEEE P1363",
+      "scope": "org",
+      "type": "lesson",
+      "status": "accepted",
+      "reviewerId": "usr_019318894978701388bb69b7f5256001",
+      "reason": "Valid mobile security rule",
+      "noteId": "not_019318894978701388bb69b7f5256040",
+      "createdAt": 1700000000000,
+      "decidedAt": 1700000010000,
+      "task": {
+        "number": 1,
+        "projectId": "prj_019318894978701388bb69b7f5256006",
+        "title": "Setup Mobile Fixtures"
+      }
+    }
+  ]
+}

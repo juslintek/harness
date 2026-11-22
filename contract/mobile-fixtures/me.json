@@ -1,0 +1,35 @@
+{
+  "user": {
+    "id": "usr_019318894978701388bb69b7f5256001",
+    "email": "alice@example.com",
+    "name": "Alice Cooper",
+    "instanceAdmin": true,
+    "createdAt": 1700000000000
+  },
+  "session": {
+    "id": "ses_019318894978701388bb69b7f5256002",
+    "method": "mobile",
+    "stepUpAt": 1700000000000,
+    "stepUpFresh": true
+  },
+  "orgs": [
+    {
+      "id": "org_019318894978701388bb69b7f5256003",
+      "slug": "alice",
+      "name": "Alice",
+      "personal": true,
+      "createdAt": 1700000000000,
+      "role": "admin"
+    }
+  ],
+  "devices": [
+    {
+      "id": "dev_019318894978701388bb69b7f5256004",
+      "name": "Alice iPhone",
+      "platform": "ios",
+      "createdAt": 1700000000000,
+      "lastUsedAt": 1700000000000,
+      "current": true
+    }
+  ]
+}

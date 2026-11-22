@@ -41,6 +41,7 @@ export const SIZE_PRIOR_MINUTES: Readonly<Record<SizeBucket, number>> = {
 export interface Engine {
   runtime: string;
   model: string | null;
+  accountId?: string | null | undefined;
 }
 
 // Provider key in the models.dev registry per agent runtime; runtimes not listed have no prices.
@@ -75,4 +76,9 @@ export const quotaBodySchema: z.ZodType<QuotaBody> = z
     usedPercent: z.number().min(0).max(100),
     resetsAt: z.number().int().positive().optional(),
   })
-  .strict();
+  .strict()
+  // A default account id names its provider; any other id is opaque.
+  .refine((b) => !b.accountId?.startsWith("default:") || b.accountId === `default:${b.provider}`, {
+    message: "accountId belongs to another provider",
+    path: ["accountId"],
+  });

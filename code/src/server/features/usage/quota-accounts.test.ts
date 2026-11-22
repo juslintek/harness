@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { quotaBodySchema } from "../../../shared/router";
 import { migrate, openDb } from "../../db/db";
 import { migrations } from "../../db/migrations";
 import { recordQuota } from "./api";
@@ -91,4 +92,17 @@ test("retention removes snapshots older than 30 days and keeps the rest", () => 
     .query<{ used_percent: number }, []>("SELECT used_percent FROM quota_snapshots")
     .all();
   expect(left).toEqual([{ used_percent: 2 }]);
+});
+
+test("a default account id must belong to the reported provider", () => {
+  const body = { window: "five_hour", usedPercent: 10 };
+  expect(
+    quotaBodySchema.safeParse({ ...body, provider: "claude", accountId: "default:claude" }).success,
+  ).toBe(true);
+  expect(
+    quotaBodySchema.safeParse({ ...body, provider: "codex", accountId: "default:claude" }).success,
+  ).toBe(false);
+  expect(
+    quotaBodySchema.safeParse({ ...body, provider: "codex", accountId: "0194-uuid" }).success,
+  ).toBe(true);
 });

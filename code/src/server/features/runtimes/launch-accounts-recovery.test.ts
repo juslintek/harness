@@ -29,7 +29,7 @@ const done: RunOutcome = {
 };
 
 async function codexAccount(f: Fixture, name = "b"): Promise<{ home: string; id: string }> {
-  const home = join(makeDir(), "accounts", name);
+  const home = join(f.home, "accounts", name);
   await mkdir(home, { recursive: true });
   writeFileSync(join(home, "auth.json"), `{"${name}":1}`);
   return { home, id: addAccount(f.db, "codex", home) };

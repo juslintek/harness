@@ -48,6 +48,7 @@ async function startNext(
   const runId = await startRun(db, deps.runDeps, {
     agentId: next.engine.runtime,
     ...(next.engine.model === null ? {} : { model: next.engine.model }),
+    ...(next.engine.accountId == null ? {} : { accountId: next.engine.accountId }),
     repo: run.repo,
     prompt: `${next.summary}\n\n${buildPrompt(db, member, wakes, mem.mcp, mem.index !== undefined)}`,
     ...(run.taskId === null ? {} : { taskId: run.taskId }),
