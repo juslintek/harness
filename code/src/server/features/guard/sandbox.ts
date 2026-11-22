@@ -4,7 +4,17 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 import { withRealpaths } from "./real-paths";
-import { accountsRoot } from "./sandbox-accounts";
+import {
+  accountHomeAccess,
+  accountsRoot,
+  CLAUDE_DENY_WRITE,
+  CODEX_DENY_WRITE,
+  credentialsDenyRead,
+  filterAgentStateWrite,
+  type SandboxAccount,
+} from "./sandbox-accounts";
+
+export type { SandboxAccount } from "./sandbox-accounts";
 
 export interface SandboxInput {
   runDir: string;
@@ -20,6 +30,7 @@ export interface SandboxInput {
   preset: "dev" | "offline" | "open-web";
   weakerNetworkIsolation: boolean;
   codexHome: string | null;
+  account?: SandboxAccount | null | undefined;
   // A manager reviews and delegates; it must not change code, so the worktree and git refs stay read-only.
   readOnlyWorktree?: boolean;
   // A read-only run still needs somewhere to run tests: a detached checkout of its own, whose admin
@@ -60,22 +71,11 @@ const DENY_READ_HOME = [
 ];
 
 // Everything here is read by an agent CLI as code or config on its next start, possibly outside srt.
-const underHome = (dir: string, names: string[]): string[] => names.map((n) => `${dir}/${n}`);
+const underHome = (dir: string, names: readonly string[]): string[] =>
+  names.map((n) => `${dir}/${n}`);
 
 const DENY_WRITE_HOME = [
-  ...underHome("~/.claude", [
-    "settings.json",
-    "settings.local.json",
-    "hooks",
-    "plugins",
-    "agents",
-    "commands",
-    "skills",
-    "output-styles",
-    "CLAUDE.md",
-    "rules",
-    "shell-snapshots",
-  ]),
+  ...underHome("~/.claude", CLAUDE_DENY_WRITE),
   "~/.claude.json",
   ...underHome("~/.gemini", [
     "settings.json",
@@ -106,37 +106,8 @@ const DENY_WRITE_HOME = [
   ]),
   ...underHome("~/.cursor", ["mcp.json", "hooks.json", "extensions", "rules", "commands"]),
   "~/.junie/mcp",
-  ...underHome("~/.codex", ["config.toml", "rules", "hooks.json"]),
+  ...underHome("~/.codex", CODEX_DENY_WRITE),
 ];
-
-// A run may read its own agent's credentials and no other agent's. gemini and agy share ~/.gemini.
-const GEMINI_CREDENTIALS = underHome("~/.gemini", [
-  "oauth_creds.json",
-  "google_accounts.json",
-  "jetski-standalone-oauth-token",
-  "antigravity-cli/antigravity-oauth-token",
-]);
-const AGENT_CREDENTIALS: Record<string, string[]> = {
-  claude: ["~/.claude/.credentials.json"],
-  codex: ["~/.codex/auth.json"],
-  // Copilot's CLI login token lives in the keychain and cannot be file-denied. These are the
-  // plaintext files the IDE plugin and the CLI's fallback store write.
-  copilot: [
-    "~/.config/github-copilot/oauth.json",
-    "~/.config/github-copilot/apps.json",
-    "~/.config/github-copilot/auth.db",
-    "~/.copilot/config.json",
-  ],
-  gemini: GEMINI_CREDENTIALS,
-  agy: GEMINI_CREDENTIALS,
-};
-
-function otherAgentCredentials(agentId: string | null | undefined): string[] {
-  const own = new Set(agentId ? (AGENT_CREDENTIALS[agentId] ?? []) : []);
-  return Object.values(AGENT_CREDENTIALS)
-    .flat()
-    .filter((p) => !own.has(p));
-}
 
 // The worktree's .git file points at the admin dir; rewriting it makes git read attacker-chosen config.
 // Commit on the run branch needs only these: objects, the worktree's own admin dir, the branch ref, its lock, the packed-refs lock and reflog.
@@ -212,14 +183,27 @@ function assertSafe(input: SandboxInput, allowWrite: string[]): void {
   }
 }
 
-export function buildSrtSettings(input: SandboxInput): SrtSettings {
+function gitDenyWrite(input: SandboxInput): string[] {
   const git = input.gitCommonDir;
+  if (!git) return [];
+  return [
+    join(git, "hooks"),
+    join(git, "config"),
+    join(git, "modules"),
+    ...adminPointers(input.gitWorktreeDir ?? git),
+    join(input.worktree, ".git"),
+  ];
+}
+
+export function buildSrtSettings(input: SandboxInput): SrtSettings {
   const codex = input.codexHome;
+  const acct = accountHomeAccess(input.harnessHome, input.account, codex);
   const allowWrite = unique([
     ...(input.readOnlyWorktree ? [] : [input.worktree, ...gitWritable(input)]),
     ...scratchWritable(input),
     ...(codex ? [codex] : []),
-    ...input.agentStateWrite.map(expand),
+    ...filterAgentStateWrite(input.agentId, input.agentStateWrite, input.account, expand),
+    ...acct.allowWrite,
     runTmpDir(input.runDir),
   ]);
   assertSafe(input, allowWrite);
@@ -240,26 +224,24 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
         join(input.harnessHome, "memory"),
         join(input.harnessHome, "scratch-checkouts"),
         accountsRoot(input.harnessHome),
-        ...otherAgentCredentials(input.agentId).map(expand),
+        ...credentialsDenyRead(input.agentId, input.account).map(expand),
       ]),
-      allowRead: [input.runDir, input.worktree, ...(input.scratch ? [input.scratch.path] : [])],
+      allowRead: [
+        input.runDir,
+        input.worktree,
+        ...(input.scratch ? [input.scratch.path] : []),
+        ...acct.allowRead,
+      ],
       allowWrite,
       denyWrite: withRealpaths([
-        ...(git
-          ? [
-              join(git, "hooks"),
-              join(git, "config"),
-              join(git, "modules"),
-              ...adminPointers(input.gitWorktreeDir ?? git),
-              join(input.worktree, ".git"),
-            ]
-          : []),
+        ...gitDenyWrite(input),
         ...(codex ? [join(codex, "rules"), join(codex, "config.toml")] : []),
         ...scratchPointers(input),
         join(input.worktree, ".claude"),
         join(input.worktree, ".codex"),
         join(input.worktree, ".mcp.json"),
         ...DENY_WRITE_HOME.map(expand),
+        ...acct.denyWrite,
       ]),
     },
     enableWeakerNetworkIsolation: input.weakerNetworkIsolation,

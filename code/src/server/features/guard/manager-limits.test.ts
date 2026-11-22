@@ -176,9 +176,10 @@ test("managerDecide resolves a waiting approval and the guard event carries sour
   expect(row?.decided_by).toBe(`agent:${boss}`);
 });
 
-test("managerDecide refuses a run without a member and an unknown approval", () => {
-  const { db, boss } = setup();
+test("managerDecide refuses a run without a member, an unknown approval, and accounts paths", () => {
+  const { db, boss, dev } = setup();
   const a = ask(db, null, "bun test");
+  const acct = ask(db, dev, "cat accounts/b/auth.json");
   const input = {
     harnessHome: HOME,
     managerMemberId: boss,
@@ -187,6 +188,10 @@ test("managerDecide refuses a run without a member and an unknown approval", () 
   };
   expect(managerDecide(db, { ...input, approvalId: a.id }).ok).toBe(false);
   expect(managerDecide(db, { ...input, approvalId: "nope" }).ok).toBe(false);
+  expect(managerDecide(db, { ...input, approvalId: acct.id })).toEqual({
+    ok: false,
+    reason: "the action mentions accounts/",
+  });
 });
 
 test("an approval Laya flagged for exfiltration is left to a human", () => {

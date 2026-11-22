@@ -1,7 +1,15 @@
 import type { Database } from "bun:sqlite";
 import { afterAll, expect, test } from "bun:test";
-import { existsSync, lstatSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { mkdir } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { fakeCliSpec } from "../../test-support/agents-kit";
 import { ensureDefaultAccount, getSpec } from "../agents/api";
@@ -46,7 +54,7 @@ const start = (
 test("a claude run on account B gets CLAUDE_CONFIG_DIR, the default account gets none", async () => {
   const f = fixture();
   ensureDefaultAccount(f.db, "claude");
-  const home = join(makeDir(), "accounts", "b");
+  const home = join(f.home, "accounts", "b");
   await mkdir(home, { recursive: true });
   const b = addAccount(f.db, "claude", home);
   const log = join(makeDir(), "fake.log");
@@ -67,13 +75,34 @@ test("a claude run on account B gets CLAUDE_CONFIG_DIR, the default account gets
   expect(readFileSync(log, "utf8")).toContain("config=<unset>");
   expect(getRun(f.db, onB)?.accountId).toBe(b);
   expect(getRun(f.db, onDefault)?.accountId).toBe("default:claude");
+
+  const srtB = JSON.parse(readFileSync(join(f.home, "runs", onB, "srt.json"), "utf8")) as {
+    filesystem: {
+      allowRead: string[];
+      allowWrite: string[];
+      denyRead: string[];
+      denyWrite: string[];
+    };
+  };
+  const realHome = realpathSync(home);
+  expect(srtB.filesystem.allowRead).toContain(realHome);
+  expect(srtB.filesystem.allowWrite).toContain(realHome);
+  expect(srtB.filesystem.allowWrite).not.toContain(join(homedir(), ".claude"));
+  expect(srtB.filesystem.denyRead).toEqual(
+    expect.arrayContaining([
+      join(homedir(), ".claude/.credentials.json"),
+      join(homedir(), ".codex/auth.json"),
+    ]),
+  );
+  expect(srtB.filesystem.denyWrite).toEqual(
+    expect.arrayContaining([join(realHome, "settings.json"), join(realHome, "hooks")]),
+  );
 });
 
 test("a codex run gets a copy of B's auth.json and only B's file takes the refresh", async () => {
   const f = fixture();
-  const root = makeDir();
-  const homeA = join(root, "accounts", "a");
-  const homeB = join(root, "accounts", "b");
+  const homeA = join(f.home, "accounts", "a");
+  const homeB = join(f.home, "accounts", "b");
   for (const h of [homeA, homeB]) await mkdir(h, { recursive: true });
   writeFileSync(join(homeA, "auth.json"), '{"who":"a"}');
   writeFileSync(join(homeB, "auth.json"), '{"who":"b"}');
@@ -98,11 +127,19 @@ test("a codex run gets a copy of B's auth.json and only B's file takes the refre
   expect(readdirSync(homeB)).toEqual(["auth.json"]);
   expect(getRun(f.db, id)?.accountId).toBe(b);
   expect(a).not.toBe(b);
+
+  const srt = JSON.parse(readFileSync(join(f.home, "runs", id, "srt.json"), "utf8")) as {
+    filesystem: { allowRead: string[]; allowWrite: string[]; denyRead: string[] };
+  };
+  const accountsDir = realpathSync(join(f.home, "accounts"));
+  expect(srt.filesystem.denyRead).toContain(join(homedir(), ".codex/auth.json"));
+  expect(srt.filesystem.allowRead.some((p) => p.startsWith(accountsDir))).toBe(false);
+  expect(srt.filesystem.allowWrite.some((p) => p.startsWith(accountsDir))).toBe(false);
 });
 
 test("a run whose account file changed meanwhile leaves the account file alone", async () => {
   const f = fixture();
-  const home = join(makeDir(), "accounts", "b");
+  const home = join(f.home, "accounts", "b");
   await mkdir(home, { recursive: true });
   writeFileSync(join(home, "auth.json"), '{"v":1}');
   const b = addAccount(f.db, "codex", home);
@@ -118,7 +155,7 @@ test("a run whose account file changed meanwhile leaves the account file alone",
 
 test("an unusable account is refused before a run row exists", async () => {
   const f = fixture();
-  const home = join(makeDir(), "accounts", "x");
+  const home = join(f.home, "accounts", "x");
   const d = deps(f, async () => done);
   const wrongRuntime = addAccount(f.db, "codex", home);
   const removed = addAccount(f.db, "claude", home, "removed");
@@ -142,7 +179,7 @@ test("an unusable account is refused before a run row exists", async () => {
 
 test("a probe launch on a codex account copies that account's auth.json too", async () => {
   const f = fixture();
-  const home = join(makeDir(), "accounts", "b");
+  const home = join(f.home, "accounts", "b");
   await mkdir(home, { recursive: true });
   writeFileSync(join(home, "auth.json"), '{"who":"b"}');
   const id = addAccount(f.db, "codex", home);
@@ -161,7 +198,7 @@ test("a probe launch on a codex account copies that account's auth.json too", as
 
 test("a refresh from an older login does not replace the credentials that took its place", async () => {
   const f = fixture();
-  const home = join(makeDir(), "accounts", "b");
+  const home = join(f.home, "accounts", "b");
   await mkdir(home, { recursive: true });
   writeFileSync(join(home, "auth.json"), '{"login":"old"}');
   const b = addAccount(f.db, "codex", home);
@@ -177,7 +214,7 @@ test("a refresh from an older login does not replace the credentials that took i
 
 test("usage and quota of a run on account B are attributed to B", async () => {
   const f = fixture();
-  const home = join(makeDir(), "accounts", "b");
+  const home = join(f.home, "accounts", "b");
   await mkdir(home, { recursive: true });
   writeFileSync(join(home, "auth.json"), "{}");
   const b = addAccount(f.db, "codex", home);

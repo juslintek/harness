@@ -145,6 +145,7 @@ interface SettingsInput {
   runDir: string;
   tree: { path: string; branch: string; gitCommonDir: string };
   codexHome: string | null;
+  account: RunAccount | null;
   member: RunMember | RunCandidate | undefined;
   scratch: { path: string; gitDir: string } | null;
 }
@@ -163,6 +164,7 @@ async function writeRunSettings(i: SettingsInput): Promise<string> {
     preset: "dev",
     weakerNetworkIsolation: i.spec.weakerNetworkIsolation,
     codexHome: i.codexHome,
+    account: i.account,
     readOnlyWorktree:
       i.member !== undefined && ("candidateId" in i.member || i.member.readOnly === true),
     ...(i.scratch === null ? {} : { scratch: i.scratch }),
@@ -205,6 +207,7 @@ export async function createLaunch(
       runDir,
       tree,
       codexHome,
+      account,
       member,
       scratch,
     });
@@ -253,6 +256,8 @@ export async function createProbeLaunch(
   cwd: string;
   finish: (() => Promise<void>) | null;
 }> {
+  await mkdir(deps.home, { recursive: true });
+  const home = await realpath(deps.home);
   const cwd = join(dir, "cwd");
   await mkdir(cwd, { recursive: true });
   const codex = await runCodexHome(spec, dir, account);
@@ -262,12 +267,13 @@ export async function createProbeLaunch(
     worktree: cwd,
     gitCommonDir: null,
     agentId: spec.id,
-    harnessHome: deps.home,
+    harnessHome: home,
     agentStateWrite: spec.stateWrite,
     agentEgress: spec.egress,
     preset: "dev",
     weakerNetworkIsolation: spec.weakerNetworkIsolation,
     codexHome,
+    account,
   });
   const tmp = runTmpDir(dir);
   const env = scrubEnv(process.env, {

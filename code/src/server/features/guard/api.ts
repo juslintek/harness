@@ -39,7 +39,7 @@ import {
 
 export type { ApprovalRow } from "./approvals";
 export type { ActionRequest, Category, L1Result, Scope } from "./l1";
-export type { SandboxInput } from "./sandbox";
+export type { SandboxAccount, SandboxInput } from "./sandbox";
 
 export interface GuardOutcome {
   verdict: "allow" | "deny";
