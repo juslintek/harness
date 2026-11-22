@@ -76,16 +76,25 @@ function Conversation(props: {
   // New messages move the view only when the person was already at the bottom.
   let scroller!: HTMLDivElement;
   let atBottom = true;
+  let lastScrollTop = 0;
+  let lastScrollHeight = 0;
   const toBottom = (): void => {
-    requestAnimationFrame(() => {
-      scroller.scrollTop = scroller.scrollHeight;
-    });
+    scroller.scrollTop = scroller.scrollHeight;
+    atBottom = true;
+    lastScrollTop = scroller.scrollTop;
+    lastScrollHeight = scroller.scrollHeight;
   };
   createEffect(
     on(
       () => history.messages().length,
-      () => {
+      (len) => {
+        if (len === 0 || scroller.clientHeight === 0) return;
+        // Re-check against the prior height so a scroll before onScroll fires is not missed.
+        if (scroller.scrollTop !== lastScrollTop && lastScrollHeight > 0) {
+          atBottom = lastScrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+        }
         if (atBottom) toBottom();
+        else lastScrollHeight = scroller.scrollHeight;
       },
     ),
   );
@@ -93,6 +102,7 @@ function Conversation(props: {
   const send = async (body: string): Promise<void> => {
     await api(base, messageViewSchema, { method: "POST", body: { body } });
     atBottom = true;
+    lastScrollTop = scroller.scrollTop;
     await messages.reload();
   };
   return (
@@ -125,6 +135,9 @@ function Conversation(props: {
           class="pane-scroll"
           ref={scroller}
           onScroll={() => {
+            if (scroller.clientHeight === 0) return;
+            lastScrollTop = scroller.scrollTop;
+            lastScrollHeight = scroller.scrollHeight;
             atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
           }}
         >
