@@ -8,6 +8,8 @@ import { AccountPage } from "./features/auth/account-page";
 import { BoardPage } from "./features/board/board-page";
 import { ChatPage } from "./features/chat/chat-page";
 import { DashboardPage } from "./features/dashboard/dashboard-page";
+import { DeployPage } from "./features/deploy/deploy-page";
+import { FederationPage } from "./features/federation/federation-page";
 import { HiringPage } from "./features/hiring/hiring-page";
 import { IntegrationsPage } from "./features/integrations/integrations-page";
 import { LogsPage } from "./features/logs/logs-page";
@@ -18,6 +20,7 @@ import { SettingsPage } from "./features/orgs/settings-page";
 import { PlaybooksPage } from "./features/playbooks/playbooks";
 import { PoliciesPage } from "./features/policies/policies-page";
 import { runsRoute } from "./features/runs/routes";
+import { UpdatesPage } from "./features/updates/updates-page";
 import { errorText } from "./format";
 import { routeParts } from "./route";
 import { Button } from "./ui/atoms";
@@ -95,6 +98,15 @@ export function App(): JSX.Element {
               </Match>
               <Match when={first() === "integrations"}>
                 <IntegrationsPage />
+              </Match>
+              <Match when={first() === "federation"}>
+                <FederationPage />
+              </Match>
+              <Match when={first() === "deploy"}>
+                <DeployPage />
+              </Match>
+              <Match when={first() === "updates"}>
+                <UpdatesPage />
               </Match>
               <Match when={orgPage("dashboard")} keyed>
                 {(slug) => <DashboardPage slug={slug} />}

@@ -47,6 +47,33 @@ export function IntegrationsPage(): JSX.Element {
                 </li>
               )}
             </Show>
+            <li>
+              <span>
+                <b>Federation</b>
+                <Help small>
+                  Pair with other Harness instances and share projects without syncing secrets.
+                </Help>
+              </span>
+              <a href="#/federation">Manage federation</a>
+            </li>
+            <li>
+              <span>
+                <b>Deploy</b>
+                <Help small>
+                  Deploy a signed Harness binary to SSH or Tailscale targets with human approval.
+                </Help>
+              </span>
+              <a href="#/deploy">Manage deploy</a>
+            </li>
+            <li>
+              <span>
+                <b>Updates</b>
+                <Help small>
+                  Update this instance from a branch with scratch verification and rollback.
+                </Help>
+              </span>
+              <a href="#/updates">Manage updates</a>
+            </li>
           </ul>
         </Panel>
       </div>
