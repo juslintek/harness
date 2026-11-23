@@ -101,7 +101,7 @@ export interface RouteDecisionView {
   candidates: RouteCandidateDecision[];
 }
 
-export const routeCandidateDecisionSchema: z.ZodType<RouteCandidateDecision> = z.object({
+const routeCandidateDecisionSchema: z.ZodType<RouteCandidateDecision> = z.object({
   account: z.string(),
   runtime: z.string(),
   model: z.string().nullable(),

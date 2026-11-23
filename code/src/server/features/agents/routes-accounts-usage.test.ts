@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { accountUsageReportSchema } from "../../../shared/accounts";
 import { bootApi } from "../../test-support/api-kit";
 import { appendEvent } from "../logs/api";
 import { recordQuota, recordUsage, type UsageRecord, usageSummary } from "../usage/api";
@@ -88,11 +89,7 @@ test("GET /api/agents/:id/accounts/:acct/usage requires admin and returns tokens
 
   const resA = await kit.call(admin, "GET", "/api/agents/claude/accounts/acct-a/usage");
   expect(resA.status).toBe(200);
-  const bodyA = (await resA.json()) as {
-    totals: { inputTokens: number; estimatedCostUsd: number; reportedCostUsd: number | null };
-    byDay: Array<{ day: string; estimatedCostUsd: number }>;
-    windows: Array<{ window: string; estimatedCostUsd: number }>;
-  };
+  const bodyA = accountUsageReportSchema.parse(await resA.json());
   expect(bodyA.totals.inputTokens).toBe(1_000_000);
   expect(bodyA.totals.reportedCostUsd).toBeNull();
   expect(bodyA.totals.estimatedCostUsd).toBeCloseTo(4.5, 4);

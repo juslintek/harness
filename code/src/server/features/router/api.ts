@@ -7,7 +7,6 @@ import {
   type FailoverDecision,
   linkHandoff,
   type NextAttempt,
-  nextAttempt,
   nextAttemptOrPark,
   startWatchdog,
 } from "./failover";
@@ -20,7 +19,6 @@ export {
   linkHandoff,
   linkRouteDecision,
   listRouteDecisions,
-  nextAttempt,
   nextAttemptOrPark,
   onTriaged,
   priceOf,

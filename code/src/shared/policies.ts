@@ -3,7 +3,7 @@ import { z } from "zod";
 export const layers = ["harness", "org", "team", "agent", "task"] as const;
 export type Layer = (typeof layers)[number];
 
-export const accountPolicies = ["spread", "drain", "expiring"] as const;
+const accountPolicies = ["spread", "drain", "expiring"] as const;
 export type AccountPolicy = (typeof accountPolicies)[number];
 
 export interface PolicyValues {

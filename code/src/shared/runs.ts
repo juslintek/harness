@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { quotaWindowFields } from "./tracking";
 
 const RUN_STATES = [
   "queued",
@@ -173,6 +174,24 @@ export interface OllayaStatus {
 export const ollayaStatusSchema: z.ZodType<OllayaStatus> = z.object({
   up: z.boolean(),
   version: z.string().nullable(),
+});
+
+export interface QuotaRow {
+  provider: string;
+  accountId: string;
+  window: string;
+  usedPercent: number | null;
+  resetsAt: number | null;
+  source: string;
+  ts: number;
+}
+export const quotaRowSchema: z.ZodType<QuotaRow> = z.object({
+  ...quotaWindowFields,
+  accountId: z.string(),
+});
+
+export const accountLoginSchema: z.ZodType<{ command: string[] }> = z.object({
+  command: z.array(z.string()),
 });
 
 export interface SearchHitView {

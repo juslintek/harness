@@ -1,11 +1,23 @@
 import { useState } from "preact/hooks";
 import { z } from "zod";
-import { type AgentRow, agentRowSchema, ollayaStatusSchema } from "../../../shared/runs";
+import { type AccountView, accountView } from "../../../shared/accounts";
+import { routeDecisionViewSchema } from "../../../shared/router";
+import {
+  type AgentRow,
+  agentRowSchema,
+  ollayaStatusSchema,
+  quotaRowSchema,
+} from "../../../shared/runs";
 import { api, useLoad } from "../../api";
 import { errorText } from "../../format";
+import { AccountsList } from "./accounts-list";
 import { KeyForm } from "./key-form";
+import { PoolPanel } from "./pool-panel";
 
 const agentsSchema = z.array(agentRowSchema);
+const accountsSchema = z.array(accountView);
+const quotaListSchema = z.array(quotaRowSchema);
+const decisionsSchema = z.array(routeDecisionViewSchema);
 const okSchema = z.object({ ok: z.literal(true) });
 const modelsSchema = z.object({ models: z.array(z.object({ id: z.string(), name: z.string() })) });
 const loginSchema = z.object({ command: z.array(z.string()) });
@@ -143,35 +155,102 @@ function OllayaStatus(): preact.JSX.Element {
   );
 }
 
+function RuntimeAccountsSection({
+  agents,
+  reloadAll,
+  version,
+}: {
+  agents: AgentRow[];
+  reloadAll: () => void;
+  version: number;
+}): preact.JSX.Element {
+  const pool = useLoad(async () => {
+    const entries = await Promise.all(
+      agents.map(
+        async (a) => [a.id, await api(`/api/agents/${a.id}/accounts`, accountsSchema)] as const,
+      ),
+    );
+    const [quota, decisions] = await Promise.all([
+      api("/api/quota", quotaListSchema),
+      api("/api/router/decisions?limit=5", decisionsSchema),
+    ]);
+    return {
+      accountsByRuntime: Object.fromEntries(entries) as Record<string, AccountView[]>,
+      quota,
+      decisions,
+    };
+  }, [agents.map((a) => a.id).join(","), version]);
+
+  if (!pool.data)
+    return pool.error ? (
+      <p class="error">{pool.error}</p>
+    ) : (
+      <p class="muted">Loading accounts...</p>
+    );
+  const { accountsByRuntime, quota, decisions } = pool.data;
+  const visible = agents.filter((a) => a.installed || (accountsByRuntime[a.id]?.length ?? 0) > 0);
+  return (
+    <>
+      <PoolPanel
+        agents={agents}
+        accountsByRuntime={accountsByRuntime}
+        quota={quota}
+        decisions={decisions}
+      />
+      <h3>Accounts by Runtime</h3>
+      {visible.map((a) => (
+        <AccountsList
+          key={a.id}
+          runtime={a.id}
+          accounts={accountsByRuntime[a.id] ?? []}
+          quota={quota}
+          reload={() => {
+            pool.reload();
+            reloadAll();
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
 export function AgentsPage(): preact.JSX.Element {
   const agents = useLoad(() => api("/api/agents", agentsSchema), []);
+  const [version, setVersion] = useState(0);
+  const refreshAll = (): void => {
+    setVersion((v) => v + 1);
+    agents.reload();
+  };
   return (
     <>
       <h2>Agents</h2>
-      <button type="button" onClick={agents.reload}>
+      <button type="button" onClick={refreshAll}>
         Refresh
       </button>
       {agents.error && <p class="error">{agents.error}</p>}
       {!(agents.data || agents.error) && <p class="muted">Checking installed agents...</p>}
       {agents.data && (
-        <table class="stack">
-          <thead>
-            <tr>
-              <th>Agent</th>
-              <th>Installed</th>
-              <th>Version</th>
-              <th>Logged in</th>
-              <th>Linked</th>
-              <th>Models</th>
-              <th>Login</th>
-            </tr>
-          </thead>
-          <tbody>
-            {agents.data.map((a) => (
-              <AgentRowView key={a.id} agent={a} reload={agents.reload} />
-            ))}
-          </tbody>
-        </table>
+        <>
+          <table class="stack">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Installed</th>
+                <th>Version</th>
+                <th>Logged in</th>
+                <th>Linked</th>
+                <th>Models</th>
+                <th>Login</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agents.data.map((a) => (
+                <AgentRowView key={a.id} agent={a} reload={refreshAll} />
+              ))}
+            </tbody>
+          </table>
+          <RuntimeAccountsSection agents={agents.data} reloadAll={refreshAll} version={version} />
+        </>
       )}
       <OllayaStatus />
       <KeyForm />
