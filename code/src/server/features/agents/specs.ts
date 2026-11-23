@@ -1,7 +1,9 @@
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { accountEnvFor } from "../../../shared/accounts";
+import { resolvePackagedAdapter } from "../../packaged";
 
 export interface AgentSpec {
   id: string;
@@ -37,16 +39,28 @@ export interface AgentSpec {
   mcp: boolean;
 }
 
-const adapterBin = (name: string): string =>
-  join(import.meta.dir, "../../../../node_modules/.bin", name);
+function adapterCommand(
+  runtime: "claude" | "codex",
+  binName: string,
+): { bin: string; args: string[] } {
+  const local = join(import.meta.dir, "../../../../node_modules/.bin", binName);
+  if (existsSync(local)) return { bin: local, args: [] };
+  if (resolvePackagedAdapter(`${binName}.mjs`)) {
+    return { bin: process.execPath, args: ["acp-adapter", runtime] };
+  }
+  return { bin: binName, args: [] };
+}
+
+const claudeAdapter = adapterCommand("claude", "claude-agent-acp");
+const codexAdapter = adapterCommand("codex", "codex-acp");
 
 const builtinSpecs: readonly AgentSpec[] = [
   {
     id: "claude",
     name: "Claude Code",
     lane: "acp",
-    bin: adapterBin("claude-agent-acp"),
-    args: [],
+    bin: claudeAdapter.bin,
+    args: claudeAdapter.args,
     versionArgs: ["claude", "--version"],
     loginProbe: {
       args: ["claude", "auth", "status"],
@@ -69,8 +83,8 @@ const builtinSpecs: readonly AgentSpec[] = [
     id: "codex",
     name: "Codex",
     lane: "acp",
-    bin: adapterBin("codex-acp"),
-    args: [],
+    bin: codexAdapter.bin,
+    args: codexAdapter.args,
     versionArgs: ["codex", "--version"],
     loginProbe: {
       args: ["codex", "login", "status"],

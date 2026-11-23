@@ -19,6 +19,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - run: bun install --frozen-lockfile
+      # @shared imports resolve their packages (zod) from code/node_modules
+      - run: bun install --frozen-lockfile
+        working-directory: code
       - run: bun run build
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -125,7 +128,7 @@ jobs:
           name: macos-dmg
           path: release-assets/*
 
-  build-ts-fallback:
+  build-ts:
     needs: build-ui
     strategy:
       fail-fast: false
@@ -135,22 +138,25 @@ jobs:
             os: ubuntu-latest
           - target: linux-arm64
             os: ubuntu-latest
+          - target: darwin-x64
+            os: macos-latest
           - target: darwin-arm64
             os: macos-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ui-dist
+          path: ui/dist
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       - working-directory: code
         run: |
           bun install --frozen-lockfile
-          bun scripts/build.ts --target ${{ matrix.target }} --out ../release-assets
-          mv ../release-assets/harness-${{ matrix.target }} ../release-assets/harness-bun-${{ matrix.target }}
-          (cd ../release-assets && (sha256sum harness-bun-${{ matrix.target }} 2>/dev/null || shasum -a 256 harness-bun-${{ matrix.target }}) > harness-bun-${{ matrix.target }}.sha256)
-          rm -f ../release-assets/harness-${{ matrix.target }}.sha256
+          bun scripts/build.ts --target ${{ matrix.target }} --out ../release-assets --ui-dist ../ui/dist --package
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: bun-${{ matrix.target }}
+          name: ts-${{ matrix.target }}
           path: release-assets/*
 
   build-android:
@@ -219,7 +225,7 @@ jobs:
     needs:
       - build-zig
       - build-macos-app
-      - build-ts-fallback
+      - build-ts
       - build-android
       - build-ios
     runs-on: ubuntu-latest

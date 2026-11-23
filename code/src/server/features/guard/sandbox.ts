@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
+import { isCompiledBinary, resolveSeccompApplyPath } from "../../packaged";
 import { withRealpaths } from "./real-paths";
 import {
   accountHomeAccess,
@@ -139,7 +140,7 @@ const scratchWritable = (input: SandboxInput): string[] =>
 const scratchPointers = (input: SandboxInput): string[] =>
   input.scratch ? [join(input.scratch.path, ".git"), ...adminPointers(input.scratch.gitDir)] : [];
 
-const SCRUB_KEEP = /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|TERM|TMPDIR|LC_.*)$/;
+const SCRUB_KEEP = /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|TERM|TMPDIR|HARNESS_SHARE_DIR|LC_.*)$/;
 
 const SRT_BIN = join(import.meta.dir, "../../../../node_modules/.bin/srt");
 
@@ -207,6 +208,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
     runTmpDir(input.runDir),
   ]);
   assertSafe(input, allowWrite);
+  const seccompApply = resolveSeccompApplyPath();
   return {
     network: {
       allowedDomains: unique([...input.agentEgress, ...presetDomains(input.preset)]),
@@ -245,6 +247,7 @@ export function buildSrtSettings(input: SandboxInput): SrtSettings {
       ]),
     },
     enableWeakerNetworkIsolation: input.weakerNetworkIsolation,
+    ...(seccompApply ? { seccomp: { applyPath: seccompApply } } : {}),
   };
 }
 
@@ -260,10 +263,21 @@ export async function writeSrtSettings(input: SandboxInput): Promise<string> {
   return path;
 }
 
+function resolveSrtCommand(): string[] {
+  const override = process.env.HARNESS_SRT_BIN;
+  if (override) {
+    if (!existsSync(override)) throw new Error(`srt not found at ${override}`);
+    return [override];
+  }
+  if (existsSync(SRT_BIN)) return [SRT_BIN];
+  if (isCompiledBinary()) return [process.execPath, "srt"];
+  throw new Error(`srt not found at ${SRT_BIN}`);
+}
+
 export function wrapCommand(settingsPath: string, argv: string[]): string[] {
-  if (!existsSync(SRT_BIN)) throw new Error(`srt not found at ${SRT_BIN}`);
+  const srt = resolveSrtCommand();
   if (!existsSync(settingsPath)) throw new Error(`srt settings not found: ${settingsPath}`);
-  return [SRT_BIN, "-s", settingsPath, "--", ...argv];
+  return [...srt, "-s", settingsPath, "--", ...argv];
 }
 
 export function scrubEnv(

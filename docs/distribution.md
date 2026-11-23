@@ -8,13 +8,14 @@ Paths below are API paths on the instance. The UI has pages for deploy, federati
 
 ```sh
 cd code
-bun run build                          # host target, writes dist/
+bun run build                          # host target single binary, writes dist/
 bun scripts/build.ts --target linux-x64 --out /some/dir
+bun scripts/build.ts --target linux-x64 --out /some/dir --ui-dist ../ui/dist --package
 ```
 
-Targets: `darwin-arm64`, `linux-x64`, `linux-arm64`, or `host`. `--out` defaults to `dist`. The output is `harness-<target>` and next to it `harness-<target>.sha256` in `sha256sum` format. The version baked in is the `version` from `code/package.json`, and the git commit of the checkout is baked in too (self-update needs it). The binary is one file with the UI, migrations and PWA files inside.
+Targets: `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`, or `host`. `--out` defaults to `dist`. Without `--package`, the output is `harness-<target>` and next to it `harness-<target>.sha256` in `sha256sum` format (with built-in `srt` sandbox and `guard-hook` subcommands, migrations, and PWA files inside). With `--package`, the output is `harness-<target>.tar.gz` (and `.sha256`) bundling `harness`, `ui/` (`ui/dist`), bundled ACP adapters (`adapters/`), and on Linux `vendor/seccomp/<arch>/apply-seccomp`. The version baked in is the `version` from `code/package.json`, and the git commit of the checkout is baked in too (self-update needs it).
 
-Configuration is the same as for `bun run dev`: `HARNESS_HOME`, `HARNESS_PORT`, `HARNESS_HOST`, `HARNESS_ORIGIN`, `HARNESS_TRUST_PROXY` (see `docs/README.md`).
+Configuration is the same as for `bun run dev`: `HARNESS_HOME`, `HARNESS_PORT`, `HARNESS_HOST`, `HARNESS_ORIGIN`, `HARNESS_TRUST_PROXY`, `HARNESS_SHARE_DIR`, `HARNESS_UI_DIST` (see `docs/README.md`).
 
 ## Discover deploy targets
 
