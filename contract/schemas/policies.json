@@ -38,6 +38,7 @@
               "hiring.autoMinScore",
               "router.allowedRuntimes",
               "router.failover",
+              "router.accountPolicy",
               "heartbeat.maxRunsPerHour"
             ],
             "type": "string"
@@ -119,6 +120,7 @@
               "hiring.autoMinScore",
               "router.allowedRuntimes",
               "router.failover",
+              "router.accountPolicy",
               "heartbeat.maxRunsPerHour"
             ],
             "type": "string"
@@ -173,6 +175,7 @@
             "hiring.autoMinScore",
             "router.allowedRuntimes",
             "router.failover",
+            "router.accountPolicy",
             "heartbeat.maxRunsPerHour"
           ],
           "type": "string"
@@ -196,6 +199,7 @@
             "hiring.autoMinScore",
             "router.allowedRuntimes",
             "router.failover",
+            "router.accountPolicy",
             "heartbeat.maxRunsPerHour"
           ],
           "type": "string"
@@ -221,6 +225,7 @@
             "hiring.autoMinScore",
             "router.allowedRuntimes",
             "router.failover",
+            "router.accountPolicy",
             "heartbeat.maxRunsPerHour"
           ],
           "type": "string"
@@ -257,6 +262,7 @@
             "hiring.autoMinScore",
             "router.allowedRuntimes",
             "router.failover",
+            "router.accountPolicy",
             "heartbeat.maxRunsPerHour"
           ],
           "type": "string"
@@ -382,6 +388,7 @@
             "hiring.autoMinScore",
             "router.allowedRuntimes",
             "router.failover",
+            "router.accountPolicy",
             "heartbeat.maxRunsPerHour"
           ],
           "type": "string"
@@ -420,6 +427,7 @@
             "hiring.autoMinScore",
             "router.allowedRuntimes",
             "router.failover",
+            "router.accountPolicy",
             "heartbeat.maxRunsPerHour"
           ],
           "type": "string"
@@ -506,6 +514,7 @@
               "hiring.autoMinScore",
               "router.allowedRuntimes",
               "router.failover",
+              "router.accountPolicy",
               "heartbeat.maxRunsPerHour"
             ],
             "type": "string"
@@ -599,6 +608,7 @@
               "hiring.autoMinScore",
               "router.allowedRuntimes",
               "router.failover",
+              "router.accountPolicy",
               "heartbeat.maxRunsPerHour"
             ],
             "type": "string"

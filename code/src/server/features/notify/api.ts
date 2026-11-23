@@ -5,6 +5,7 @@ import { createDispatcher, type Dispatcher, type DispatcherDeps } from "./dispat
 import { emailCodeSender } from "./email/adapter";
 import { subscribeEvents } from "./events";
 import { effectivePrefs, setPref } from "./prefs";
+import { orgAdminRecipients } from "./recipients";
 import { notifyRoutes } from "./routes";
 import { openSlackConnection, postSlackMessage, slackConfigured } from "./slack/client";
 import { deleteTarget, insertTarget, sweepWebhookSecrets, targetsOf, viewOf } from "./targets-repo";
@@ -22,6 +23,7 @@ export {
   getTelegramUpdates,
   notifyRoutes,
   openSlackConnection,
+  orgAdminRecipients,
   postSlackMessage,
   sendTelegramMessage,
   setPref,

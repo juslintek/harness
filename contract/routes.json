@@ -126,6 +126,20 @@
     }
   },
   {
+    "method": "GET",
+    "path": "/api/agents/:id/accounts/:acct/usage",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
     "method": "POST",
     "path": "/api/agents/:id/link",
     "policy": {
@@ -2121,6 +2135,20 @@
       "loopback": false,
       "orgAdmin": false,
       "origin": true,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
+    "path": "/api/router/decisions",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
       "public": false,
       "rateLimited": false,
       "session": true,

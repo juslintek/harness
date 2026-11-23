@@ -92,14 +92,23 @@ const memberReportSchema: z.ZodType<MemberReport> = z.object({
   stack: z.array(z.string()),
 });
 
-const quotaWindowSchema: z.ZodType<QuotaWindow> = z.object({
+export const quotaWindowFields: {
+  provider: z.ZodString;
+  window: z.ZodString;
+  usedPercent: z.ZodNullable<z.ZodNumber>;
+  resetsAt: z.ZodNullable<z.ZodNumber>;
+  source: z.ZodString;
+  ts: z.ZodNumber;
+} = {
   provider: z.string(),
   window: z.string(),
   usedPercent: z.number().nullable(),
   resetsAt: z.number().nullable(),
   source: z.string(),
   ts: z.number(),
-});
+};
+
+const quotaWindowSchema: z.ZodType<QuotaWindow> = z.object(quotaWindowFields);
 
 const dashboardTaskSchema: z.ZodType<DashboardTask> = z.object({
   number: z.number(),

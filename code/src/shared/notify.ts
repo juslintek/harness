@@ -9,6 +9,7 @@ export const NOTIFY_KINDS = [
   "mention",
   "dm",
   "run_blocked",
+  "pool_exhausted",
 ] as const;
 export type NotifyKind = (typeof NOTIFY_KINDS)[number];
 

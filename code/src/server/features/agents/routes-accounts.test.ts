@@ -243,9 +243,7 @@ test("link and unlink append events, and no event carries a path or secret", asy
   }
 });
 
-// Only the refusals are exercised through the full app: an allowed add would write under the
-// configured HARNESS_HOME, not the temp one.
-test("through the full app, add is refused without admin and without step-up", async () => {
+test("through the full app, add enforces admin and step-up and stores homes under deps.home", async () => {
   const origin = "http://localhost:4100";
   const app = createApp({
     db,
@@ -256,18 +254,19 @@ test("through the full app, add is refused without admin and without step-up", a
     version: "1",
     runDeps: { home, port: 4100, resolveSpec: () => null },
   });
-  const call = async (opts: { admin: boolean; stepUp: boolean }): Promise<number> => {
+  const call = async (opts: { admin: boolean; stepUp: boolean }): Promise<Response> => {
     const { headers } = await sessionHeaders(db, { ...opts, origin });
-    const res = await app.request("/api/agents/claude/accounts", {
+    return app.request("/api/agents/codex/accounts", {
       method: "POST",
       headers,
       body: JSON.stringify({ label: "work" }),
     });
-    return res.status;
   };
-  expect(await call({ admin: false, stepUp: true })).toBe(403);
-  expect(await call({ admin: true, stepUp: false })).toBe(403);
-  expect(db.query("SELECT count(*) AS n FROM agent_accounts WHERE label = 'work'").get()).toEqual({
-    n: 0,
-  });
+  expect((await call({ admin: false, stepUp: true })).status).toBe(403);
+  expect((await call({ admin: true, stepUp: false })).status).toBe(403);
+  const ok = await call({ admin: true, stepUp: true });
+  expect(ok.status).toBe(201);
+  const created = (await ok.json()) as AccountView;
+  expect(created.home).toBe(join(home, "accounts", created.id));
+  expect(existsSync(created.home as string)).toBe(true);
 });

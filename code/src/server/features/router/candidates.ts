@@ -1,10 +1,18 @@
 import type { Database } from "bun:sqlite";
-import type { Difficulty, Engine, TaskType } from "../../../shared/router";
+import type { Difficulty, Engine, RouteCandidateDecision, TaskType } from "../../../shared/router";
 import { type AgentView, listAgents } from "../agents/api";
 import { contextForMember, effective } from "../policies/api";
 import { ensureProfile } from "../profiles/api";
 import { probeQuota } from "../usage/api";
-import { accountContext, eligibleAccounts, pickBestAccount } from "./accounts";
+import {
+  type AccountCandidate,
+  accountContext,
+  eligibleAccounts,
+  evaluateAccounts,
+  pickBestAccount,
+  poolExhaustedRetryAt,
+} from "./accounts";
+import { recordRouteDecision } from "./decisions";
 import { priceOf } from "./registry";
 import { scoreEngine, tierOf } from "./score";
 import { learnedStats, type StatRow } from "./stats";
@@ -16,12 +24,22 @@ export interface RouteChoice {
   reasons: string[];
 }
 
+export interface RouteOutcome {
+  choices: RouteChoice[];
+  poolExhausted: { retryAt: number } | null;
+  decisionId: string | null;
+}
+
 export interface RouteInput {
   memberId: string;
   taskId?: string | null | undefined;
   exclude?: Engine[] | undefined;
+  // Failover prefers another account of the failed engine before switching runtimes.
+  preferEngine?: { runtime: string; model: string | null } | undefined;
   // Keeps only the runtimes the caller can use for this run, e.g. those able to call MCP tools.
   runtimeFilter?: ((runtime: string) => boolean) | undefined;
+  // Read-only preview endpoints pass false so polling never floods route_decisions.
+  record?: boolean | undefined;
 }
 
 // Tests inject a fixed agent list; real discovery spawns every installed CLI.
@@ -54,49 +72,155 @@ function candidateEngines(
   return [primary, ...others];
 }
 
+function buildChoice(
+  db: Database,
+  e: Engine,
+  picked: AccountCandidate,
+  ctx: {
+    primary: Engine;
+    triage: ReturnType<typeof triageOf>;
+    stats: StatRow[];
+  },
+  headroomOverride: number | null = picked.headroom,
+): { choice: RouteChoice; lastUsedAt: number } {
+  const engine: Engine = picked.explicit
+    ? { runtime: e.runtime, model: e.model, accountId: picked.id }
+    : { runtime: e.runtime, model: e.model };
+  const price = priceOf(db, engine);
+  const headroom = headroomOverride;
+  const stat = statOf(ctx.stats, engine, ctx.triage?.taskType ?? null);
+  const isPrimary = sameEngine(e, ctx.primary);
+  const score = scoreEngine({
+    engine,
+    primary: isPrimary,
+    triage: ctx.triage,
+    price,
+    headroom,
+    stat,
+  });
+  const reasons = [
+    ...(isPrimary ? ["profile primary"] : []),
+    `tier ${tierOf(price)}${price ? "" : " (no price)"} for ${ctx.triage?.difficulty ?? "unknown"} difficulty`,
+    headroom === null ? "no quota data" : `${Math.round(headroom * 100)}% quota left`,
+    stat ? `${stat.completed}/${stat.runs} completed recently` : "no history",
+  ];
+  return { choice: { engine, score, reasons }, lastUsedAt: picked.lastUsedAt };
+}
+
+function evaluateEngines(
+  db: Database,
+  engines: Engine[],
+  quota: Awaited<ReturnType<typeof probeQuota>>,
+  acctCtx: ReturnType<typeof accountContext>,
+  accountPolicy: ReturnType<typeof effective<"router.accountPolicy">>["value"],
+  scoreCtx: { primary: Engine; triage: ReturnType<typeof triageOf>; stats: StatRow[] },
+): { choices: RouteChoice[]; logged: RouteCandidateDecision[] } {
+  const logged: RouteCandidateDecision[] = [];
+  const ranked: Array<{ choice: RouteChoice; lastUsedAt: number }> = [];
+  for (const e of engines) {
+    const { eligible, rejected } = evaluateAccounts(db, e, quota, acctCtx);
+    for (const r of rejected) {
+      logged.push({
+        account: r.id,
+        runtime: e.runtime,
+        model: e.model,
+        score: null,
+        rejectedBy: r.rejectedBy,
+      });
+    }
+    const picked = pickBestAccount(eligible, accountPolicy);
+    if (!picked) continue;
+    // Stage 1 ranks engines by their best-headroom eligible account; Stage 2 picks inside the engine by policy.
+    const best = pickBestAccount(eligible, "spread");
+    const bestHeadroom = best ? best.headroom : picked.headroom;
+    const built = buildChoice(db, e, picked, scoreCtx, bestHeadroom);
+    ranked.push(built);
+    for (const c of eligible) {
+      logged.push({
+        account: c.id,
+        runtime: e.runtime,
+        model: e.model,
+        score: buildChoice(db, e, c, scoreCtx).choice.score,
+        rejectedBy: null,
+      });
+    }
+  }
+  const choices = ranked
+    .sort((a, b) => b.choice.score - a.choice.score || a.lastUsedAt - b.lastUsedAt)
+    .map((r) => r.choice);
+  return { choices, logged };
+}
+
+function applyPreferred(
+  choices: RouteChoice[],
+  prefer: { runtime: string; model: string | null } | undefined,
+): RouteChoice[] {
+  if (!prefer) return choices;
+  const idx = choices.findIndex(
+    (c) => c.engine.runtime === prefer.runtime && c.engine.model === prefer.model,
+  );
+  if (idx <= 0) return choices;
+  const preferred = choices[idx] as RouteChoice;
+  return [preferred, ...choices.slice(0, idx), ...choices.slice(idx + 1)];
+}
+
 // A window reset in the past already reads as null usage, so 100% here means exhausted now.
+export async function routeOutcome(
+  db: Database,
+  input: RouteInput,
+  deps: RouteDeps = {},
+): Promise<RouteOutcome> {
+  const profile = ensureProfile(db, input.memberId);
+  const ctx = contextForMember(db, input.memberId, input.taskId ?? undefined);
+  const allowed = effective(db, ctx, "router.allowedRuntimes").value;
+  const accountPolicy = effective(db, ctx, "router.accountPolicy").value;
+  const agents = await (deps.agents ?? (() => listAgents(db)))();
+  const usable = agents.filter((a) => a.enabled && a.loggedIn !== false);
+  const quota = await probeQuota(db);
+  const now = Date.now();
+  const scoreCtx = {
+    primary: { runtime: profile.runtime, model: profile.model },
+    triage: input.taskId ? triageOf(db, input.taskId) : null,
+    stats: learnedStats(db, now - LEARN_WINDOW_MS),
+  };
+  const engines = candidateEngines(profile, usable)
+    .filter((e) => usable.some((a) => a.id === e.runtime))
+    .filter((e) => allowed === null || allowed.includes(e.runtime))
+    .filter((e) => input.runtimeFilter?.(e.runtime) ?? true);
+
+  const evaluated = evaluateEngines(
+    db,
+    engines,
+    quota,
+    accountContext(db, input.exclude, now),
+    accountPolicy,
+    scoreCtx,
+  );
+  const choices = applyPreferred(evaluated.choices, input.preferEngine);
+  const chosenAccount = choices[0]
+    ? (choices[0].engine.accountId ?? `default:${choices[0].engine.runtime}`)
+    : null;
+  const decisionId =
+    input.record === false
+      ? null
+      : recordRouteDecision(db, {
+          ts: now,
+          policy: accountPolicy,
+          chosenAccount,
+          candidates: evaluated.logged,
+        });
+
+  if (choices.length > 0) return { choices, poolExhausted: null, decisionId };
+  const retryAt = poolExhaustedRetryAt(db, engines, quota, now);
+  return { choices, poolExhausted: retryAt === null ? null : { retryAt }, decisionId };
+}
+
 export async function route(
   db: Database,
   input: RouteInput,
   deps: RouteDeps = {},
 ): Promise<RouteChoice[]> {
-  const profile = ensureProfile(db, input.memberId);
-  const ctx = contextForMember(db, input.memberId, input.taskId ?? undefined);
-  const allowed = effective(db, ctx, "router.allowedRuntimes").value;
-  const agents = await (deps.agents ?? (() => listAgents(db)))();
-  const usable = agents.filter((a) => a.enabled && a.loggedIn !== false);
-  const quota = await probeQuota(db);
-  const now = Date.now();
-  const acctCtx = accountContext(db, input.exclude, now);
-  const triage = input.taskId ? triageOf(db, input.taskId) : null;
-  const stats = learnedStats(db, now - LEARN_WINDOW_MS);
-  const primary = { runtime: profile.runtime, model: profile.model };
-
-  return candidateEngines(profile, usable)
-    .filter((e) => usable.some((a) => a.id === e.runtime))
-    .filter((e) => allowed === null || allowed.includes(e.runtime))
-    .filter((e) => input.runtimeFilter?.(e.runtime) ?? true)
-    .flatMap((e) => {
-      const best = pickBestAccount(eligibleAccounts(db, e, quota, acctCtx));
-      if (!best) return [];
-      const engine: Engine = best.explicit
-        ? { runtime: e.runtime, model: e.model, accountId: best.id }
-        : { runtime: e.runtime, model: e.model };
-      const price = priceOf(db, engine);
-      const headroom = best.headroom;
-      const stat = statOf(stats, engine, triage?.taskType ?? null);
-      const isPrimary = sameEngine(e, primary);
-      const score = scoreEngine({ engine, primary: isPrimary, triage, price, headroom, stat });
-      const reasons = [
-        ...(isPrimary ? ["profile primary"] : []),
-        `tier ${tierOf(price)}${price ? "" : " (no price)"} for ${triage?.difficulty ?? "unknown"} difficulty`,
-        headroom === null ? "no quota data" : `${Math.round(headroom * 100)}% quota left`,
-        stat ? `${stat.completed}/${stat.runs} completed recently` : "no history",
-      ];
-      return [{ choice: { engine, score, reasons }, lastUsedAt: best.lastUsedAt }];
-    })
-    .sort((a, b) => b.choice.score - a.choice.score || a.lastUsedAt - b.lastUsedAt)
-    .map((r) => r.choice);
+  return (await routeOutcome(db, input, deps)).choices;
 }
 
 // Linked, logged in and with at least one eligible account: what a new run could start on right now.
@@ -122,6 +246,7 @@ export async function rankEngines(
 ): Promise<Engine[]> {
   const agents = await (deps.agents ?? (() => listAgents(db)))();
   const allowed = effective(db, { orgId: input.orgId }, "router.allowedRuntimes").value;
+  const accountPolicy = effective(db, { orgId: input.orgId }, "router.accountPolicy").value;
   const quota = await probeQuota(db);
   const now = Date.now();
   const acctCtx = accountContext(db, undefined, now);
@@ -130,22 +255,23 @@ export async function rankEngines(
     .filter((a) => a.enabled && a.loggedIn !== false)
     .filter((a) => allowed === null || allowed.includes(a.id))
     .flatMap((a) => {
-      const best = pickBestAccount(
-        eligibleAccounts(db, { runtime: a.id, model: null }, quota, acctCtx),
-      );
-      if (!best) return [];
-      const engine: Engine = best.explicit
-        ? { runtime: a.id, model: null, accountId: best.id }
+      const eligible = eligibleAccounts(db, { runtime: a.id, model: null }, quota, acctCtx);
+      const picked = pickBestAccount(eligible, accountPolicy);
+      if (!picked) return [];
+      const best = pickBestAccount(eligible, "spread");
+      const bestHeadroom = best ? best.headroom : picked.headroom;
+      const engine: Engine = picked.explicit
+        ? { runtime: a.id, model: null, accountId: picked.id }
         : { runtime: a.id, model: null };
       const score = scoreEngine({
         engine,
         primary: false,
         triage: { difficulty: input.difficulty },
         price: priceOf(db, engine),
-        headroom: best.headroom,
+        headroom: bestHeadroom,
         stat: statOf(stats, engine, input.taskType),
       });
-      return [{ engine, score, lastUsedAt: best.lastUsedAt }];
+      return [{ engine, score, lastUsedAt: picked.lastUsedAt }];
     })
     .sort((a, b) => b.score - a.score || a.lastUsedAt - b.lastUsedAt)
     .map((r) => r.engine);

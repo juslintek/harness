@@ -1,10 +1,12 @@
 import type { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import { getTask } from "../board/api";
 import { budgetGate } from "../budgets/api";
 import { getMember, getProject, type MemberRow } from "../orgs/api";
-import { route } from "../router/api";
-import { HaltedError, isHalted, scratchRepo, startRun } from "../runtimes/api";
+import { handoffSummary, linkRouteDecision, routeOutcome } from "../router/api";
+import { getRun, HaltedError, isHalted, type RunRow, scratchRepo, startRun } from "../runtimes/api";
 import { mcpOnly, memoryRun } from "./memory-notice";
+import { parkWakes } from "./park";
 import { buildPrompt, MAX_WAKES } from "./prompt";
 import {
   endedStartedRuns,
@@ -61,8 +63,12 @@ export function nextBatch(
   const reachable = kept.filter((w) => !stale.includes(w));
   const first = reachable[0];
   const projectId = first ? wakeProject(db, first) : null;
+  const origin = first ? parkedOrigin(first) : null;
   const same = (w: WakeRow): boolean =>
-    wakeProject(db, w) === projectId && first !== undefined && lane(w) === lane(first);
+    wakeProject(db, w) === projectId &&
+    first !== undefined &&
+    lane(w) === lane(first) &&
+    parkedOrigin(w) === origin;
   const batch = reachable.filter(same);
   const memoryOnly = first !== undefined && lane(first) !== "work";
   return { wakes: memoryOnly ? batch.slice(0, MAX_WAKES) : batch, projectId };
@@ -74,35 +80,78 @@ interface Batch {
   projectId: string | null;
 }
 
-// Null when no engine can take the run, with the wakes already marked failed.
+type StartResult = { kind: "started"; runId: string } | { kind: "parked" } | { kind: "failed" };
+
+function parkedOrigin(w: WakeRow): string | null {
+  const id = (w.detail as { parkedFromRunId?: unknown } | null)?.parkedFromRunId;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+function wasParkedWake(w: WakeRow): boolean {
+  const detail = w.detail as { route?: unknown } | null;
+  return detail?.route === "pool_exhausted" || parkedOrigin(w) !== null;
+}
+
+function parkedOriginRun(db: Database, wakes: WakeRow[]): RunRow | null {
+  for (const w of wakes) {
+    const id = parkedOrigin(w);
+    if (id === null) continue;
+    const prev = getRun(db, id);
+    if (prev?.worktree && prev.branch && existsSync(prev.worktree)) return prev;
+  }
+  return null;
+}
+
+function batchIdFor(batch: Batch, prev: RunRow | null): string {
+  // Recovered wakes get a fresh failover-chain id so accounts tried before cooldown stay eligible.
+  return prev !== null || batch.wakes.some(wasParkedWake)
+    ? Bun.randomUUIDv7()
+    : (batch.ids[0] as string);
+}
+
 async function startFirst(
   db: Database,
   deps: ExecDeps,
   member: MemberRow,
   batch: Batch,
-): Promise<string | null> {
+): Promise<StartResult> {
   const taskId = batch.wakes.find((w) => w.taskId !== null && getTask(db, w.taskId))?.taskId;
   const runtimeFilter = mcpOnly(deps, batch.wakes);
-  const [choice] = await route(db, { memberId: member.id, taskId, runtimeFilter }, deps.routeDeps);
+  const { choices, poolExhausted, decisionId } = await routeOutcome(
+    db,
+    { memberId: member.id, taskId, runtimeFilter },
+    deps.routeDeps,
+  );
+  const [choice] = choices;
   if (!choice) {
+    if (poolExhausted !== null) {
+      parkWakes(db, member, batch.ids, poolExhausted.retryAt);
+      return { kind: "parked" };
+    }
     const reason = runtimeFilter ? "no engine with MCP for a memory-only run" : "no engine";
     setStatus(db, batch.ids, "failed", { detail: { route: reason } });
-    return null;
+    return { kind: "failed" };
   }
   const { runtime, model, accountId } = choice.engine;
+  const prev = parkedOriginRun(db, batch.wakes);
   const repo = batch.projectId === null ? null : (getProject(db, batch.projectId)?.repo ?? null);
   const mem = memoryRun(db, deps, member, runtime, batch.projectId, batch.wakes);
-  return startRun(db, deps.runDeps, {
+  const basePrompt = buildPrompt(db, member, batch.wakes, mem.mcp, mem.index !== undefined);
+  const prompt = prev ? `${await handoffSummary(db, prev)}\n\n${basePrompt}` : basePrompt;
+  const runId = await startRun(db, deps.runDeps, {
     agentId: runtime,
     ...(model === null ? {} : { model }),
     ...(accountId == null ? {} : { accountId }),
-    repo: repo ?? scratchRepo(deps.home, member.orgId),
-    prompt: buildPrompt(db, member, batch.wakes, mem.mcp, mem.index !== undefined),
+    repo: prev ? prev.repo : (repo ?? scratchRepo(deps.home, member.orgId)),
+    prompt,
     ...(taskId == null ? {} : { taskId }),
     member: runMember(db, member, batch.projectId, mem.index),
+    ...(prev ? { reuseWorktreeOf: prev.id } : {}),
     attempt: 1,
-    batchId: batch.ids[0] as string,
+    batchId: batchIdFor(batch, prev),
   });
+  if (decisionId !== null) linkRouteDecision(db, decisionId, runId);
+  return { kind: "started", runId };
 }
 
 // "retry" means the batch was marked failed at routing, so the member's next pending batch is
@@ -131,10 +180,11 @@ async function launchBatch(
   }
   setStatus(db, ids, "started");
   try {
-    const runId = await startFirst(db, deps, member, { ids, wakes, projectId });
-    if (runId === null) return "retry";
-    setStatus(db, ids, "started", { runId });
-    await settleRun(db, deps, runId);
+    const started = await startFirst(db, deps, member, { ids, wakes, projectId });
+    if (started.kind === "failed") return "retry";
+    if (started.kind === "parked") return false;
+    setStatus(db, ids, "started", { runId: started.runId, detail: { parkedFromRunId: null } });
+    await settleRun(db, deps, started.runId);
     return false;
   } catch (err) {
     if (err instanceof HaltedError) {

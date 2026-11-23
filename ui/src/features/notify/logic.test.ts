@@ -9,7 +9,7 @@ test("applicationServerKey decodes unpadded base64url", () => {
 
 test("gridRows has a cell for every kind and channel, missing ones off", () => {
   const rows = gridRows([{ channel: "push", kind: "dm", enabled: true }]);
-  expect(rows).toHaveLength(5);
+  expect(rows).toHaveLength(6);
   expect(rows.every((r) => r.cells.length === 5)).toBe(true);
   const dm = rows.find((r) => r.kind === "dm");
   expect(dm?.cells.find((c) => c.channel === "push")?.enabled).toBe(true);

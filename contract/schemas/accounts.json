@@ -1,4 +1,464 @@
 {
+  "accountUsageReportSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "byDay": {
+          "items": {
+            "properties": {
+              "cacheReadTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "cacheWriteTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "day": {
+                "type": "string"
+              },
+              "estimatedCostUsd": {
+                "type": "number"
+              },
+              "events": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "inputTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "outputTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "reasoningTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "reportedCostUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "unpricedEvents": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "inputTokens",
+              "outputTokens",
+              "cacheReadTokens",
+              "cacheWriteTokens",
+              "reasoningTokens",
+              "reportedCostUsd",
+              "estimatedCostUsd",
+              "unpricedEvents",
+              "events",
+              "day"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "totals": {
+          "properties": {
+            "cacheReadTokens": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "cacheWriteTokens": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "estimatedCostUsd": {
+              "type": "number"
+            },
+            "events": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "inputTokens": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "outputTokens": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "reasoningTokens": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "reportedCostUsd": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "unpricedEvents": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "inputTokens",
+            "outputTokens",
+            "cacheReadTokens",
+            "cacheWriteTokens",
+            "reasoningTokens",
+            "reportedCostUsd",
+            "estimatedCostUsd",
+            "unpricedEvents",
+            "events"
+          ],
+          "type": "object"
+        },
+        "windows": {
+          "items": {
+            "properties": {
+              "cacheReadTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "cacheWriteTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "estimatedCostUsd": {
+                "type": "number"
+              },
+              "events": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "inputTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "outputTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "reasoningTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "reportedCostUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "resetsAt": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "unpricedEvents": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "usedPercent": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "window": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "inputTokens",
+              "outputTokens",
+              "cacheReadTokens",
+              "cacheWriteTokens",
+              "reasoningTokens",
+              "reportedCostUsd",
+              "estimatedCostUsd",
+              "unpricedEvents",
+              "events",
+              "window",
+              "usedPercent",
+              "resetsAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "accountId",
+        "runtime",
+        "totals",
+        "byDay",
+        "windows"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "byDay": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cacheReadTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "cacheWriteTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "day": {
+                "type": "string"
+              },
+              "estimatedCostUsd": {
+                "type": "number"
+              },
+              "events": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "inputTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "outputTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "reasoningTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "reportedCostUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "unpricedEvents": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "inputTokens",
+              "outputTokens",
+              "cacheReadTokens",
+              "cacheWriteTokens",
+              "reasoningTokens",
+              "reportedCostUsd",
+              "estimatedCostUsd",
+              "unpricedEvents",
+              "events",
+              "day"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "totals": {
+          "additionalProperties": false,
+          "properties": {
+            "cacheReadTokens": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "cacheWriteTokens": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "estimatedCostUsd": {
+              "type": "number"
+            },
+            "events": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "inputTokens": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "outputTokens": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "reasoningTokens": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            },
+            "reportedCostUsd": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "unpricedEvents": {
+              "maximum": 9007199254740991,
+              "minimum": -9007199254740991,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "inputTokens",
+            "outputTokens",
+            "cacheReadTokens",
+            "cacheWriteTokens",
+            "reasoningTokens",
+            "reportedCostUsd",
+            "estimatedCostUsd",
+            "unpricedEvents",
+            "events"
+          ],
+          "type": "object"
+        },
+        "windows": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cacheReadTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "cacheWriteTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "estimatedCostUsd": {
+                "type": "number"
+              },
+              "events": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "inputTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "outputTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "reasoningTokens": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "reportedCostUsd": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "resetsAt": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "unpricedEvents": {
+                "maximum": 9007199254740991,
+                "minimum": -9007199254740991,
+                "type": "integer"
+              },
+              "usedPercent": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "window": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "inputTokens",
+              "outputTokens",
+              "cacheReadTokens",
+              "cacheWriteTokens",
+              "reasoningTokens",
+              "reportedCostUsd",
+              "estimatedCostUsd",
+              "unpricedEvents",
+              "events",
+              "window",
+              "usedPercent",
+              "resetsAt"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "accountId",
+        "runtime",
+        "totals",
+        "byDay",
+        "windows"
+      ],
+      "type": "object"
+    }
+  },
   "accountView": {
     "input": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",

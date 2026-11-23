@@ -1,9 +1,12 @@
 import type { Database } from "bun:sqlite";
 import type { Engine } from "../../../shared/router";
 import { contextForMember, effective } from "../policies/api";
+import { ensureProfile } from "../profiles/api";
 import { getRun, killRun, liveRuns, type RunRow } from "../runtimes/api";
-import { onQuotaRecorded } from "../usage/api";
-import { type RouteDeps, route } from "./candidates";
+import { onQuotaRecorded, probeQuota } from "../usage/api";
+import { accountContext, eligibleAccounts } from "./accounts";
+import { type RouteDeps, routeOutcome } from "./candidates";
+import { listRouteDecisions } from "./decisions";
 import { handoffSummary } from "./handoff";
 
 export interface NextAttempt {
@@ -11,7 +14,13 @@ export interface NextAttempt {
   handoffId: string;
   summary: string;
   reuseWorktreeOf: string;
+  decisionId?: string | null;
 }
+
+export type FailoverDecision =
+  | { kind: "next"; attempt: NextAttempt }
+  | { kind: "park"; retryAt: number }
+  | { kind: "none" };
 
 const MAX_ATTEMPTS = 3;
 
@@ -22,37 +31,19 @@ function failsOver(run: RunRow): boolean {
   return run.state === "killed" && run.reason === "quota_exhausted";
 }
 
+const isExhaustionStop = (run: RunRow): boolean =>
+  run.reason === "rate_limited" || run.reason === "quota_exhausted";
+
 function triedIn(db: Database, batchId: string): Engine[] {
   return db
-    .query<{ agent_id: string; model: string | null }, [string, string]>(
-      "SELECT agent_id, model FROM runs WHERE batch_id = ? OR id = ?",
+    .query<{ agent_id: string; model: string | null; account_id: string }, [string, string]>(
+      "SELECT agent_id, model, COALESCE(account_id, 'default:' || agent_id) AS account_id FROM runs WHERE batch_id = ? OR id = ?",
     )
     .all(batchId, batchId)
-    .map((r) => ({ runtime: r.agent_id, model: r.model }));
+    .map((r) => ({ runtime: r.agent_id, model: r.model, accountId: r.account_id }));
 }
 
-// Two paths can end the same run (the quota watchdog and the run's own error); the unique handoff per
-// failed run lets only one of them continue.
-export async function nextAttempt(
-  db: Database,
-  endedRunId: string,
-  deps?: RouteDeps,
-  runtimeFilter?: (runtime: string) => boolean,
-): Promise<NextAttempt | null> {
-  const run = getRun(db, endedRunId);
-  if (!run?.memberId || !run.worktree || !failsOver(run) || run.attempt >= MAX_ATTEMPTS) {
-    return null;
-  }
-  const ctx = contextForMember(db, run.memberId, run.taskId ?? undefined);
-  if (!effective(db, ctx, "router.failover").value) return null;
-  const batchId = run.batchId ?? run.id;
-  const [next] = await route(
-    db,
-    { memberId: run.memberId, taskId: run.taskId, exclude: triedIn(db, batchId), runtimeFilter },
-    deps,
-  );
-  if (!next) return null;
-  const summary = await handoffSummary(db, run);
+function insertHandoff(db: Database, run: RunRow, batchId: string, summary: string): string | null {
   const handoffId = Bun.randomUUIDv7();
   const inserted = db.run(
     `INSERT INTO run_handoffs (id, batch_id, task_id, member_id, from_run_id, reason, summary, created_at)
@@ -68,8 +59,141 @@ export async function nextAttempt(
       Date.now(),
     ],
   );
-  if (inserted.changes === 0) return null;
-  return { engine: next.engine, handoffId, summary, reuseWorktreeOf: run.id };
+  return inserted.changes === 0 ? null : handoffId;
+}
+
+function inProfile(
+  profile: { runtime: string; model: string | null; fallbacks: Engine[] },
+  runtime: string,
+  model: string | null,
+): boolean {
+  if (runtime === profile.runtime && model === profile.model) return true;
+  if (profile.fallbacks.length === 0) return runtime !== profile.runtime && model === null;
+  return profile.fallbacks.some((f) => f.runtime === runtime && f.model === model);
+}
+
+// At the attempt cap we never start another immediate attempt, so avoid re-running agent discovery
+// when another candidate that was eligible at launch still has capacity in the DB.
+async function hasUnexhaustedSibling(
+  db: Database,
+  run: RunRow,
+  allowed: string[] | null,
+  runtimeFilter?: (runtime: string) => boolean,
+): Promise<boolean> {
+  const decision = listRouteDecisions(db, { runId: run.id, limit: 1 })[0];
+  if (!decision) return false;
+  const profile = ensureProfile(db, run.memberId as string);
+  const current = run.accountId ?? `default:${run.agentId}`;
+  const siblings = decision.candidates.filter(
+    (c) =>
+      c.rejectedBy === null &&
+      c.account !== current &&
+      inProfile(profile, c.runtime, c.model) &&
+      (allowed === null || allowed.includes(c.runtime)) &&
+      (runtimeFilter?.(c.runtime) ?? true),
+  );
+  if (siblings.length === 0) return false;
+  const unlinked = new Set(
+    db
+      .query<{ agent_id: string }, []>("SELECT agent_id FROM agent_links WHERE enabled = 0")
+      .all()
+      .map((r) => r.agent_id),
+  );
+  const quota = await probeQuota(db);
+  const acctCtx = accountContext(db);
+  return siblings.some(
+    (c) =>
+      !unlinked.has(c.runtime) &&
+      eligibleAccounts(
+        db,
+        { runtime: c.runtime, model: c.model, accountId: c.account },
+        quota,
+        acctCtx,
+      ).length > 0,
+  );
+}
+
+async function parkAtLimit(
+  db: Database,
+  run: RunRow,
+  allowed: string[] | null,
+  deps?: RouteDeps,
+  runtimeFilter?: (runtime: string) => boolean,
+): Promise<FailoverDecision> {
+  if (!isExhaustionStop(run)) return { kind: "none" };
+  if (await hasUnexhaustedSibling(db, run, allowed, runtimeFilter)) return { kind: "none" };
+  const batchId = run.batchId ?? run.id;
+  const { poolExhausted } = await routeOutcome(
+    db,
+    {
+      memberId: run.memberId as string,
+      taskId: run.taskId,
+      exclude: triedIn(db, batchId),
+      preferEngine: { runtime: run.agentId, model: run.model },
+      runtimeFilter,
+      record: false,
+    },
+    deps,
+  );
+  return poolExhausted !== null
+    ? { kind: "park", retryAt: poolExhausted.retryAt }
+    : { kind: "none" };
+}
+
+// Two paths can end the same run (the quota watchdog and the run's own error); the unique handoff per
+// failed run lets only one of them continue.
+export async function nextAttemptOrPark(
+  db: Database,
+  endedRunId: string,
+  deps?: RouteDeps,
+  runtimeFilter?: (runtime: string) => boolean,
+): Promise<FailoverDecision> {
+  const run = getRun(db, endedRunId);
+  if (!run?.memberId || !run.worktree || !failsOver(run)) {
+    return { kind: "none" };
+  }
+  const ctx = contextForMember(db, run.memberId, run.taskId ?? undefined);
+  if (!effective(db, ctx, "router.failover").value) return { kind: "none" };
+  if (run.attempt >= MAX_ATTEMPTS) {
+    const allowed = effective(db, ctx, "router.allowedRuntimes").value;
+    return parkAtLimit(db, run, allowed, deps, runtimeFilter);
+  }
+  const batchId = run.batchId ?? run.id;
+  // Same CLI + worktree gives the cleanest handoff, so prefer remaining accounts of the same engine first.
+  const { choices, poolExhausted, decisionId } = await routeOutcome(
+    db,
+    {
+      memberId: run.memberId,
+      taskId: run.taskId,
+      exclude: triedIn(db, batchId),
+      preferEngine: { runtime: run.agentId, model: run.model },
+      runtimeFilter,
+    },
+    deps,
+  );
+  const [next] = choices;
+  if (!next) {
+    return poolExhausted !== null && isExhaustionStop(run)
+      ? { kind: "park", retryAt: poolExhausted.retryAt }
+      : { kind: "none" };
+  }
+  const summary = await handoffSummary(db, run);
+  const handoffId = insertHandoff(db, run, batchId, summary);
+  if (handoffId === null) return { kind: "none" };
+  return {
+    kind: "next",
+    attempt: { engine: next.engine, handoffId, summary, reuseWorktreeOf: run.id, decisionId },
+  };
+}
+
+export async function nextAttempt(
+  db: Database,
+  endedRunId: string,
+  deps?: RouteDeps,
+  runtimeFilter?: (runtime: string) => boolean,
+): Promise<NextAttempt | null> {
+  const res = await nextAttemptOrPark(db, endedRunId, deps, runtimeFilter);
+  return res.kind === "next" ? res.attempt : null;
 }
 
 export function linkHandoff(db: Database, handoffId: string, toRunId: string): void {

@@ -63,7 +63,7 @@ test("org sets hiring.decision human, team sets auto → member in the team sees
   const got = effective(db, ctx, "hiring.decision");
   expect(got).toMatchObject({ value: "auto", layer: "team", targetId: team });
   expect(got.chain.map((r) => r.layer)).toEqual(["org", "team"]);
-  expect(explain(db, ctx)).toHaveLength(6);
+  expect(explain(db, ctx)).toHaveLength(7);
 });
 
 test("org autonomy strict, agent row full (inserted directly) → effective strict from org", () => {

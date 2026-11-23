@@ -72,12 +72,12 @@ export function startedRunsSince(db: Database, memberId: string, since: number):
   );
 }
 
-export function membersWithPending(db: Database): string[] {
+export function membersWithPending(db: Database, now: number = Date.now()): string[] {
   return db
-    .query<{ member_id: string }, []>(
-      "SELECT DISTINCT member_id FROM wakeups WHERE status = 'pending'",
+    .query<{ member_id: string }, [number]>(
+      "SELECT DISTINCT member_id FROM wakeups WHERE status = 'pending' AND (not_before IS NULL OR not_before <= ?)",
     )
-    .all()
+    .all(now)
     .map((r) => r.member_id);
 }
 
@@ -105,12 +105,12 @@ export function endedStartedRuns(db: Database): string[] {
     .map((r) => r.run_id);
 }
 
-export function pendingWakes(db: Database, memberId: string): WakeRow[] {
+export function pendingWakes(db: Database, memberId: string, now: number = Date.now()): WakeRow[] {
   return db
-    .query<Raw, [string]>(
-      "SELECT * FROM wakeups WHERE member_id = ? AND status = 'pending' ORDER BY created_at, id",
+    .query<Raw, [string, number]>(
+      "SELECT * FROM wakeups WHERE member_id = ? AND status = 'pending' AND (not_before IS NULL OR not_before <= ?) ORDER BY created_at, id",
     )
-    .all(memberId)
+    .all(memberId, now)
     .map(wakeRow);
 }
 
@@ -122,19 +122,38 @@ export function setStatus(
   db: Database,
   ids: string[],
   status: WakeStatus,
-  extra: { runId?: string; detail?: Record<string, unknown> } = {},
+  extra: { runId?: string; detail?: Record<string, unknown>; notBefore?: number | null } = {},
 ): void {
   if (ids.length === 0) return;
   const now = Date.now();
   const patch = extra.detail === undefined ? null : JSON.stringify(extra.detail);
+  const hasNotBefore = extra.notBefore !== undefined ? 1 : 0;
+  const notBefore = extra.notBefore ?? null;
   db.query(
     `UPDATE wakeups SET status = ?,
-       run_id = COALESCE(?, run_id),
+       run_id = CASE WHEN ? = 'pending' AND ? IS NULL THEN NULL ELSE COALESCE(?, run_id) END,
        detail = CASE WHEN ? IS NULL THEN detail ELSE json_patch(COALESCE(detail, '{}'), ?) END,
+       not_before = CASE WHEN ? = 1 THEN ? WHEN ? != 'pending' THEN NULL ELSE not_before END,
        started_at = CASE WHEN ? = 'started' THEN ? WHEN ? = 'pending' THEN NULL ELSE started_at END,
        ended_at = CASE WHEN ? IN ('done', 'failed', 'skipped') THEN ? ELSE NULL END
      WHERE id IN (${inList(ids)})`,
-  ).run(status, extra.runId ?? null, patch, patch, status, now, status, status, now, ...ids);
+  ).run(
+    status,
+    status,
+    extra.runId ?? null,
+    extra.runId ?? null,
+    patch,
+    patch,
+    hasNotBefore,
+    notBefore,
+    status,
+    status,
+    now,
+    status,
+    status,
+    now,
+    ...ids,
+  );
 }
 
 // A restart loses every live run, so wakes still marked started can never be settled by an event.

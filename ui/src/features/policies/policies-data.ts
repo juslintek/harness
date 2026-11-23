@@ -11,6 +11,7 @@ export const fields: Record<PolicyKey, Field> = {
   "hiring.autoMinScore": { kind: "number" },
   "router.allowedRuntimes": { kind: "list" },
   "router.failover": { kind: "choice", options: ["true", "false"] },
+  "router.accountPolicy": { kind: "choice", options: ["spread", "drain", "expiring"] },
   "heartbeat.maxRunsPerHour": { kind: "number" },
 };
 
@@ -70,6 +71,10 @@ export function valueWord(key: PolicyKey, value: unknown): string {
       { auto: "Automatic", manager: "Manager", human: "A person" }[String(value)] ?? show(value)
     );
   if (key === "router.failover") return value ? "On" : "Off";
+  if (key === "router.accountPolicy")
+    return (
+      { spread: "Spread", drain: "Drain", expiring: "Expiring first" }[String(value)] ?? show(value)
+    );
   if (key === "router.allowedRuntimes") return value === null ? "No limit" : show(value);
   return show(value);
 }
@@ -120,6 +125,16 @@ export const policyMeta: Record<PolicyKey, PolicyMeta> = {
     name: "Fail over to another runtime",
     help: "If a run fails, the next attempt moves to another allowed runtime and continues in the same worktree.",
     explain: none,
+  },
+  "router.accountPolicy": {
+    name: "Account selection policy",
+    help: "How the router chooses among eligible accounts of the winning runtime.",
+    explain: (v) =>
+      ({
+        spread: "Picks the account with the most headroom, breaking ties by least recently used.",
+        drain: "Uses accounts in priority order and moves on only at exhaustion.",
+        expiring: "Spends quota whose window resets soonest among accounts with headroom.",
+      })[String(v)] ?? "",
   },
   "heartbeat.maxRunsPerHour": {
     name: "Runs per agent per hour",

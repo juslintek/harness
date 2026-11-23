@@ -12,7 +12,12 @@ import { isHalted, onRunEvent, type RunDeps } from "../runtimes/api";
 import { onApprovalResolved } from "./approval-wakes";
 import { runPending, sweepEnded } from "./executor";
 import { onPolicyChange } from "./policy-wakes";
-import { endedStartedRuns, failStartedWakes, listWakeups as list } from "./repo";
+import {
+  endedStartedRuns,
+  failStartedWakes,
+  listWakeups as list,
+  membersWithPending,
+} from "./repo";
 import type { ExecDeps } from "./run-input";
 import { dueSchedules, onChat, onTask, recordWake, runNow } from "./triggers";
 
@@ -100,7 +105,8 @@ export function startHeartbeat(db: Database, deps: HeartbeatDeps): () => Promise
     try {
       const swept = endedStartedRuns(db).length > 0;
       const scheduled = isHalted(db) ? 0 : dueSchedules(db, Date.now());
-      if (swept || scheduled > 0 || deferred) kick();
+      const due = !isHalted(db) && membersWithPending(db).length > 0;
+      if (swept || scheduled > 0 || due || deferred) kick();
     } catch (err) {
       report("schedule tick", err);
     }
