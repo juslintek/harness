@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { AccountPolicy } from "../../../shared/policies";
 import { type Engine, QUOTA_PROVIDER } from "../../../shared/router";
 import { listAccounts } from "../agents/api";
 import { liveRuns } from "../runtimes/api";
@@ -6,15 +7,18 @@ import type { QuotaView } from "../usage/api";
 
 const USABLE_STATES = new Set(["active", "unknown"]);
 
-interface AccountCandidate {
+export interface AccountCandidate {
   id: string;
   runtime: string;
   headroom: number | null;
   lastUsedAt: number;
+  priority: number;
+  createdAt: number;
+  earliestResetAt: number | null;
   explicit: boolean;
 }
 
-interface AccountContext {
+export interface AccountContext {
   now: number;
   live: Map<string, number>;
   lastUsed: Map<string, number>;
@@ -39,12 +43,10 @@ function lastUsedByAccount(db: Database): Map<string, number> {
   return new Map(rows.map((r) => [r.acct, r.ts]));
 }
 
-function accountWindows(quota: QuotaView[], runtime: string, accountId: string): number[] {
+function accountQuotaViews(quota: QuotaView[], runtime: string, accountId: string): QuotaView[] {
   const provider = QUOTA_PROVIDER[runtime];
-  return quota.flatMap((q) =>
-    q.provider === provider && q.accountId === accountId && q.usedPercent !== null
-      ? [q.usedPercent]
-      : [],
+  return quota.filter(
+    (q) => q.provider === provider && q.accountId === accountId && q.usedPercent !== null,
   );
 }
 
@@ -73,6 +75,8 @@ interface PoolAccount {
   id: string;
   state: string;
   maxConcurrent: number;
+  priority: number;
+  createdAt: number;
   exhaustedUntil: number | null;
 }
 
@@ -88,13 +92,20 @@ function toCandidate(
   if (acct.exhaustedUntil !== null && acct.exhaustedUntil > ctx.now) return null;
   if ((ctx.live.get(acct.id) ?? 0) >= acct.maxConcurrent) return null;
   if (isExcluded(engine, acct.id, ctx.exclude)) return null;
-  const used = accountWindows(quota, engine.runtime, acct.id);
+  const views = accountQuotaViews(quota, engine.runtime, acct.id);
+  const used = views.map((v) => v.usedPercent as number);
   if (used.some((u) => u >= 100)) return null;
+  const resets = views.flatMap((v) =>
+    v.resetsAt !== null && v.resetsAt > ctx.now ? [v.resetsAt] : [],
+  );
   return {
     id: acct.id,
     runtime: engine.runtime,
     headroom: used.length === 0 ? null : 1 - Math.max(...used) / 100,
     lastUsedAt: ctx.lastUsed.get(acct.id) ?? 0,
+    priority: acct.priority,
+    createdAt: acct.createdAt,
+    earliestResetAt: resets.length === 0 ? null : Math.min(...resets),
     explicit,
   };
 }
@@ -114,6 +125,8 @@ export function eligibleAccounts(
           id: `default:${engine.runtime}`,
           state: "unknown",
           maxConcurrent: engine.runtime === "codex" ? 1 : 2,
+          priority: 0,
+          createdAt: 0,
           exhaustedUntil: null,
         },
       ];
@@ -123,15 +136,32 @@ export function eligibleAccounts(
   });
 }
 
-// Spread: pick the eligible account with the most headroom on its tightest window,
-// breaking ties by least-recently-used and then account id for determinism.
-export function pickBestAccount(candidates: AccountCandidate[]): AccountCandidate | null {
-  const sorted = [...candidates].sort(
-    (a, b) =>
-      (b.headroom ?? 0.5) - (a.headroom ?? 0.5) ||
-      a.lastUsedAt - b.lastUsedAt ||
-      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+const cmpId = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+function compareSpread(a: AccountCandidate, b: AccountCandidate): number {
+  return (
+    (b.headroom ?? 0.5) - (a.headroom ?? 0.5) || a.lastUsedAt - b.lastUsedAt || cmpId(a.id, b.id)
   );
+}
+
+// Spread: most headroom on tightest window, LRU tie-break.
+// Drain: ascending priority, then creation order so equal-priority accounts drain in turn instead of alternating.
+// Expiring: soonest active window reset among accounts with headroom; accounts without a known reset sort last.
+export function pickBestAccount(
+  candidates: AccountCandidate[],
+  policy: AccountPolicy = "spread",
+): AccountCandidate | null {
+  const sorted = [...candidates].sort((a, b) => {
+    if (policy === "drain") {
+      return a.priority - b.priority || a.createdAt - b.createdAt || cmpId(a.id, b.id);
+    }
+    if (policy === "expiring") {
+      const ra = a.earliestResetAt ?? Number.POSITIVE_INFINITY;
+      const rb = b.earliestResetAt ?? Number.POSITIVE_INFINITY;
+      return ra - rb || compareSpread(a, b);
+    }
+    return compareSpread(a, b);
+  });
   return sorted[0] ?? null;
 }
 
@@ -140,9 +170,11 @@ export function pickAccountForRuntime(
   runtime: string,
   quota: QuotaView[],
   now: number = Date.now(),
+  policy: AccountPolicy = "spread",
 ): string | null {
   const best = pickBestAccount(
     eligibleAccounts(db, { runtime, model: null }, quota, accountContext(db, undefined, now)),
+    policy,
   );
   return best?.explicit ? best.id : null;
 }

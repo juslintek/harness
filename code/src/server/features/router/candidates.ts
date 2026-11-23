@@ -63,6 +63,7 @@ export async function route(
   const profile = ensureProfile(db, input.memberId);
   const ctx = contextForMember(db, input.memberId, input.taskId ?? undefined);
   const allowed = effective(db, ctx, "router.allowedRuntimes").value;
+  const accountPolicy = effective(db, ctx, "router.accountPolicy").value;
   const agents = await (deps.agents ?? (() => listAgents(db)))();
   const usable = agents.filter((a) => a.enabled && a.loggedIn !== false);
   const quota = await probeQuota(db);
@@ -77,7 +78,7 @@ export async function route(
     .filter((e) => allowed === null || allowed.includes(e.runtime))
     .filter((e) => input.runtimeFilter?.(e.runtime) ?? true)
     .flatMap((e) => {
-      const best = pickBestAccount(eligibleAccounts(db, e, quota, acctCtx));
+      const best = pickBestAccount(eligibleAccounts(db, e, quota, acctCtx), accountPolicy);
       if (!best) return [];
       const engine: Engine = best.explicit
         ? { runtime: e.runtime, model: e.model, accountId: best.id }
@@ -122,6 +123,7 @@ export async function rankEngines(
 ): Promise<Engine[]> {
   const agents = await (deps.agents ?? (() => listAgents(db)))();
   const allowed = effective(db, { orgId: input.orgId }, "router.allowedRuntimes").value;
+  const accountPolicy = effective(db, { orgId: input.orgId }, "router.accountPolicy").value;
   const quota = await probeQuota(db);
   const now = Date.now();
   const acctCtx = accountContext(db, undefined, now);
@@ -132,6 +134,7 @@ export async function rankEngines(
     .flatMap((a) => {
       const best = pickBestAccount(
         eligibleAccounts(db, { runtime: a.id, model: null }, quota, acctCtx),
+        accountPolicy,
       );
       if (!best) return [];
       const engine: Engine = best.explicit

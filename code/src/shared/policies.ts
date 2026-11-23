@@ -3,12 +3,16 @@ import { z } from "zod";
 export const layers = ["harness", "org", "team", "agent", "task"] as const;
 export type Layer = (typeof layers)[number];
 
+export const accountPolicies = ["spread", "drain", "expiring"] as const;
+export type AccountPolicy = (typeof accountPolicies)[number];
+
 export interface PolicyValues {
   autonomy: "full" | "supervised" | "strict";
   "hiring.decision": "auto" | "manager" | "human";
   "hiring.autoMinScore": number;
   "router.allowedRuntimes": string[] | null;
   "router.failover": boolean;
+  "router.accountPolicy": AccountPolicy;
   "heartbeat.maxRunsPerHour": number;
 }
 export type PolicyKey = keyof PolicyValues;
@@ -31,6 +35,7 @@ export const policyKeys: { [K in PolicyKey]: PolicyDef<PolicyValues[K]> } = {
   "hiring.autoMinScore": { schema: z.number().min(0).max(5), default: 3.5 },
   "router.allowedRuntimes": { schema: z.array(z.string().min(1)).nullable(), default: null },
   "router.failover": { schema: z.boolean(), default: true },
+  "router.accountPolicy": { schema: z.enum(accountPolicies), default: "spread" },
   "heartbeat.maxRunsPerHour": { schema: z.number().int().min(1).max(200), default: 20 },
 };
 

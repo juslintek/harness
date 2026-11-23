@@ -10,6 +10,7 @@ export const fields: Record<PolicyKey, Field> = {
   "hiring.autoMinScore": { kind: "number" },
   "router.allowedRuntimes": { kind: "list" },
   "router.failover": { kind: "choice", options: ["true", "false"] },
+  "router.accountPolicy": { kind: "choice", options: ["spread", "drain", "expiring"] },
   "heartbeat.maxRunsPerHour": { kind: "number" },
 };
 
