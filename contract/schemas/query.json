@@ -39,7 +39,8 @@
           "enum": [
             "agent",
             "model",
-            "run"
+            "run",
+            "account"
           ],
           "type": "string"
         },
@@ -61,7 +62,8 @@
           "enum": [
             "agent",
             "model",
-            "run"
+            "run",
+            "account"
           ],
           "type": "string"
         },

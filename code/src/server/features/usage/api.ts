@@ -160,7 +160,12 @@ export function probeQuota(db: Database): Promise<QuotaView[]> {
   return Promise.resolve(latestQuota(db));
 }
 
-const GROUP_COLUMN = { agent: "agent", model: "gen_ai_request_model", run: "run_id" } as const;
+const GROUP_COLUMN = {
+  agent: "agent",
+  model: "gen_ai_request_model",
+  run: "run_id",
+  account: "COALESCE(account_id, 'default:' || agent)",
+} as const;
 
 interface SummaryDbRow {
   key: string | null;
@@ -174,7 +179,7 @@ interface SummaryDbRow {
 
 export function usageSummary(
   db: Database,
-  by: "agent" | "model" | "run",
+  by: "agent" | "model" | "run" | "account",
   sinceMs: number,
 ): UsageSummaryRow[] {
   const col = GROUP_COLUMN[by];

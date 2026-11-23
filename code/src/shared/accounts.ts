@@ -49,3 +49,59 @@ export const accountView: z.ZodType<AccountView> = z.object({
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });
+
+export interface AccountUsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  reasoningTokens: number;
+  reportedCostUsd: number | null;
+  estimatedCostUsd: number;
+  unpricedEvents: number;
+  events: number;
+}
+
+export interface AccountUsageDay extends AccountUsageTotals {
+  day: string;
+}
+
+export interface AccountUsageWindow extends AccountUsageTotals {
+  window: string;
+  usedPercent: number | null;
+  resetsAt: number | null;
+}
+
+export interface AccountUsageReport {
+  accountId: string;
+  runtime: string;
+  totals: AccountUsageTotals;
+  byDay: AccountUsageDay[];
+  windows: AccountUsageWindow[];
+}
+
+const accountUsageTotalsSchema = z.object({
+  inputTokens: z.number().int(),
+  outputTokens: z.number().int(),
+  cacheReadTokens: z.number().int(),
+  cacheWriteTokens: z.number().int(),
+  reasoningTokens: z.number().int(),
+  reportedCostUsd: z.number().nullable(),
+  estimatedCostUsd: z.number(),
+  unpricedEvents: z.number().int(),
+  events: z.number().int(),
+});
+
+export const accountUsageReportSchema: z.ZodType<AccountUsageReport> = z.object({
+  accountId: z.string(),
+  runtime: z.string(),
+  totals: accountUsageTotalsSchema,
+  byDay: z.array(accountUsageTotalsSchema.extend({ day: z.string() })),
+  windows: z.array(
+    accountUsageTotalsSchema.extend({
+      window: z.string(),
+      usedPercent: z.number().nullable(),
+      resetsAt: z.number().nullable(),
+    }),
+  ),
+});

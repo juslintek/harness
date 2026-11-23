@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { type AuthEnv, requireStepUp } from "../auth/api";
+import { accountUsageReport } from "./account-usage";
 import { type AccountDeps, startAccountLogin, testAccount } from "./accounts-login";
 import { AccountError, addAccount, removeAccount, setAccountEnabled } from "./accounts-ops";
 import { getSpec, LoginError, listAccounts } from "./api";
@@ -29,6 +30,13 @@ async function respond(
 export function accountRoutes(db: Database, home: string, deps: AccountDeps = {}): Hono<AuthEnv> {
   const app = new Hono<AuthEnv>();
   app.get("/:id/accounts", (c) => respond(c, () => listAccounts(db, c.req.param("id"))));
+  app.get("/:id/accounts/:acct/usage", async (c) => {
+    const rawSince = c.req.query("since");
+    const since = rawSince === undefined ? 0 : Number(rawSince);
+    if (!Number.isFinite(since) || since < 0) return c.json({ error: "invalid query" }, 400);
+    const { id, acct } = c.req.param();
+    return respond(c, () => accountUsageReport(db, id, acct, since));
+  });
   app.post("/:id/accounts", requireStepUp, async (c) => {
     const body = addBody.safeParse(await c.req.json().catch(() => null));
     if (!body.success) return c.json({ error: "invalid label" }, 400);
