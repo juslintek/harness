@@ -93,3 +93,46 @@ test("router.failover off for the member stops the failover", async () => {
   const id = w.ended("failed", "rate_limited");
   expect(await nextAttempt(w.db, id, agents("claude", "codex"))).toBeNull();
 });
+
+test("failover prefers another account of the same runtime and model before switching runtimes", async () => {
+  const w = world();
+  const addAcct = (id: string, runtime: string) =>
+    w.db.run(
+      `INSERT INTO agent_accounts (id, runtime, kind, label, home, state, max_concurrent, created_at, updated_at)
+       VALUES (?, ?, 'login', ?, '/h', 'active', 2, 1, 1)`,
+      [id, runtime, id],
+    );
+  addAcct("claude-a", "claude");
+  addAcct("claude-b", "claude");
+  addAcct("codex-a", "codex");
+  addAcct("codex-b", "codex");
+  // Give claude-b lower headroom than codex-a so score alone could prefer codex unless failover stays on runtime first.
+  const now = Date.now();
+  w.db.run(
+    `INSERT INTO quota_snapshots (id, provider, account_id, window, used_percent, resets_at, source, ts)
+     VALUES ('q1', 'claude', 'claude-a', 'five_hour', 100, ?, 'manual', ?),
+            ('q2', 'claude', 'claude-b', 'five_hour', 80, ?, 'manual', ?),
+            ('q3', 'codex', 'codex-a', 'five_hour', 5, ?, 'manual', ?)`,
+    [now + 60_000, now, now + 60_000, now, now + 60_000, now],
+  );
+  const first = w.ended("killed", "quota_exhausted");
+  w.db.run("UPDATE runs SET account_id = 'claude-a' WHERE id = ?", [first]);
+  const attempt2 = await nextAttempt(w.db, first, agents("claude", "codex"));
+  expect(attempt2?.engine).toEqual({ runtime: "claude", model: "opus", accountId: "claude-b" });
+  expect(attempt2?.reuseWorktreeOf).toBe(first);
+  expect(attempt2?.summary).toContain("Fix login");
+
+  const second = w.ended("killed", "quota_exhausted", { attempt: 2, batch_id: first });
+  w.db.run("UPDATE runs SET account_id = 'claude-b' WHERE id = ?", [second]);
+  const attempt3 = await nextAttempt(w.db, second, agents("claude", "codex"));
+  expect(attempt3?.engine.runtime).toBe("codex");
+
+  const third = w.ended("killed", "quota_exhausted", {
+    agent_id: "codex",
+    model: null,
+    attempt: 3,
+    batch_id: first,
+  });
+  w.db.run("UPDATE runs SET account_id = 'codex-a' WHERE id = ?", [third]);
+  expect(await nextAttempt(w.db, third, agents("claude", "codex"))).toBeNull();
+});

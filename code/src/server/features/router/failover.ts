@@ -24,11 +24,11 @@ function failsOver(run: RunRow): boolean {
 
 function triedIn(db: Database, batchId: string): Engine[] {
   return db
-    .query<{ agent_id: string; model: string | null }, [string, string]>(
-      "SELECT agent_id, model FROM runs WHERE batch_id = ? OR id = ?",
+    .query<{ agent_id: string; model: string | null; account_id: string }, [string, string]>(
+      "SELECT agent_id, model, COALESCE(account_id, 'default:' || agent_id) AS account_id FROM runs WHERE batch_id = ? OR id = ?",
     )
     .all(batchId, batchId)
-    .map((r) => ({ runtime: r.agent_id, model: r.model }));
+    .map((r) => ({ runtime: r.agent_id, model: r.model, accountId: r.account_id }));
 }
 
 // Two paths can end the same run (the quota watchdog and the run's own error); the unique handoff per
@@ -46,11 +46,15 @@ export async function nextAttempt(
   const ctx = contextForMember(db, run.memberId, run.taskId ?? undefined);
   if (!effective(db, ctx, "router.failover").value) return null;
   const batchId = run.batchId ?? run.id;
-  const [next] = await route(
+  const choices = await route(
     db,
     { memberId: run.memberId, taskId: run.taskId, exclude: triedIn(db, batchId), runtimeFilter },
     deps,
   );
+  // Same CLI + worktree gives the cleanest handoff, so try remaining accounts of the same engine first.
+  const next =
+    choices.find((c) => c.engine.runtime === run.agentId && c.engine.model === run.model) ??
+    choices[0];
   if (!next) return null;
   const summary = await handoffSummary(db, run);
   const handoffId = Bun.randomUUIDv7();
