@@ -17,6 +17,7 @@ import {
 import { applyAutonomy } from "./autonomy";
 import { claudeSettings as buildClaudeSettings, type ClaudeSettings } from "./claude-settings";
 import { codexRules as buildCodexRules } from "./codex-rules";
+import { runGuardHook as guardHookRun } from "./hook";
 import {
   type ActionRequest,
   type L1Result,
@@ -36,6 +37,7 @@ import {
   wrapCommand as sandboxWrapCommand,
   writeSrtSettings as sandboxWriteSrtSettings,
 } from "./sandbox";
+import { runSrtCli as srtCliRun } from "./srt-cli";
 
 export type { ApprovalRow } from "./approvals";
 export type { ActionRequest, Category, L1Result, Scope } from "./l1";
@@ -147,6 +149,14 @@ export function scrubEnv(
 
 export function runTmpDir(runDir: string): string {
   return sandboxRunTmpDir(runDir);
+}
+
+export function runGuardHook(): Promise<number> {
+  return guardHookRun();
+}
+
+export function runSrtCli(args: string[]): Promise<number> {
+  return srtCliRun(args);
 }
 
 function approvalTimeout(opts: CheckOpts | undefined): number {

@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, realpathSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { resolveShareDir } from "../../packaged";
 import { appendLog, getRequest, setFlagged, setStatus, type UpdateRequest } from "./requests";
 import { verifyOnScratch } from "./scratch";
 import { snapshotDb } from "./snapshot";
@@ -31,9 +32,49 @@ export interface PipelineDeps {
   verifyMs: number;
 }
 
-function spawnSwap(binary: string, args: string[], log: string): void {
+function isMissingOrSymlink(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return true;
+  }
+}
+
+// A self-update moves the running binary into <home>/bin/harness-<id>; preserve the original
+// installation's packaged assets (ui/, adapters/, vendor/) at <home>/share/harness and in the
+// swap environment so both the immediate restart and future service restarts find them.
+export function preserveShareDir(
+  home: string,
+  liveBinary: string,
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const share = resolveShareDir(env, { execPath: liveBinary });
+  if (!share) return undefined;
+  let shareReal = resolve(share);
+  try {
+    shareReal = realpathSync(share);
+  } catch {
+    // Keep lexical path if realpath fails.
+  }
+  const link = join(home, "share", "harness");
+  if (resolve(link) !== shareReal && isMissingOrSymlink(link)) {
+    flipSymlink(link, shareReal);
+  }
+  return shareReal;
+}
+
+function spawnSwap(
+  binary: string,
+  args: string[],
+  log: string,
+  shareDir: string | undefined,
+): void {
+  const env =
+    shareDir && !process.env.HARNESS_SHARE_DIR
+      ? { ...process.env, HARNESS_SHARE_DIR: shareDir }
+      : process.env;
   const proc = Bun.spawn([binary, "swap", ...args], {
-    env: process.env,
+    env,
     stdin: "ignore",
     stdout: Bun.file(log),
     stderr: Bun.file(log),
@@ -54,6 +95,7 @@ async function startSwap(
   const snapshot = snapshotDb(db, deps.home, `${req.id}-swap`);
   const current = join(deps.home, "bin", "current");
   const previous = existsSync(current) ? realpathSync(current) : deps.liveBinary;
+  const shareDir = preserveShareDir(deps.home, deps.liveBinary);
   flipSymlink(current, binary);
   spawnSwap(
     current,
@@ -74,6 +116,7 @@ async function startSwap(
       req.id,
     ],
     join(deps.home, `selfupdate-${req.id}.log`),
+    shareDir,
   );
   deps.beginShutdown();
 }

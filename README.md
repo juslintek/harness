@@ -111,14 +111,13 @@ On first boot with an empty database, the server prints a one-time enrollment li
 | `HARNESS_PORT` | `4100` | HTTP/WebSocket port |
 | `HARNESS_HOST` | `127.0.0.1` | Bind address |
 | `HARNESS_ORIGIN` | `http://localhost:<port>` | Browser origin and WebAuthn passkey relying party |
-| `HARNESS_UI_DIST` | *(unset)* | Path to built `ui/dist`; if unset, serves the legacy embedded Preact UI at `/_app` |
+| `HARNESS_UI_DIST` | *(auto / unset)* | Path to built `ui/dist`; packaged releases auto-detect `ui/` beside the binary or under `../share/harness/ui`, falling back to the legacy embedded Preact UI at `/_app` |
+| `HARNESS_SHARE_DIR` | *(auto / unset)* | Override for the packaged assets directory (`ui/`, `adapters/`, `vendor/`) when installed outside `<bin>/../share/harness` |
 | `HARNESS_TRUST_PROXY` | `false` | Set `true` behind a reverse proxy setting `X-Forwarded-For` |
 
 ## Building & Distribution
 
-### Installing from Releases (Zig preview + UI bundle)
-
-> Note: `install.sh` and `Harness-macos-universal.dmg` install the partial Zig backend preview (missing real sandboxed runs and most contract routes; see [Known gaps](#known-gaps-before-public-distribution)). For full functionality today, run the TypeScript/Bun backend from source using the Quick start steps above.
+### Installing from Releases (Linux / macOS)
 
 Linux and macOS (`x64` / `arm64`):
 
@@ -127,32 +126,36 @@ curl -fsSL https://github.com/juslintek/harness/releases/latest/download/install
 harness serve
 ```
 
-Release tags (`v*`) also build via [`.github/workflows/release.yml`](.github/workflows/release.yml):
-- `harness-zig-<os>-<arch>.tar.gz` (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`) bundling `harness`, `harness-hook`, and `ui/` (`ui/dist`)
-- `Harness-macos-universal.dmg` (macOS SwiftUI app bundling the universal Zig backend and `ui/` resources)
+By default, `install.sh` downloads `harness-<os>-<arch>.tar.gz`, verifies its SHA-256 checksum, installs the standalone TypeScript/Bun `harness` binary (with built-in `srt` sandbox and `guard-hook` subcommands) to `~/.local/bin/harness`, and installs the built SolidJS UI (`ui/`), bundled ACP adapters (`adapters/`), and Linux seccomp helper (`vendor/`) to `~/.local/share/harness/`. Set `HARNESS_BACKEND=zig` only if you want to try the incomplete Zig preview instead.
+
+Release tags (`v*`) build via [`.github/workflows/release.yml`](.github/workflows/release.yml):
+- `harness-<os>-<arch>.tar.gz` (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`): default full-featured TypeScript/Bun release bundling `harness`, `ui/` (`ui/dist`), bundled ACP adapters (`adapters/`), and on Linux `vendor/seccomp/<arch>/apply-seccomp`
+- `harness-zig-<os>-<arch>.tar.gz` (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`): Zig preview archive bundling `harness`, `harness-hook`, and `ui/`
+- `Harness-macos-universal.dmg`: macOS SwiftUI app preview bundling the universal Zig backend and `ui/` resources
 - `harness-android-debug.apk` & `harness-android-release-unsigned.apk`
 - `harness-ios-unsigned.ipa` & `harness-ios-simulator.app.zip`
-- `harness-bun-<target>` (standalone Bun binaries; see packaging gaps below)
 
 ### Building from source
 
-Build a standalone single-file Bun binary for `darwin-arm64`, `linux-x64`, or `linux-arm64`:
+Build a standalone binary or full release tarball for `darwin-arm64`, `darwin-x64`, `linux-x64`, or `linux-arm64`:
 
 ```sh
+# Build the SolidJS UI first if packaging a release tarball
+(cd ui && bun install --frozen-lockfile && bun run build)
+
 cd code
-bun run build                                    # host target -> code/dist/harness-<target>
-bun scripts/build.ts --target linux-x64 --out /tmp/out
+bun run build                                                # single binary -> code/dist/harness-<target>
+bun scripts/build.ts --package                               # tarball + sha256 -> code/dist/harness-<target>.tar.gz
+bun scripts/build.ts --target linux-x64 --out /tmp/out --package
 ```
 
 See [docs/distribution.md](docs/distribution.md) for SSH/Tailscale deployment, Ed25519 peer pairing, project sharing, and self-updating, and [docs/accounts.md](docs/accounts.md) for multi-account management, quota-aware routing, and failover.
 
 ### Known gaps before public distribution
 
-If you are evaluating the Zig vs TypeScript release artifacts today:
-
-1. **Zig backend parity & sandboxing**: [zig/src/http/routes.zig](zig/src/http/routes.zig) implements 55 handlers total (52 of the 195 routes in [contract/routes.json](contract/routes.json) plus `/api/guard/hook`, `/mcp`, and `/ws`), while 42 registered routes return `501 not_implemented` and 101 newer contract routes (board/chat/policies/router/budgets/memory/notifications/OAuth/OIDC/federation/deploy/self-update/accounts/mobile) are not registered yet (143 of 195 contract routes missing). Zig also has no `srt` sandbox builder yet, so `POST /api/runs` returns `503 sandbox unavailable` outside `HARNESS_TEST=1`.
-2. **Standalone Bun binary & v0.1.0 packaging gap**: `scripts/install.sh` and `Harness-macos-universal.dmg` default to the Zig backend, while compiled `harness-bun-<target>` binaries embed the legacy Preact UI (`code/src/web`) and still resolve `srt` (`node_modules/.bin/srt`) and `scripts/guard-hook.ts` relative to the source tree via `import.meta.dir`. Until standalone Bun packaging bundles `ui/dist`, `srt`, and the guard hook, running from a source checkout (`cd code && HARNESS_UI_DIST=../ui/dist bun run dev`) is the working full-feature path. (The Zig release archives and `Harness.app` package `ui/dist` alongside the binary and auto-detect it when `HARNESS_UI_DIST` is unset; `zig/tools/embedgen.zig` is still a stub.)
-3. **Unsigned desktop/mobile & incomplete secondary ports**: Android release APKs, iOS IPAs, and macOS `.app`/`.dmg` builds are unsigned/unnotarized in CI; `desktop/macos/` lacks runs, approvals, and passkey/OIDC sign-in; `desktop/dotnet/` has no UI yet.
+1. **Zig backend preview & sandboxing (frozen for v1)**: [zig/src/http/routes.zig](zig/src/http/routes.zig) implements 55 handlers total (52 of the 195 routes in [contract/routes.json](contract/routes.json) plus `/api/guard/hook`, `/mcp`, and `/ws`), while 42 registered routes return `501 not_implemented` and 101 newer contract routes (board/chat/policies/router/budgets/memory/notifications/OAuth/OIDC/federation/deploy/self-update/accounts/mobile) are not registered yet (143 of 195 contract routes missing). Zig also has no `srt` sandbox builder yet, so `POST /api/runs` returns `503 sandbox unavailable` outside `HARNESS_TEST=1`. Use the default TypeScript/Bun release for full functionality.
+2. **Unsigned desktop/mobile & incomplete secondary ports**: Android release APKs, iOS IPAs, and macOS `.app`/`.dmg` builds (which still bundle the Zig preview backend) are unsigned/unnotarized in CI; `desktop/macos/` lacks runs, approvals, and passkey/OIDC sign-in; `desktop/dotnet/` has no UI yet.
+3. **Host prerequisites for live runs**: On Linux, sandboxed agent runs require `bubblewrap` (`bwrap`), `socat`, and `rg` (`ripgrep`) installed on the host. Live `claude` / `codex` runs require the corresponding vendor CLI logged in on the host.
 
 ## Verification & Tests
 

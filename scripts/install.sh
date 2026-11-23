@@ -3,6 +3,7 @@ set -eu
 
 REPO="${HARNESS_REPO:-juslintek/harness}"
 VERSION="${HARNESS_VERSION:-latest}"
+BACKEND="${HARNESS_BACKEND:-ts}"
 INSTALL_DIR="${HARNESS_INSTALL_DIR:-$HOME/.local/bin}"
 DEFAULT_SHARE_DIR="$(dirname "$INSTALL_DIR")/share/harness"
 SHARE_DIR="${HARNESS_SHARE_DIR:-$DEFAULT_SHARE_DIR}"
@@ -29,9 +30,18 @@ case "$arch" in
 esac
 
 target="${os}-${arch}"
-asset="harness-zig-${target}.tar.gz"
+case "$BACKEND" in
+  ts) asset="harness-${target}.tar.gz" ;;
+  zig) asset="harness-zig-${target}.tar.gz" ;;
+  *)
+    echo "Unsupported HARNESS_BACKEND: $BACKEND (expected ts or zig)" >&2
+    exit 1
+    ;;
+esac
 
-if [ "$VERSION" = "latest" ]; then
+if [ -n "${HARNESS_BASE_URL:-}" ]; then
+  base_url="${HARNESS_BASE_URL%/}"
+elif [ "$VERSION" = "latest" ]; then
   base_url="https://github.com/${REPO}/releases/latest/download"
 else
   base_url="https://github.com/${REPO}/releases/download/${VERSION}"
@@ -68,21 +78,29 @@ fi
 mkdir -p "$INSTALL_DIR"
 tar -xzf "${tmp_dir}/${asset}" -C "$tmp_dir"
 install -m 0755 "${tmp_dir}/harness" "${INSTALL_DIR}/harness"
-install -m 0755 "${tmp_dir}/harness-hook" "${INSTALL_DIR}/harness-hook"
-
-if [ -d "${tmp_dir}/ui" ]; then
-  mkdir -p "$SHARE_DIR"
-  rm -rf "${SHARE_DIR}/ui"
-  cp -R "${tmp_dir}/ui" "${SHARE_DIR}/ui"
+if [ -f "${tmp_dir}/harness-hook" ]; then
+  install -m 0755 "${tmp_dir}/harness-hook" "${INSTALL_DIR}/harness-hook"
 fi
 
-echo "Installed harness and harness-hook to ${INSTALL_DIR}"
+for dir in ui adapters vendor; do
+  if [ -d "${tmp_dir}/${dir}" ]; then
+    mkdir -p "$SHARE_DIR"
+    rm -rf "${SHARE_DIR:?}/${dir}"
+    cp -R "${tmp_dir}/${dir}" "${SHARE_DIR}/${dir}"
+  fi
+done
+
+echo "Installed harness (${BACKEND}) to ${INSTALL_DIR}"
 case ":${PATH}:" in
   *":${INSTALL_DIR}:"*) ;;
   *) echo "Add ${INSTALL_DIR} to your PATH: export PATH=\"${INSTALL_DIR}:\$PATH\"" ;;
 esac
 if [ "$SHARE_DIR" != "$DEFAULT_SHARE_DIR" ] && [ -d "${SHARE_DIR}/ui" ]; then
-  echo "Run 'HARNESS_UI_DIST=\"${SHARE_DIR}/ui\" harness serve' to start."
+  if [ "$BACKEND" = "zig" ]; then
+    echo "Run 'HARNESS_UI_DIST=\"${SHARE_DIR}/ui\" harness serve' to start."
+  else
+    echo "Run 'HARNESS_SHARE_DIR=\"${SHARE_DIR}\" harness serve' to start."
+  fi
 else
   echo "Run 'harness serve' to start."
 fi

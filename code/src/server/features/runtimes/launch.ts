@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { mkdir, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { guardHookArg } from "../../packaged";
 import type { AgentSpec } from "../agents/api";
 import {
   claudeSettings,
@@ -232,7 +233,7 @@ export async function createLaunch(
       argv: wrapCommand(settingsPath, [spec.bin, ...spec.args]),
       env,
       mcp: { url: `${base}/mcp`, token },
-      claudeSettings: claudeSettings(process.execPath, HOOK_SCRIPT),
+      claudeSettings: claudeSettings(process.execPath, guardHookArg(HOOK_SCRIPT)),
       scope: { root: tree.path, home: homedir(), harnessHome: home, defaultBranch: branch },
       ...(codex?.finish ? { finish: codex.finish } : {}),
     };
