@@ -111,14 +111,15 @@ async function installSandboxFixture(): Promise<{
   return { bin: join(work, "bin", "harness"), tree, settingsPath };
 }
 
-test("install.sh canonicalizes relative and spaced dirs so printed HARNESS_SHARE_DIR works", async () => {
+test("install.sh canonicalizes relative and spaced dirs even with CDPATH set", async () => {
   const work = scratch("harness-inst-rel-");
   const res = await runCmd(["sh", INSTALL_SH], work, {
     PATH: process.env.PATH ?? "",
     HOME: work,
+    CDPATH: ".",
     HARNESS_BASE_URL: baseUrl,
-    HARNESS_INSTALL_DIR: "./my bin",
-    HARNESS_SHARE_DIR: "./my share",
+    HARNESS_INSTALL_DIR: "my bin",
+    HARNESS_SHARE_DIR: "my share",
   });
   expect(res.code).toBe(0);
   const absShare = join(work, "my share");

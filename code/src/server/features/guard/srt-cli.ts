@@ -92,6 +92,39 @@ function withBundledSeccomp(
   return applyPath ? { ...config, seccomp: { ...config.seccomp, applyPath } } : config;
 }
 
+function installPreSpawnAbort(): {
+  signal: AbortSignal;
+  aborted: Promise<never>;
+  interruptedBy: () => NodeJS.Signals | null;
+  detach: () => void;
+} {
+  const controller = new AbortController();
+  let interruptedSignal: NodeJS.Signals | null = null;
+  let rejectAbort: ((reason?: unknown) => void) | null = null;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
+  // Suppress unhandled rejection if no caller races against `aborted` (e.g. signal arrives during wrap).
+  aborted.catch(() => {});
+  const onSignal = (signal: NodeJS.Signals): void => {
+    interruptedSignal = signal;
+    const err = new Error(`interrupted by ${signal}`);
+    controller.abort(err);
+    rejectAbort?.(err);
+  };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
+  return {
+    signal: controller.signal,
+    aborted,
+    interruptedBy: () => interruptedSignal,
+    detach: () => {
+      process.off("SIGINT", onSignal);
+      process.off("SIGTERM", onSignal);
+    },
+  };
+}
+
 // Built-in srt launcher for compiled binaries, replacing node_modules/.bin/srt outside a source
 // checkout. Fails closed if settings are missing or invalid rather than falling back to defaults.
 export async function runSrtCli(args: string[]): Promise<number> {
@@ -110,43 +143,36 @@ export async function runSrtCli(args: string[]): Promise<number> {
     console.error("harness srt: no command specified");
     return 1;
   }
-  // Abort before spawn if interrupted while initializing proxies or wrapping the sandbox tree.
-  const interrupted = new AbortController();
-  let interruptedSignal: NodeJS.Signals | null = null;
-  const onPreSpawnSignal = (signal: NodeJS.Signals): void => {
-    interruptedSignal = signal;
-    interrupted.abort(new Error(`interrupted by ${signal}`));
-  };
-  const detachPreSpawn = (): void => {
-    process.off("SIGINT", onPreSpawnSignal);
-    process.off("SIGTERM", onPreSpawnSignal);
-  };
-  process.once("SIGINT", onPreSpawnSignal);
-  process.once("SIGTERM", onPreSpawnSignal);
+  const pre = installPreSpawnAbort();
+  let initPromise: Promise<void> | null = null;
   try {
     const checked = loadSettings(parsed.settingsPath);
     if (!checked.success) {
-      detachPreSpawn();
+      pre.detach();
       console.error(`harness srt: invalid settings: ${checked.error.message}`);
       return 1;
     }
-    await SandboxManager.initialize(withBundledSeccomp(checked.data));
-    const wrapped = await SandboxManager.wrapWithSandbox(
-      command,
-      undefined,
-      undefined,
-      interrupted.signal,
-    );
-    detachPreSpawn();
-    if (interruptedSignal !== null) {
+    initPromise = SandboxManager.initialize(withBundledSeccomp(checked.data));
+    await Promise.race([initPromise, pre.aborted]);
+    const wrapped = await SandboxManager.wrapWithSandbox(command, undefined, undefined, pre.signal);
+    pre.detach();
+    const sig = pre.interruptedBy();
+    if (sig !== null) {
       await SandboxManager.reset().catch(() => {});
-      return signalExitCode(interruptedSignal);
+      return signalExitCode(sig);
     }
     return await spawnSandboxed(wrapped);
   } catch (err) {
-    detachPreSpawn();
+    pre.detach();
+    const sig = pre.interruptedBy();
+    if (sig !== null && initPromise !== null) {
+      void initPromise.then(
+        () => SandboxManager.reset().catch(() => {}),
+        () => {},
+      );
+    }
     await SandboxManager.reset().catch(() => {});
-    if (interruptedSignal !== null) return signalExitCode(interruptedSignal);
+    if (sig !== null) return signalExitCode(sig);
     console.error(`harness srt: ${err instanceof Error ? err.message : String(err)}`);
     return 1;
   }

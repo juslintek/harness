@@ -75,7 +75,7 @@ else
 fi
 
 mkdir -p "$INSTALL_DIR"
-INSTALL_DIR=$(cd "$INSTALL_DIR" && pwd)
+INSTALL_DIR=$(CDPATH='' cd -- "$INSTALL_DIR" && pwd)
 parent_dir=$(dirname "$INSTALL_DIR")
 if [ "$parent_dir" = "/" ]; then
   DEFAULT_SHARE_DIR="/share/harness"
@@ -84,7 +84,7 @@ else
 fi
 if [ -n "$CUSTOM_SHARE_DIR" ]; then
   mkdir -p "$CUSTOM_SHARE_DIR"
-  SHARE_DIR=$(cd "$CUSTOM_SHARE_DIR" && pwd)
+  SHARE_DIR=$(CDPATH='' cd -- "$CUSTOM_SHARE_DIR" && pwd)
 else
   SHARE_DIR="$DEFAULT_SHARE_DIR"
 fi
