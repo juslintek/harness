@@ -1,0 +1,238 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ui:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ui-dist
+          path: ui/dist
+
+  build-zig:
+    needs: build-ui
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            zig_target: x86_64-linux-musl
+            os: ubuntu-latest
+          - name: linux-arm64
+            zig_target: aarch64-linux-musl
+            os: ubuntu-latest
+          - name: darwin-x64
+            zig_target: x86_64-macos
+            os: macos-latest
+          - name: darwin-arm64
+            zig_target: aarch64-macos
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ui-dist
+          path: ui/dist
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.17.0
+      - name: Build Zig backend (${{ matrix.name }})
+        working-directory: zig
+        run: |
+          zig build -Doptimize=ReleaseSafe -Dtarget=${{ matrix.zig_target }} --prefix zig-out-${{ matrix.name }}
+      - name: Package tarball and checksum
+        run: |
+          mkdir -p release-assets "zig/zig-out-${{ matrix.name }}/bin/ui"
+          cp -R ui/dist/. "zig/zig-out-${{ matrix.name }}/bin/ui/"
+          tar -C "zig/zig-out-${{ matrix.name }}/bin" -czf "release-assets/harness-zig-${{ matrix.name }}.tar.gz" harness harness-hook ui
+          (cd release-assets && (sha256sum "harness-zig-${{ matrix.name }}.tar.gz" 2>/dev/null || shasum -a 256 "harness-zig-${{ matrix.name }}.tar.gz") > "harness-zig-${{ matrix.name }}.tar.gz.sha256")
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: zig-${{ matrix.name }}
+          path: release-assets/*
+
+  build-macos-app:
+    needs: build-ui
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ui-dist
+          path: ui/dist
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.17.0
+      - name: Build universal Zig backend
+        working-directory: zig
+        run: |
+          zig build -Doptimize=ReleaseSafe -Dtarget=aarch64-macos --prefix zig-out-arm64
+          zig build -Doptimize=ReleaseSafe -Dtarget=x86_64-macos --prefix zig-out-x64
+          mkdir -p zig-out-universal/bin
+          lipo -create -output zig-out-universal/bin/harness zig-out-arm64/bin/harness zig-out-x64/bin/harness
+          lipo -create -output zig-out-universal/bin/harness-hook zig-out-arm64/bin/harness-hook zig-out-x64/bin/harness-hook
+      - name: Build universal HarnessMac SwiftUI app
+        id: macos_build
+        working-directory: desktop/macos
+        run: |
+          swift build -c release --arch arm64 --arch x86_64
+          echo "bin_dir=$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)" >> "$GITHUB_OUTPUT"
+      - name: Assemble Harness.app and DMG
+        run: |
+          APP_DIR="build/Harness.app"
+          mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources/ui"
+          cp "${{ steps.macos_build.outputs.bin_dir }}/HarnessMac" "$APP_DIR/Contents/MacOS/HarnessMac"
+          cp zig/zig-out-universal/bin/harness "$APP_DIR/Contents/Resources/harness"
+          cp zig/zig-out-universal/bin/harness-hook "$APP_DIR/Contents/Resources/harness-hook"
+          cp -R ui/dist/. "$APP_DIR/Contents/Resources/ui/"
+          chmod +x "$APP_DIR/Contents/MacOS/HarnessMac" "$APP_DIR/Contents/Resources/harness" "$APP_DIR/Contents/Resources/harness-hook"
+          sed 's/^          //' > "$APP_DIR/Contents/Info.plist" << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key><string>HarnessMac</string>
+            <key>CFBundleIdentifier</key><string>dev.harness.macos</string>
+            <key>CFBundleName</key><string>Harness</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>1.0.0</string>
+            <key>LSMinimumSystemVersion</key><string>14.0</string>
+          </dict>
+          </plist>
+          EOF
+          mkdir -p release-assets
+          hdiutil create -volname "Harness" -srcfolder "$APP_DIR" -ov -format UDZO release-assets/Harness-macos-universal.dmg
+          (cd release-assets && shasum -a 256 Harness-macos-universal.dmg > Harness-macos-universal.dmg.sha256)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: macos-dmg
+          path: release-assets/*
+
+  build-ts-fallback:
+    needs: build-ui
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-latest
+          - target: linux-arm64
+            os: ubuntu-latest
+          - target: darwin-arm64
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - working-directory: code
+        run: |
+          bun install --frozen-lockfile
+          bun scripts/build.ts --target ${{ matrix.target }} --out ../release-assets
+          mv ../release-assets/harness-${{ matrix.target }} ../release-assets/harness-bun-${{ matrix.target }}
+          (cd ../release-assets && (sha256sum harness-bun-${{ matrix.target }} 2>/dev/null || shasum -a 256 harness-bun-${{ matrix.target }}) > harness-bun-${{ matrix.target }}.sha256)
+          rm -f ../release-assets/harness-${{ matrix.target }}.sha256
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bun-${{ matrix.target }}
+          path: release-assets/*
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+      - name: Build Android APK
+        working-directory: android
+        run: ./gradlew assembleDebug assembleRelease
+      - name: Package Android APKs
+        run: |
+          mkdir -p release-assets
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-assets/harness-android-debug.apk
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk release-assets/harness-android-release-unsigned.apk
+          (cd release-assets && shasum -a 256 harness-android-*.apk > harness-android.apk.sha256)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-apk
+          path: release-assets/*
+
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Generate Xcode project
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build unsigned iOS archive & simulator app
+        working-directory: ios
+        run: |
+          xcodebuild archive \
+            -project Harness.xcodeproj \
+            -scheme Harness \
+            -destination "generic/platform=iOS" \
+            -archivePath build/Harness.xcarchive \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          mkdir -p build/ipa/Payload
+          cp -R build/Harness.xcarchive/Products/Applications/Harness.app build/ipa/Payload/
+          mkdir -p ../release-assets
+          (cd build/ipa && zip -r ../../../release-assets/harness-ios-unsigned.ipa Payload)
+
+          xcodebuild build \
+            -project Harness.xcodeproj \
+            -scheme Harness \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath build/sim \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+          (cd build/sim/Build/Products/Debug-iphonesimulator && zip -r ../../../../../../release-assets/harness-ios-simulator.app.zip Harness.app)
+          (cd ../release-assets && shasum -a 256 harness-ios-* > harness-ios.sha256)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-app
+          path: release-assets/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    needs:
+      - build-zig
+      - build-macos-app
+      - build-ts-fallback
+      - build-android
+      - build-ios
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: all-assets
+          merge-multiple: true
+      - run: |
+          rm -rf all-assets/assets all-assets/icon.svg all-assets/index.html all-assets/manifest.webmanifest all-assets/sw.js
+          cp scripts/install.sh all-assets/install.sh
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          generate_release_notes: true
+          files: all-assets/*

@@ -71,6 +71,9 @@ const KNOWN = new Set([
   "playbooks",
   "agents",
   "integrations",
+  "federation",
+  "deploy",
+  "updates",
   "search",
   "board",
   "chat",
@@ -92,6 +95,9 @@ export function currentKey(): string {
 export function pageTitle(): string {
   const key = currentKey();
   if (key === "account") return "Account";
+  if (key === "federation") return "Federation";
+  if (key === "deploy") return "Deploy";
+  if (key === "updates") return "Updates";
   return (
     navGroups()
       .flatMap((g) => g.items)
