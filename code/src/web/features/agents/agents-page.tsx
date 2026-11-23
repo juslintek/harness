@@ -194,6 +194,11 @@ function RuntimeAccountsSection({
   );
   return (
     <>
+      {pool.error && (
+        <p class="error" role="alert">
+          {pool.error}
+        </p>
+      )}
       <PoolPanel
         agents={agents}
         accountsByRuntime={accountsByRuntime}

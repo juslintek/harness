@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import { accountEnvFor } from "../../../shared/accounts";
 
 export interface AgentSpec {
   id: string;
@@ -178,10 +179,7 @@ export function accountEnv(
   spec: Pick<AgentSpec, "id">,
   account: { home: string | null },
 ): Record<string, string> {
-  if (account.home === null) return {};
-  if (spec.id === "claude") return { CLAUDE_CONFIG_DIR: account.home };
-  if (spec.id === "codex") return { CODEX_HOME: account.home };
-  return {};
+  return accountEnvFor(spec.id, account.home);
 }
 
 const specSchema: z.ZodType<AgentSpec> = z.object({

@@ -211,3 +211,37 @@ test("unprobed reactive rate_limited backs off 15, 30, 60 minutes, notifies once
   expect(getTask(k.db, task.id)?.status).not.toBe("blocked");
   expect(getTask(k.db, nextTask.id)?.status).not.toBe("blocked");
 });
+
+test("exhausting a 3-account pool across attempts 1, 2, and 3 parks the wake instead of failing it and resumes on recovery", async () => {
+  const k = setup();
+  onlyClaude(k);
+  addClaudeAccount(k, "claude-1");
+  addClaudeAccount(k, "claude-2");
+  addClaudeAccount(k, "claude-3");
+  let mode: "fail" | "ok" = "fail";
+  const seenAccounts: string[] = [];
+  k.runDeps.resolveSpec = (id) => ({ ...specFor(id), accountIsolation: true });
+  k.runDeps.lane = async (ctx) => {
+    seenAccounts.push(ctx.env.CLAUDE_CONFIG_DIR ?? "");
+    return mode === "fail" ? rateLimited : ok;
+  };
+  const b = k.agent("bob", [], "claude");
+  stops.push(k.start());
+  const task = k.task("three accounts");
+  updateTask(k.db, task.id, { assigneeId: b.id }, k.human.id);
+
+  await until(() => {
+    const w = parkedWake(k, b.id);
+    const n = k.db.query<{ n: number }, []>("SELECT count(*) AS n FROM runs").get()?.n ?? 0;
+    return n === 3 && w?.status === "pending" && w.not_before !== null;
+  });
+  expect(new Set(seenAccounts).size).toBe(3);
+
+  mode = "ok";
+  const past = Date.now() - 1000;
+  k.db.run("UPDATE agent_accounts SET exhausted_until = ? WHERE id = 'claude-1'", [past]);
+  k.db.run("UPDATE wakeups SET not_before = ?", [past]);
+
+  await until(() => wakes(k.db, b.id)[0]?.status === "done");
+  expect(k.db.query<{ n: number }, []>("SELECT count(*) AS n FROM runs").get()?.n).toBe(4);
+});

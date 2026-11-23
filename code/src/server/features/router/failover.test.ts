@@ -141,11 +141,11 @@ test("failover prefers another account of the same runtime and records it as cho
   expect(await nextAttempt(w.db, third, agents("claude", "codex"))).toBeNull();
 });
 
-test("nextAttemptOrPark parks when attempt 2 exhausts the pool and stops at attempt 3", async () => {
+test("nextAttemptOrPark parks when attempt 2 or 3 exhausts the pool, while capping immediate failover at 3", async () => {
   const w = world();
   const now = Date.now();
   const reset = now + 180_000;
-  for (const id of ["c1", "c2"]) {
+  for (const id of ["c1", "c2", "c3"]) {
     w.db.run(
       `INSERT INTO agent_accounts (id, runtime, kind, label, home, state, max_concurrent, exhausted_until, created_at, updated_at)
        VALUES (?, 'claude', 'login', ?, '/h', 'active', 2, ?, 1, 1)`,
@@ -159,5 +159,17 @@ test("nextAttemptOrPark parks when attempt 2 exhausts the pool and stops at atte
     retryAt: reset,
   });
   const third = w.ended("killed", "quota_exhausted", { attempt: 3, batch_id: first });
-  expect(await nextAttemptOrPark(w.db, third, agents("claude"))).toEqual({ kind: "none" });
+  expect(await nextAttemptOrPark(w.db, third, agents("claude"))).toEqual({
+    kind: "park",
+    retryAt: reset,
+  });
+  // When another runtime still has capacity, attempt 3 does not park and never starts a 4th immediate attempt.
+  expect(await nextAttemptOrPark(w.db, third, agents("claude", "codex"))).toEqual({
+    kind: "none",
+  });
+  // Non-exhaustion failures at attempt 3 still do not park.
+  const nonExhaustion = w.ended("failed", "launch_failed", { attempt: 3, batch_id: first });
+  expect(await nextAttemptOrPark(w.db, nonExhaustion, agents("claude"))).toEqual({
+    kind: "none",
+  });
 });

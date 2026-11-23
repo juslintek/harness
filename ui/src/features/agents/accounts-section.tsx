@@ -3,6 +3,7 @@ import {
   type AccountRowView,
   addAccountWithLogin,
   type JsonCaller,
+  loginAccount,
   mapAccountRows,
   removeAccountConfirmed,
 } from "@shared/accounts-ui";
@@ -27,11 +28,14 @@ function stateTone(row: AccountRowView): "success" | "warning" | "danger" | "neu
 }
 
 function AccountRow(props: { row: AccountRowView; reload: () => void }): JSX.Element {
+  const loginAct = createAction();
   const testAct = createAction();
   const toggleAct = createAction();
   const removeAct = createAction();
-  const busy = () => testAct.busy() || toggleAct.busy() || removeAct.busy();
-  const err = () => testAct.error() ?? toggleAct.error() ?? removeAct.error();
+  const [loginCommand, setLoginCommand] = createSignal<string | null>(null);
+  const busy = () => loginAct.busy() || testAct.busy() || toggleAct.busy() || removeAct.busy();
+  const err = () => loginAct.error() ?? testAct.error() ?? toggleAct.error() ?? removeAct.error();
+  const canRetryLogin = () => props.row.state === "pending" || props.row.state === "logged_out";
 
   return (
     <tr>
@@ -68,6 +72,20 @@ function AccountRow(props: { row: AccountRowView; reload: () => void }): JSX.Ele
       </td>
       <td data-label="Actions">
         <div class="cli-actions">
+          <Show when={canRetryLogin()}>
+            <Button
+              size="sm"
+              disabled={busy()}
+              onClick={() => {
+                setLoginCommand(null);
+                void loginAct.run(async () => {
+                  setLoginCommand(await loginAccount(addCall, props.row));
+                });
+              }}
+            >
+              Log in
+            </Button>
+          </Show>
           <Button
             size="sm"
             disabled={busy()}
@@ -129,6 +147,13 @@ function AccountRow(props: { row: AccountRowView; reload: () => void }): JSX.Ele
             />
           </Show>
         </div>
+        <Show when={loginCommand()}>
+          {(cmd) => (
+            <p class="muted" role="status">
+              Finish login: <code>{cmd()}</code>
+            </p>
+          )}
+        </Show>
         <Show when={err()}>
           {(m) => (
             <p class="error" role="alert">

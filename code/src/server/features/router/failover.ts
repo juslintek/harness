@@ -2,8 +2,10 @@ import type { Database } from "bun:sqlite";
 import type { Engine } from "../../../shared/router";
 import { contextForMember, effective } from "../policies/api";
 import { getRun, killRun, liveRuns, type RunRow } from "../runtimes/api";
-import { onQuotaRecorded } from "../usage/api";
+import { onQuotaRecorded, probeQuota } from "../usage/api";
+import { accountContext, eligibleAccounts } from "./accounts";
 import { type RouteDeps, routeOutcome } from "./candidates";
+import { listRouteDecisions } from "./decisions";
 import { handoffSummary } from "./handoff";
 
 export interface NextAttempt {
@@ -59,6 +61,72 @@ function insertHandoff(db: Database, run: RunRow, batchId: string, summary: stri
   return inserted.changes === 0 ? null : handoffId;
 }
 
+// At the attempt cap we never start another immediate attempt, so avoid re-running agent discovery
+// when another candidate that was eligible at launch still has capacity in the DB.
+async function hasUnexhaustedSibling(
+  db: Database,
+  run: RunRow,
+  allowed: string[] | null,
+  runtimeFilter?: (runtime: string) => boolean,
+): Promise<boolean> {
+  const decision = listRouteDecisions(db, { runId: run.id, limit: 1 })[0];
+  if (!decision) return false;
+  const current = run.accountId ?? `default:${run.agentId}`;
+  const siblings = decision.candidates.filter(
+    (c) =>
+      c.rejectedBy === null &&
+      c.account !== current &&
+      (allowed === null || allowed.includes(c.runtime)) &&
+      (runtimeFilter?.(c.runtime) ?? true),
+  );
+  if (siblings.length === 0) return false;
+  const unlinked = new Set(
+    db
+      .query<{ agent_id: string }, []>("SELECT agent_id FROM agent_links WHERE enabled = 0")
+      .all()
+      .map((r) => r.agent_id),
+  );
+  const quota = await probeQuota(db);
+  const acctCtx = accountContext(db);
+  return siblings.some(
+    (c) =>
+      !unlinked.has(c.runtime) &&
+      eligibleAccounts(
+        db,
+        { runtime: c.runtime, model: c.model, accountId: c.account },
+        quota,
+        acctCtx,
+      ).length > 0,
+  );
+}
+
+async function parkAtLimit(
+  db: Database,
+  run: RunRow,
+  allowed: string[] | null,
+  deps?: RouteDeps,
+  runtimeFilter?: (runtime: string) => boolean,
+): Promise<FailoverDecision> {
+  if (!isExhaustionStop(run)) return { kind: "none" };
+  if (await hasUnexhaustedSibling(db, run, allowed, runtimeFilter)) return { kind: "none" };
+  const batchId = run.batchId ?? run.id;
+  const { poolExhausted } = await routeOutcome(
+    db,
+    {
+      memberId: run.memberId as string,
+      taskId: run.taskId,
+      exclude: triedIn(db, batchId),
+      preferEngine: { runtime: run.agentId, model: run.model },
+      runtimeFilter,
+      record: false,
+    },
+    deps,
+  );
+  return poolExhausted !== null
+    ? { kind: "park", retryAt: poolExhausted.retryAt }
+    : { kind: "none" };
+}
+
 // Two paths can end the same run (the quota watchdog and the run's own error); the unique handoff per
 // failed run lets only one of them continue.
 export async function nextAttemptOrPark(
@@ -68,11 +136,15 @@ export async function nextAttemptOrPark(
   runtimeFilter?: (runtime: string) => boolean,
 ): Promise<FailoverDecision> {
   const run = getRun(db, endedRunId);
-  if (!run?.memberId || !run.worktree || !failsOver(run) || run.attempt >= MAX_ATTEMPTS) {
+  if (!run?.memberId || !run.worktree || !failsOver(run)) {
     return { kind: "none" };
   }
   const ctx = contextForMember(db, run.memberId, run.taskId ?? undefined);
   if (!effective(db, ctx, "router.failover").value) return { kind: "none" };
+  if (run.attempt >= MAX_ATTEMPTS) {
+    const allowed = effective(db, ctx, "router.allowedRuntimes").value;
+    return parkAtLimit(db, run, allowed, deps, runtimeFilter);
+  }
   const batchId = run.batchId ?? run.id;
   // Same CLI + worktree gives the cleanest handoff, so prefer remaining accounts of the same engine first.
   const { choices, poolExhausted, decisionId } = await routeOutcome(

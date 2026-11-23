@@ -2,7 +2,9 @@ import { expect, test } from "bun:test";
 import type { AccountView } from "../../../shared/accounts";
 import {
   addAccountWithLogin,
+  formatAccountLoginCommand,
   formatQuotaAge,
+  loginAccount,
   mapAccountRows,
   poolSummary,
   removeAccountConfirmed,
@@ -95,7 +97,7 @@ test("poolSummary picks the next eligible account by headroom and counts exhaust
   expect(summary.exhaustedCount).toBe(1);
 });
 
-test("addAccountWithLogin creates the account and yields the login command", async () => {
+test("addAccountWithLogin creates the account and yields the isolated login command", async () => {
   const calls: Array<{ path: string; method: string; body?: unknown }> = [];
   const created = acct({ id: "new-1", label: "team-b", state: "pending" });
   const fakeApi = async (
@@ -108,12 +110,37 @@ test("addAccountWithLogin creates the account and yields the login command", asy
   };
   const result = await addAccountWithLogin(fakeApi, "codex", "team-b");
   expect(result.account.id).toBe("new-1");
-  expect(result.command).toBe("codex login");
+  expect(result.command).toBe("CODEX_HOME=/h/accounts/acct-a codex login");
   expect(result.loginError).toBeNull();
   expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
     "POST /api/agents/codex/accounts",
     "POST /api/agents/codex/accounts/new-1/login",
   ]);
+});
+
+test("formatAccountLoginCommand shell-quotes account home and argv, and omits env for default accounts", () => {
+  expect(
+    formatAccountLoginCommand("codex", "/tmp/my accounts/o'brien/$HOME", ["codex", "login"]),
+  ).toBe("CODEX_HOME='/tmp/my accounts/o'\\''brien/$HOME' codex login");
+  expect(formatAccountLoginCommand("claude", "/tmp/claude home", ["claude", "auth", "login"])).toBe(
+    "CLAUDE_CONFIG_DIR='/tmp/claude home' claude auth login",
+  );
+  expect(formatAccountLoginCommand("codex", null, ["codex", "login"])).toBe("codex login");
+});
+
+test("loginAccount retries login on an existing row with its isolated environment", async () => {
+  const calls: string[] = [];
+  const fakeApi = async (path: string): Promise<unknown> => {
+    calls.push(path);
+    return { command: ["codex", "login"] };
+  };
+  const cmd = await loginAccount(fakeApi, {
+    id: "acct-stale",
+    runtime: "codex",
+    home: "/h/accounts/acct stale",
+  });
+  expect(cmd).toBe("CODEX_HOME='/h/accounts/acct stale' codex login");
+  expect(calls).toEqual(["/api/agents/codex/accounts/acct-stale/login"]);
 });
 
 test("addAccountWithLogin preserves the created account and reports loginError when /login fails", async () => {

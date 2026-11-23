@@ -1,4 +1,4 @@
-import type { AccountView } from "./accounts";
+import { type AccountView, accountEnvFor } from "./accounts";
 import { QUOTA_PROVIDER } from "./router";
 import type { QuotaRow } from "./runs";
 
@@ -13,6 +13,7 @@ export interface AccountRowView {
   id: string;
   runtime: string;
   label: string;
+  home: string | null;
   state: AccountView["state"];
   identityHint: string | null;
   isDefault: boolean;
@@ -67,6 +68,7 @@ export function mapAccountRows(
         id: a.id,
         runtime: a.runtime,
         label: a.label,
+        home: a.home,
         state: a.state,
         identityHint: a.identityHint,
         isDefault: a.home === null,
@@ -113,6 +115,33 @@ export type JsonCaller = (
   init: { method: "POST" | "DELETE"; body?: unknown },
 ) => Promise<unknown>;
 
+function shellQuote(arg: string): string {
+  if (arg.length > 0 && /^[A-Za-z0-9_./:@+-]+$/.test(arg)) return arg;
+  return `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
+export function formatAccountLoginCommand(
+  runtime: string,
+  home: string | null,
+  command: string[],
+): string {
+  const envParts = Object.entries(accountEnvFor(runtime, home)).map(
+    ([key, value]) => `${key}=${shellQuote(value)}`,
+  );
+  return [...envParts, ...command.map(shellQuote)].join(" ");
+}
+
+export async function loginAccount(
+  call: JsonCaller,
+  account: Pick<AccountView, "id" | "runtime" | "home">,
+): Promise<string> {
+  const login = (await call(
+    `/api/agents/${encodeURIComponent(account.runtime)}/accounts/${encodeURIComponent(account.id)}/login`,
+    { method: "POST", body: {} },
+  )) as { command: string[] };
+  return formatAccountLoginCommand(account.runtime, account.home, login.command);
+}
+
 export async function addAccountWithLogin(
   call: JsonCaller,
   runtime: string,
@@ -123,11 +152,7 @@ export async function addAccountWithLogin(
     body: { label: label.trim() },
   })) as AccountView;
   try {
-    const login = (await call(
-      `/api/agents/${encodeURIComponent(runtime)}/accounts/${encodeURIComponent(account.id)}/login`,
-      { method: "POST", body: {} },
-    )) as { command: string[] };
-    return { account, command: login.command.join(" "), loginError: null };
+    return { account, command: await loginAccount(call, account), loginError: null };
   } catch (err) {
     return {
       account,

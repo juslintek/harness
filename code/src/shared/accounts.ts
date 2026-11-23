@@ -105,3 +105,10 @@ export const accountUsageReportSchema: z.ZodType<AccountUsageReport> = z.object(
     }),
   ),
 });
+
+export function accountEnvFor(runtime: string, home: string | null): Record<string, string> {
+  if (home === null) return {};
+  if (runtime === "claude") return { CLAUDE_CONFIG_DIR: home };
+  if (runtime === "codex") return { CODEX_HOME: home };
+  return {};
+}
