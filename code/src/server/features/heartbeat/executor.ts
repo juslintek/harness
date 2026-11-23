@@ -63,8 +63,12 @@ export function nextBatch(
   const reachable = kept.filter((w) => !stale.includes(w));
   const first = reachable[0];
   const projectId = first ? wakeProject(db, first) : null;
+  const origin = first ? parkedOrigin(first) : null;
   const same = (w: WakeRow): boolean =>
-    wakeProject(db, w) === projectId && first !== undefined && lane(w) === lane(first);
+    wakeProject(db, w) === projectId &&
+    first !== undefined &&
+    lane(w) === lane(first) &&
+    parkedOrigin(w) === origin;
   const batch = reachable.filter(same);
   const memoryOnly = first !== undefined && lane(first) !== "work";
   return { wakes: memoryOnly ? batch.slice(0, MAX_WAKES) : batch, projectId };
@@ -78,14 +82,31 @@ interface Batch {
 
 type StartResult = { kind: "started"; runId: string } | { kind: "parked" } | { kind: "failed" };
 
+function parkedOrigin(w: WakeRow): string | null {
+  const id = (w.detail as { parkedFromRunId?: unknown } | null)?.parkedFromRunId;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+function wasParkedWake(w: WakeRow): boolean {
+  const detail = w.detail as { route?: unknown } | null;
+  return detail?.route === "pool_exhausted" || parkedOrigin(w) !== null;
+}
+
 function parkedOriginRun(db: Database, wakes: WakeRow[]): RunRow | null {
   for (const w of wakes) {
-    const detail = w.detail as { parkedFromRunId?: unknown } | null;
-    if (typeof detail?.parkedFromRunId !== "string") continue;
-    const prev = getRun(db, detail.parkedFromRunId);
+    const id = parkedOrigin(w);
+    if (id === null) continue;
+    const prev = getRun(db, id);
     if (prev?.worktree && prev.branch && existsSync(prev.worktree)) return prev;
   }
   return null;
+}
+
+function batchIdFor(batch: Batch, prev: RunRow | null): string {
+  // Recovered wakes get a fresh failover-chain id so accounts tried before cooldown stay eligible.
+  return prev !== null || batch.wakes.some(wasParkedWake)
+    ? Bun.randomUUIDv7()
+    : (batch.ids[0] as string);
 }
 
 async function startFirst(
@@ -127,7 +148,7 @@ async function startFirst(
     member: runMember(db, member, batch.projectId, mem.index),
     ...(prev ? { reuseWorktreeOf: prev.id } : {}),
     attempt: 1,
-    batchId: batch.ids[0] as string,
+    batchId: batchIdFor(batch, prev),
   });
   if (decisionId !== null) linkRouteDecision(db, decisionId, runId);
   return { kind: "started", runId };
