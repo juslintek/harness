@@ -1,4 +1,37 @@
 {
+  "accountLoginSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "type": "object"
+    }
+  },
   "agentRowSchema": {
     "input": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -424,6 +457,93 @@
       "required": [
         "up",
         "version"
+      ],
+      "type": "object"
+    }
+  },
+  "quotaRowSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "resetsAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "number"
+        },
+        "usedPercent": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "window": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "window",
+        "usedPercent",
+        "resetsAt",
+        "source",
+        "ts",
+        "accountId"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "resetsAt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "number"
+        },
+        "usedPercent": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "window": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "window",
+        "usedPercent",
+        "resetsAt",
+        "source",
+        "ts",
+        "accountId"
       ],
       "type": "object"
     }
