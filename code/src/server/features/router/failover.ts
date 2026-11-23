@@ -11,6 +11,7 @@ export interface NextAttempt {
   handoffId: string;
   summary: string;
   reuseWorktreeOf: string;
+  decisionId?: string | null;
 }
 
 export type FailoverDecision =
@@ -54,7 +55,7 @@ export async function nextAttemptOrPark(
   const ctx = contextForMember(db, run.memberId, run.taskId ?? undefined);
   if (!effective(db, ctx, "router.failover").value) return { kind: "none" };
   const batchId = run.batchId ?? run.id;
-  const { choices, poolExhausted } = await routeOutcome(
+  const { choices, poolExhausted, decisionId } = await routeOutcome(
     db,
     { memberId: run.memberId, taskId: run.taskId, exclude: triedIn(db, batchId), runtimeFilter },
     deps,
@@ -88,7 +89,7 @@ export async function nextAttemptOrPark(
   if (inserted.changes === 0) return { kind: "none" };
   return {
     kind: "next",
-    attempt: { engine: next.engine, handoffId, summary, reuseWorktreeOf: run.id },
+    attempt: { engine: next.engine, handoffId, summary, reuseWorktreeOf: run.id, decisionId },
   };
 }
 

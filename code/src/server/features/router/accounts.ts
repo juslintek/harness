@@ -80,33 +80,54 @@ interface PoolAccount {
   exhaustedUntil: number | null;
 }
 
-function toCandidate(
+export interface RejectedAccount {
+  id: string;
+  runtime: string;
+  rejectedBy: string;
+}
+
+function rejectReason(
+  acct: PoolAccount,
+  engine: Engine,
+  used: number[],
+  ctx: AccountContext,
+): string | null {
+  if (engine.accountId != null && acct.id !== engine.accountId) return "pinned_account";
+  if (!USABLE_STATES.has(acct.state)) return "state";
+  if (acct.exhaustedUntil !== null && acct.exhaustedUntil > ctx.now) return "exhausted_until";
+  if ((ctx.live.get(acct.id) ?? 0) >= acct.maxConcurrent) return "max_concurrent";
+  if (isExcluded(engine, acct.id, ctx.exclude)) return "excluded";
+  if (used.some((u) => u >= 100)) return "quota_full";
+  return null;
+}
+
+function evaluateAccount(
   acct: PoolAccount,
   engine: Engine,
   quota: QuotaView[],
   ctx: AccountContext,
   explicit: boolean,
-): AccountCandidate | null {
-  if (engine.accountId != null && acct.id !== engine.accountId) return null;
-  if (!USABLE_STATES.has(acct.state)) return null;
-  if (acct.exhaustedUntil !== null && acct.exhaustedUntil > ctx.now) return null;
-  if ((ctx.live.get(acct.id) ?? 0) >= acct.maxConcurrent) return null;
-  if (isExcluded(engine, acct.id, ctx.exclude)) return null;
+): { candidate: AccountCandidate } | { rejected: RejectedAccount } {
   const views = accountQuotaViews(quota, engine.runtime, acct.id);
   const used = views.map((v) => v.usedPercent as number);
-  if (used.some((u) => u >= 100)) return null;
+  const rejectedBy = rejectReason(acct, engine, used, ctx);
+  if (rejectedBy !== null) {
+    return { rejected: { id: acct.id, runtime: engine.runtime, rejectedBy } };
+  }
   const resets = views.flatMap((v) =>
     v.resetsAt !== null && v.resetsAt > ctx.now ? [v.resetsAt] : [],
   );
   return {
-    id: acct.id,
-    runtime: engine.runtime,
-    headroom: used.length === 0 ? null : 1 - Math.max(...used) / 100,
-    lastUsedAt: ctx.lastUsed.get(acct.id) ?? 0,
-    priority: acct.priority,
-    createdAt: acct.createdAt,
-    earliestResetAt: resets.length === 0 ? null : Math.min(...resets),
-    explicit,
+    candidate: {
+      id: acct.id,
+      runtime: engine.runtime,
+      headroom: used.length === 0 ? null : 1 - Math.max(...used) / 100,
+      lastUsedAt: ctx.lastUsed.get(acct.id) ?? 0,
+      priority: acct.priority,
+      createdAt: acct.createdAt,
+      earliestResetAt: resets.length === 0 ? null : Math.min(...resets),
+      explicit,
+    },
   };
 }
 
@@ -128,17 +149,30 @@ function runtimePool(db: Database, runtime: string): { pool: PoolAccount[]; expl
   };
 }
 
+export function evaluateAccounts(
+  db: Database,
+  engine: Engine,
+  quota: QuotaView[],
+  ctx: AccountContext,
+): { eligible: AccountCandidate[]; rejected: RejectedAccount[] } {
+  const { pool, explicit } = runtimePool(db, engine.runtime);
+  const eligible: AccountCandidate[] = [];
+  const rejected: RejectedAccount[] = [];
+  for (const acct of pool) {
+    const res = evaluateAccount(acct, engine, quota, ctx, explicit);
+    if ("candidate" in res) eligible.push(res.candidate);
+    else rejected.push(res.rejected);
+  }
+  return { eligible, rejected };
+}
+
 export function eligibleAccounts(
   db: Database,
   engine: Engine,
   quota: QuotaView[],
   ctx: AccountContext,
 ): AccountCandidate[] {
-  const { pool, explicit } = runtimePool(db, engine.runtime);
-  return pool.flatMap((acct) => {
-    const candidate = toCandidate(acct, engine, quota, ctx, explicit);
-    return candidate ? [candidate] : [];
-  });
+  return evaluateAccounts(db, engine, quota, ctx).eligible;
 }
 
 const cmpId = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);

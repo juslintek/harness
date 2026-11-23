@@ -2129,6 +2129,20 @@
   },
   {
     "method": "GET",
+    "path": "/api/router/decisions",
+    "policy": {
+      "admin": true,
+      "loopback": false,
+      "orgAdmin": false,
+      "origin": false,
+      "public": false,
+      "rateLimited": false,
+      "session": true,
+      "stepUp": false
+    }
+  },
+  {
+    "method": "GET",
     "path": "/api/router/registry",
     "policy": {
       "admin": true,

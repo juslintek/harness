@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { probeQuota } from "../usage/api";
 import { pickAccountForRuntime } from "./accounts";
 import { type RouteDeps, rankEngines, readyRuntimes, route, routeOutcome } from "./candidates";
+import { linkRouteDecision, listRouteDecisions, pruneRouteDecisions } from "./decisions";
 import {
   type FailoverDecision,
   linkHandoff,
@@ -17,10 +18,13 @@ export type { FailoverDecision, NextAttempt, RouteDeps };
 export {
   estimateCostUsd,
   linkHandoff,
+  linkRouteDecision,
+  listRouteDecisions,
   nextAttempt,
   nextAttemptOrPark,
   onTriaged,
   priceOf,
+  pruneRouteDecisions,
   rankEngines,
   readyRuntimes,
   refreshRegistry,
@@ -39,8 +43,12 @@ const REFRESH_EVERY_MS = 24 * 60 * 60 * 1000;
 export function startRouter(db: Database): () => void {
   const stopTriage = startTriage(db);
   const stopWatchdog = startWatchdog(db);
+  pruneRouteDecisions(db);
   if (registryStale(db, Date.now())) void refreshRegistry(db);
-  const timer = setInterval(() => void refreshRegistry(db), REFRESH_EVERY_MS);
+  const timer = setInterval(() => {
+    pruneRouteDecisions(db);
+    void refreshRegistry(db);
+  }, REFRESH_EVERY_MS);
   timer.unref();
   return () => {
     stopTriage();

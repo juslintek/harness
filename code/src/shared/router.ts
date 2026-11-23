@@ -82,3 +82,39 @@ export const quotaBodySchema: z.ZodType<QuotaBody> = z
     message: "accountId belongs to another provider",
     path: ["accountId"],
   });
+
+export interface RouteCandidateDecision {
+  account: string;
+  runtime: string;
+  model: string | null;
+  score: number | null;
+  rejectedBy: string | null;
+}
+
+export interface RouteDecisionView {
+  id: string;
+  runId: string | null;
+  ts: number;
+  policy: string;
+  chosenAccount: string | null;
+  totalCandidates: number;
+  candidates: RouteCandidateDecision[];
+}
+
+export const routeCandidateDecisionSchema: z.ZodType<RouteCandidateDecision> = z.object({
+  account: z.string(),
+  runtime: z.string(),
+  model: z.string().nullable(),
+  score: z.number().nullable(),
+  rejectedBy: z.string().nullable(),
+});
+
+export const routeDecisionViewSchema: z.ZodType<RouteDecisionView> = z.object({
+  id: z.string(),
+  runId: z.string().nullable(),
+  ts: z.number(),
+  policy: z.string(),
+  chosenAccount: z.string().nullable(),
+  totalCandidates: z.number().int().nonnegative(),
+  candidates: z.array(routeCandidateDecisionSchema),
+});

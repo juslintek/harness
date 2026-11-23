@@ -5,6 +5,7 @@ import { getMember } from "../orgs/api";
 import {
   type FailoverDecision,
   linkHandoff,
+  linkRouteDecision,
   type NextAttempt,
   nextAttemptOrPark,
 } from "../router/api";
@@ -83,6 +84,7 @@ async function continueWithNext(
     else fail(db, ids, err);
     return;
   }
+  if (next.decisionId) linkRouteDecision(db, next.decisionId, nextRunId);
   // The new run is live whether or not the link is written, so a failure here only loses the audit row.
   try {
     linkHandoff(db, next.handoffId, nextRunId);

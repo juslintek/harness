@@ -74,5 +74,246 @@
       ],
       "type": "object"
     }
+  },
+  "routeCandidateDecisionSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "account": {
+          "type": "string"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rejectedBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "account",
+        "runtime",
+        "model",
+        "score",
+        "rejectedBy"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "type": "string"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rejectedBy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "account",
+        "runtime",
+        "model",
+        "score",
+        "rejectedBy"
+      ],
+      "type": "object"
+    }
+  },
+  "routeDecisionViewSchema": {
+    "input": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "candidates": {
+          "items": {
+            "properties": {
+              "account": {
+                "type": "string"
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rejectedBy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "runtime": {
+                "type": "string"
+              },
+              "score": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "account",
+              "runtime",
+              "model",
+              "score",
+              "rejectedBy"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "chosenAccount": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "policy": {
+          "type": "string"
+        },
+        "runId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "totalCandidates": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ts": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "ts",
+        "policy",
+        "chosenAccount",
+        "totalCandidates",
+        "candidates"
+      ],
+      "type": "object"
+    },
+    "output": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "properties": {
+        "candidates": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "account": {
+                "type": "string"
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "rejectedBy": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "runtime": {
+                "type": "string"
+              },
+              "score": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "account",
+              "runtime",
+              "model",
+              "score",
+              "rejectedBy"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "chosenAccount": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "policy": {
+          "type": "string"
+        },
+        "runId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "totalCandidates": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ts": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "runId",
+        "ts",
+        "policy",
+        "chosenAccount",
+        "totalCandidates",
+        "candidates"
+      ],
+      "type": "object"
+    }
   }
 }

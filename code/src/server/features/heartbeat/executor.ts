@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { getTask } from "../board/api";
 import { budgetGate } from "../budgets/api";
 import { getMember, getProject, type MemberRow } from "../orgs/api";
-import { routeOutcome } from "../router/api";
+import { linkRouteDecision, routeOutcome } from "../router/api";
 import { HaltedError, isHalted, scratchRepo, startRun } from "../runtimes/api";
 import { mcpOnly, memoryRun } from "./memory-notice";
 import { clearExhaustedEpisode, parkWakes } from "./park";
@@ -85,7 +85,7 @@ async function startFirst(
 ): Promise<StartResult> {
   const taskId = batch.wakes.find((w) => w.taskId !== null && getTask(db, w.taskId))?.taskId;
   const runtimeFilter = mcpOnly(deps, batch.wakes);
-  const { choices, poolExhausted } = await routeOutcome(
+  const { choices, poolExhausted, decisionId } = await routeOutcome(
     db,
     { memberId: member.id, taskId, runtimeFilter },
     deps.routeDeps,
@@ -115,6 +115,7 @@ async function startFirst(
     attempt: 1,
     batchId: batch.ids[0] as string,
   });
+  if (decisionId !== null) linkRouteDecision(db, decisionId, runId);
   return { kind: "started", runId };
 }
 
