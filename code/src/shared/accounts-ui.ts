@@ -117,16 +117,24 @@ export async function addAccountWithLogin(
   call: JsonCaller,
   runtime: string,
   label: string,
-): Promise<{ account: AccountView; command: string }> {
+): Promise<{ account: AccountView; command: string | null; loginError: string | null }> {
   const account = (await call(`/api/agents/${encodeURIComponent(runtime)}/accounts`, {
     method: "POST",
     body: { label: label.trim() },
   })) as AccountView;
-  const login = (await call(
-    `/api/agents/${encodeURIComponent(runtime)}/accounts/${encodeURIComponent(account.id)}/login`,
-    { method: "POST", body: {} },
-  )) as { command: string[] };
-  return { account, command: login.command.join(" ") };
+  try {
+    const login = (await call(
+      `/api/agents/${encodeURIComponent(runtime)}/accounts/${encodeURIComponent(account.id)}/login`,
+      { method: "POST", body: {} },
+    )) as { command: string[] };
+    return { account, command: login.command.join(" "), loginError: null };
+  } catch (err) {
+    return {
+      account,
+      command: null,
+      loginError: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 export async function removeAccountConfirmed(

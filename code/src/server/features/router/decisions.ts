@@ -19,13 +19,17 @@ interface DecisionRow {
   chosen_account: string | null;
 }
 
-function encodeCandidates(all: RouteCandidateDecision[]): string {
-  const ordered = [...all].sort((a, b) => {
-    const ae = a.rejectedBy === null ? 0 : 1;
-    const be = b.rejectedBy === null ? 0 : 1;
-    if (ae !== be) return ae - be;
-    return (b.score ?? -1) - (a.score ?? -1);
-  });
+function candidateRank(c: RouteCandidateDecision, chosenAccount: string | null): number {
+  if (c.rejectedBy !== null) return 2;
+  return chosenAccount !== null && c.account === chosenAccount ? 0 : 1;
+}
+
+function encodeCandidates(all: RouteCandidateDecision[], chosenAccount: string | null): string {
+  const ordered = [...all].sort(
+    (a, b) =>
+      candidateRank(a, chosenAccount) - candidateRank(b, chosenAccount) ||
+      (b.score ?? -1) - (a.score ?? -1),
+  );
   const kept = ordered.slice(0, MAX_CANDIDATES);
   let json = JSON.stringify({ total: all.length, candidates: kept } satisfies StoredPayload);
   while (kept.length > 0 && Buffer.byteLength(json, "utf8") > MAX_JSON_BYTES) {
@@ -54,7 +58,7 @@ export function recordRouteDecision(
       input.runId ?? null,
       input.ts,
       input.policy,
-      encodeCandidates(input.candidates),
+      encodeCandidates(input.candidates, input.chosenAccount),
       input.chosenAccount,
     ],
   );

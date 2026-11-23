@@ -33,7 +33,12 @@ export function accountRoutes(db: Database, home: string, deps: AccountDeps = {}
   app.get("/:id/accounts/:acct/usage", async (c) => {
     const rawSince = c.req.query("since");
     const since = rawSince === undefined ? 0 : Number(rawSince);
-    if (!Number.isFinite(since) || since < 0) return c.json({ error: "invalid query" }, 400);
+    if (
+      rawSince !== undefined &&
+      (rawSince.trim() === "" || !Number.isInteger(since) || since < 0)
+    ) {
+      return c.json({ error: "invalid query" }, 400);
+    }
     const { id, acct } = c.req.param();
     return respond(c, () => accountUsageReport(db, id, acct, since));
   });

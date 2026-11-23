@@ -166,13 +166,18 @@ function expireWait(k: ReturnType<typeof setup>): number {
   return t;
 }
 
-test("unprobed reactive rate_limited backs off 15, 30, 60 minutes up to 5h cap and resets after success", async () => {
+test("unprobed reactive rate_limited backs off 15, 30, 60 minutes, notifies once per episode, preserves worktree continuation, and resets after success", async () => {
   const k = setup();
   onlyClaude(k);
   addClaudeAccount(k, "claude-only");
+  const sent = captureNotifications(k);
   let mode: "fail" | "ok" = "fail";
+  const seen: Array<{ cwd: string; prompt: string }> = [];
   k.runDeps.resolveSpec = (id) => ({ ...specFor(id), accountIsolation: true });
-  k.runDeps.lane = async () => (mode === "fail" ? rateLimited : ok);
+  k.runDeps.lane = async (ctx) => {
+    seen.push({ cwd: ctx.cwd, prompt: ctx.prompt });
+    return mode === "fail" ? rateLimited : ok;
+  };
 
   const b = k.agent("bob", [], "claude");
   stops.push(k.start());
@@ -185,16 +190,24 @@ test("unprobed reactive rate_limited backs off 15, 30, 60 minutes up to 5h cap a
   expectMinutes(await waitParkedRun(k, b.id, 2), 30, t);
   t = expireWait(k);
   expectMinutes(await waitParkedRun(k, b.id, 3), 60, t);
+  expect(sent.filter((n) => n.kind === "pool_exhausted")).toHaveLength(1);
 
   mode = "ok";
   expireWait(k);
   await until(() => wakes(k.db, b.id)[0]?.status === "done");
+  // Every retry and the final recovery continued in run 1's worktree with a handoff summary.
+  expect(seen).toHaveLength(4);
+  expect(seen[1]?.cwd).toBe(seen[0]?.cwd as string);
+  expect(seen[3]?.cwd).toBe(seen[0]?.cwd as string);
+  expect(seen[3]?.prompt).toContain("Previous attempt on claude");
 
   mode = "fail";
   t = Date.now();
   const nextTask = k.task("after recovery");
   updateTask(k.db, nextTask.id, { assigneeId: b.id }, k.human.id);
   expectMinutes(await waitParkedRun(k, b.id, 5), 15, t);
+  await until(() => sent.filter((n) => n.kind === "pool_exhausted").length === 2);
+  expect(sent.filter((n) => n.kind === "pool_exhausted")).toHaveLength(2);
   expect(getTask(k.db, task.id)?.status).not.toBe("blocked");
   expect(getTask(k.db, nextTask.id)?.status).not.toBe("blocked");
 });

@@ -189,3 +189,33 @@ test("refreshAcpModels reads the model option from session/new under srt and cle
     .trim();
   expect(left).toBe("");
 });
+
+test("quota_exhausted kill without resetsAt increments exhaustion_streak once (15m, not 30m)", async () => {
+  const x = fixture();
+  const baseDeps = fakeDeps(x, []);
+  const before = Date.now();
+  const id = await startRun(
+    x.db,
+    {
+      ...baseDeps,
+      lane: async (ctx) => {
+        await new Promise((resolve) => ctx.signal.addEventListener("abort", resolve));
+        return { stopReason: "cancelled", text: "", usage: [], error: null, sessionId: null };
+      },
+    },
+    input(x.repo),
+  );
+  await until(() => getRun(x.db, id)?.state === "running");
+  killRun(x.db, id, "quota_exhausted");
+  const done = await waitForRun(id);
+  expect(done).toMatchObject({ state: "killed", reason: "quota_exhausted" });
+  const row = x.db
+    .query<{ exhaustion_streak: number; exhausted_until: number | null }, []>(
+      "SELECT exhaustion_streak, exhausted_until FROM agent_accounts WHERE id = 'default:fake'",
+    )
+    .get();
+  expect(row?.exhaustion_streak).toBe(1);
+  const mins = ((row?.exhausted_until ?? 0) - before) / 60_000;
+  expect(mins).toBeGreaterThanOrEqual(14.5);
+  expect(mins).toBeLessThanOrEqual(15.5);
+});

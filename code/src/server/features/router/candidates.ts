@@ -34,6 +34,8 @@ export interface RouteInput {
   memberId: string;
   taskId?: string | null | undefined;
   exclude?: Engine[] | undefined;
+  // Failover prefers another account of the failed engine before switching runtimes.
+  preferEngine?: { runtime: string; model: string | null } | undefined;
   // Keeps only the runtimes the caller can use for this run, e.g. those able to call MCP tools.
   runtimeFilter?: ((runtime: string) => boolean) | undefined;
   // Read-only preview endpoints pass false so polling never floods route_decisions.
@@ -73,18 +75,19 @@ function candidateEngines(
 function buildChoice(
   db: Database,
   e: Engine,
-  best: AccountCandidate,
+  picked: AccountCandidate,
   ctx: {
     primary: Engine;
     triage: ReturnType<typeof triageOf>;
     stats: StatRow[];
   },
+  headroomOverride: number | null = picked.headroom,
 ): { choice: RouteChoice; lastUsedAt: number } {
-  const engine: Engine = best.explicit
-    ? { runtime: e.runtime, model: e.model, accountId: best.id }
+  const engine: Engine = picked.explicit
+    ? { runtime: e.runtime, model: e.model, accountId: picked.id }
     : { runtime: e.runtime, model: e.model };
   const price = priceOf(db, engine);
-  const headroom = best.headroom;
+  const headroom = headroomOverride;
   const stat = statOf(ctx.stats, engine, ctx.triage?.taskType ?? null);
   const isPrimary = sameEngine(e, ctx.primary);
   const score = scoreEngine({
@@ -101,7 +104,7 @@ function buildChoice(
     headroom === null ? "no quota data" : `${Math.round(headroom * 100)}% quota left`,
     stat ? `${stat.completed}/${stat.runs} completed recently` : "no history",
   ];
-  return { choice: { engine, score, reasons }, lastUsedAt: best.lastUsedAt };
+  return { choice: { engine, score, reasons }, lastUsedAt: picked.lastUsedAt };
 }
 
 function evaluateEngines(
@@ -125,16 +128,18 @@ function evaluateEngines(
         rejectedBy: r.rejectedBy,
       });
     }
-    const best = pickBestAccount(eligible, accountPolicy);
-    if (!best) continue;
-    const built = buildChoice(db, e, best, scoreCtx);
+    const picked = pickBestAccount(eligible, accountPolicy);
+    if (!picked) continue;
+    // Stage 1 ranks engines by their best-headroom eligible account; Stage 2 picks inside the engine by policy.
+    const bestHeadroom = pickBestAccount(eligible, "spread")?.headroom ?? picked.headroom;
+    const built = buildChoice(db, e, picked, scoreCtx, bestHeadroom);
     ranked.push(built);
     for (const c of eligible) {
       logged.push({
         account: c.id,
         runtime: e.runtime,
         model: e.model,
-        score: c.id === best.id ? built.choice.score : buildChoice(db, e, c, scoreCtx).choice.score,
+        score: buildChoice(db, e, c, scoreCtx).choice.score,
         rejectedBy: null,
       });
     }
@@ -143,6 +148,19 @@ function evaluateEngines(
     .sort((a, b) => b.choice.score - a.choice.score || a.lastUsedAt - b.lastUsedAt)
     .map((r) => r.choice);
   return { choices, logged };
+}
+
+function applyPreferred(
+  choices: RouteChoice[],
+  prefer: { runtime: string; model: string | null } | undefined,
+): RouteChoice[] {
+  if (!prefer) return choices;
+  const idx = choices.findIndex(
+    (c) => c.engine.runtime === prefer.runtime && c.engine.model === prefer.model,
+  );
+  if (idx <= 0) return choices;
+  const preferred = choices[idx] as RouteChoice;
+  return [preferred, ...choices.slice(0, idx), ...choices.slice(idx + 1)];
 }
 
 // A window reset in the past already reads as null usage, so 100% here means exhausted now.
@@ -169,7 +187,7 @@ export async function routeOutcome(
     .filter((e) => allowed === null || allowed.includes(e.runtime))
     .filter((e) => input.runtimeFilter?.(e.runtime) ?? true);
 
-  const { choices, logged } = evaluateEngines(
+  const evaluated = evaluateEngines(
     db,
     engines,
     quota,
@@ -177,6 +195,7 @@ export async function routeOutcome(
     accountPolicy,
     scoreCtx,
   );
+  const choices = applyPreferred(evaluated.choices, input.preferEngine);
   const chosenAccount = choices[0]
     ? (choices[0].engine.accountId ?? `default:${choices[0].engine.runtime}`)
     : null;
@@ -187,7 +206,7 @@ export async function routeOutcome(
           ts: now,
           policy: accountPolicy,
           chosenAccount,
-          candidates: logged,
+          candidates: evaluated.logged,
         });
 
   if (choices.length > 0) return { choices, poolExhausted: null, decisionId };
@@ -235,23 +254,22 @@ export async function rankEngines(
     .filter((a) => a.enabled && a.loggedIn !== false)
     .filter((a) => allowed === null || allowed.includes(a.id))
     .flatMap((a) => {
-      const best = pickBestAccount(
-        eligibleAccounts(db, { runtime: a.id, model: null }, quota, acctCtx),
-        accountPolicy,
-      );
-      if (!best) return [];
-      const engine: Engine = best.explicit
-        ? { runtime: a.id, model: null, accountId: best.id }
+      const eligible = eligibleAccounts(db, { runtime: a.id, model: null }, quota, acctCtx);
+      const picked = pickBestAccount(eligible, accountPolicy);
+      if (!picked) return [];
+      const bestHeadroom = pickBestAccount(eligible, "spread")?.headroom ?? picked.headroom;
+      const engine: Engine = picked.explicit
+        ? { runtime: a.id, model: null, accountId: picked.id }
         : { runtime: a.id, model: null };
       const score = scoreEngine({
         engine,
         primary: false,
         triage: { difficulty: input.difficulty },
         price: priceOf(db, engine),
-        headroom: best.headroom,
+        headroom: bestHeadroom,
         stat: statOf(stats, engine, input.taskType),
       });
-      return [{ engine, score, lastUsedAt: best.lastUsedAt }];
+      return [{ engine, score, lastUsedAt: picked.lastUsedAt }];
     })
     .sort((a, b) => b.score - a.score || a.lastUsedAt - b.lastUsedAt)
     .map((r) => r.engine);

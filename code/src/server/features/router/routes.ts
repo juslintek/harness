@@ -18,7 +18,10 @@ export function routerRoutes(db: Database): Hono<AuthEnv> {
   app.get("/decisions", (c) => {
     const rawLimit = c.req.query("limit");
     const limit = rawLimit === undefined ? undefined : Number(rawLimit);
-    if (limit !== undefined && (!Number.isFinite(limit) || limit < 1)) {
+    if (
+      rawLimit !== undefined &&
+      (rawLimit.trim() === "" || !Number.isInteger(limit) || (limit as number) < 1)
+    ) {
       return c.json({ error: "invalid query" }, 400);
     }
     const runId = c.req.query("runId");

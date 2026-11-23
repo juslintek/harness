@@ -5,6 +5,7 @@ import type {
   AccountUsageTotals,
   AccountUsageWindow,
 } from "../../../shared/accounts";
+import { QUOTA_PROVIDER } from "../../../shared/router";
 import { estimateCostUsd } from "../../db/pricing";
 import { AccountError } from "./accounts-ops";
 import { getAccount } from "./accounts-repo";
@@ -19,17 +20,22 @@ interface UsageBucketRow {
   cache_write: number;
   reasoning: number;
   cost: number | null;
-  reported_count: number;
+  reported: number;
   events: number;
 }
 
 interface SnapshotWindowRow {
+  provider: string;
   window: string;
   used_percent: number | null;
   resets_at: number | null;
+  ts: number;
 }
 
-const HOUR_MS = 60 * 60_000;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const QUOTA_TTL_MS: Readonly<Record<string, number>> = { codex: 10 * MINUTE_MS };
+const DEFAULT_QUOTA_TTL_MS = 60 * MINUTE_MS;
 const WINDOW_DURATION_MS: Readonly<Record<string, number>> = {
   five_hour: 5 * HOUR_MS,
   seven_day: 7 * 24 * HOUR_MS,
@@ -62,7 +68,7 @@ function accumulate(db: Database, rows: UsageBucketRow[]): AccountUsageTotals {
     out.cacheWriteTokens += r.cache_write;
     out.reasoningTokens += r.reasoning;
     out.events += r.events;
-    if (r.reported_count === r.events && r.cost !== null) {
+    if (r.reported === 1 && r.cost !== null) {
       reportedSum += r.cost;
       out.estimatedCostUsd += r.cost;
     } else {
@@ -99,32 +105,40 @@ function queryBuckets(
               COALESCE(sum(cache_write_tokens), 0) AS cache_write,
               COALESCE(sum(reasoning_tokens), 0) AS reasoning,
               sum(reported_cost_usd) AS cost,
-              count(reported_cost_usd) AS reported_count,
+              reported_cost_usd IS NOT NULL AS reported,
               count(*) AS events
        FROM events
        WHERE kind = 'usage'
          AND COALESCE(account_id, 'default:' || agent) = ?
          AND ts >= ? ${upper}
-       GROUP BY day, agent, gen_ai_request_model
-       ORDER BY day DESC, agent, gen_ai_request_model`,
+       GROUP BY day, agent, gen_ai_request_model, reported
+       ORDER BY day DESC, agent, gen_ai_request_model, reported`,
     )
     .all(...args);
 }
 
-function latestWindows(db: Database, accountId: string): SnapshotWindowRow[] {
-  const legacyProvider = accountId.startsWith("default:")
-    ? accountId.slice("default:".length)
-    : null;
+function latestWindows(db: Database, runtime: string, accountId: string): SnapshotWindowRow[] {
+  const legacyProvider =
+    accountId === `default:${runtime}` ? (QUOTA_PROVIDER[runtime] ?? runtime) : null;
   return db
     .query<SnapshotWindowRow, [string, string | null]>(
-      `SELECT window, used_percent, resets_at FROM (
-         SELECT window, used_percent, resets_at,
+      `SELECT provider, window, used_percent, resets_at, ts FROM (
+         SELECT provider, window, used_percent, resets_at, ts,
                 row_number() OVER (PARTITION BY window ORDER BY ts DESC, rowid DESC) AS rn
          FROM quota_snapshots
          WHERE account_id = ? OR (account_id IS NULL AND provider = ?)
        ) WHERE rn = 1 ORDER BY window`,
     )
     .all(accountId, legacyProvider);
+}
+
+function effectiveUsedPercent(w: SnapshotWindowRow, now: number): number | null {
+  if (w.resets_at !== null && w.resets_at <= now) return null;
+  if (w.used_percent !== null && w.used_percent >= 100 && w.resets_at !== null) {
+    return w.used_percent;
+  }
+  const ttl = QUOTA_TTL_MS[w.provider] ?? DEFAULT_QUOTA_TTL_MS;
+  return now - w.ts > ttl ? null : w.used_percent;
 }
 
 export function accountUsageReport(
@@ -149,14 +163,14 @@ export function accountUsageReport(
     day,
     ...accumulate(db, list),
   }));
-  const windows: AccountUsageWindow[] = latestWindows(db, accountId).map((w) => {
+  const windows: AccountUsageWindow[] = latestWindows(db, runtime, accountId).map((w) => {
     const span = WINDOW_DURATION_MS[w.window] ?? 24 * HOUR_MS;
     const end = w.resets_at !== null && w.resets_at > now ? w.resets_at : now;
     const start = Math.max(sinceMs, end - span);
     const slice = queryBuckets(db, accountId, start, end);
     return {
       window: w.window,
-      usedPercent: w.resets_at !== null && w.resets_at <= now ? null : w.used_percent,
+      usedPercent: effectiveUsedPercent(w, now),
       resetsAt: w.resets_at,
       ...accumulate(db, slice),
     };

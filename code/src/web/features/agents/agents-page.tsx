@@ -188,7 +188,10 @@ function RuntimeAccountsSection({
       <p class="muted">Loading accounts...</p>
     );
   const { accountsByRuntime, quota, decisions } = pool.data;
-  const visible = agents.filter((a) => a.installed || (accountsByRuntime[a.id]?.length ?? 0) > 0);
+  const visible = agents.filter(
+    (a) =>
+      a.installed || (accountsByRuntime[a.id]?.some((acct) => acct.state !== "removed") ?? false),
+  );
   return (
     <>
       <PoolPanel

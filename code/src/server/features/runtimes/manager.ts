@@ -215,7 +215,8 @@ async function execute(
     reason = err instanceof Error ? err.message : String(err);
   }
   await storeAccount(run);
-  if (run.killReason !== null) [state, reason] = endKilled(db, input.id, run.killReason);
+  if (run.killReason !== null && state !== "killed")
+    [state, reason] = endKilled(db, input.id, run.killReason);
   return finalize(db, input.id, spec.id, state, reason);
 }
 

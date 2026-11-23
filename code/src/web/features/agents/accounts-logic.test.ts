@@ -109,10 +109,23 @@ test("addAccountWithLogin creates the account and yields the login command", asy
   const result = await addAccountWithLogin(fakeApi, "codex", "team-b");
   expect(result.account.id).toBe("new-1");
   expect(result.command).toBe("codex login");
+  expect(result.loginError).toBeNull();
   expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
     "POST /api/agents/codex/accounts",
     "POST /api/agents/codex/accounts/new-1/login",
   ]);
+});
+
+test("addAccountWithLogin preserves the created account and reports loginError when /login fails", async () => {
+  const created = acct({ id: "new-2", label: "team-c", state: "pending" });
+  const fakeApi = async (path: string): Promise<unknown> => {
+    if (path.endsWith("/accounts")) return created;
+    throw new Error("codex could not be started, is it installed?");
+  };
+  const result = await addAccountWithLogin(fakeApi, "codex", "team-c");
+  expect(result.account.id).toBe("new-2");
+  expect(result.command).toBeNull();
+  expect(result.loginError).toContain("is it installed?");
 });
 
 test("removeAccountConfirmed requires explicit confirmation and propagates step_up_required", async () => {

@@ -142,3 +142,48 @@ test("tailer events with no run and legacy NULL account_id rows attribute to def
   expect(body.totals.events).toBe(2);
   expect(body.totals.estimatedCostUsd).toBeCloseTo(3.0, 4);
 });
+
+test("mixed reported and unreported events in the same day/model bucket keep reported cost and count unpriced accurately", async () => {
+  const kit = bootApi();
+  const admin = await kit.user({ admin: true });
+  seedAccount(kit.db, "acct-mix");
+  recordUsage(kit.db, { id: "run-mix", agent: "claude", accountId: "acct-mix" }, [
+    rec({ model: "unpriced-model", reportedCostUsd: 2.5 }),
+    rec({ model: "unpriced-model", reportedCostUsd: null }),
+  ]);
+
+  const res = await kit.call(admin, "GET", "/api/agents/claude/accounts/acct-mix/usage");
+  expect(res.status).toBe(200);
+  const body = accountUsageReportSchema.parse(await res.json());
+  expect(body.totals.reportedCostUsd).toBeNull();
+  expect(body.totals.estimatedCostUsd).toBeCloseTo(2.5, 4);
+  expect(body.totals.unpricedEvents).toBe(1);
+  expect(body.totals.events).toBe(2);
+});
+
+test("stale quota snapshot reads as null and invalid since query returns 400", async () => {
+  const kit = bootApi();
+  const admin = await kit.user({ admin: true });
+  seedAccount(kit.db, "codex-stale", "codex");
+  const now = Date.now();
+  recordQuota(kit.db, {
+    provider: "codex",
+    accountId: "codex-stale",
+    window: "primary",
+    usedPercent: 42,
+    resetsAt: now + 3_600_000,
+    source: "probe",
+    ts: now - 15 * 60_000,
+  });
+
+  const res = await kit.call(admin, "GET", "/api/agents/codex/accounts/codex-stale/usage");
+  expect(res.status).toBe(200);
+  const body = accountUsageReportSchema.parse(await res.json());
+  expect(body.windows.find((w) => w.window === "primary")?.usedPercent).toBeNull();
+
+  for (const bad of ["?since=", "?since=1.5", "?since=-1", "?since=abc"]) {
+    expect(
+      (await kit.call(admin, "GET", `/api/agents/codex/accounts/codex-stale/usage${bad}`)).status,
+    ).toBe(400);
+  }
+});

@@ -10,12 +10,14 @@ import {
   nextAttemptOrPark,
   startWatchdog,
 } from "./failover";
+import { handoffSummary } from "./handoff";
 import { estimateCostUsd, priceOf, refreshRegistry, registryStale } from "./registry";
 import { onTriaged, startTriage, triageOf } from "./triage";
 
 export type { FailoverDecision, NextAttempt, RouteDeps };
 export {
   estimateCostUsd,
+  handoffSummary,
   linkHandoff,
   linkRouteDecision,
   listRouteDecisions,

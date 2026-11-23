@@ -12,7 +12,7 @@ import {
 import { getRun, type RunRow, ShuttingDownError, startRun } from "../runtimes/api";
 import { mcpOnly, memoryRun } from "./memory-notice";
 import { nudgeUndelegated } from "./nudge";
-import { parkWakes } from "./park";
+import { clearExhaustedEpisode, parkWakes } from "./park";
 import { buildPrompt } from "./prompt";
 import { setStatus, startedWakesOf, type WakeRow } from "./repo";
 import { type ExecDeps, fail, runMember, wakeProject } from "./run-input";
@@ -117,13 +117,17 @@ export async function settleRun(db: Database, deps: ExecDeps, runId: string): Pr
   if (decision.kind === "park") {
     const member = run.memberId === null ? null : getMember(db, run.memberId);
     if (member) {
-      parkWakes(db, member, ids, decision.retryAt);
+      parkWakes(db, member, ids, decision.retryAt, run.id);
       return;
     }
   }
   if (decision.kind === "next") {
     await continueWithNext(db, deps, run, wakes, ids, decision.attempt);
     return;
+  }
+  if (run.state === "completed" && run.memberId !== null) {
+    const member = getMember(db, run.memberId);
+    if (member) clearExhaustedEpisode(db, member.orgId);
   }
   const detail = { state: run.state, reason: run.reason };
   setStatus(db, ids, run.state === "completed" ? "done" : "failed", { detail });

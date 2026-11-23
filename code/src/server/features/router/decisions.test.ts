@@ -150,4 +150,44 @@ test("GET /api/router/decisions requires instance admin and returns decisions", 
   const body = (await res.json()) as Array<{ chosenAccount: string | null }>;
   expect(body).toHaveLength(1);
   expect(body[0]?.chosenAccount).toBe("acct-a");
+  expect((await kit.call(admin, "GET", "/api/router/decisions?limit=")).status).toBe(400);
+  expect((await kit.call(admin, "GET", "/api/router/decisions?limit=1.5")).status).toBe(400);
+});
+
+test("chosen account is retained inside the top 10 candidates under drain even with lowest score", async () => {
+  const { db, orgId, memberId } = setup();
+  setPolicy(db, {
+    layer: "org",
+    targetId: orgId,
+    key: "router.accountPolicy",
+    value: "drain",
+    setBy: "u1",
+  });
+  const future = Date.now() + 3600_000;
+  addAccount(db, "acct-chosen", { priority: 0 });
+  recordQuota(db, {
+    provider: "claude",
+    accountId: "acct-chosen",
+    window: "five_hour",
+    usedPercent: 95,
+    resetsAt: future,
+    source: "manual",
+  });
+  for (let i = 1; i <= 14; i++) {
+    const id = `acct-other-${i}`;
+    addAccount(db, id, { priority: i });
+    recordQuota(db, {
+      provider: "claude",
+      accountId: id,
+      window: "five_hour",
+      usedPercent: 10,
+      resetsAt: future,
+      source: "manual",
+    });
+  }
+  await routeOutcome(db, { memberId }, deps);
+  const [d] = listRouteDecisions(db, { limit: 1 });
+  expect(d?.chosenAccount).toBe("acct-chosen");
+  expect(d?.candidates).toHaveLength(10);
+  expect(d?.candidates[0]?.account).toBe("acct-chosen");
 });

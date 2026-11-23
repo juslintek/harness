@@ -1,11 +1,12 @@
 import type { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import { getTask } from "../board/api";
 import { budgetGate } from "../budgets/api";
 import { getMember, getProject, type MemberRow } from "../orgs/api";
-import { linkRouteDecision, routeOutcome } from "../router/api";
-import { HaltedError, isHalted, scratchRepo, startRun } from "../runtimes/api";
+import { handoffSummary, linkRouteDecision, routeOutcome } from "../router/api";
+import { getRun, HaltedError, isHalted, type RunRow, scratchRepo, startRun } from "../runtimes/api";
 import { mcpOnly, memoryRun } from "./memory-notice";
-import { clearExhaustedEpisode, parkWakes } from "./park";
+import { parkWakes } from "./park";
 import { buildPrompt, MAX_WAKES } from "./prompt";
 import {
   endedStartedRuns,
@@ -77,6 +78,16 @@ interface Batch {
 
 type StartResult = { kind: "started"; runId: string } | { kind: "parked" } | { kind: "failed" };
 
+function parkedOriginRun(db: Database, wakes: WakeRow[]): RunRow | null {
+  for (const w of wakes) {
+    const detail = w.detail as { parkedFromRunId?: unknown } | null;
+    if (typeof detail?.parkedFromRunId !== "string") continue;
+    const prev = getRun(db, detail.parkedFromRunId);
+    if (prev?.worktree && prev.branch && existsSync(prev.worktree)) return prev;
+  }
+  return null;
+}
+
 async function startFirst(
   db: Database,
   deps: ExecDeps,
@@ -100,18 +111,21 @@ async function startFirst(
     setStatus(db, batch.ids, "failed", { detail: { route: reason } });
     return { kind: "failed" };
   }
-  clearExhaustedEpisode(db, member.orgId);
   const { runtime, model, accountId } = choice.engine;
+  const prev = parkedOriginRun(db, batch.wakes);
   const repo = batch.projectId === null ? null : (getProject(db, batch.projectId)?.repo ?? null);
   const mem = memoryRun(db, deps, member, runtime, batch.projectId, batch.wakes);
+  const basePrompt = buildPrompt(db, member, batch.wakes, mem.mcp, mem.index !== undefined);
+  const prompt = prev ? `${await handoffSummary(db, prev)}\n\n${basePrompt}` : basePrompt;
   const runId = await startRun(db, deps.runDeps, {
     agentId: runtime,
     ...(model === null ? {} : { model }),
     ...(accountId == null ? {} : { accountId }),
-    repo: repo ?? scratchRepo(deps.home, member.orgId),
-    prompt: buildPrompt(db, member, batch.wakes, mem.mcp, mem.index !== undefined),
+    repo: prev ? prev.repo : (repo ?? scratchRepo(deps.home, member.orgId)),
+    prompt,
     ...(taskId == null ? {} : { taskId }),
     member: runMember(db, member, batch.projectId, mem.index),
+    ...(prev ? { reuseWorktreeOf: prev.id } : {}),
     attempt: 1,
     batchId: batch.ids[0] as string,
   });
@@ -148,7 +162,7 @@ async function launchBatch(
     const started = await startFirst(db, deps, member, { ids, wakes, projectId });
     if (started.kind === "failed") return "retry";
     if (started.kind === "parked") return false;
-    setStatus(db, ids, "started", { runId: started.runId });
+    setStatus(db, ids, "started", { runId: started.runId, detail: { parkedFromRunId: null } });
     await settleRun(db, deps, started.runId);
     return false;
   } catch (err) {

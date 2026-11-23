@@ -14,7 +14,11 @@ export function PoolPanel(props: {
 }): JSX.Element {
   const summaries = () =>
     props.agents
-      .filter((a) => a.installed || (props.accountsByRuntime[a.id]?.length ?? 0) > 0)
+      .filter(
+        (a) =>
+          a.installed ||
+          (props.accountsByRuntime[a.id]?.some((acct) => acct.state !== "removed") ?? false),
+      )
       .map((a) => poolSummary(a.id, props.accountsByRuntime[a.id] ?? [], props.quota));
 
   return (

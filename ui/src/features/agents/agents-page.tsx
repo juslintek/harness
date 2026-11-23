@@ -37,11 +37,7 @@ function OllayaStatus(): JSX.Element {
   );
 }
 
-function AccountsArea(props: {
-  agents: AgentRow[];
-  tick: number;
-  reloadAll: () => void;
-}): JSX.Element {
+function AccountsArea(props: { agents: AgentRow[]; tick: number }): JSX.Element {
   const [pool, { refetch }] = createResource(
     () => ({ ids: props.agents.map((a) => a.id), tick: props.tick }),
     async ({ ids }) => {
@@ -63,16 +59,31 @@ function AccountsArea(props: {
   );
   const reload = (): void => {
     void refetch();
-    props.reloadAll();
+  };
+  const errMessage = (): string | null => {
+    const e: unknown = pool.error;
+    if (!e) return null;
+    return e instanceof Error ? e.message : String(e);
+  };
+  const latest = () => pool.latest;
+  const visibleIds = (): string[] => {
+    const data = latest();
+    if (!data) return [];
+    return props.agents
+      .filter(
+        (a) =>
+          a.installed ||
+          (data.accountsByRuntime[a.id]?.some((acct) => acct.state !== "removed") ?? false),
+      )
+      .map((a) => a.id);
   };
   return (
-    <Show when={pool()}>
-      {(data) => {
-        const visible = () =>
-          props.agents.filter(
-            (a) => a.installed || (data().accountsByRuntime[a.id]?.length ?? 0) > 0,
-          );
-        return (
+    <>
+      <Show when={errMessage()}>
+        {(message) => <State kind="error" message={message()} onRetry={() => void refetch()} />}
+      </Show>
+      <Show when={latest()}>
+        {(data) => (
           <>
             <PoolPanel
               agents={props.agents}
@@ -80,20 +91,20 @@ function AccountsArea(props: {
               quota={data().quota}
               decisions={data().decisions}
             />
-            <For each={visible()}>
-              {(a) => (
+            <For each={visibleIds()}>
+              {(runtime) => (
                 <RuntimeAccountsPanel
-                  runtime={a.id}
-                  accounts={data().accountsByRuntime[a.id] ?? []}
+                  runtime={runtime}
+                  accounts={data().accountsByRuntime[runtime] ?? []}
                   quota={data().quota}
                   reload={reload}
                 />
               )}
             </For>
           </>
-        );
-      }}
-    </Show>
+        )}
+      </Show>
+    </>
   );
 }
 
@@ -158,7 +169,7 @@ export function AgentsPage(): JSX.Element {
                 <For each={rows()}>{(agent) => <CliRow agent={agent} reload={reloadAll} />}</For>
               </tbody>
             </TableBox>
-            <AccountsArea agents={rows()} tick={tick()} reloadAll={reloadAll} />
+            <AccountsArea agents={rows()} tick={tick()} />
           </>
         )}
       </Show>

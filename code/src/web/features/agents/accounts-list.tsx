@@ -31,6 +31,9 @@ function QuotaCell({ row }: { row: AccountRowView }): preact.JSX.Element {
   );
 }
 
+const accountPath = (row: AccountRowView): string =>
+  `/api/agents/${encodeURIComponent(row.runtime)}/accounts/${encodeURIComponent(row.id)}`;
+
 function AccountRowItem({
   row,
   reload,
@@ -41,6 +44,7 @@ function AccountRowItem({
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const base = accountPath(row);
 
   const act = async (fn: () => Promise<unknown>): Promise<void> => {
     setBusy(true);
@@ -71,12 +75,7 @@ function AccountRowItem({
           type="button"
           disabled={busy}
           onClick={() =>
-            void act(() =>
-              api(`/api/agents/${row.runtime}/accounts/${row.id}/test`, accountView, {
-                method: "POST",
-                body: {},
-              }),
-            )
+            void act(() => api(`${base}/test`, accountView, { method: "POST", body: {} }))
           }
         >
           Test
@@ -86,10 +85,7 @@ function AccountRowItem({
           disabled={busy}
           onClick={() =>
             void act(() =>
-              api(`/api/agents/${row.runtime}/accounts/${row.id}`, accountView, {
-                method: "PATCH",
-                body: { enabled: !row.enabled },
-              }),
+              api(base, accountView, { method: "PATCH", body: { enabled: !row.enabled } }),
             )
           }
         >

@@ -74,7 +74,7 @@ function AccountRow(props: { row: AccountRowView; reload: () => void }): JSX.Ele
             onClick={() =>
               void testAct.run(async () => {
                 await api(
-                  `/api/agents/${props.row.runtime}/accounts/${props.row.id}/test`,
+                  `/api/agents/${encodeURIComponent(props.row.runtime)}/accounts/${encodeURIComponent(props.row.id)}/test`,
                   accountView,
                   {
                     method: "POST",
@@ -93,7 +93,7 @@ function AccountRow(props: { row: AccountRowView; reload: () => void }): JSX.Ele
             onClick={() =>
               void toggleAct.run(async () => {
                 await api(
-                  `/api/agents/${props.row.runtime}/accounts/${props.row.id}`,
+                  `/api/agents/${encodeURIComponent(props.row.runtime)}/accounts/${encodeURIComponent(props.row.id)}`,
                   accountView,
                   {
                     method: "PATCH",
@@ -144,6 +144,7 @@ function AccountRow(props: { row: AccountRowView; reload: () => void }): JSX.Ele
 function AddAccountRow(props: { runtime: string; onAdded: () => void }): JSX.Element {
   const [label, setLabel] = createSignal("");
   const [command, setCommand] = createSignal<string | null>(null);
+  const [loginError, setLoginError] = createSignal<string | null>(null);
   const add = createAction();
 
   return (
@@ -152,9 +153,12 @@ function AddAccountRow(props: { runtime: string; onAdded: () => void }): JSX.Ele
       onSubmit={(e) => {
         e.preventDefault();
         if (!label().trim()) return;
+        setCommand(null);
+        setLoginError(null);
         void add.run(async () => {
           const res = await addAccountWithLogin(addCall, props.runtime, label());
           setCommand(res.command);
+          setLoginError(res.loginError);
           setLabel("");
           props.onAdded();
         });
@@ -183,7 +187,7 @@ function AddAccountRow(props: { runtime: string; onAdded: () => void }): JSX.Ele
           </p>
         )}
       </Show>
-      <Show when={add.error()}>
+      <Show when={add.error() ?? loginError()}>
         {(m) => (
           <p class="error" role="alert">
             {m()}

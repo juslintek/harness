@@ -15,7 +15,10 @@ export function PoolPanel({
   decisions: RouteDecisionView[];
 }): preact.JSX.Element {
   const summaries = agents
-    .filter((a) => a.installed || (accountsByRuntime[a.id]?.length ?? 0) > 0)
+    .filter(
+      (a) =>
+        a.installed || (accountsByRuntime[a.id]?.some((acct) => acct.state !== "removed") ?? false),
+    )
     .map((a) => poolSummary(a.id, accountsByRuntime[a.id] ?? [], quota));
 
   return (

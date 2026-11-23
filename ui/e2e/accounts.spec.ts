@@ -4,11 +4,23 @@ import { expect, signIn, test } from "./fixtures";
 
 const ADA = { email: "ada@example.com", name: "Ada", admin: true };
 const SHOTS_DIR = resolve(import.meta.dirname, "../../screenshots");
+const FAKE_BIN = resolve(import.meta.dirname, "../../code/src/server/test-support/fake-bin");
+
+const savedPath = process.env.PATH;
+test.beforeAll(() => {
+  process.env.PATH = `${FAKE_BIN}:${savedPath ?? ""}`;
+});
+test.afterAll(() => {
+  if (savedPath === undefined) delete process.env.PATH;
+  else process.env.PATH = savedPath;
+});
 
 async function usePasskey(page: Page): Promise<void> {
   const dialog = page.getByRole("dialog", { name: "Confirm it's you" });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Use passkey" }).click();
+  const btn = dialog.getByRole("button", { name: "Use passkey" });
+  await btn.focus();
+  await page.keyboard.press("Enter");
   await expect(dialog).toBeHidden();
 }
 
@@ -80,6 +92,7 @@ test.describe("multi-account management and pool panel", () => {
     await page.keyboard.type("team-c");
     await page.keyboard.press("Enter");
     await expect(codexPanel.getByRole("rowheader", { name: "team-c" })).toBeVisible();
+    await expect(codexPanel.getByText(/Finish login:/)).toContainText("codex login");
 
     // Remove the newly added account through the keyboard-accessible ConfirmButton dialog.
     const teamRow = codexPanel.locator("tr", { hasText: "team-c" });
@@ -88,7 +101,9 @@ test.describe("multi-account management and pool panel", () => {
     await page.keyboard.press("Enter");
     const confirmDialog = page.getByRole("dialog", { name: "Remove team-c?" });
     await expect(confirmDialog).toBeVisible();
-    await confirmDialog.getByRole("button", { name: "Remove account" }).click();
+    const confirmBtn = confirmDialog.getByRole("button", { name: "Remove account" });
+    await confirmBtn.focus();
+    await page.keyboard.press("Enter");
     await expect(confirmDialog).toBeHidden();
     await expect(codexPanel.locator("tr", { hasText: "team-c" })).toHaveCount(0);
   });

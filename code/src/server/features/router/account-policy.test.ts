@@ -191,3 +191,39 @@ test("router.accountPolicy rejects invalid values", () => {
     }),
   ).toEqual({ ok: true });
 });
+
+test("drain ranks engines by best eligible headroom in Stage 1 before picking priority-0 account in Stage 2", async () => {
+  const { db, orgId, memberId } = setup();
+  setPolicy(db, {
+    layer: "org",
+    targetId: orgId,
+    key: "router.accountPolicy",
+    value: "drain",
+    setBy: "u1",
+  });
+  const now = Date.now();
+  addAccount(db, "claude-drain", { priority: 0 });
+  addAccount(db, "claude-reserve", { priority: 1 });
+  db.run(
+    `INSERT INTO agent_accounts
+       (id, runtime, kind, label, home, state, max_concurrent, priority, created_at, updated_at)
+     VALUES ('codex-a', 'codex', 'login', 'codex-a', '/h', 'active', 1, 0, 1, 1)`,
+  );
+  quota(db, "claude-drain", 95, now + 3600_000);
+  quota(db, "claude-reserve", 10, now + 3600_000);
+  recordQuota(db, {
+    provider: "codex",
+    accountId: "codex-a",
+    window: "primary",
+    usedPercent: 15,
+    resetsAt: now + 3600_000,
+    source: "manual",
+  });
+
+  const [choice] = await route(db, { memberId }, fakeAgents("claude", "codex"));
+  expect(choice?.engine).toEqual({
+    runtime: "claude",
+    model: "opus",
+    accountId: "claude-drain",
+  });
+});

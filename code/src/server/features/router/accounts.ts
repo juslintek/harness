@@ -43,10 +43,19 @@ function lastUsedByAccount(db: Database): Map<string, number> {
   return new Map(rows.map((r) => [r.acct, r.ts]));
 }
 
-function accountQuotaViews(quota: QuotaView[], runtime: string, accountId: string): QuotaView[] {
+function accountQuotaViews(
+  quota: QuotaView[],
+  runtime: string,
+  accountId: string,
+  now: number,
+): QuotaView[] {
   const provider = QUOTA_PROVIDER[runtime];
   return quota.filter(
-    (q) => q.provider === provider && q.accountId === accountId && q.usedPercent !== null,
+    (q) =>
+      q.provider === provider &&
+      q.accountId === accountId &&
+      q.usedPercent !== null &&
+      (q.resetsAt === null || q.resetsAt > now),
   );
 }
 
@@ -108,7 +117,7 @@ function evaluateAccount(
   ctx: AccountContext,
   explicit: boolean,
 ): { candidate: AccountCandidate } | { rejected: RejectedAccount } {
-  const views = accountQuotaViews(quota, engine.runtime, acct.id);
+  const views = accountQuotaViews(quota, engine.runtime, acct.id, ctx.now);
   const used = views.map((v) => v.usedPercent as number);
   const rejectedBy = rejectReason(acct, engine, used, ctx);
   if (rejectedBy !== null) {
@@ -227,7 +236,7 @@ function accountRecoveryAt(
   quota: QuotaView[],
   now: number,
 ): number | null {
-  const views = accountQuotaViews(quota, runtime, acct.id);
+  const views = accountQuotaViews(quota, runtime, acct.id, now);
   const full = views.filter((v) => v.usedPercent !== null && v.usedPercent >= 100);
   const byCooldown = acct.exhaustedUntil !== null && acct.exhaustedUntil > now;
   if (!byCooldown && full.length === 0) return null;

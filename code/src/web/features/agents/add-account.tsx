@@ -29,6 +29,7 @@ export function AddAccountForm({
     try {
       const res = await addAccountWithLogin(jsonCall, runtime, label);
       setCommand(res.command);
+      if (res.loginError) setMessage(res.loginError);
       setLabel("");
       onAdded();
     } catch (err) {

@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { waitForRun } from "../runtimes/api";
-import { linkHandoff, nextAttempt } from "./failover";
+import { listRouteDecisions } from "./decisions";
+import { linkHandoff, nextAttempt, nextAttemptOrPark } from "./failover";
 import { agents, cleanup, ends, world } from "./failover-kit";
 
 afterAll(cleanup);
@@ -94,7 +95,7 @@ test("router.failover off for the member stops the failover", async () => {
   expect(await nextAttempt(w.db, id, agents("claude", "codex"))).toBeNull();
 });
 
-test("failover prefers another account of the same runtime and model before switching runtimes", async () => {
+test("failover prefers another account of the same runtime and records it as chosenAccount", async () => {
   const w = world();
   const addAcct = (id: string, runtime: string) =>
     w.db.run(
@@ -121,6 +122,9 @@ test("failover prefers another account of the same runtime and model before swit
   expect(attempt2?.engine).toEqual({ runtime: "claude", model: "opus", accountId: "claude-b" });
   expect(attempt2?.reuseWorktreeOf).toBe(first);
   expect(attempt2?.summary).toContain("Fix login");
+  const decision = listRouteDecisions(w.db, { limit: 1 })[0];
+  expect(decision?.id).toBe(attempt2?.decisionId as string);
+  expect(decision?.chosenAccount).toBe("claude-b");
 
   const second = w.ended("killed", "quota_exhausted", { attempt: 2, batch_id: first });
   w.db.run("UPDATE runs SET account_id = 'claude-b' WHERE id = ?", [second]);
@@ -135,4 +139,25 @@ test("failover prefers another account of the same runtime and model before swit
   });
   w.db.run("UPDATE runs SET account_id = 'codex-a' WHERE id = ?", [third]);
   expect(await nextAttempt(w.db, third, agents("claude", "codex"))).toBeNull();
+});
+
+test("nextAttemptOrPark parks when attempt 2 exhausts the pool and stops at attempt 3", async () => {
+  const w = world();
+  const now = Date.now();
+  const reset = now + 180_000;
+  for (const id of ["c1", "c2"]) {
+    w.db.run(
+      `INSERT INTO agent_accounts (id, runtime, kind, label, home, state, max_concurrent, exhausted_until, created_at, updated_at)
+       VALUES (?, 'claude', 'login', ?, '/h', 'active', 2, ?, 1, 1)`,
+      [id, id, reset],
+    );
+  }
+  const first = w.ended("killed", "quota_exhausted");
+  const second = w.ended("killed", "quota_exhausted", { attempt: 2, batch_id: first });
+  expect(await nextAttemptOrPark(w.db, second, agents("claude"))).toEqual({
+    kind: "park",
+    retryAt: reset,
+  });
+  const third = w.ended("killed", "quota_exhausted", { attempt: 3, batch_id: first });
+  expect(await nextAttemptOrPark(w.db, third, agents("claude"))).toEqual({ kind: "none" });
 });

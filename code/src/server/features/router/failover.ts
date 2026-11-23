@@ -40,37 +40,7 @@ function triedIn(db: Database, batchId: string): Engine[] {
     .map((r) => ({ runtime: r.agent_id, model: r.model, accountId: r.account_id }));
 }
 
-// Two paths can end the same run (the quota watchdog and the run's own error); the unique handoff per
-// failed run lets only one of them continue.
-export async function nextAttemptOrPark(
-  db: Database,
-  endedRunId: string,
-  deps?: RouteDeps,
-  runtimeFilter?: (runtime: string) => boolean,
-): Promise<FailoverDecision> {
-  const run = getRun(db, endedRunId);
-  if (!run?.memberId || !run.worktree || !failsOver(run) || run.attempt >= MAX_ATTEMPTS) {
-    return { kind: "none" };
-  }
-  const ctx = contextForMember(db, run.memberId, run.taskId ?? undefined);
-  if (!effective(db, ctx, "router.failover").value) return { kind: "none" };
-  const batchId = run.batchId ?? run.id;
-  const { choices, poolExhausted, decisionId } = await routeOutcome(
-    db,
-    { memberId: run.memberId, taskId: run.taskId, exclude: triedIn(db, batchId), runtimeFilter },
-    deps,
-  );
-  // Same CLI + worktree gives the cleanest handoff, so try remaining accounts of the same engine first.
-  const next =
-    choices.find((c) => c.engine.runtime === run.agentId && c.engine.model === run.model) ??
-    choices[0];
-  if (!next) {
-    if (poolExhausted !== null && isExhaustionStop(run)) {
-      return { kind: "park", retryAt: poolExhausted.retryAt };
-    }
-    return { kind: "none" };
-  }
-  const summary = await handoffSummary(db, run);
+function insertHandoff(db: Database, run: RunRow, batchId: string, summary: string): string | null {
   const handoffId = Bun.randomUUIDv7();
   const inserted = db.run(
     `INSERT INTO run_handoffs (id, batch_id, task_id, member_id, from_run_id, reason, summary, created_at)
@@ -86,7 +56,45 @@ export async function nextAttemptOrPark(
       Date.now(),
     ],
   );
-  if (inserted.changes === 0) return { kind: "none" };
+  return inserted.changes === 0 ? null : handoffId;
+}
+
+// Two paths can end the same run (the quota watchdog and the run's own error); the unique handoff per
+// failed run lets only one of them continue.
+export async function nextAttemptOrPark(
+  db: Database,
+  endedRunId: string,
+  deps?: RouteDeps,
+  runtimeFilter?: (runtime: string) => boolean,
+): Promise<FailoverDecision> {
+  const run = getRun(db, endedRunId);
+  if (!run?.memberId || !run.worktree || !failsOver(run) || run.attempt >= MAX_ATTEMPTS) {
+    return { kind: "none" };
+  }
+  const ctx = contextForMember(db, run.memberId, run.taskId ?? undefined);
+  if (!effective(db, ctx, "router.failover").value) return { kind: "none" };
+  const batchId = run.batchId ?? run.id;
+  // Same CLI + worktree gives the cleanest handoff, so prefer remaining accounts of the same engine first.
+  const { choices, poolExhausted, decisionId } = await routeOutcome(
+    db,
+    {
+      memberId: run.memberId,
+      taskId: run.taskId,
+      exclude: triedIn(db, batchId),
+      preferEngine: { runtime: run.agentId, model: run.model },
+      runtimeFilter,
+    },
+    deps,
+  );
+  const [next] = choices;
+  if (!next) {
+    return poolExhausted !== null && isExhaustionStop(run)
+      ? { kind: "park", retryAt: poolExhausted.retryAt }
+      : { kind: "none" };
+  }
+  const summary = await handoffSummary(db, run);
+  const handoffId = insertHandoff(db, run, batchId, summary);
+  if (handoffId === null) return { kind: "none" };
   return {
     kind: "next",
     attempt: { engine: next.engine, handoffId, summary, reuseWorktreeOf: run.id, decisionId },
