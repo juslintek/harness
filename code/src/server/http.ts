@@ -134,7 +134,10 @@ function adminRoutes(deps: AppDeps): Hono {
   app.route("/integrations", integrationRoutes(db, deps.home, deps.port));
   app.route("/router", routerRoutes(db));
   app.route("/policies", harnessPolicyRoutes(db));
-  app.route("/agents", agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }));
+  app.route(
+    "/agents",
+    agentRoutes(db, { listAcp: (spec) => refreshAcpModels(runDeps, spec) }, deps.home),
+  );
   app.get("/search", (c) => {
     const query = searchQuerySchema.safeParse(c.req.query());
     if (!query.success) return c.json({ error: "invalid query" }, 400);
