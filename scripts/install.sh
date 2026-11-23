@@ -4,6 +4,7 @@ set -eu
 REPO="${HARNESS_REPO:-juslintek/harness}"
 VERSION="${HARNESS_VERSION:-latest}"
 INSTALL_DIR="${HARNESS_INSTALL_DIR:-$HOME/.local/bin}"
+SHARE_DIR="${HARNESS_SHARE_DIR:-$(dirname "$INSTALL_DIR")/share/harness}"
 
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m)
@@ -59,13 +60,20 @@ if command -v sha256sum >/dev/null 2>&1; then
 elif command -v shasum >/dev/null 2>&1; then
   (cd "$tmp_dir" && shasum -a 256 -c "${asset}.sha256")
 else
-  echo "Warning: sha256sum/shasum not found, skipping checksum verification." >&2
+  echo "Error: sha256sum/shasum not found, cannot verify checksum. Aborting." >&2
+  exit 1
 fi
 
 mkdir -p "$INSTALL_DIR"
 tar -xzf "${tmp_dir}/${asset}" -C "$tmp_dir"
 install -m 0755 "${tmp_dir}/harness" "${INSTALL_DIR}/harness"
 install -m 0755 "${tmp_dir}/harness-hook" "${INSTALL_DIR}/harness-hook"
+
+if [ -d "${tmp_dir}/ui" ]; then
+  mkdir -p "$SHARE_DIR"
+  rm -rf "${SHARE_DIR}/ui"
+  cp -R "${tmp_dir}/ui" "${SHARE_DIR}/ui"
+fi
 
 echo "Installed harness and harness-hook to ${INSTALL_DIR}"
 case ":${PATH}:" in

@@ -79,7 +79,8 @@ export function rememberedIds(): string[] {
 
 export function rememberId(id: string): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify([id, ...rememberedIds()].slice(0, 20)));
+    const next = [id, ...rememberedIds().filter((x) => x !== id)].slice(0, 20);
+    localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
     // Private mode: the request still runs, it just is not listed after a reload.
   }

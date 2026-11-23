@@ -202,6 +202,38 @@ pub fn serveHome(
     if (serve_error) |err| return err;
 }
 
+fn hasIndexHtml(io: std.Io, gpa: std.mem.Allocator, dir: []const u8) bool {
+    const probe = std.fs.path.join(gpa, &.{ dir, "index.html" }) catch return false;
+    defer gpa.free(probe);
+    std.Io.Dir.cwd().access(io, probe, .{}) catch return false;
+    return true;
+}
+
+fn resolveUiDistForDir(gpa: std.mem.Allocator, io: std.Io, base_dir: ?[]const u8, env: *const std.process.Environ.Map) !?[]u8 {
+    if (env.get("HARNESS_UI_DIST")) |configured| {
+        if (configured.len > 0) return try gpa.dupe(u8, configured);
+    }
+    const dir = base_dir orelse return null;
+    const rels = [_][]const u8{
+        "ui",
+        "../Resources/ui",
+        "../share/harness/ui",
+        "../../../ui/dist",
+    };
+    for (rels) |rel| {
+        const candidate = try std.fs.path.resolve(gpa, &.{ dir, rel });
+        if (hasIndexHtml(io, gpa, candidate)) return candidate;
+        gpa.free(candidate);
+    }
+    return null;
+}
+
+fn resolveUiDist(gpa: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map) !?[]u8 {
+    const exe_dir = std.process.executableDirPathAlloc(io, gpa) catch null;
+    defer if (exe_dir) |d| gpa.free(d);
+    return resolveUiDistForDir(gpa, io, exe_dir, env);
+}
+
 pub fn serve(init: std.process.Init) u8 {
     const gpa = init.gpa;
     const settings = config_mod.load(gpa, init.environ_map) catch |err| {
@@ -209,6 +241,11 @@ pub fn serve(init: std.process.Init) u8 {
         return 1;
     };
     defer settings.deinit(gpa);
+    const ui_dist = resolveUiDist(gpa, init.io, init.environ_map) catch |err| {
+        std.debug.print("harness: ui dist lookup failed: {t}\n", .{err});
+        return 1;
+    };
+    defer if (ui_dist) |d| gpa.free(d);
     var out_buffer: [256]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(init.io, &out_buffer);
     var held: lock.Held = .{};
@@ -222,7 +259,7 @@ pub fn serve(init: std.process.Init) u8 {
         .host = settings.host,
         .port = settings.port,
         .origin = settings.origin,
-        .ui_dist = init.environ_map.get("HARNESS_UI_DIST"),
+        .ui_dist = ui_dist,
         .trust_proxy = settings.trust_proxy,
         .agents = agents_ctx,
     }, &held, &stdout.interface) catch |err| {
@@ -320,4 +357,37 @@ test "boot: supplied environment starts usage and cancels it on listener failure
     try expectLockGone(io, path);
     const reopened = try Home.open(gpa, io, path, &held);
     reopened.close();
+}
+
+test "boot: resolveUiDistForDir prefers HARNESS_UI_DIST and falls back to packaged locations" {
+    const gpa = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(io, "prefix/bin");
+    try tmp.dir.createDirPath(io, "prefix/share/harness/ui");
+    try tmp.dir.writeFile(io, .{ .sub_path = "prefix/share/harness/ui/index.html", .data = "<!doctype html>" });
+
+    const root = try tmp.dir.realPathFileAlloc(io, ".", gpa);
+    defer gpa.free(root);
+    const bin_dir = try std.fs.path.join(gpa, &.{ root, "prefix/bin" });
+    defer gpa.free(bin_dir);
+
+    var env = std.process.Environ.Map.init(gpa);
+    defer env.deinit();
+
+    const share_ui = (try resolveUiDistForDir(gpa, io, bin_dir, &env)) orelse return error.TestExpectedNonNull;
+    defer gpa.free(share_ui);
+    try std.testing.expect(std.mem.endsWith(u8, share_ui, "/prefix/share/harness/ui"));
+
+    try tmp.dir.createDirPath(io, "prefix/bin/ui");
+    try tmp.dir.writeFile(io, .{ .sub_path = "prefix/bin/ui/index.html", .data = "<!doctype html>" });
+    const local_ui = (try resolveUiDistForDir(gpa, io, bin_dir, &env)) orelse return error.TestExpectedNonNull;
+    defer gpa.free(local_ui);
+    try std.testing.expect(std.mem.endsWith(u8, local_ui, "/prefix/bin/ui"));
+
+    try env.put("HARNESS_UI_DIST", "/custom/ui");
+    const explicit = (try resolveUiDistForDir(gpa, io, bin_dir, &env)) orelse return error.TestExpectedNonNull;
+    defer gpa.free(explicit);
+    try std.testing.expectEqualStrings("/custom/ui", explicit);
 }

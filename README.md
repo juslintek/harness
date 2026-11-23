@@ -125,8 +125,8 @@ harness serve
 ```
 
 Release tags (`v*`) also build via [`.github/workflows/release.yml`](.github/workflows/release.yml):
-- `harness-zig-<os>-<arch>.tar.gz` (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`) with `ui/dist` embedded
-- `Harness-macos-universal.dmg` (macOS SwiftUI app bundling the universal Zig backend)
+- `harness-zig-<os>-<arch>.tar.gz` (`linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`) bundling `harness`, `harness-hook`, and `ui/` (`ui/dist`)
+- `Harness-macos-universal.dmg` (macOS SwiftUI app bundling the universal Zig backend and `ui/` resources)
 - `harness-android-debug.apk` & `harness-android-release-unsigned.apk`
 - `harness-ios-unsigned.ipa` & `harness-ios-simulator.app.zip`
 - `harness-bun-<target>` (TypeScript/Bun fallback binaries with all routes)
@@ -148,7 +148,7 @@ See [docs/distribution.md](docs/distribution.md) for SSH/Tailscale deployment, E
 If you are evaluating the Zig vs TypeScript release artifacts today:
 
 1. **Zig backend parity**: [zig/src/http/routes.zig](zig/src/http/routes.zig) implements core auth, agents, orgs, guard, mcp, logs, usage, runtimes, and WebSockets (56 routes), while 43 routes (board, chat, hiring, policies, budgets, wakeups, router) still return `501 not_implemented`. Use the `harness-bun-<target>` binaries with `HARNESS_UI_DIST=../ui/dist` when you need full feature parity.
-2. **Legacy embedded UI in Bun binary**: `bun run build` in `code/` still embeds `code/src/web`, so pass `HARNESS_UI_DIST=../ui/dist` when running the Bun server/binary to use the redesigned SolidJS UI (the Zig release binaries already embed `ui/dist`).
+2. **Legacy embedded UI in Bun binary**: `bun run build` in `code/` still embeds `code/src/web`, so pass `HARNESS_UI_DIST=../ui/dist` when running the Bun server/binary to use the redesigned SolidJS UI. (The Zig release archives and `Harness.app` package `ui/dist` alongside the binary and auto-detect it when `HARNESS_UI_DIST` is unset; `zig/tools/embedgen.zig` is still a stub.)
 3. **Unsigned desktop/mobile & incomplete secondary ports**: Android release APKs, iOS IPAs, and macOS `.app`/`.dmg` builds are unsigned/unnotarized in CI; `desktop/macos/` lacks runs, approvals, and passkey/OIDC sign-in; `desktop/dotnet/` has no UI yet.
 
 ## Verification & Tests
