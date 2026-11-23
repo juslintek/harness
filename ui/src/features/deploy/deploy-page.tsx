@@ -184,8 +184,17 @@ function DeployBody(): JSX.Element {
   createEffect(() => {
     const live = requests.data()?.some((r) => r.status === "approved" || r.status === "running");
     if (!live) return;
-    const timer = setInterval(() => void requests.reload(), POLL_MS);
-    onCleanup(() => clearInterval(timer));
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async (): Promise<void> => {
+      await requests.reload();
+      if (!stopped) timer = setTimeout(() => void poll(), POLL_MS);
+    };
+    timer = setTimeout(() => void poll(), POLL_MS);
+    onCleanup(() => {
+      stopped = true;
+      clearTimeout(timer);
+    });
   });
 
   const changed = (message: string): void => {

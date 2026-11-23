@@ -4,7 +4,8 @@ set -eu
 REPO="${HARNESS_REPO:-juslintek/harness}"
 VERSION="${HARNESS_VERSION:-latest}"
 INSTALL_DIR="${HARNESS_INSTALL_DIR:-$HOME/.local/bin}"
-SHARE_DIR="${HARNESS_SHARE_DIR:-$(dirname "$INSTALL_DIR")/share/harness}"
+DEFAULT_SHARE_DIR="$(dirname "$INSTALL_DIR")/share/harness"
+SHARE_DIR="${HARNESS_SHARE_DIR:-$DEFAULT_SHARE_DIR}"
 
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m)
@@ -80,4 +81,8 @@ case ":${PATH}:" in
   *":${INSTALL_DIR}:"*) ;;
   *) echo "Add ${INSTALL_DIR} to your PATH: export PATH=\"${INSTALL_DIR}:\$PATH\"" ;;
 esac
-echo "Run 'harness serve' to start."
+if [ "$SHARE_DIR" != "$DEFAULT_SHARE_DIR" ] && [ -d "${SHARE_DIR}/ui" ]; then
+  echo "Run 'HARNESS_UI_DIST=\"${SHARE_DIR}/ui\" harness serve' to start."
+else
+  echo "Run 'harness serve' to start."
+fi

@@ -64,23 +64,24 @@ Most coding agent harnesses are either single-user CLI/IDE wrappers (running wit
 
 ### 1. Install dependencies
 
+From the repository root:
+
 ```sh
-cd code && bun install --frozen-lockfile
-cd ../ui && bun install --frozen-lockfile && bun run build
+(cd code && bun install --frozen-lockfile)
+(cd ui && bun install --frozen-lockfile && bun run build)
 ```
 
 ### 2. Run the server + UI
 
 **Option A: Single-server mode (recommended for local use)**
 
-Point the server at the built SolidJS UI in `ui/dist`:
+From the repository root, point the server at the built SolidJS UI in `ui/dist`:
 
 ```sh
-cd code
-HARNESS_UI_DIST=../ui/dist bun run dev
+(cd code && HARNESS_UI_DIST=../ui/dist bun run dev)
 ```
 
-Open `http://127.0.0.1:4100`.
+Open `http://localhost:4100`.
 
 **Option B: Frontend dev mode (hot reload on `:5173`)**
 
@@ -153,13 +154,15 @@ If you are evaluating the Zig vs TypeScript release artifacts today:
 
 ## Verification & Tests
 
+From the repository root:
+
 ```sh
 # Backend: lint, typecheck, unit/integration tests, knip, depcruise, jscpd, file-size check
-cd code && bun run check
+(cd code && bun run check)
 
 # Conformance suite
-cd code && HARNESS_TARGET=ts bun run conformance
+(cd code && HARNESS_TARGET=ts bun run conformance)
 
 # Web UI: lint, typecheck, unit tests, production build, Playwright e2e
-cd ui && bun run check && bun run e2e
+(cd ui && bun run check && bun run e2e)
 ```

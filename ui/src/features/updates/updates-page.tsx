@@ -1,8 +1,8 @@
-import { createEffect, createSignal, For, type JSX, onCleanup, Show } from "solid-js";
-import { api } from "../../api";
+import { createEffect, createSignal, For, type JSX, onCleanup, Show, untrack } from "solid-js";
+import { ApiError, api } from "../../api";
 import { ErrorLine } from "../../auth/error-line";
 import { me } from "../../auth/me";
-import { minuteStamp } from "../../format";
+import { errorText, minuteStamp } from "../../format";
 import { createLoad } from "../../load";
 import { createAction } from "../../ui/action";
 import { Button, Help, StatusBadge } from "../../ui/atoms";
@@ -124,27 +124,50 @@ function RequestForm(props: { onCreated: (r: UpdateRequestView) => void }): JSX.
   );
 }
 
-async function loadAll(ids: string[]): Promise<UpdateRequestView[]> {
+async function loadAll(
+  ids: string[],
+  previous: Map<string, UpdateRequestView>,
+): Promise<{ rows: UpdateRequestView[]; error: string | null }> {
+  let firstError: string | null = null;
   const loaded = await Promise.all(
-    ids.map((id) =>
-      api(`/api/selfupdate/requests/${encodeURIComponent(id)}`, updateRequestSchema).catch(
-        () => null,
-      ),
-    ),
+    ids.map(async (id): Promise<UpdateRequestView | null> => {
+      try {
+        return await api(`/api/selfupdate/requests/${encodeURIComponent(id)}`, updateRequestSchema);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) return null;
+        firstError ??= errorText(err);
+        return previous.get(id) ?? null;
+      }
+    }),
   );
-  return loaded.filter((r): r is UpdateRequestView => r !== null);
+  return {
+    rows: loaded.filter((r): r is UpdateRequestView => r !== null),
+    error: firstError,
+  };
 }
 
 function UpdatesBody(): JSX.Element {
   const [status, setStatus] = createSignal<string | null>(null);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
+  const [sessionIds, setSessionIds] = createSignal<string[]>([]);
   const [requests, setRequests] = createSignal<UpdateRequestView[]>([]);
   const [tick, setTick] = createSignal(0);
 
+  const reload = async (isLive: () => boolean): Promise<void> => {
+    const ids = untrack(() => Array.from(new Set([...sessionIds(), ...rememberedIds()])));
+    const prev = untrack(() => new Map(requests().map((r) => [r.id, r])));
+    const res = await loadAll(ids, prev);
+    if (!isLive()) return;
+    setRequests(res.rows);
+    setLoadError(res.error);
+  };
+
   createEffect(() => {
     tick();
+    sessionIds();
     let live = true;
-    void loadAll(rememberedIds()).then((all) => {
-      if (live) setRequests(all);
+    void reload(() => live).catch((err: unknown) => {
+      if (live) setLoadError(errorText(err));
     });
     onCleanup(() => {
       live = false;
@@ -154,13 +177,27 @@ function UpdatesBody(): JSX.Element {
   createEffect(() => {
     const busy = requests().some((r) => !isFinished(r.status) && r.status !== "awaiting_approval");
     if (!busy) return;
-    const timer = setInterval(() => setTick((n) => n + 1), POLL_MS);
-    onCleanup(() => clearInterval(timer));
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async (): Promise<void> => {
+      await reload(() => !stopped);
+      if (!stopped) timer = setTimeout(() => void poll(), POLL_MS);
+    };
+    timer = setTimeout(() => void poll(), POLL_MS);
+    onCleanup(() => {
+      stopped = true;
+      clearTimeout(timer);
+    });
   });
 
   const changed = (message: string): void => {
     setStatus(message);
     setTick((n) => n + 1);
+  };
+
+  const created = (r: UpdateRequestView): void => {
+    setSessionIds((prev) => [r.id, ...prev.filter((x) => x !== r.id)]);
+    changed(`Update request for ${r.branch} created`);
   };
 
   return (
@@ -178,7 +215,8 @@ function UpdatesBody(): JSX.Element {
           </Notice>
         )}
       </Show>
-      <RequestForm onCreated={(r) => changed(`Update request for ${r.branch} created`)} />
+      <ErrorLine message={loadError()} />
+      <RequestForm onCreated={created} />
       <Show
         when={requests().length > 0}
         fallback={

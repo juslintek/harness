@@ -356,7 +356,7 @@ function FederationBody(): JSX.Element {
       <SharesPanel
         shares={shares.data() ?? []}
         peers={peers.data() ?? []}
-        projects={projects() ?? []}
+        projects={projects.state === "errored" ? [] : (projects() ?? [])}
         onChange={changed}
       />
     </div>
