@@ -92,7 +92,8 @@
             "approval_resolved",
             "mention",
             "dm",
-            "run_blocked"
+            "run_blocked",
+            "pool_exhausted"
           ],
           "type": "string"
         },
@@ -140,7 +141,8 @@
             "approval_resolved",
             "mention",
             "dm",
-            "run_blocked"
+            "run_blocked",
+            "pool_exhausted"
           ],
           "type": "string"
         },
@@ -198,7 +200,8 @@
             "approval_resolved",
             "mention",
             "dm",
-            "run_blocked"
+            "run_blocked",
+            "pool_exhausted"
           ],
           "type": "string"
         }
@@ -233,7 +236,8 @@
             "approval_resolved",
             "mention",
             "dm",
-            "run_blocked"
+            "run_blocked",
+            "pool_exhausted"
           ],
           "type": "string"
         }

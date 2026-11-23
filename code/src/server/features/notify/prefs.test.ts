@@ -19,7 +19,7 @@ const enabled = (db: Database, memberId: string): string[] =>
 
 test("with no rows only the documented defaults are on", () => {
   const { db, memberId } = setup();
-  expect(effectivePrefs(db, memberId)).toHaveLength(25);
+  expect(effectivePrefs(db, memberId)).toHaveLength(30);
   expect(enabled(db, memberId)).toEqual([
     "email:approval_requested",
     "push:approval_requested",

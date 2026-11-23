@@ -24,10 +24,18 @@ export function markAccountExhausted(db: Database, id: string, until: number): v
   accounts.markExhausted(db, id, until);
 }
 
+export function recordAccountReactiveExhaustion(db: Database, id: string, now?: number): number {
+  return accounts.recordReactiveExhaustion(db, id, now);
+}
+export function resetAccountExhaustion(db: Database, id: string): void {
+  accounts.resetExhaustionStreak(db, id);
+}
+
 const PROBE_IGNORE_STATES = new Set(["disabled", "removing", "removed"]);
 
 export function clearAccountExhaustion(db: Database, id: string): void {
   accounts.updateAccount(db, id, { exhaustedUntil: null });
+  accounts.resetExhaustionStreak(db, id);
 }
 
 export function recordAccountQuotaProbe(

@@ -1,22 +1,31 @@
 import type { Database } from "bun:sqlite";
 import { probeQuota } from "../usage/api";
 import { pickAccountForRuntime } from "./accounts";
-import { type RouteDeps, rankEngines, readyRuntimes, route } from "./candidates";
-import { linkHandoff, type NextAttempt, nextAttempt, startWatchdog } from "./failover";
+import { type RouteDeps, rankEngines, readyRuntimes, route, routeOutcome } from "./candidates";
+import {
+  type FailoverDecision,
+  linkHandoff,
+  type NextAttempt,
+  nextAttempt,
+  nextAttemptOrPark,
+  startWatchdog,
+} from "./failover";
 import { estimateCostUsd, priceOf, refreshRegistry, registryStale } from "./registry";
 import { onTriaged, startTriage, triageOf } from "./triage";
 
-export type { NextAttempt, RouteDeps };
+export type { FailoverDecision, NextAttempt, RouteDeps };
 export {
   estimateCostUsd,
   linkHandoff,
   nextAttempt,
+  nextAttemptOrPark,
   onTriaged,
   priceOf,
   rankEngines,
   readyRuntimes,
   refreshRegistry,
   route,
+  routeOutcome,
   startWatchdog,
   triageOf,
 };

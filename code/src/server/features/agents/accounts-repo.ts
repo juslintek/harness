@@ -161,3 +161,41 @@ export function markExhausted(db: Database, id: string, until: number): void {
   // Removed accounts keep their row, so a missing one means a bad id and the block would be lost.
   if (changes === 0) console.warn(`exhaustion not recorded, unknown account: ${id}`);
 }
+
+const BACKOFF_BASE_MS = 15 * 60_000;
+const BACKOFF_CAP_MS = 5 * 60 * 60_000;
+
+// Unprobed accounts back off 15, 30, 60, ... minutes up to the window length across consecutive rate limits.
+export function recordReactiveExhaustion(
+  db: Database,
+  id: string,
+  now: number = Date.now(),
+  capMs: number = BACKOFF_CAP_MS,
+): number {
+  if (id.startsWith("default:")) ensureDefaultAccount(db, id.slice("default:".length));
+  const row = db
+    .query<{ exhaustion_streak: number }, [string]>(
+      "SELECT exhaustion_streak FROM agent_accounts WHERE id = ?",
+    )
+    .get(id);
+  const streak = row?.exhaustion_streak ?? 0;
+  const delay = Math.min(BACKOFF_BASE_MS * 2 ** streak, capMs);
+  const until = now + delay;
+  const { changes } = db.run(
+    `UPDATE agent_accounts
+       SET exhausted_until = max(COALESCE(exhausted_until, 0), ?),
+           exhaustion_streak = ?,
+           updated_at = ?
+     WHERE id = ?`,
+    [until, streak + 1, now, id],
+  );
+  if (changes === 0) console.warn(`exhaustion not recorded, unknown account: ${id}`);
+  return until;
+}
+
+export function resetExhaustionStreak(db: Database, id: string): void {
+  db.run("UPDATE agent_accounts SET exhaustion_streak = 0, updated_at = ? WHERE id = ?", [
+    Date.now(),
+    id,
+  ]);
+}

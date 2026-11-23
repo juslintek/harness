@@ -47,7 +47,7 @@ const send = (
 test("prefs list defaults and a put changes only the caller's row", async () => {
   const { asAda, asBob, db, ada } = setup();
   const before = (await (await send(asAda, "GET", "/prefs")).json()) as { enabled: boolean }[];
-  expect(before).toHaveLength(25);
+  expect(before).toHaveLength(30);
   const put = await send(asAda, "PUT", "/prefs", { channel: "push", kind: "dm", enabled: false });
   expect(put.status).toBe(200);
   const mine = (await (await send(asAda, "GET", "/prefs")).json()) as {

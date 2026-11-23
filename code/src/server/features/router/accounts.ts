@@ -110,26 +110,31 @@ function toCandidate(
   };
 }
 
+function runtimePool(db: Database, runtime: string): { pool: PoolAccount[]; explicit: boolean } {
+  const real = listAccounts(db, runtime);
+  if (real.length > 0) return { pool: real, explicit: true };
+  return {
+    explicit: false,
+    pool: [
+      {
+        id: `default:${runtime}`,
+        state: "unknown",
+        maxConcurrent: runtime === "codex" ? 1 : 2,
+        priority: 0,
+        createdAt: 0,
+        exhaustedUntil: null,
+      },
+    ],
+  };
+}
+
 export function eligibleAccounts(
   db: Database,
   engine: Engine,
   quota: QuotaView[],
   ctx: AccountContext,
 ): AccountCandidate[] {
-  const real = listAccounts(db, engine.runtime);
-  const explicit = real.length > 0;
-  const pool: PoolAccount[] = explicit
-    ? real
-    : [
-        {
-          id: `default:${engine.runtime}`,
-          state: "unknown",
-          maxConcurrent: engine.runtime === "codex" ? 1 : 2,
-          priority: 0,
-          createdAt: 0,
-          exhaustedUntil: null,
-        },
-      ];
+  const { pool, explicit } = runtimePool(db, engine.runtime);
   return pool.flatMap((acct) => {
     const candidate = toCandidate(acct, engine, quota, ctx, explicit);
     return candidate ? [candidate] : [];
@@ -177,4 +182,59 @@ export function pickAccountForRuntime(
     policy,
   );
   return best?.explicit ? best.id : null;
+}
+
+const MIN_PARK_MS = 60_000;
+const FALLBACK_RETRY_MS = 15 * 60_000;
+
+function accountRecoveryAt(
+  acct: PoolAccount,
+  runtime: string,
+  quota: QuotaView[],
+  now: number,
+): number | null {
+  const views = accountQuotaViews(quota, runtime, acct.id);
+  const full = views.filter((v) => v.usedPercent !== null && v.usedPercent >= 100);
+  const byCooldown = acct.exhaustedUntil !== null && acct.exhaustedUntil > now;
+  if (!byCooldown && full.length === 0) return null;
+  const fullResets = full.flatMap((v) =>
+    v.resetsAt !== null && v.resetsAt > now ? [v.resetsAt] : [],
+  );
+  const windowUntil = fullResets.length > 0 ? Math.max(...fullResets) : 0;
+  const until = Math.max(windowUntil, byCooldown ? (acct.exhaustedUntil as number) : 0);
+  return until > now ? until : now + FALLBACK_RETRY_MS;
+}
+
+function runtimeRecoveries(
+  db: Database,
+  runtime: string,
+  quota: QuotaView[],
+  now: number,
+): number[] | null {
+  const out: number[] = [];
+  for (const acct of runtimePool(db, runtime).pool) {
+    if (!USABLE_STATES.has(acct.state)) continue;
+    const at = accountRecoveryAt(acct, runtime, quota, now);
+    if (at === null) return null;
+    out.push(at);
+  }
+  return out;
+}
+
+// Non-null only when every usable account across the candidate engines is exhausted.
+export function poolExhaustedRetryAt(
+  db: Database,
+  engines: Engine[],
+  quota: QuotaView[],
+  now: number = Date.now(),
+): number | null {
+  const runtimes = [...new Set(engines.map((e) => e.runtime))];
+  const recoveries: number[] = [];
+  for (const runtime of runtimes) {
+    const times = runtimeRecoveries(db, runtime, quota, now);
+    if (times === null) return null;
+    recoveries.push(...times);
+  }
+  if (recoveries.length === 0) return null;
+  return Math.max(now + MIN_PARK_MS, Math.min(...recoveries));
 }

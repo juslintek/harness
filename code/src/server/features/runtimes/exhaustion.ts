@@ -1,5 +1,9 @@
 import type { Database } from "bun:sqlite";
-import { markAccountExhausted } from "../agents/api";
+import {
+  markAccountExhausted,
+  recordAccountReactiveExhaustion,
+  resetAccountExhaustion,
+} from "../agents/api";
 import { accountQuota, recordQuota } from "../usage/api";
 import type { RunContext, RunOutcome } from "./adapter";
 import { type Cooldown, endState, killCooldown, QUOTA_COOLDOWN } from "./outcome";
@@ -42,11 +46,12 @@ function markRunCooldown(db: Database, runId: string, cooldown: Cooldown | null)
   const resets = accountQuota(db, accountId)
     .filter((v) => v.usedPercent !== null && v.usedPercent >= 100 && (v.resetsAt ?? 0) > now)
     .map((v) => v.resetsAt ?? 0);
-  const until =
-    cooldown.kind === "quota" && resets.length > 0
-      ? Math.max(...resets)
-      : now + cooldown.fallbackMs;
-  markAccountExhausted(db, accountId, until);
+  if (cooldown.kind === "quota") {
+    if (resets.length > 0) markAccountExhausted(db, accountId, Math.max(...resets));
+    else recordAccountReactiveExhaustion(db, accountId, now);
+    return;
+  }
+  markAccountExhausted(db, accountId, now + cooldown.fallbackMs);
 }
 
 // The state a run ends in, plus the account block that ending calls for.
@@ -57,6 +62,10 @@ export function endAndMark(
   outcome: RunOutcome,
 ): [RunState, string | null] {
   const [state, reason, cooldown] = endState(db, runId, run, outcome);
+  if (state === "completed") {
+    const accountId = accountOf(db, runId);
+    if (accountId !== null) resetAccountExhaustion(db, accountId);
+  }
   markRunCooldown(db, runId, cooldown);
   return [state, reason];
 }

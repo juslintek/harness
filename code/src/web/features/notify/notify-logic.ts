@@ -20,6 +20,7 @@ export const KIND_LABELS: Record<NotifyKind, string> = {
   mention: "Mentioned in chat",
   dm: "Direct message",
   run_blocked: "Run blocked",
+  pool_exhausted: "Account pool exhausted",
 };
 
 export interface GridRow {

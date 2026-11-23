@@ -4,7 +4,12 @@ import { type AgentView, listAgents } from "../agents/api";
 import { contextForMember, effective } from "../policies/api";
 import { ensureProfile } from "../profiles/api";
 import { probeQuota } from "../usage/api";
-import { accountContext, eligibleAccounts, pickBestAccount } from "./accounts";
+import {
+  accountContext,
+  eligibleAccounts,
+  pickBestAccount,
+  poolExhaustedRetryAt,
+} from "./accounts";
 import { priceOf } from "./registry";
 import { scoreEngine, tierOf } from "./score";
 import { learnedStats, type StatRow } from "./stats";
@@ -14,6 +19,11 @@ export interface RouteChoice {
   engine: Engine;
   score: number;
   reasons: string[];
+}
+
+export interface RouteOutcome {
+  choices: RouteChoice[];
+  poolExhausted: { retryAt: number } | null;
 }
 
 export interface RouteInput {
@@ -55,11 +65,11 @@ function candidateEngines(
 }
 
 // A window reset in the past already reads as null usage, so 100% here means exhausted now.
-export async function route(
+export async function routeOutcome(
   db: Database,
   input: RouteInput,
   deps: RouteDeps = {},
-): Promise<RouteChoice[]> {
+): Promise<RouteOutcome> {
   const profile = ensureProfile(db, input.memberId);
   const ctx = contextForMember(db, input.memberId, input.taskId ?? undefined);
   const allowed = effective(db, ctx, "router.allowedRuntimes").value;
@@ -73,10 +83,12 @@ export async function route(
   const stats = learnedStats(db, now - LEARN_WINDOW_MS);
   const primary = { runtime: profile.runtime, model: profile.model };
 
-  return candidateEngines(profile, usable)
+  const engines = candidateEngines(profile, usable)
     .filter((e) => usable.some((a) => a.id === e.runtime))
     .filter((e) => allowed === null || allowed.includes(e.runtime))
-    .filter((e) => input.runtimeFilter?.(e.runtime) ?? true)
+    .filter((e) => input.runtimeFilter?.(e.runtime) ?? true);
+
+  const choices = engines
     .flatMap((e) => {
       const best = pickBestAccount(eligibleAccounts(db, e, quota, acctCtx), accountPolicy);
       if (!best) return [];
@@ -98,6 +110,18 @@ export async function route(
     })
     .sort((a, b) => b.choice.score - a.choice.score || a.lastUsedAt - b.lastUsedAt)
     .map((r) => r.choice);
+
+  if (choices.length > 0) return { choices, poolExhausted: null };
+  const retryAt = poolExhaustedRetryAt(db, engines, quota, now);
+  return { choices, poolExhausted: retryAt === null ? null : { retryAt } };
+}
+
+export async function route(
+  db: Database,
+  input: RouteInput,
+  deps: RouteDeps = {},
+): Promise<RouteChoice[]> {
+  return (await routeOutcome(db, input, deps)).choices;
 }
 
 // Linked, logged in and with at least one eligible account: what a new run could start on right now.

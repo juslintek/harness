@@ -40,10 +40,14 @@ export function instanceAdminMembers(db: Database, orgId: string): string[] {
   });
 }
 
+export function orgAdminRecipients(db: Database, orgId: string): string[] {
+  return [...new Set([...instanceAdminMembers(db, orgId), ...orgAdmins(db, orgId)])];
+}
+
 export function approvalRecipients(db: Database, approval: ApprovalView): string[] {
   const orgId = runOrgId(db, approval.runId);
   if (orgId === null) return [];
-  return [...new Set([...instanceAdminMembers(db, orgId), ...orgAdmins(db, orgId)])];
+  return orgAdminRecipients(db, orgId);
 }
 
 export function chatRecipients(db: Database, e: ChatEvent): { dm: string[]; mention: string[] } {
