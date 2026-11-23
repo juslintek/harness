@@ -16,3 +16,8 @@ Environment variables:
 - `HARNESS_HOST`: bind address. Default `127.0.0.1`.
 - `HARNESS_ORIGIN`: browser origin and passkey relying party. Default `http://localhost:<port>`.
 - `HARNESS_TRUST_PROXY`: `true` when a reverse proxy in front sets `X-Forwarded-For`; the login rate limit then keys on its rightmost address. Default `false`, which ignores the header.
+
+Further guides:
+
+- [Multi-account management](accounts.md)
+- [Distribution, federation and self-update](distribution.md)

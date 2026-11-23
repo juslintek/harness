@@ -144,13 +144,13 @@ bun run build                                    # host target -> code/dist/harn
 bun scripts/build.ts --target linux-x64 --out /tmp/out
 ```
 
-See [docs/distribution.md](docs/distribution.md) for SSH/Tailscale deployment, Ed25519 peer pairing, project sharing, and self-updating.
+See [docs/distribution.md](docs/distribution.md) for SSH/Tailscale deployment, Ed25519 peer pairing, project sharing, and self-updating, and [docs/accounts.md](docs/accounts.md) for multi-account management, quota-aware routing, and failover.
 
 ### Known gaps before public distribution
 
 If you are evaluating the Zig vs TypeScript release artifacts today:
 
-1. **Zig backend parity & sandboxing**: [zig/src/http/routes.zig](zig/src/http/routes.zig) implements 55 handlers total (52 of the 193 routes in [contract/routes.json](contract/routes.json) plus `/api/guard/hook`, `/mcp`, and `/ws`), while 42 registered routes return `501 not_implemented` and 99 newer contract routes (board/chat/policies/router/budgets/memory/notifications/OAuth/OIDC/federation/deploy/self-update/accounts/mobile) are not registered yet (141 of 193 contract routes missing). Zig also has no `srt` sandbox builder yet, so `POST /api/runs` returns `503 sandbox unavailable` outside `HARNESS_TEST=1`.
+1. **Zig backend parity & sandboxing**: [zig/src/http/routes.zig](zig/src/http/routes.zig) implements 55 handlers total (52 of the 195 routes in [contract/routes.json](contract/routes.json) plus `/api/guard/hook`, `/mcp`, and `/ws`), while 42 registered routes return `501 not_implemented` and 101 newer contract routes (board/chat/policies/router/budgets/memory/notifications/OAuth/OIDC/federation/deploy/self-update/accounts/mobile) are not registered yet (143 of 195 contract routes missing). Zig also has no `srt` sandbox builder yet, so `POST /api/runs` returns `503 sandbox unavailable` outside `HARNESS_TEST=1`.
 2. **Standalone Bun binary & v0.1.0 packaging gap**: `scripts/install.sh` and `Harness-macos-universal.dmg` default to the Zig backend, while compiled `harness-bun-<target>` binaries embed the legacy Preact UI (`code/src/web`) and still resolve `srt` (`node_modules/.bin/srt`) and `scripts/guard-hook.ts` relative to the source tree via `import.meta.dir`. Until standalone Bun packaging bundles `ui/dist`, `srt`, and the guard hook, running from a source checkout (`cd code && HARNESS_UI_DIST=../ui/dist bun run dev`) is the working full-feature path. (The Zig release archives and `Harness.app` package `ui/dist` alongside the binary and auto-detect it when `HARNESS_UI_DIST` is unset; `zig/tools/embedgen.zig` is still a stub.)
 3. **Unsigned desktop/mobile & incomplete secondary ports**: Android release APKs, iOS IPAs, and macOS `.app`/`.dmg` builds are unsigned/unnotarized in CI; `desktop/macos/` lacks runs, approvals, and passkey/OIDC sign-in; `desktop/dotnet/` has no UI yet.
 

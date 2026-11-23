@@ -47,7 +47,7 @@ A server that stops mid-deploy marks the running request failed on the next star
 Limits, stated plainly:
 
 - Only a loopback target (`localhost`, `127.0.0.1`, `::1`) is paired automatically. A remote target is installed and started on its loopback only, and no pairing code is written. It needs its own HTTPS origin (a tunnel or reverse proxy) before it can be paired, then you pair it from Federation.
-- The new instance has no agent logins. Log in to `claude` and `codex` on it yourself.
+- The new instance has no agent logins or isolated account homes. Add and log in to agent accounts (`claude`, `codex`, and any extra accounts under `<HARNESS_HOME>/accounts/`) on that instance yourself (see `docs/accounts.md`).
 - Unit files only accept plain path characters. Anything else in a path or home makes the deploy fail.
 
 ## Pairing and invites
@@ -117,8 +117,8 @@ The allowlist is one list in `code/src/server/features/federation/schema.ts`, an
 Everything else stays on the instance where it was made. In particular:
 
 - credentials, passkeys, sessions, tokens, `secrets.json` and the instance key
-- agent configuration, agent ids and models
-- runs, run stacks and their logs, approvals
+- agent configuration, agent ids, models, `agent_accounts`, and per-account homes under `<HARNESS_HOME>/accounts/`
+- `quota_snapshots`, `route_decisions`, runs, run stacks and their logs, approvals
 - policies and profiles
 - notification targets and preferences, OAuth tables, OIDC providers
 - every note or channel with a local scope (org, member, direct messages)
