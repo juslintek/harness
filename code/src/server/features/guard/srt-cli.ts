@@ -9,24 +9,34 @@ interface ParsedArgs {
   argv: string[];
 }
 
-function parseSrtArgs(args: string[]): ParsedArgs | { error: string } {
+function parseSrtArgs(args: string[]): ParsedArgs | { badArg: string } {
   let settingsPath: string | null = null;
   let commandString: string | null = null;
   let i = 0;
   while (i < args.length) {
     const arg = args[i] as string;
-    if (arg === "--") return { settingsPath, commandString, argv: args.slice(i + 1) };
+    if (arg === "--") {
+      i++;
+      break;
+    }
     if (arg !== "-s" && arg !== "--settings" && arg !== "-c") break;
     const value = args[i + 1];
-    if (!value) return { error: `${arg} requires a value` };
+    if (!value) return { badArg: `${arg} requires a value` };
     if (arg === "-c") commandString = value;
     else settingsPath = value;
     i += 2;
   }
-  return { settingsPath, commandString, argv: args.slice(i) };
+  const argv = args.slice(i);
+  if (commandString !== null && argv.length > 0) {
+    return { badArg: "-c cannot be combined with positional command arguments" };
+  }
+  return { settingsPath, commandString, argv };
 }
 
 const shellQuote = (arg: string): string => `'${arg.replaceAll("'", "'\\''")}'`;
+
+const signalExitCode = (signal: NodeJS.Signals): number =>
+  signal === "SIGINT" ? 130 : signal === "SIGTERM" ? 143 : 1;
 
 function loadSettings(path: string): ReturnType<typeof SandboxRuntimeConfigSchema.safeParse> {
   let raw: unknown;
@@ -51,7 +61,10 @@ function spawnSandboxed(wrapped: string): Promise<number> {
     };
     process.on("SIGINT", onSigInt);
     process.on("SIGTERM", onSigTerm);
+    let finished = false;
     const finish = (code: number): void => {
+      if (finished) return;
+      finished = true;
       process.off("SIGINT", onSigInt);
       process.off("SIGTERM", onSigTerm);
       SandboxManager.cleanupAfterCommand();
@@ -62,8 +75,7 @@ function spawnSandboxed(wrapped: string): Promise<number> {
       finish(1);
     });
     child.on("exit", (code, signal) => {
-      if (signal === "SIGINT") finish(130);
-      else if (signal === "SIGTERM") finish(143);
+      if (signal === "SIGINT" || signal === "SIGTERM") finish(signalExitCode(signal));
       else if (signal) {
         console.error(`harness srt: process killed by signal: ${signal}`);
         finish(1);
@@ -84,8 +96,8 @@ function withBundledSeccomp(
 // checkout. Fails closed if settings are missing or invalid rather than falling back to defaults.
 export async function runSrtCli(args: string[]): Promise<number> {
   const parsed = parseSrtArgs(args);
-  if ("error" in parsed) {
-    console.error(`harness srt: ${parsed.error}`);
+  if ("badArg" in parsed) {
+    console.error(`harness srt: ${parsed.badArg}`);
     return 1;
   }
   if (!parsed.settingsPath) {
@@ -98,17 +110,44 @@ export async function runSrtCli(args: string[]): Promise<number> {
     console.error("harness srt: no command specified");
     return 1;
   }
+  // Abort before spawn if interrupted while initializing proxies or wrapping the sandbox tree.
+  const interrupted = new AbortController();
+  let interruptedSignal: NodeJS.Signals | null = null;
+  const onPreSpawnSignal = (signal: NodeJS.Signals): void => {
+    interruptedSignal = signal;
+    interrupted.abort(new Error(`interrupted by ${signal}`));
+  };
+  const detachPreSpawn = (): void => {
+    process.off("SIGINT", onPreSpawnSignal);
+    process.off("SIGTERM", onPreSpawnSignal);
+  };
+  process.once("SIGINT", onPreSpawnSignal);
+  process.once("SIGTERM", onPreSpawnSignal);
   try {
     const checked = loadSettings(parsed.settingsPath);
     if (!checked.success) {
+      detachPreSpawn();
       console.error(`harness srt: invalid settings: ${checked.error.message}`);
       return 1;
     }
     await SandboxManager.initialize(withBundledSeccomp(checked.data));
-    return await spawnSandboxed(await SandboxManager.wrapWithSandbox(command));
+    const wrapped = await SandboxManager.wrapWithSandbox(
+      command,
+      undefined,
+      undefined,
+      interrupted.signal,
+    );
+    detachPreSpawn();
+    if (interruptedSignal !== null) {
+      await SandboxManager.reset().catch(() => {});
+      return signalExitCode(interruptedSignal);
+    }
+    return await spawnSandboxed(wrapped);
   } catch (err) {
-    console.error(`harness srt: ${err instanceof Error ? err.message : String(err)}`);
+    detachPreSpawn();
     await SandboxManager.reset().catch(() => {});
+    if (interruptedSignal !== null) return signalExitCode(interruptedSignal);
+    console.error(`harness srt: ${err instanceof Error ? err.message : String(err)}`);
     return 1;
   }
 }

@@ -233,10 +233,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          path: all-assets
-          merge-multiple: true
+          path: downloaded
       - run: |
-          rm -rf all-assets/assets all-assets/icon.svg all-assets/index.html all-assets/manifest.webmanifest all-assets/sw.js
+          rm -rf downloaded/ui-dist
+          mkdir -p all-assets
+          cp -R downloaded/*/* all-assets/
           cp scripts/install.sh all-assets/install.sh
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:

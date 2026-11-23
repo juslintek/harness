@@ -31,6 +31,8 @@ export const GUARDED_FILES: ReadonlySet<string> = new Set([
   "lefthook.yml",
   "src/server/http.ts",
   "src/server/origin-app.ts",
+  "src/server/packaged.ts",
+  "src/server/acp-adapter.ts",
   "package.json",
   "bun.lock",
   "bunfig.toml",

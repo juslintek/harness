@@ -16,7 +16,7 @@ export function isCompiledBinary(dir: string = import.meta.dir): boolean {
 }
 
 export function guardHookArg(scriptPath: string, compiled: boolean = isCompiledBinary()): string {
-  return !existsSync(scriptPath) && compiled ? "guard-hook" : scriptPath;
+  return compiled ? "guard-hook" : scriptPath;
 }
 
 function uniqueDirs(execPath: string): string[] {
