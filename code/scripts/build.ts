@@ -54,6 +54,8 @@ async function compileBinary(root: string, options: BuildOptions, outfile: strin
       process.execPath,
       "build",
       "--compile",
+      "--no-compile-autoload-dotenv",
+      "--no-compile-autoload-bunfig",
       `--target=bun-${options.target}`,
       "--define",
       `HARNESS_VERSION=${JSON.stringify(version)}`,

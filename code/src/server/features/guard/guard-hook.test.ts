@@ -116,6 +116,16 @@ test("a valid unknown tool is still an ask, not an allow", async () => {
   expect(res.out).toContain('"permissionDecision":"ask"');
 });
 
+test("ToolSearch and harness MCP tools are allowed via toolName", async () => {
+  expect(await hook(JSON.stringify({ tool_name: "ToolSearch", tool_input: {} }))).toMatchObject({
+    code: 0,
+    out: "",
+  });
+  expect(
+    await hook(JSON.stringify({ tool_name: "mcp__harness__whoami", tool_input: {} })),
+  ).toMatchObject({ code: 0, out: "" });
+});
+
 test("missing HOME fails closed", async () => {
   const { HOME: _drop, ...env } = baseEnv;
   expect((await hook(bash("ls"), env)).code).toBe(2);

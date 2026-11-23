@@ -264,11 +264,6 @@ export async function writeSrtSettings(input: SandboxInput): Promise<string> {
 }
 
 function resolveSrtCommand(): string[] {
-  const override = process.env.HARNESS_SRT_BIN;
-  if (override) {
-    if (!existsSync(override)) throw new Error(`srt not found at ${override}`);
-    return [override];
-  }
   if (existsSync(SRT_BIN)) return [SRT_BIN];
   if (isCompiledBinary()) return [process.execPath, "srt"];
   throw new Error(`srt not found at ${SRT_BIN}`);

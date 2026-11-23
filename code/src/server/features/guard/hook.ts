@@ -42,7 +42,7 @@ function toAction(input: HookInput): ActionRequest {
     return { kind: "edit", paths: paths("file_path", "notebook_path") };
   }
   if (tool === "WebFetch" || tool === "WebSearch") return { kind: "fetch", paths: [] };
-  return { kind: "other", paths: [] };
+  return { kind: "other", paths: [], toolName: tool };
 }
 
 async function report(verdict: string, rule: string | null, command: string): Promise<void> {

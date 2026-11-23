@@ -167,11 +167,13 @@ test("packaged harness guard-hook enforces L1 deny, allow, ask, and fail-closed 
   ).toBe(2);
 }, 30_000);
 
-test("packaged harness srt enforces OS sandbox boundaries, runs guard-hook inside srt, and fails closed", async () => {
+async function makeSrtFixture() {
   const home = realpathSync(tempDir("harness-pkg-srt-home-"));
   const work = realpathSync(tempDir("harness-pkg-srt-work-"));
   const runDir = join(home, "runs", "pkg-test");
   mkdirSync(runDir, { recursive: true });
+  const sentinelPath = join(home, "secrets.json");
+  writeFileSync(sentinelPath, "SENTINEL_SECRET_VALUE");
   const settingsPath = await writeSrtSettings({
     runDir,
     worktree: work,
@@ -189,17 +191,25 @@ test("packaged harness srt enforces OS sandbox boundaries, runs guard-hook insid
     HARNESS_SCOPE_ROOT: work,
     HARNESS_DEFAULT_BRANCH: "main",
   };
+  return { work, sentinelPath, settingsPath, env };
+}
+
+test("packaged harness srt enforces OS sandbox boundaries, runs guard-hook inside srt, and fails closed", async () => {
+  const { work, sentinelPath, settingsPath, env } = await makeSrtFixture();
   const ok = await exec(
     [installedBin, "srt", "-s", settingsPath, "--", "/bin/sh", "-c", `touch '${work}/ok'`],
     { cwd: work, env },
   );
   expect(ok.code).toBe(0);
   expect(existsSync(join(work, "ok"))).toBe(true);
+  const control = await exec(["/bin/cat", sentinelPath], { cwd: work, env });
+  expect(control).toMatchObject({ code: 0, out: "SENTINEL_SECRET_VALUE" });
   const denied = await exec(
-    [installedBin, "srt", "-s", settingsPath, "--", "/bin/sh", "-c", "ls ~/.ssh"],
+    [installedBin, "srt", "-s", settingsPath, "--", "/bin/cat", sentinelPath],
     { cwd: work, env },
   );
   expect(denied.code).not.toBe(0);
+  expect(denied.out).not.toContain("SENTINEL_SECRET_VALUE");
   const hookCmd = claudeSettings(installedBin, "guard-hook").hooks.PreToolUse[0]?.hooks[0]?.command;
   expect(hookCmd).toBeDefined();
   const hookDeny = await exec([installedBin, "srt", "-s", settingsPath, "-c", hookCmd as string], {
@@ -220,6 +230,22 @@ test("packaged harness srt enforces OS sandbox boundaries, runs guard-hook insid
   });
   expect(missing.code).toBe(1);
 }, 60_000);
+
+test("packaged binary ignores .env and bunfig.toml in an untrusted working directory", async () => {
+  const untrusted = tempDir("harness-pkg-untrusted-");
+  const preload = join(untrusted, "evil.js");
+  const marker = join(untrusted, "pwned");
+  writeFileSync(preload, `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "pwned");`);
+  writeFileSync(join(untrusted, "bunfig.toml"), `preload = [${JSON.stringify(preload)}]\n`);
+  writeFileSync(join(untrusted, ".env"), "HARNESS_SCOPE_ROOT=/tmp/injected\nHOME=/tmp/injected\n");
+  const res = await exec([installedBin, "guard-hook"], {
+    cwd: untrusted,
+    env: { PATH: process.env.PATH ?? "" },
+    stdin: JSON.stringify({ tool_name: "Bash", tool_input: { command: "ls" }, cwd: untrusted }),
+  });
+  expect(res.code).toBe(2);
+  expect(existsSync(marker)).toBe(false);
+}, 30_000);
 
 test("packaged bundled ACP adapters run through the compiled binary without node or bun", async () => {
   const home = tempDir("harness-pkg-acp-home-");

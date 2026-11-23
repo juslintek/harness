@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 type PackageEnv = Record<string, string | undefined>;
 
@@ -30,6 +30,12 @@ function uniqueDirs(execPath: string): string[] {
   return dirs;
 }
 
+function trustedShareDir(env: PackageEnv): string | undefined {
+  return env.HARNESS_SHARE_DIR && isAbsolute(env.HARNESS_SHARE_DIR)
+    ? env.HARNESS_SHARE_DIR
+    : undefined;
+}
+
 function packageRoots(
   execPath: string = process.execPath,
   env: PackageEnv = process.env,
@@ -39,7 +45,8 @@ function packageRoots(
     const full = resolve(dir);
     if (!roots.includes(full)) roots.push(full);
   };
-  if (env.HARNESS_SHARE_DIR) push(env.HARNESS_SHARE_DIR);
+  const share = trustedShareDir(env);
+  if (share) push(share);
   for (const dir of uniqueDirs(execPath)) {
     push(dir);
     push(resolve(dir, "../share/harness"));
@@ -52,9 +59,11 @@ export function resolveUiDist(
   env: PackageEnv = process.env,
   opts: ResolveOpts = {},
 ): string | undefined {
-  if (env.HARNESS_UI_DIST) return env.HARNESS_UI_DIST;
+  if (env.HARNESS_UI_DIST) {
+    return existsSync(join(env.HARNESS_UI_DIST, "index.html")) ? env.HARNESS_UI_DIST : undefined;
+  }
   const compiled = opts.compiled ?? isCompiledBinary();
-  if (!compiled && !env.HARNESS_SHARE_DIR) return undefined;
+  if (!compiled && !trustedShareDir(env)) return undefined;
   for (const root of packageRoots(opts.execPath, env)) {
     const uiDir = join(root, "ui");
     if (existsSync(join(uiDir, "index.html"))) return uiDir;
@@ -68,9 +77,6 @@ export function resolveSeccompApplyPath(
 ): string | null {
   const platform = opts.platform ?? process.platform;
   if (platform !== "linux") return null;
-  if (env.HARNESS_SECCOMP_APPLY_PATH && existsSync(env.HARNESS_SECCOMP_APPLY_PATH)) {
-    return env.HARNESS_SECCOMP_APPLY_PATH;
-  }
   const arch = opts.arch ?? process.arch;
   if (arch !== "x64" && arch !== "arm64") return null;
   for (const root of packageRoots(opts.execPath, env)) {

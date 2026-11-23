@@ -62,7 +62,8 @@ function spawnSandboxed(wrapped: string): Promise<number> {
       finish(1);
     });
     child.on("exit", (code, signal) => {
-      if (signal === "SIGINT" || signal === "SIGTERM") finish(0);
+      if (signal === "SIGINT") finish(130);
+      else if (signal === "SIGTERM") finish(143);
       else if (signal) {
         console.error(`harness srt: process killed by signal: ${signal}`);
         finish(1);

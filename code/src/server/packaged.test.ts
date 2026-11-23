@@ -41,12 +41,22 @@ test("resolveUiDist prefers HARNESS_UI_DIST, then packaged share/sibling layouts
   writeFileSync(exe, "");
   writeFileSync(join(shareUi, "index.html"), "<!doctype html><title>Solid</title>");
 
-  // Explicit HARNESS_UI_DIST always wins.
-  expect(resolveUiDist({ HARNESS_UI_DIST: "/custom/ui" }, { execPath: exe, compiled: true })).toBe(
-    "/custom/ui",
+  // Explicit HARNESS_UI_DIST wins when it contains index.html, and falls back to undefined if not.
+  const customUi = join(root, "custom-ui");
+  mkdirSync(customUi, { recursive: true });
+  writeFileSync(join(customUi, "index.html"), "<!doctype html>");
+  expect(resolveUiDist({ HARNESS_UI_DIST: customUi }, { execPath: exe, compiled: true })).toBe(
+    customUi,
   );
+  expect(
+    resolveUiDist({ HARNESS_UI_DIST: join(root, "missing-ui") }, { execPath: exe, compiled: true }),
+  ).toBeUndefined();
   // In source checkout mode (not compiled, no HARNESS_SHARE_DIR), do not auto-pick packaged UI.
   expect(resolveUiDist({}, { execPath: exe, compiled: false })).toBeUndefined();
+  // Relative HARNESS_SHARE_DIR values are ignored.
+  expect(
+    resolveUiDist({ HARNESS_SHARE_DIR: "./relative-share" }, { execPath: exe, compiled: false }),
+  ).toBeUndefined();
   // In compiled mode, auto-detect ../share/harness/ui relative to binary.
   expect(resolveUiDist({}, { execPath: exe, compiled: true })).toBe(shareUi);
 
