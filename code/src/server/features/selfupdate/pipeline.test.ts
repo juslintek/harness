@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { resolvePackagedAdapter, resolveSeccompApplyPath, resolveUiDist } from "../../packaged";
 import { makeHome, makeRepo, script, tempDir } from "../../test-support/selfupdate-kit";
-import { type PipelineDeps, runPipeline } from "./pipeline";
+import { type PipelineDeps, preserveShareDir, runPipeline } from "./pipeline";
 import { createRequest, getRequest } from "./requests";
 import { resolveCommit } from "./steps";
 
@@ -84,5 +85,59 @@ describe("a pipeline that fails before the swap", () => {
     await run({ check: ["false"] });
     const list = Bun.spawnSync(["git", "worktree", "list"], { cwd: repo }).stdout.toString();
     expect(list.trim().split("\n")).toHaveLength(1);
+  });
+});
+
+describe("preserveShareDir", () => {
+  test("links installed share assets into harness home across first and subsequent swaps", () => {
+    const prefix = realpathSync(tempDir("pkg-prefix"));
+    const harnessHome = realpathSync(tempDir("pkg-home"));
+    const oldBin = join(prefix, "bin", "harness");
+    const origShare = join(prefix, "share", "harness");
+    mkdirSync(join(prefix, "bin"), { recursive: true });
+    mkdirSync(join(origShare, "ui"), { recursive: true });
+    mkdirSync(join(origShare, "adapters"), { recursive: true });
+    mkdirSync(join(origShare, "vendor", "seccomp", "x64"), { recursive: true });
+    writeFileSync(oldBin, "");
+    writeFileSync(join(origShare, "ui", "index.html"), "<!doctype html>");
+    writeFileSync(join(origShare, "adapters", "codex-acp.mjs"), "");
+    writeFileSync(join(origShare, "vendor", "seccomp", "x64", "apply-seccomp"), "");
+
+    const firstShare = preserveShareDir(harnessHome, oldBin, {});
+    expect(firstShare).toBe(origShare);
+    const updatedBin = join(harnessHome, "bin", "harness-u1");
+    mkdirSync(join(harnessHome, "bin"), { recursive: true });
+    writeFileSync(updatedBin, "");
+
+    // Even with an empty env (e.g. after a service restart), the updated binary finds all assets.
+    expect(resolveUiDist({}, { execPath: updatedBin, compiled: true })).toBe(
+      join(harnessHome, "share", "harness", "ui"),
+    );
+    expect(resolvePackagedAdapter("codex-acp.mjs", {}, { execPath: updatedBin })).toBe(
+      join(harnessHome, "share", "harness", "adapters", "codex-acp.mjs"),
+    );
+    expect(
+      resolveSeccompApplyPath({}, { execPath: updatedBin, platform: "linux", arch: "x64" }),
+    ).toBe(join(harnessHome, "share", "harness", "vendor", "seccomp", "x64", "apply-seccomp"));
+
+    // A second self-update resolves through the existing symlink without creating a self-loop.
+    const secondShare = preserveShareDir(harnessHome, updatedBin, {});
+    expect(secondShare).toBe(origShare);
+    expect(realpathSync(join(harnessHome, "share", "harness"))).toBe(origShare);
+  });
+
+  test("does not overwrite a real share directory in harness home", () => {
+    const prefix = realpathSync(tempDir("pkg-prefix2"));
+    const harnessHome = realpathSync(tempDir("pkg-home2"));
+    const oldBin = join(prefix, "bin", "harness");
+    mkdirSync(join(prefix, "bin"), { recursive: true });
+    mkdirSync(join(prefix, "share", "harness", "ui"), { recursive: true });
+    writeFileSync(oldBin, "");
+    writeFileSync(join(prefix, "share", "harness", "ui", "index.html"), "<!doctype html>");
+    const realShare = join(harnessHome, "share", "harness");
+    mkdirSync(realShare, { recursive: true });
+
+    preserveShareDir(harnessHome, oldBin, {});
+    expect(lstatSync(realShare).isSymbolicLink()).toBe(false);
   });
 });

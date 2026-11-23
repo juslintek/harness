@@ -86,6 +86,24 @@ export function resolveSeccompApplyPath(
   return null;
 }
 
+function hasPackagedAssets(root: string): boolean {
+  return (
+    existsSync(join(root, "ui", "index.html")) ||
+    existsSync(join(root, "adapters")) ||
+    existsSync(join(root, "vendor", "seccomp"))
+  );
+}
+
+export function resolveShareDir(
+  env: PackageEnv = process.env,
+  opts: ResolveOpts = {},
+): string | undefined {
+  for (const root of packageRoots(opts.execPath, env)) {
+    if (hasPackagedAssets(root)) return root;
+  }
+  return undefined;
+}
+
 export function resolvePackagedAdapter(
   fileName: string,
   env: PackageEnv = process.env,
