@@ -163,7 +163,7 @@ When the diff touches any of these, the request stops at `awaiting_approval`. An
 - `src/server/features/runtimes/launch.ts`
 - `scripts/guard-hook.ts`, `.dependency-cruiser.cjs`, `biome.json`, `lefthook.yml`
 - `src/main.ts`, `src/server/config.ts`, `src/server/db/migrations.ts`, `src/server/features/runtimes/decide.ts`, `src/server/features/orgs/roles.ts`, `src/server/features/orgs/routes-kit.ts` (they call `checkAction` or map roles to access). A guarded source file also guards the files that could shadow it for an extensionless import. Checked on Bun 1.4.4 with `bun run` and `bun build`: a `.tsx`, `.jsx` or `.mts` sibling, or an extensionless file with the same stem, is loaded instead of the `.ts`. A `.cts`, `.js`, `.mjs`, `.cjs` or `.json` sibling is not, but it is flagged anyway in case that order changes
-- `src/server/http.ts`, `src/server/origin-app.ts`, `src/server/features/mcp`, `package.json`, `bun.lock`, `bunfig.toml`, `tsconfig*`, `scripts/build.ts`
+- `src/server/http.ts`, `src/server/origin-app.ts`, `src/server/packaged.ts`, `src/server/acp-adapter.ts`, `src/server/features/mcp`, `package.json`, `bun.lock`, `bunfig.toml`, `tsconfig*`, `scripts/build.ts`
 - any path containing `sandbox` or `srt`
 - any path with a character outside printable ASCII (so look-alike names such as `ſrc`, ligatures and decomposed accents), with a control character, or with a segment ending in a dot or a space, on either side of a rename: case-insensitive filesystems (APFS) fold such names onto real paths, so a branch could otherwise plant a file in a guarded directory that the path rules never see
 - any path with a `node_modules` segment, and any `package.json`, `tsconfig*`, `jsconfig.json` or `bunfig.toml` at any depth, because a nested one redirects the imports of guarded modules
@@ -221,7 +221,7 @@ The relay verifies the HMAC signature, translates the envelope into an APNs aler
 - No relay between grantees. A project is shared from its home to each peer; two peers do not see each other's changes except through the home, and a change on a copy reaches only the home.
 - The stub org that holds a remote copy gets the receiving instance's admins as members at the first pull, only while the org has no members. Any admin of that stub org can then add other users.
 - Notes replicate their `disk` and `hash` fields. The receiving instance does not write the file to disk, and the hash is only used for the 409 check on the home.
-- The compiled binary cannot launch agents: the sandbox runtime, guard hook and agent CLI paths are resolved from the source tree, so a deployed copy can hold and sync data but cannot run agents.
+- Single-binary SSH deploy (`POST /api/deploy/requests`) copies only the `harness` binary without the packaged `ui/`, `adapters/`, and Linux `vendor/` share assets; packaged release tarballs (`--package` / `install.sh`) include those assets so the installed binary serves the SolidJS UI and runs sandboxed `claude`/`codex` agents standalone.
 - A service install (systemd or launchd unit) runs `~/.harness/bin/harness`, but self-update flips `<home>/bin/current`. Updating an instance installed this way needs the unit pointed at `<home>/bin/current` by hand.
 - Member and org deletes are not replicated.
 - Deploy approvals do not expire, and old snapshots and built binaries are not cleaned up.

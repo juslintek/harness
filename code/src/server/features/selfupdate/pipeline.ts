@@ -69,10 +69,7 @@ function spawnSwap(
   log: string,
   shareDir: string | undefined,
 ): void {
-  const env =
-    shareDir && !process.env.HARNESS_SHARE_DIR
-      ? { ...process.env, HARNESS_SHARE_DIR: shareDir }
-      : process.env;
+  const env = shareDir ? { ...process.env, HARNESS_SHARE_DIR: shareDir } : process.env;
   const proc = Bun.spawn([binary, "swap", ...args], {
     env,
     stdin: "ignore",

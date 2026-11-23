@@ -92,6 +92,8 @@ const AUTHZ_FILES = [
   "code/src/server/features/orgs/roles.ts",
   "code/src/server/features/orgs/routes-kit.ts",
   "code/src/main.ts",
+  "code/src/server/packaged.ts",
+  "code/src/server/acp-adapter.ts",
   "code/src/server/db/migrations.ts",
   "code/src/server/config.ts",
 ];

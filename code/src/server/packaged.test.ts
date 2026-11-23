@@ -22,10 +22,14 @@ afterAll(() => {
 });
 
 test("isCompiledBinary detects Bun virtual filesystem paths only", () => {
+  const root = tempRoot();
+  const existingScript = join(root, "guard-hook.ts");
+  writeFileSync(existingScript, "");
   expect(isCompiledBinary("/$bunfs/root/src/server")).toBe(true);
   expect(isCompiledBinary("B:/~BUN/root/src/server")).toBe(true);
   expect(isCompiledBinary("/Users/dev/harness/code/src/server")).toBe(false);
   expect(guardHookArg("/$bunfs/root/scripts/guard-hook.ts", true)).toBe("guard-hook");
+  expect(guardHookArg(existingScript, true)).toBe("guard-hook");
   expect(guardHookArg("/$bunfs/root/scripts/guard-hook.ts", false)).toBe(
     "/$bunfs/root/scripts/guard-hook.ts",
   );

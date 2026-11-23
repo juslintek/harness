@@ -5,8 +5,7 @@ REPO="${HARNESS_REPO:-juslintek/harness}"
 VERSION="${HARNESS_VERSION:-latest}"
 BACKEND="${HARNESS_BACKEND:-ts}"
 INSTALL_DIR="${HARNESS_INSTALL_DIR:-$HOME/.local/bin}"
-DEFAULT_SHARE_DIR="$(dirname "$INSTALL_DIR")/share/harness"
-SHARE_DIR="${HARNESS_SHARE_DIR:-$DEFAULT_SHARE_DIR}"
+CUSTOM_SHARE_DIR="${HARNESS_SHARE_DIR:-}"
 
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m)
@@ -76,6 +75,20 @@ else
 fi
 
 mkdir -p "$INSTALL_DIR"
+INSTALL_DIR=$(CDPATH='' cd -- "$INSTALL_DIR" && pwd)
+parent_dir=$(dirname "$INSTALL_DIR")
+if [ "$parent_dir" = "/" ]; then
+  DEFAULT_SHARE_DIR="/share/harness"
+else
+  DEFAULT_SHARE_DIR="${parent_dir}/share/harness"
+fi
+if [ -n "$CUSTOM_SHARE_DIR" ]; then
+  mkdir -p "$CUSTOM_SHARE_DIR"
+  SHARE_DIR=$(CDPATH='' cd -- "$CUSTOM_SHARE_DIR" && pwd)
+else
+  SHARE_DIR="$DEFAULT_SHARE_DIR"
+fi
+
 tar -xzf "${tmp_dir}/${asset}" -C "$tmp_dir"
 install -m 0755 "${tmp_dir}/harness" "${INSTALL_DIR}/harness"
 if [ -f "${tmp_dir}/harness-hook" ]; then

@@ -9,24 +9,34 @@ interface ParsedArgs {
   argv: string[];
 }
 
-function parseSrtArgs(args: string[]): ParsedArgs | { error: string } {
+function parseSrtArgs(args: string[]): ParsedArgs | { badArg: string } {
   let settingsPath: string | null = null;
   let commandString: string | null = null;
   let i = 0;
   while (i < args.length) {
     const arg = args[i] as string;
-    if (arg === "--") return { settingsPath, commandString, argv: args.slice(i + 1) };
+    if (arg === "--") {
+      i++;
+      break;
+    }
     if (arg !== "-s" && arg !== "--settings" && arg !== "-c") break;
     const value = args[i + 1];
-    if (!value) return { error: `${arg} requires a value` };
+    if (!value) return { badArg: `${arg} requires a value` };
     if (arg === "-c") commandString = value;
     else settingsPath = value;
     i += 2;
   }
-  return { settingsPath, commandString, argv: args.slice(i) };
+  const argv = args.slice(i);
+  if (commandString !== null && argv.length > 0) {
+    return { badArg: "-c cannot be combined with positional command arguments" };
+  }
+  return { settingsPath, commandString, argv };
 }
 
 const shellQuote = (arg: string): string => `'${arg.replaceAll("'", "'\\''")}'`;
+
+const signalExitCode = (signal: NodeJS.Signals): number =>
+  signal === "SIGINT" ? 130 : signal === "SIGTERM" ? 143 : 1;
 
 function loadSettings(path: string): ReturnType<typeof SandboxRuntimeConfigSchema.safeParse> {
   let raw: unknown;
@@ -51,7 +61,10 @@ function spawnSandboxed(wrapped: string): Promise<number> {
     };
     process.on("SIGINT", onSigInt);
     process.on("SIGTERM", onSigTerm);
+    let finished = false;
     const finish = (code: number): void => {
+      if (finished) return;
+      finished = true;
       process.off("SIGINT", onSigInt);
       process.off("SIGTERM", onSigTerm);
       SandboxManager.cleanupAfterCommand();
@@ -62,8 +75,7 @@ function spawnSandboxed(wrapped: string): Promise<number> {
       finish(1);
     });
     child.on("exit", (code, signal) => {
-      if (signal === "SIGINT") finish(130);
-      else if (signal === "SIGTERM") finish(143);
+      if (signal === "SIGINT" || signal === "SIGTERM") finish(signalExitCode(signal));
       else if (signal) {
         console.error(`harness srt: process killed by signal: ${signal}`);
         finish(1);
@@ -80,12 +92,45 @@ function withBundledSeccomp(
   return applyPath ? { ...config, seccomp: { ...config.seccomp, applyPath } } : config;
 }
 
+function installPreSpawnAbort(): {
+  signal: AbortSignal;
+  aborted: Promise<never>;
+  interruptedBy: () => NodeJS.Signals | null;
+  detach: () => void;
+} {
+  const controller = new AbortController();
+  let interruptedSignal: NodeJS.Signals | null = null;
+  let rejectAbort: ((reason?: unknown) => void) | null = null;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
+  // Suppress unhandled rejection if no caller races against `aborted` (e.g. signal arrives during wrap).
+  aborted.catch(() => {});
+  const onSignal = (signal: NodeJS.Signals): void => {
+    interruptedSignal = signal;
+    const err = new Error(`interrupted by ${signal}`);
+    controller.abort(err);
+    rejectAbort?.(err);
+  };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
+  return {
+    signal: controller.signal,
+    aborted,
+    interruptedBy: () => interruptedSignal,
+    detach: () => {
+      process.off("SIGINT", onSignal);
+      process.off("SIGTERM", onSignal);
+    },
+  };
+}
+
 // Built-in srt launcher for compiled binaries, replacing node_modules/.bin/srt outside a source
 // checkout. Fails closed if settings are missing or invalid rather than falling back to defaults.
 export async function runSrtCli(args: string[]): Promise<number> {
   const parsed = parseSrtArgs(args);
-  if ("error" in parsed) {
-    console.error(`harness srt: ${parsed.error}`);
+  if ("badArg" in parsed) {
+    console.error(`harness srt: ${parsed.badArg}`);
     return 1;
   }
   if (!parsed.settingsPath) {
@@ -98,17 +143,37 @@ export async function runSrtCli(args: string[]): Promise<number> {
     console.error("harness srt: no command specified");
     return 1;
   }
+  const pre = installPreSpawnAbort();
+  let initPromise: Promise<void> | null = null;
   try {
     const checked = loadSettings(parsed.settingsPath);
     if (!checked.success) {
+      pre.detach();
       console.error(`harness srt: invalid settings: ${checked.error.message}`);
       return 1;
     }
-    await SandboxManager.initialize(withBundledSeccomp(checked.data));
-    return await spawnSandboxed(await SandboxManager.wrapWithSandbox(command));
+    initPromise = SandboxManager.initialize(withBundledSeccomp(checked.data));
+    await Promise.race([initPromise, pre.aborted]);
+    const wrapped = await SandboxManager.wrapWithSandbox(command, undefined, undefined, pre.signal);
+    pre.detach();
+    const sig = pre.interruptedBy();
+    if (sig !== null) {
+      await SandboxManager.reset().catch(() => {});
+      return signalExitCode(sig);
+    }
+    return await spawnSandboxed(wrapped);
   } catch (err) {
-    console.error(`harness srt: ${err instanceof Error ? err.message : String(err)}`);
+    pre.detach();
+    const sig = pre.interruptedBy();
+    if (sig !== null && initPromise !== null) {
+      void initPromise.then(
+        () => SandboxManager.reset().catch(() => {}),
+        () => {},
+      );
+    }
     await SandboxManager.reset().catch(() => {});
+    if (sig !== null) return signalExitCode(sig);
+    console.error(`harness srt: ${err instanceof Error ? err.message : String(err)}`);
     return 1;
   }
 }

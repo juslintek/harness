@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { accountEnvFor } from "../../../shared/accounts";
-import { resolvePackagedAdapter } from "../../packaged";
+import { isCompiledBinary, resolvePackagedAdapter } from "../../packaged";
 
 export interface AgentSpec {
   id: string;
@@ -43,8 +43,10 @@ function adapterCommand(
   runtime: "claude" | "codex",
   binName: string,
 ): { bin: string; args: string[] } {
-  const local = join(import.meta.dir, "../../../../node_modules/.bin", binName);
-  if (existsSync(local)) return { bin: local, args: [] };
+  if (!isCompiledBinary()) {
+    const local = join(import.meta.dir, "../../../../node_modules/.bin", binName);
+    if (existsSync(local)) return { bin: local, args: [] };
+  }
   if (resolvePackagedAdapter(`${binName}.mjs`)) {
     return { bin: process.execPath, args: ["acp-adapter", runtime] };
   }

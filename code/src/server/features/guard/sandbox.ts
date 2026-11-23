@@ -264,8 +264,8 @@ export async function writeSrtSettings(input: SandboxInput): Promise<string> {
 }
 
 function resolveSrtCommand(): string[] {
-  if (existsSync(SRT_BIN)) return [SRT_BIN];
   if (isCompiledBinary()) return [process.execPath, "srt"];
+  if (existsSync(SRT_BIN)) return [SRT_BIN];
   throw new Error(`srt not found at ${SRT_BIN}`);
 }
 
