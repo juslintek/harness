@@ -65,7 +65,7 @@ function AccountsArea(props: { agents: AgentRow[]; tick: number }): JSX.Element 
     if (!e) return null;
     return e instanceof Error ? e.message : String(e);
   };
-  const latest = () => pool.latest;
+  const latest = () => (pool.state === "errored" ? undefined : pool.latest);
   const visibleIds = (): string[] => {
     const data = latest();
     if (!data) return [];

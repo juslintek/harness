@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { Engine } from "../../../shared/router";
 import { contextForMember, effective } from "../policies/api";
+import { ensureProfile } from "../profiles/api";
 import { getRun, killRun, liveRuns, type RunRow } from "../runtimes/api";
 import { onQuotaRecorded, probeQuota } from "../usage/api";
 import { accountContext, eligibleAccounts } from "./accounts";
@@ -61,6 +62,16 @@ function insertHandoff(db: Database, run: RunRow, batchId: string, summary: stri
   return inserted.changes === 0 ? null : handoffId;
 }
 
+function inProfile(
+  profile: { runtime: string; model: string | null; fallbacks: Engine[] },
+  runtime: string,
+  model: string | null,
+): boolean {
+  if (runtime === profile.runtime && model === profile.model) return true;
+  if (profile.fallbacks.length === 0) return runtime !== profile.runtime && model === null;
+  return profile.fallbacks.some((f) => f.runtime === runtime && f.model === model);
+}
+
 // At the attempt cap we never start another immediate attempt, so avoid re-running agent discovery
 // when another candidate that was eligible at launch still has capacity in the DB.
 async function hasUnexhaustedSibling(
@@ -71,11 +82,13 @@ async function hasUnexhaustedSibling(
 ): Promise<boolean> {
   const decision = listRouteDecisions(db, { runId: run.id, limit: 1 })[0];
   if (!decision) return false;
+  const profile = ensureProfile(db, run.memberId as string);
   const current = run.accountId ?? `default:${run.agentId}`;
   const siblings = decision.candidates.filter(
     (c) =>
       c.rejectedBy === null &&
       c.account !== current &&
+      inProfile(profile, c.runtime, c.model) &&
       (allowed === null || allowed.includes(c.runtime)) &&
       (runtimeFilter?.(c.runtime) ?? true),
   );

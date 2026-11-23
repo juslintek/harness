@@ -131,7 +131,8 @@ function evaluateEngines(
     const picked = pickBestAccount(eligible, accountPolicy);
     if (!picked) continue;
     // Stage 1 ranks engines by their best-headroom eligible account; Stage 2 picks inside the engine by policy.
-    const bestHeadroom = pickBestAccount(eligible, "spread")?.headroom ?? picked.headroom;
+    const best = pickBestAccount(eligible, "spread");
+    const bestHeadroom = best ? best.headroom : picked.headroom;
     const built = buildChoice(db, e, picked, scoreCtx, bestHeadroom);
     ranked.push(built);
     for (const c of eligible) {
@@ -257,7 +258,8 @@ export async function rankEngines(
       const eligible = eligibleAccounts(db, { runtime: a.id, model: null }, quota, acctCtx);
       const picked = pickBestAccount(eligible, accountPolicy);
       if (!picked) return [];
-      const bestHeadroom = pickBestAccount(eligible, "spread")?.headroom ?? picked.headroom;
+      const best = pickBestAccount(eligible, "spread");
+      const bestHeadroom = best ? best.headroom : picked.headroom;
       const engine: Engine = picked.explicit
         ? { runtime: a.id, model: null, accountId: picked.id }
         : { runtime: a.id, model: null };
